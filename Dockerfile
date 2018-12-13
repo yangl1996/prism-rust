@@ -13,7 +13,7 @@ RUN go get -d github.com/vibhaa/lnd
 RUN rm -rf $GOPATH/src/github.com/lightningnetwork/lnd
 RUN mv $GOPATH/src/github.com/vibhaa/lnd $GOPATH/src/github.com/lightningnetwork
 WORKDIR $GOPATH/src/github.com/lightningnetwork/lnd
-RUN git checkout split-transaction
+RUN git checkout master
 RUN make && make install
 RUN make btcd
 CMD make check
