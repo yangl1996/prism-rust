@@ -16,4 +16,5 @@ WORKDIR $GOPATH/src/github.com/lightningnetwork/lnd
 RUN git checkout master
 RUN make && make install
 RUN make btcd
-CMD make check
+COPY bootstrap /root/bootstrap
+WORKDIR /root/bootstrap
