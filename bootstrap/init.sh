@@ -1,3 +1,5 @@
 #!/bin/bash
 python3 bootstrap.py
-btcd
+btcd &
+lnd &
+bash

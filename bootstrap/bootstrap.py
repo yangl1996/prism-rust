@@ -20,3 +20,7 @@ for peer in btcd_peers:
 os.makedirs("/root/.btcd", exist_ok=True)
 with open("/root/.btcd/btcd.conf", "w") as f:
     f.write(btcd_config_string)
+
+os.makedirs("/root/.lnd", exist_ok=True)
+with open("/root/.lnd/lnd.conf", "w") as f:
+    f.write(templates.lnd_conf)

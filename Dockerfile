@@ -18,3 +18,4 @@ RUN make && make install
 RUN make btcd
 COPY bootstrap /root/bootstrap
 WORKDIR /root/bootstrap
+CMD /root/bootstrap/init.sh
