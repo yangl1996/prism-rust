@@ -17,6 +17,7 @@ RUN git checkout master
 RUN make && make install
 RUN make btcd
 RUN apt-get install -y etcd netcat
+RUN apt-get install -y jq
 COPY bootstrap /root/bootstrap
 WORKDIR /root/bootstrap
 CMD /root/bootstrap/init.sh
