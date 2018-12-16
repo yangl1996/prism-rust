@@ -1,0 +1,17 @@
+{
+    "btcd_connections": [
+        {
+            "dst": "spider2",
+            "src": "spider1"
+        },
+        {
+            "dst": "spider1",
+            "src": "spider3"
+        }
+    ],
+    "nodes": {
+        "spider1": "10.0.0.100",
+        "spider2": "10.0.0.101",
+        "spider3": "10.0.0.102"
+    }
+}

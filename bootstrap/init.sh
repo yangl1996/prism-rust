@@ -34,6 +34,9 @@ etcdctl set "/$NODENAME/btcaddr" $btc_addr
 # restart btcd with mining address set to the new wallet 
 echo "miningaddr=$btc_addr" >> /root/.btcd/btcd.conf
 kill $btcd_pid
+while kill -0 $btcd_pid; do
+    sleep 1
+done
 btcd &> /dev/null &
 
 # wait for btcd to restart
