@@ -3,7 +3,7 @@ import default_topo as t
 import templates
 
 nodename = os.getenv("NODENAME")
-nodeip = t.nodes[nodename]
+nodeip = os.getenv("NODEIP")
 
 btcd_peers = []
 
