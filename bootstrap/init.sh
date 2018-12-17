@@ -30,7 +30,7 @@ python3 bootstrap.py
 # start btcd, lnd, and etcd
 btcd &> /dev/null &
 btcd_pid=$!
-lnd --noseedbackup &> /dev/null &
+lnd --noseedbackup --debughtlc &> /dev/null &
 etcd --config-file ~/.etcd/etcd.conf &> /dev/null &
 
 # wait for etcd to start
@@ -82,9 +82,16 @@ for chan in `cat default_topo.json | jq -c '.lnd_channels | .[]'`; do
 	dst=`echo $chan | jq -r '.dst'`
 	if [ "$NODENAME" == "$src" ]
 	then
+		# establish p2p connection
 		peer_pubkey=`etcdget /$dst/pubkey`
 		peer_ip=`etcdget /$dst/ip`
 		lncli -n simnet connect $peer_pubkey@$peer_ip:9735
+
+		# establish channel
+		# we need to retry until succeed because btcd might by syncing
+		until lncli -n simnet openchannel --node_key=$peer_pubkey --local_amt=2000000 --push_amt=1000000; do
+			sleep 0.5
+		done
 	fi
 done
 

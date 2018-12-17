@@ -21,8 +21,8 @@
 			"dst": "spider1"
 		},
 		{
-			"src": "spider3",
-			"dst": "spider2"
+			"src": "spider2",
+			"dst": "spider3"
 		}
 	]
 }
