@@ -24,6 +24,25 @@ function killandassert()
 	done
 }
 
+function monitorpendingchannels()
+{
+	while true
+	do
+		local has_pending=`etcdctl get /channels/pending`
+		echo $has_pending
+		if (( $? != 0 )) ; then
+			# no pending channels
+			break
+		elif [ "$has_pending" == "init" ] ; then
+			# still init
+		elif [ "$has_pending" == "yes" ] ; then
+			# has pending channels
+			btcctl --simnet --rpcuser=btcd --rpcpass=btcd generate 6
+		fi
+		sleep 4.5
+	done
+}
+
 # create config files
 python3 bootstrap.py
 
@@ -44,6 +63,7 @@ waitportopen 10009
 
 # store ip in etcd
 etcdctl set "/nodeinfo/$NODENAME/ip" "$NODEIP"
+etcdctl set /channels/pending init
 
 # create btc wallet and store address in etcd
 btc_addr=`lncli -n simnet newaddress np2wkh | jq -r '.address'`
@@ -104,22 +124,23 @@ done
 # miner node should mine blocks after all channels has been established
 if [ "$NODENAME" == "$miner_node" ]
 then
-	for chan in `cat default_topo.json | jq -c '.lnd_channels | .[]'`; do
-		src=`echo $chan | jq -r '.src'`
-		dst=`echo $chan | jq -r '.dst'`
-		etcdget "/channels/$src/$dst"
-	done
-	# repeat 5 times since funding tx may take some time to arrive
-	btcctl --simnet --rpcuser=btcd --rpcpass=btcd generate 6
-	sleep 1
-	btcctl --simnet --rpcuser=btcd --rpcpass=btcd generate 6
-	sleep 1
-	btcctl --simnet --rpcuser=btcd --rpcpass=btcd generate 6
-	sleep 1
-	btcctl --simnet --rpcuser=btcd --rpcpass=btcd generate 6
-	sleep 1
-	btcctl --simnet --rpcuser=btcd --rpcpass=btcd generate 6
+	monitorpendingchannels &
 fi
+
+# monitor how many pending channels are there
+while true
+do
+	pending_chans=`lncli -n simnet pendingchannels | jq '.pending_open_channels | length'`
+	if (( $pending_chans == 0 )) ; then
+		break
+	fi
+	# if there are still channels pending, tell the miner
+	# this info will live for 5 sec. The miner checks this key
+	# every (<5) sec, so it will always be seen by the miner
+	etcdctl set --ttl=5 /channels/pending yes
+	sleep 5
+done
+
 
 # enter interactive bash
 bash

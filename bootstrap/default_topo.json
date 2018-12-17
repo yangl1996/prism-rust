@@ -10,9 +10,9 @@
 		}
 	],
 	"nodes": {
-		"spider1": "10.0.0.100",
-		"spider2": "10.0.0.101",
-		"spider3": "10.0.0.102"
+		"spider1": "10.0.1.100",
+		"spider2": "10.0.1.101",
+		"spider3": "10.0.1.102"
 	},
 	"miner": "spider1",
 	"lnd_channels": [
@@ -23,6 +23,18 @@
 		{
 			"src": "spider2",
 			"dst": "spider3"
+		}
+	],
+	"demands": [
+		{
+			"src": "spider1",
+			"dst": "spider3",
+			"rate": 1
+		},
+		{
+			"src": "spider3",
+			"dst": "spider1",
+			"rate": 1
 		}
 	]
 }
