@@ -43,11 +43,11 @@ waitportopen 18556
 waitportopen 10009
 
 # store ip in etcd
-etcdctl set "/$NODENAME/ip" "$NODEIP"
+etcdctl set "/nodeinfo/$NODENAME/ip" "$NODEIP"
 
 # create btc wallet and store address in etcd
 btc_addr=`lncli -n simnet newaddress np2wkh | jq -r '.address'`
-etcdctl set "/$NODENAME/btcaddr" $btc_addr
+etcdctl set "/nodeinfo/$NODENAME/btcaddr" $btc_addr
 
 # if we are the mining node, mine coins for each node
 miner_node=`cat default_topo.json | jq -r '.miner'`
@@ -55,7 +55,7 @@ if [ "$NODENAME" == "$miner_node" ]
 then
 	for node in `cat default_topo.json | jq -r '.nodes | keys[]'`; do
 		# wait for the node to publish its btc address
-		node_btcaddr=`etcdget /$node/btcaddr`
+		node_btcaddr=`etcdget /nodeinfo/$node/btcaddr`
 
 		# kill current btcd instance and wait for it to exit
 		killandassert $btcd_pid
@@ -74,7 +74,7 @@ fi
 
 # store public key in etcd
 pubkey=`lncli -n simnet getinfo | jq -r '.identity_pubkey'`
-etcdctl set "/$NODENAME/pubkey" $pubkey
+etcdctl set "/nodeinfo/$NODENAME/pubkey" $pubkey
 
 # establish channel with peers
 for chan in `cat default_topo.json | jq -c '.lnd_channels | .[]'`; do
@@ -83,8 +83,8 @@ for chan in `cat default_topo.json | jq -c '.lnd_channels | .[]'`; do
 	if [ "$NODENAME" == "$src" ]
 	then
 		# establish p2p connection
-		peer_pubkey=`etcdget /$dst/pubkey`
-		peer_ip=`etcdget /$dst/ip`
+		peer_pubkey=`etcdget /nodeinfo/$dst/pubkey`
+		peer_ip=`etcdget /nodeinfo/$dst/ip`
 		lncli -n simnet connect $peer_pubkey@$peer_ip:9735
 
 		# establish channel
@@ -92,6 +92,9 @@ for chan in `cat default_topo.json | jq -c '.lnd_channels | .[]'`; do
 		until lncli -n simnet openchannel --node_key=$peer_pubkey --local_amt=2000000 --push_amt=1000000; do
 			sleep 0.5
 		done
+
+		# publish on etcd
+		etcdctl set "/channels/$src/$dst" established
 	fi
 done
 
