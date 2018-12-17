@@ -98,6 +98,17 @@ for chan in `cat default_topo.json | jq -c '.lnd_channels | .[]'`; do
 	fi
 done
 
+# miner node should mine blocks after all channels has been established
+if [ "$NODENAME" == "$miner_node" ]
+then
+	for chan in `cat default_topo.json | jq -c '.lnd_channels | .[]'`; do
+		src=`echo $chan | jq -r '.src'`
+		dst=`echo $chan | jq -r '.dst'`
+		etcdget "/channels/$src/$dst"
+	done
+	btcctl --simnet --rpcuser=btcd --rpcpass=btcd generate 100
+fi
+
 # enter interactive bash
 bash
 
