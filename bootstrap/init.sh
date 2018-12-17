@@ -44,6 +44,18 @@ function monitorpendingchannels()
 	done
 }
 
+function generatepayreq()
+{
+	local invoice=''
+	local interval=`awk "BEGIN{print 1.0/$3}"`
+	while true
+	do
+		invoice=`lncli -n simnet addinvoice --amt 100000 | jq -r '.pay_req'`
+		etcdctl set "/payments/$1/$2" $invoice
+		sleep $interval
+	done
+}
+
 # create config files
 python3 bootstrap.py
 
@@ -142,6 +154,17 @@ do
 	sleep 5
 done
 
+gen_procs=()
+for chan in `cat default_topo.json | jq -c '.demands | .[]'`; do
+	src=`echo $chan | jq -r '.src'`
+	dst=`echo $chan | jq -r '.dst'`
+	rate=`echo $chan | jq -r '.rate'`
+	if [ "$NODENAME" == "$dst" ]
+	then
+		generatepayreq $src $dst $rate &
+		gen_procs+=( $! )
+	fi
+done
 
 # enter interactive bash
 bash
