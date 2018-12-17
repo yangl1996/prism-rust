@@ -89,12 +89,15 @@ for chan in `cat default_topo.json | jq -c '.lnd_channels | .[]'`; do
 
 		# establish channel
 		# we need to retry until succeed because btcd might by syncing
-		until lncli -n simnet openchannel --node_key=$peer_pubkey --local_amt=2000000 --push_amt=1000000; do
+		funding_output=''
+		until funding_output=`lncli -n simnet openchannel --node_key=$peer_pubkey --local_amt=2000000 --push_amt=1000000`
+		do
 			sleep 0.5
 		done
 
 		# publish on etcd
-		etcdctl set "/channels/$src/$dst" established
+		funding_txid=`echo $funding_output | jq -r '.funding_txid'`
+		etcdctl set "/channels/$src/$dst" "$funding_txid"
 	fi
 done
 
@@ -106,7 +109,16 @@ then
 		dst=`echo $chan | jq -r '.dst'`
 		etcdget "/channels/$src/$dst"
 	done
-	btcctl --simnet --rpcuser=btcd --rpcpass=btcd generate 100
+	# repeat 5 times since funding tx may take some time to arrive
+	btcctl --simnet --rpcuser=btcd --rpcpass=btcd generate 6
+	sleep 1
+	btcctl --simnet --rpcuser=btcd --rpcpass=btcd generate 6
+	sleep 1
+	btcctl --simnet --rpcuser=btcd --rpcpass=btcd generate 6
+	sleep 1
+	btcctl --simnet --rpcuser=btcd --rpcpass=btcd generate 6
+	sleep 1
+	btcctl --simnet --rpcuser=btcd --rpcpass=btcd generate 6
 fi
 
 # enter interactive bash
