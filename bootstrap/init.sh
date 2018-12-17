@@ -56,6 +56,14 @@ function generatepayreq()
 	done
 }
 
+function watchpayreq()
+{
+	while true
+	do
+		etcdctl exec-watch "/payments/$1/$2" -- sh -c 'lncli -n simnet sendpayment -f --pay_req=$ETCD_WATCH_VALUE &'
+	done
+}
+
 # create config files
 python3 bootstrap.py
 
@@ -155,6 +163,7 @@ do
 done
 
 gen_procs=()
+pay_procs=()
 for chan in `cat default_topo.json | jq -c '.demands | .[]'`; do
 	src=`echo $chan | jq -r '.src'`
 	dst=`echo $chan | jq -r '.dst'`
@@ -163,8 +172,13 @@ for chan in `cat default_topo.json | jq -c '.demands | .[]'`; do
 	then
 		generatepayreq $src $dst $rate &
 		gen_procs+=( $! )
+	elif [ "$NODENAME" == "$src" ]
+	then
+		watchpayreq $src $dst &
+		pay_procs+=( $! )
 	fi
 done
+
 
 # enter interactive bash
 bash
