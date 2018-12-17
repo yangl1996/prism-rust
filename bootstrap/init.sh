@@ -26,20 +26,21 @@ function killandassert()
 
 function monitorpendingchannels()
 {
+	local has_pending=''
 	while true
 	do
-		local has_pending=`etcdctl get /channels/pending`
-		echo $has_pending
-		if (( $? != 0 )) ; then
-			# no pending channels
+		if has_pending=`etcdctl get /channels/pending` ; then
+			if [ "$has_pending" == "init" ] ; then
+				# still init
+				sleep 4.5
+			elif [ "$has_pending" == "yes" ] ; then
+				# has pending channels
+				btcctl --simnet --rpcuser=btcd --rpcpass=btcd generate 6
+				sleep 4.5
+			fi
+		else
 			break
-		elif [ "$has_pending" == "init" ] ; then
-			# still init
-		elif [ "$has_pending" == "yes" ] ; then
-			# has pending channels
-			btcctl --simnet --rpcuser=btcd --rpcpass=btcd generate 6
 		fi
-		sleep 4.5
 	done
 }
 
