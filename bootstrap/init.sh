@@ -29,7 +29,7 @@ function monitorpendingchannels()
 	local has_pending=''
 	while true
 	do
-		if has_pending=`etcdctl get /channels/pending` ; then
+		if has_pending=`etcdctl get /cluster/haspendingchan` ; then
 			if [ "$has_pending" == "init" ] ; then
 				# still init
 				sleep 4.5
@@ -90,7 +90,7 @@ waitportopen 10009
 
 # store ip in etcd
 etcdctl set "/nodeinfo/$NODENAME/ip" "$NODEIP"
-etcdctl set /channels/pending init
+etcdctl set /cluster/haspendingchan init
 
 # create btc wallet and store address in etcd
 btc_addr=`lncli -n simnet newaddress np2wkh | jq -r '.address'`
@@ -164,7 +164,7 @@ do
 	# if there are still channels pending, tell the miner
 	# this info will live for 5 sec. The miner checks this key
 	# every (<5) sec, so it will always be seen by the miner
-	etcdctl set --ttl=5 /channels/pending yes
+	etcdctl set --ttl=5 /cluster/haspendingchan yes
 	sleep 5
 done
 
