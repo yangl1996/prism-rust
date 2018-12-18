@@ -181,20 +181,6 @@ for node in `cat default_topo.json | jq -rc '.nodes | keys | .[]'`; do
 	etcdget /nodeinfo/$node/seenallchans
 done
 
-for chan in `cat default_topo.json | jq -c '.demands | .[]'`; do
-	src=`echo $chan | jq -r '.src'`
-	dst=`echo $chan | jq -r '.dst'`
-	rate=`echo $chan | jq -r '.rate'`
-	if [ "$NODENAME" == "$dst" ]
-	then
-		generatepayreq $src $dst $rate &
-		killintime $! 60 &
-	elif [ "$NODENAME" == "$src" ]
-	then
-		watchpayreq $src $dst &
-	fi
-done
-
 # enter interactive bash
 bash
 
