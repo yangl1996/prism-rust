@@ -64,6 +64,14 @@ function watchpayreq()
 	done
 }
 
+function killprocs()
+{
+	for i in "${$1[@]}"
+	do
+		kill $i
+	done
+}
+
 # create config files
 python3 bootstrap.py
 
@@ -162,6 +170,19 @@ do
 	sleep 5
 done
 
+# wait for itself to receive all channels
+num_channels=`cat default_topo.json | jq '.lnd_channels | length'`
+until [ `lncli -n simnet getnetworkinfo | jq '.num_channels'` == "$num_channels" ]
+do
+	sleep 1
+done
+etcdctl set "/nodeinfo/$NODENAME/seenallchans" "yes"
+
+# wait for all nodes to receive all channels
+for node in `cat bootstrap/default_topo.json | jq -rc '.nodes | keys | .[]'`; do
+	etcdget /nodeinfo/$node/seenallchans
+done
+
 gen_procs=()
 pay_procs=()
 for chan in `cat default_topo.json | jq -c '.demands | .[]'`; do
@@ -179,6 +200,8 @@ for chan in `cat default_topo.json | jq -c '.demands | .[]'`; do
 	fi
 done
 
+sleep 60
+killprocs gen_procs
 
 # enter interactive bash
 bash
