@@ -64,12 +64,10 @@ function watchpayreq()
 	done
 }
 
-function killprocs()
+function killintime()
 {
-	for i in "${$1[@]}"
-	do
-		kill $i
-	done
+	sleep $2
+	kill $1
 }
 
 # create config files
@@ -179,12 +177,10 @@ done
 etcdctl set "/nodeinfo/$NODENAME/seenallchans" "yes"
 
 # wait for all nodes to receive all channels
-for node in `cat bootstrap/default_topo.json | jq -rc '.nodes | keys | .[]'`; do
+for node in `cat default_topo.json | jq -rc '.nodes | keys | .[]'`; do
 	etcdget /nodeinfo/$node/seenallchans
 done
 
-gen_procs=()
-pay_procs=()
 for chan in `cat default_topo.json | jq -c '.demands | .[]'`; do
 	src=`echo $chan | jq -r '.src'`
 	dst=`echo $chan | jq -r '.dst'`
@@ -192,16 +188,12 @@ for chan in `cat default_topo.json | jq -c '.demands | .[]'`; do
 	if [ "$NODENAME" == "$dst" ]
 	then
 		generatepayreq $src $dst $rate &
-		gen_procs+=( $! )
+		killintime $! 60 &
 	elif [ "$NODENAME" == "$src" ]
 	then
 		watchpayreq $src $dst &
-		pay_procs+=( $! )
 	fi
 done
-
-sleep 60
-killprocs gen_procs
 
 # enter interactive bash
 bash
