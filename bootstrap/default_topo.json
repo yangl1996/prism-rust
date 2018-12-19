@@ -9,11 +9,20 @@
 			"src": "spider3"
 		}
 	],
-	"nodes": {
-		"spider1": "10.0.1.100",
-		"spider2": "10.0.1.101",
-		"spider3": "10.0.1.102"
-	},
+	"nodes": [
+		{
+			"name": "spider1",
+		       	"ip": "10.0.1.100"
+		},
+		{
+			"name": "spider2",
+		        "ip": "10.0.1.101"
+		},
+		{
+			"name": "spider3",
+		        "ip": "10.0.1.102"
+		}
+	],
 	"miner": "spider1",
 	"lnd_channels": [
 		{

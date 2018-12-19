@@ -100,7 +100,7 @@ etcdctl set "/nodeinfo/$NODENAME/btcaddr" $btc_addr
 miner_node=`cat default_topo.json | jq -r '.miner'`
 if [ "$NODENAME" == "$miner_node" ]
 then
-	for node in `cat default_topo.json | jq -r '.nodes | keys[]'`; do
+	for node in `cat default_topo.json | jq -r '.nodes | .[] | .name'`; do
 		# wait for the node to publish its btc address
 		node_btcaddr=`etcdget /nodeinfo/$node/btcaddr`
 
@@ -177,7 +177,7 @@ done
 etcdctl set "/nodeinfo/$NODENAME/seenallchans" "yes"
 
 # wait for all nodes to receive all channels
-for node in `cat default_topo.json | jq -rc '.nodes | keys | .[]'`; do
+for node in `cat default_topo.json | jq -r '.nodes | .[] | .name'`; do
 	etcdget /nodeinfo/$node/seenallchans
 done
 

@@ -20,5 +20,10 @@ RUN make btcd
 RUN apt-get install -y etcd netcat
 RUN apt-get install -y jq
 COPY bootstrap /root/bootstrap
+RUN cp -r /root/bootstrap/payment /root/gocode/src/github.com/lightningnetwork/lnd
+WORKDIR /root/gocode/src/github.com/lightningnetwork/lnd/payment
+RUN go get -d go.etcd.io/etcd/client
+RUN go build
+RUN cp payment /root/bootstrap/run
 WORKDIR /root/bootstrap
 CMD /root/bootstrap/init.sh
