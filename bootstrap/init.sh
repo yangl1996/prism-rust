@@ -168,5 +168,6 @@ sleep 60
 kill $mainpid
 
 # enter interactive bash
+bash getresults.sh
 bash
 
