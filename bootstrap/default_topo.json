@@ -38,12 +38,12 @@
 		{
 			"src": "spider1",
 			"dst": "spider3",
-			"rate": 1
+			"rate": 10
 		},
 		{
 			"src": "spider3",
 			"dst": "spider1",
-			"rate": 1
+			"rate": 10
 		}
 	]
 }

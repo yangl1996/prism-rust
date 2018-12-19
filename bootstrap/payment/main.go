@@ -27,23 +27,31 @@ func main() {
 				defer cleanUp()
 
 				etcdPath := fmt.Sprintf("/payments/%v/%v/invoice", demand.Source, demand.Destination)
+				etcdTotalPath := fmt.Sprintf("/payments/%v/%v/total", demand.Source, demand.Destination)
+				etcdSuccPath := fmt.Sprintf("/payments/%v/%v/success", demand.Source, demand.Destination)
 				etcdwatch := etcd.Watcher(etcdPath, nil)
 
+				var totMux sync.Mutex
+				var succMux sync.Mutex
 				numTot := 0
 				numSucc := 0
 
 				for {
 					resp, _ := etcdwatch.Next(context.Background())
 					pr := resp.Node.Value
-					payresp, err := sendPayment(lnd, pr)
-					numTot += 1
-					etcdTotalPath := fmt.Sprintf("/payments/%v/%v/total", demand.Source, demand.Destination)
-					etcd.Set(context.Background(), etcdTotalPath, strconv.Itoa(numTot), nil)
-					if err == nil && payresp.PaymentError == "" {
-						numSucc += 1
-						etcdSuccPath := fmt.Sprintf("/payments/%v/%v/success", demand.Source, demand.Destination)
-						etcd.Set(context.Background(), etcdSuccPath, strconv.Itoa(numSucc), nil)
-					}
+					go func (pr string) {
+						payresp, err := sendPayment(lnd, pr)
+						totMux.Lock()
+						numTot += 1
+						etcd.Set(context.Background(), etcdTotalPath, strconv.Itoa(numTot), nil)
+						totMux.Unlock()
+						if err == nil && payresp.PaymentError == "" {
+							succMux.Lock()
+							numSucc += 1
+							etcd.Set(context.Background(), etcdSuccPath, strconv.Itoa(numSucc), nil)
+							succMux.Unlock()
+						}
+					} (pr)
 				}
 			} (demand)
 		} else if demand.Destination == nodename {
