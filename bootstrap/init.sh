@@ -44,26 +44,6 @@ function monitorpendingchannels()
 	done
 }
 
-function generatepayreq()
-{
-	local invoice=''
-	local interval=`awk "BEGIN{print 1.0/$3}"`
-	while true
-	do
-		invoice=`lncli -n simnet addinvoice --amt 100000 | jq -r '.pay_req'`
-		etcdctl set "/payments/$1/$2" $invoice
-		sleep $interval
-	done
-}
-
-function watchpayreq()
-{
-	while true
-	do
-		etcdctl exec-watch "/payments/$1/$2" -- sh -c 'lncli -n simnet sendpayment -f --pay_req=$ETCD_WATCH_VALUE &'
-	done
-}
-
 function killintime()
 {
 	sleep $2
@@ -180,6 +160,12 @@ etcdctl set "/nodeinfo/$NODENAME/seenallchans" "yes"
 for node in `cat default_topo.json | jq -r '.nodes | .[] | .name'`; do
 	etcdget /nodeinfo/$node/seenallchans
 done
+
+./run &
+mainpid=$!
+
+sleep 60
+kill $mainpid
 
 # enter interactive bash
 bash
