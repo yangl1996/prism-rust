@@ -39,7 +39,7 @@ function monitorpendingchannels()
 				sleep 4.5
 			fi
 		else
-			break
+			sleep 4.5
 		fi
 	done
 }
@@ -131,7 +131,7 @@ done
 # miner node should mine blocks after all channels has been established
 if [ "$NODENAME" == "$miner_node" ]
 then
-	monitorpendingchannels &
+	monitorpendingchannels &> /dev/null &
 fi
 
 # monitor how many pending channels are there
@@ -161,6 +161,7 @@ for node in `cat default_topo.json | jq -r '.nodes | .[] | .name'`; do
 	etcdget /nodeinfo/$node/seenallchans
 done
 
+echo "Running experiments"
 ./run &
 mainpid=$!
 

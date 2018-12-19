@@ -1,49 +1,115 @@
 {
 	"btcd_connections": [
 		{
-			"dst": "spider2",
-			"src": "spider1"
+			"dst": "0",
+			"src": "1"
 		},
 		{
-			"dst": "spider1",
-			"src": "spider3"
+			"dst": "0",
+			"src": "2"
+		},
+		{
+			"dst": "0",
+			"src": "3"
+		},
+		{
+			"dst": "0",
+			"src": "4"
+		},
+		{
+			"dst": "2",
+			"src": "4"
 		}
 	],
 	"nodes": [
 		{
-			"name": "spider1",
+			"name": "0",
 		       	"ip": "10.0.1.100"
 		},
 		{
-			"name": "spider2",
+			"name": "1",
 		        "ip": "10.0.1.101"
 		},
 		{
-			"name": "spider3",
+			"name": "2",
 		        "ip": "10.0.1.102"
-		}
-	],
-	"miner": "spider1",
-	"lnd_channels": [
-		{
-			"src": "spider2",
-			"dst": "spider1"
 		},
 		{
-			"src": "spider2",
-			"dst": "spider3"
+			"name": "3",
+		        "ip": "10.0.1.103"
+		},
+		{
+			"name": "4",
+		        "ip": "10.0.1.104"
+		}
+	],
+	"miner": "0",
+	"lnd_channels": [
+		{
+			"src": "0",
+			"dst": "1"
+		},
+		{
+			"src": "1",
+			"dst": "2"
+		},
+		{
+			"src": "2",
+			"dst": "3"
+		},
+		{
+			"src": "3",
+			"dst": "4"
+		},
+		{
+			"src": "4",
+			"dst": "0"
+		},
+		{
+			"src": "1",
+			"dst": "3"
 		}
 	],
 	"demands": [
 		{
-			"src": "spider1",
-			"dst": "spider3",
-			"rate": 10
+			"src": "0",
+			"dst": "1",
+			"rate": 1
 		},
 		{
-			"src": "spider3",
-			"dst": "spider1",
-			"rate": 10
+			"src": "0",
+			"dst": "4",
+			"rate": 1
+		},
+		{
+			"src": "1",
+			"dst": "3",
+			"rate": 2
+		},
+		{
+			"src": "2",
+			"dst": "1",
+			"rate": 1
+		},
+		{
+			"src": "2",
+			"dst": "4",
+			"rate": 2
+		},
+		{
+			"src": "3",
+			"dst": "0",
+			"rate": 2
+		},
+		{
+			"src": "3",
+			"dst": "2",
+			"rate": 2
+		},
+		{
+			"src": "4",
+			"dst": "2",
+			"rate": 1
 		}
 	]
 }
