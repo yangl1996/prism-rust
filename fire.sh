@@ -74,7 +74,7 @@ function init()
 function start()
 {
 	local host_idx=0
-	for node in `cat bootstrap/default_topo.json | jq -r '.nodes | .[]'`
+	for node in `cat bootstrap/default_topo.json | jq -rc '.nodes | .[]'`
 	do
 		name=`echo $node | jq -r '.name'`
 		ip=`echo $node | jq -r '.ip'`
@@ -86,7 +86,7 @@ function start()
 function stop()
 {
 	local host_idx=0
-	for node in `cat bootstrap/default_topo.json | jq -r '.nodes | .[]'`
+	for node in `cat bootstrap/default_topo.json | jq -rc '.nodes | .[]'`
 	do
 		name=`echo $node | jq -r '.name'`
 		destroy_container $name ${hosts[$host_idx]} &
