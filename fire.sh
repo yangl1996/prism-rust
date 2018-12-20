@@ -1,4 +1,18 @@
 #!/bin/bash
+hosts=(spider1 spider2 spider3)
+
+function next_index()
+{
+	# current index
+	local len=${#hosts[@]}
+	local next=`expr $1 + 1`
+	if [ "$next" -ge "$len" ]
+	then
+		next=0
+	fi
+	echo $next
+}
+
 function start_container()
 {
 	# name, ip, host
@@ -38,31 +52,45 @@ function create_network()
 
 function init()
 {
-	cmd_to_use=`init_swarm spider1`
-	ssh spider2 -- $cmd_to_use
-	ssh spider3 -- $cmd_to_use
-	create_network spider1
+	local cmd_to_use=`init_swarm ${hosts[0]}`
+	for h in "${hosts[@]}"
+	do
+		if [ "$h" == "${hosts[0]}" ]
+		then
+			continue
+		else
+			ssh $h -- $cmd_to_use
+		fi
+	done
 
-	build_container spider1 &
-	build_container spider2 &
-	build_container spider3 &
+	create_network ${hosts[0]}
+
+	for h in "${hosts[@]}"
+	do
+		 build_container $h &
+	done
 }
 
 function start()
 {
-	start_container 0 10.0.1.100 spider1 &
-	start_container 1 10.0.1.101 spider1 &
-	start_container 2 10.0.1.102 spider2 &
-	start_container 3 10.0.1.103 spider2 &
-	start_container 4 10.0.1.104 spider3 &
+	local host_idx=0
+	for node in `cat bootstrap/default_topo.json | jq -r '.nodes | .[]'`
+	do
+		name=`echo $node | jq -r '.name'`
+		ip=`echo $node | jq -r '.ip'`
+		start_container $name $ip ${hosts[$host_idx]} &
+		host_idx=`next_index $host_idx`
+	done
 }
 
 function stop()
 {
-	destroy_container 0 spider1 &
-	destroy_container 1 spider1 &
-	destroy_container 2 spider2 &
-	destroy_container 3 spider2 &
-	destroy_container 4 spider3 &
+	local host_idx=0
+	for node in `cat bootstrap/default_topo.json | jq -r '.nodes | .[]'`
+	do
+		name=`echo $node | jq -r '.name'`
+		destroy_container $name ${hosts[$host_idx]} &
+		host_idx=`next_index $host_idx`
+	done
 }
 
