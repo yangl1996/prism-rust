@@ -89,7 +89,7 @@ function stop()
 	for node in `cat bootstrap/default_topo.json | jq -rc '.nodes | .[]'`
 	do
 		name=`echo $node | jq -r '.name'`
-		destroy_container $name ${hosts[$host_idx]} &
+		destroy_container $name ${hosts[$host_idx]} 
 		host_idx=`next_index $host_idx`
 	done
 }
