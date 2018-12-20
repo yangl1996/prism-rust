@@ -9,7 +9,7 @@ function waitportopen()
 function etcdget()
 {
 	local dt=''
-	until dt=`etcdctl get $1`
+	until dt=`etcdctl get $1 2> /dev/null`
 	do
 		sleep 0.2
 	done
@@ -138,7 +138,7 @@ for chan in `cat default_topo.json | jq -c '.lnd_channels | .[]'`; do
 		# publish on etcd
 		echo "Publishing the new channel"
 		funding_txid=`echo $funding_output | jq -r '.funding_txid'`
-		etcdctl set "/channels/$src/$dst" "$funding_txid"
+		etcdctl set "/channels/$src/$dst" "$funding_txid" &> /dev/null
 	fi
 done
 
