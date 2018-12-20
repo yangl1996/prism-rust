@@ -12,6 +12,42 @@ function destroy_container()
 	ssh $2 -- docker rm "spider$1"
 }
 
+function build_container()
+{
+	# host
+	ssh $1 -- git clone https://github.com/yangl1996/spider-docker.git
+	ssh $1 -- docker build -t spider spider-docker
+}
+
+function init_swarm()
+{
+	# host
+	local cmd_to_use=''
+	cmd_to_use=`ssh $1 -- 'docker swarm init | sed -n 5p'`
+	echo $cmd_to_use
+}
+
+function create_network()
+{
+	# host
+	ssh $1 -- docker network create -d overlay --subnet 10.0.1.0/16 --attachable spider
+}
+
+# start swarm: docker swarm init
+# create network: docker network create -d overlay --subnet 10.0.1.0/16 --attachable spider
+
+function init()
+{
+	cmd_to_use=`init_swarm spider1`
+	ssh spider2 -- $cmd_to_use
+	ssh spider3 -- $cmd_to_use
+	create_network spider1
+
+	build_container spider1 &
+	build_container spider2 &
+	build_container spider3 &
+}
+
 function start()
 {
 	start_container 0 10.0.1.100 spider1 &
