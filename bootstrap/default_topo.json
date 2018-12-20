@@ -74,42 +74,42 @@
 		{
 			"src": "0",
 			"dst": "1",
-			"rate": 1
+			"rate": 5
 		},
 		{
 			"src": "0",
 			"dst": "4",
-			"rate": 1
+			"rate": 5
 		},
 		{
 			"src": "1",
 			"dst": "3",
-			"rate": 2
+			"rate": 5
 		},
 		{
 			"src": "2",
 			"dst": "1",
-			"rate": 1
+			"rate": 5
 		},
 		{
 			"src": "2",
 			"dst": "4",
-			"rate": 2
+			"rate": 5
 		},
 		{
 			"src": "3",
 			"dst": "0",
-			"rate": 2
+			"rate": 5
 		},
 		{
 			"src": "3",
 			"dst": "2",
-			"rate": 2
+			"rate": 5
 		},
 		{
 			"src": "4",
 			"dst": "2",
-			"rate": 1
+			"rate": 5
 		}
 	]
 }

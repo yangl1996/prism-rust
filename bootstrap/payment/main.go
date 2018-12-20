@@ -23,9 +23,6 @@ func main() {
 			senderwg.Add(1)
 			go func(demand Demand) {
 				defer senderwg.Done()
-				lnd, cleanUp := getLNDClient()
-				defer cleanUp()
-
 				etcdPath := fmt.Sprintf("/payments/%v/%v/invoice", demand.Source, demand.Destination)
 				etcdTotalPath := fmt.Sprintf("/payments/%v/%v/total", demand.Source, demand.Destination)
 				etcdSuccPath := fmt.Sprintf("/payments/%v/%v/success", demand.Source, demand.Destination)
@@ -40,6 +37,8 @@ func main() {
 					resp, _ := etcdwatch.Next(context.Background())
 					pr := resp.Node.Value
 					go func (pr string) {
+						lnd, cleanUp := getLNDClient()
+						defer cleanUp()
 						payresp, err := sendPayment(lnd, pr)
 						totMux.Lock()
 						numTot += 1
