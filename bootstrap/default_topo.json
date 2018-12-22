@@ -47,27 +47,33 @@
 	"lnd_channels": [
 		{
 			"src": "0",
-			"dst": "1"
+			"dst": "1",
+            "capacity": 1000000
 		},
 		{
 			"src": "1",
-			"dst": "2"
+			"dst": "2",
+            "capacity": 1000000
 		},
 		{
 			"src": "2",
-			"dst": "3"
+			"dst": "3",
+            "capacity": 1000000
 		},
 		{
 			"src": "3",
-			"dst": "4"
+			"dst": "4",
+            "capacity": 1000000
 		},
 		{
 			"src": "4",
-			"dst": "0"
+			"dst": "0",
+            "capacity": 1000000
 		},
 		{
 			"src": "1",
-			"dst": "3"
+			"dst": "3",
+            "capacity": 1000000
 		}
 	],
 	"demands": [

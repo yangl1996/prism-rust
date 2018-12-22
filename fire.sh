@@ -1,5 +1,5 @@
 #!/bin/bash
-hosts=(spider1 spider2 spider3)
+hosts=(spider1)
 
 function next_index()
 {

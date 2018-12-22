@@ -118,6 +118,7 @@ etcdctl set "/nodeinfo/$NODENAME/pubkey" "$pubkey" &> /dev/null
 for chan in `cat default_topo.json | jq -c '.lnd_channels | .[]'`; do
 	src=`echo $chan | jq -r '.src'`
 	dst=`echo $chan | jq -r '.dst'`
+    cap=`echo $chan | jq -r '.capacity'`
 	if [ "$NODENAME" == "$src" ]
 	then
 		echo "Establishing P2P connection to $dst"
@@ -130,7 +131,8 @@ for chan in `cat default_topo.json | jq -c '.lnd_channels | .[]'`; do
 		# we need to retry until succeed because btcd might by syncing
 		echo "Creating channel to $dst"
 		funding_output=''
-		until funding_output=`lncli -n simnet openchannel --node_key=$peer_pubkey --local_amt=2000000 --push_amt=1000000 2> /dev/null`
+        funding_amt=`expr $cap + $cap + 9050`
+		until funding_output=`lncli -n simnet openchannel --node_key=$peer_pubkey --local_amt=$funding_amt --push_amt=$cap 2> /dev/null`
 		do
 			sleep 0.5
 		done
