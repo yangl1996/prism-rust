@@ -133,7 +133,7 @@
                         "rate": 5
                 }
         ], 
-        "miner": "0", 
+        "miner": "0e",
         "btcd_connections": [
                 {
                         "src": "0", 
