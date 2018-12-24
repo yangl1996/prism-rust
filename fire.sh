@@ -16,7 +16,7 @@ function next_index()
 function start_container()
 {
 	# name, ip, host
-	ssh $3 -- docker run -itd --name "spider$1" -e NODENAME=$1 -e NODEIP=$2 --network spider --ip $2 spider
+	ssh $3 -- docker run -itd --name "spider$1" -e NODENAME=$1 -e NODEIP=$2 -e SPIDER_EXP_NAME='hotnets-01' -e SPIDER_QUEUE=0 -e SPIDER_LOG_FIREBASE=1 --network spider --ip $2 spider
 }
 
 function destroy_container()

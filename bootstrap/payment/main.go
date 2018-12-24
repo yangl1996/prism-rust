@@ -63,7 +63,7 @@ func main() {
 				interval := time.Duration(1000000.0 / demand.Rate) * time.Microsecond
 				paymentTick := time.Tick(interval)
 				for range paymentTick {
-					pr, _ := addInvoice(lnd, 100000)
+					pr, _ := addInvoice(lnd, 1)
 					etcdPath := fmt.Sprintf("/payments/%v/%v/invoice", demand.Source, demand.Destination)
 					etcd.Set(context.Background(), etcdPath, pr, nil)
 				}

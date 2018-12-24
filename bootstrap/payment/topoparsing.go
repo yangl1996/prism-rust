@@ -27,6 +27,7 @@ type Node struct {
 type LndChannel struct {
 	Source string `json:"src"`
 	Destination string `json:"dst"`
+    Capacity int `json:"capacity"`
 }
 
 type Demand struct {

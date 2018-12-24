@@ -189,6 +189,8 @@ mainpid=$!
 
 sleep 60
 kill $mainpid
+pkill lnd
+pkill btcd
 
 # enter interactive bash
 bash getresults.sh
