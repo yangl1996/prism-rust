@@ -58,20 +58,19 @@ echo "Starting btcd, etcd and lnd"
 # start btcd, lnd, and etcd
 btcd &> /dev/null &
 btcd_pid=$!
-lnd --noseedbackup --debughtlc &> /dev/null &
-etcd --config-file ~/.etcd/etcd.conf &> /dev/null &
-
-# wait for etcd to start
-waitportopen 2379 &> /dev/null
-echo "Etcd started"
-
 # wait for btcd to start
 waitportopen 18556 &> /dev/null
 echo "Btcd started"
 
+lnd --noseedbackup --debughtlc &> /dev/null &
 # wait for lnd to start
 waitportopen 10009 &> /dev/null
 echo "Lnd started"
+
+etcd --config-file ~/.etcd/etcd.conf &> /dev/null &
+# wait for etcd to start
+waitportopen 2379 &> /dev/null
+echo "Etcd started"
 
 # store ip in etcd
 echo "Publishing node name and ip address"
