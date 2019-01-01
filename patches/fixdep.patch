@@ -1,0 +1,13 @@
+diff --git a/Gopkg.toml b/Gopkg.toml
+index 1f12b06e..aea5f0c8 100644
+--- a/Gopkg.toml
++++ b/Gopkg.toml
+@@ -52,7 +52,7 @@
+ 
+ [[constraint]]
+   name = "github.com/ltcsuite/ltcd"
+-  revision = "cdab10132e8c6e4a3ffd112dba54791946d28906"
++  revision = "f37f8bf35796325487af28e0e01c2528dd97ea95"
+ 
+ [[constraint]]
+   name = "github.com/miekg/dns"
