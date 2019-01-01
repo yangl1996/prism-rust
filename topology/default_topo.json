@@ -48,32 +48,32 @@
 		{
 			"src": "0",
 			"dst": "1",
-            "capacity": 10000
+            "capacity": 100000
 		},
 		{
 			"src": "1",
 			"dst": "2",
-            "capacity": 10000
+            "capacity": 100000
 		},
 		{
 			"src": "2",
 			"dst": "3",
-            "capacity": 10000
+            "capacity": 100000
 		},
 		{
 			"src": "3",
 			"dst": "4",
-            "capacity": 10000
+            "capacity": 100000
 		},
 		{
 			"src": "4",
 			"dst": "0",
-            "capacity": 10000
+            "capacity": 100000
 		},
 		{
 			"src": "1",
 			"dst": "3",
-            "capacity": 10000
+            "capacity": 100000
 		}
 	],
 	"demands": [

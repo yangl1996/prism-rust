@@ -13,8 +13,11 @@ func main() {
 	etcd := getEtcdKeyClient()
 
 	nodename, _ := os.LookupEnv("NODENAME")
+	topopath, _ := os.LookupEnv("TOPO_FILE")
+    paymentSizeStr, _ := os.LookupEnv("PAYMENT_SIZE")
+    paymentSize, _ := strconv.ParseInt(paymentSizeStr, 10, 64)
 	//nodeip, _ := os.LookupEnv("NODEIP")
-	topo := parseTopo("default_topo.json")
+	topo := parseTopo(topopath)
 
 	var senderwg sync.WaitGroup
 	var recverwg sync.WaitGroup
@@ -63,7 +66,7 @@ func main() {
 				interval := time.Duration(1000000.0 / demand.Rate) * time.Microsecond
 				paymentTick := time.Tick(interval)
 				for range paymentTick {
-					pr, _ := addInvoice(lnd, 1)
+					pr, _ := addInvoice(lnd, paymentSize)
 					etcdPath := fmt.Sprintf("/payments/%v/%v/invoice", demand.Source, demand.Destination)
 					etcd.Set(context.Background(), etcdPath, pr, nil)
 				}

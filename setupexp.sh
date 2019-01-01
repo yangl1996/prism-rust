@@ -16,13 +16,13 @@ function next_index()
 function start_container()
 {
 	# name, ip, host
-	ssh $3 -- docker run -itd --name "spider$1" -e NODENAME=$1 -e NODEIP=$2 -e SPIDER_EXP_NAME='hotnets-01' -e SPIDER_QUEUE=0 -e SPIDER_LOG_FIREBASE=1 --network spider --ip $2 spider
+	ssh $3 -- docker run -itd --name "spider$1" -e NODENAME=$1 -e NODEIP=$2 -e SPIDER_EXP_NAME='hotnets-02' -e SPIDER_QUEUE=0 -e EXP_TIME=300 --network spider --ip $2 spider
 }
 
 function destroy_container()
 {
 	# name, host
-	ssh $2 -- docker stop "spider$1"
+	ssh $2 -- docker kill "spider$1"
 	ssh $2 -- docker rm "spider$1"
 }
 
@@ -74,7 +74,7 @@ function init()
 function start()
 {
 	local host_idx=0
-	for node in `cat bootstrap/default_topo.json | jq -rc '.nodes | .[]'`
+	for node in `cat topology/default_topo.json | jq -rc '.nodes | .[]'`
 	do
 		name=`echo $node | jq -r '.name'`
 		ip=`echo $node | jq -r '.ip'`
@@ -86,7 +86,7 @@ function start()
 function stop()
 {
 	local host_idx=0
-	for node in `cat bootstrap/default_topo.json | jq -rc '.nodes | .[]'`
+	for node in `cat topology/default_topo.json | jq -rc '.nodes | .[]'`
 	do
 		name=`echo $node | jq -r '.name'`
 		destroy_container $name ${hosts[$host_idx]} 

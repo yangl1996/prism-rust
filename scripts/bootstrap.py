@@ -2,7 +2,8 @@ import os
 import json
 import templates
 
-with open("./default_topo.json") as f:
+topo_file = os.getenv("TOPO_FILE")
+with open(topo_file) as f:
     t = json.load(f)
 
 nodename = os.getenv("NODENAME")

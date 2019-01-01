@@ -2,7 +2,7 @@
 function waitportopen()
 {
 	while ! nc -z localhost $1; do
-		sleep 0.2
+		sleep 0.3
 	done
 }
 
@@ -11,7 +11,7 @@ function etcdget()
 	local dt=''
 	until dt=`etcdctl get $1 2> /dev/null`
 	do
-		sleep 0.2
+		sleep 0.3
 	done
 	echo $dt
 }
@@ -20,7 +20,7 @@ function killandassert()
 {
 	kill $1
 	while kill -0 $1; do
-		sleep 0.2
+		sleep 0.3
 	done
 }
 
@@ -32,14 +32,14 @@ function monitorpendingchannels()
 		if has_pending=`etcdctl get /cluster/haspendingchan` ; then
 			if [ "$has_pending" == "init" ] ; then
 				# still init
-				sleep 4.5
+				sleep 0.8
 			elif [ "$has_pending" == "yes" ] ; then
 				# has pending channels
 				btcctl --simnet --rpcuser=btcd --rpcpass=btcd generate 6
-				sleep 4.5
+				sleep 0.8
 			fi
 		else
-			sleep 4.5
+			sleep 0.8
 		fi
 	done
 }
@@ -52,7 +52,7 @@ function killintime()
 
 echo "Generating config files for btcd, etcd and lnd"
 # create config files
-python3 bootstrap.py
+python3 /root/scripts/bootstrap.py
 
 echo "Starting btcd, etcd and lnd"
 # start btcd, lnd, and etcd
@@ -83,10 +83,10 @@ btc_addr=`lncli -n simnet newaddress np2wkh | jq -r '.address'`
 etcdctl set "/nodeinfo/$NODENAME/btcaddr" $btc_addr &> /dev/null
 
 # if we are the mining node, mine coins for each node
-miner_node=`cat default_topo.json | jq -r '.miner'`
+miner_node=`cat $TOPO_FILE | jq -r '.miner'`
 if [ "$NODENAME" == "$miner_node" ]
 then
-	for node in `cat default_topo.json | jq -r '.nodes | .[] | .name'`; do
+	for node in `cat $TOPO_FILE | jq -r '.nodes | .[] | .name'`; do
 		# wait for the node to publish its btc address
 		node_btcaddr=`etcdget /nodeinfo/$node/btcaddr`
 
@@ -114,7 +114,7 @@ pubkey=`lncli -n simnet getinfo | jq -r '.identity_pubkey'`
 etcdctl set "/nodeinfo/$NODENAME/pubkey" "$pubkey" &> /dev/null
 
 # establish channel with peers
-for chan in `cat default_topo.json | jq -c '.lnd_channels | .[]'`; do
+for chan in `cat $TOPO_FILE | jq -c '.lnd_channels | .[]'`; do
 	src=`echo $chan | jq -r '.src'`
 	dst=`echo $chan | jq -r '.dst'`
     cap=`echo $chan | jq -r '.capacity'`
@@ -162,13 +162,13 @@ do
 	# if there are still channels pending, tell the miner
 	# this info will live for 5 sec. The miner checks this key
 	# every (<5) sec, so it will always be seen by the miner
-	etcdctl set --ttl=5 /cluster/haspendingchan yes &> /dev/null
-	sleep 5
+	etcdctl set --ttl=1 /cluster/haspendingchan yes &> /dev/null
+	sleep 0.8
 done
 
 # wait for itself to receive all channels
 echo "Waiting to see all channels"
-num_channels=`cat default_topo.json | jq '.lnd_channels | length'`
+num_channels=`cat $TOPO_FILE | jq '.lnd_channels | length'`
 until [ `lncli -n simnet getnetworkinfo | jq '.num_channels'` == "$num_channels" ]
 do
 	sleep 1
@@ -177,21 +177,20 @@ etcdctl set "/nodeinfo/$NODENAME/seenallchans" "yes" &> /dev/null
 
 # wait for all nodes to receive all channels
 echo "Waiting for all nodes to see all channels"
-for node in `cat default_topo.json | jq -r '.nodes | .[] | .name'`; do
+for node in `cat $TOPO_FILE | jq -r '.nodes | .[] | .name'`; do
 	echo "Waiting for node $node"
 	etcdget /nodeinfo/$node/seenallchans &> /dev/null
 done
 
 echo "Running experiments"
-./run &
+expctrl &
 mainpid=$!
 
-sleep 60
+sleep $EXP_TIME
 kill $mainpid
 pkill lnd
 pkill btcd
 
 # enter interactive bash
-bash getresults.sh
-bash
+bash /root/scripts/getresults.sh
 

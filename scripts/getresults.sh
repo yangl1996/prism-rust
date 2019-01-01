@@ -18,7 +18,7 @@ function getresult()
 	echo "$1->$2: Total=$tot, Success=$succ"
 }
 
-for chan in `cat default_topo.json | jq -c '.demands | .[]'`; do
+for chan in `cat $TOPO_FILE | jq -c '.demands | .[]'`; do
 	src=`echo $chan | jq -r '.src'`
 	dst=`echo $chan | jq -r '.dst'`
 	echo `getresult $src $dst`

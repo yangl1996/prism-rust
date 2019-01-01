@@ -42,3 +42,4 @@ cp $GOPATH/src/github.com/lightningnetwork/lnd/expctrl/expctrl $BUILDROOT/binari
 
 echo "Cleaning up build files"
 rm -rf $GOPATH
+rm -rf $BUILDROOT/downloads
