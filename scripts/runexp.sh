@@ -56,18 +56,18 @@ python3 /root/scripts/bootstrap.py
 
 echo "Starting btcd, etcd and lnd"
 # start btcd, lnd, and etcd
-btcd &> /dev/null &
+btcd &> /root/log/btcd.log &
 btcd_pid=$!
 # wait for btcd to start
 waitportopen 18556 &> /dev/null
 echo "Btcd started"
 
-lnd --noseedbackup --debughtlc &> /dev/null &
+lnd --noseedbackup --debughtlc &> /root/log/lnd.log &
 # wait for lnd to start
 waitportopen 10009 &> /dev/null
 echo "Lnd started"
 
-etcd --config-file ~/.etcd/etcd.conf &> /dev/null &
+etcd --config-file ~/.etcd/etcd.conf &> /root/log/etcd.log &
 # wait for etcd to start
 waitportopen 2379 &> /dev/null
 echo "Etcd started"
@@ -95,7 +95,7 @@ then
 		killandassert $btcd_pid &> /dev/null
 
 		# start btcd and set mining addr
-		btcd --miningaddr=$node_btcaddr &> /dev/null &
+		btcd --miningaddr=$node_btcaddr >>/root/log/btcd.log 2>&1 &
 		btcd_pid=$!
 
 		# wait for btcd to restart

@@ -7,5 +7,6 @@ export SPIDER_LOG_FIREBASE=${SPIDER_LOG_FIREBASE-1}             # enable firebas
 export SPIDER_QUEUE=${SPIDER_QUEUE-0}                           # disable queue by default
 export EXP_TIME=${EXP_TIME-120}                                 # default duration is 120s
 
-/root/scripts/runexp.sh &> /root/log &
+mkdir -p /root/log
+/root/scripts/runexp.sh &> /root/log/main.log &
 bash
