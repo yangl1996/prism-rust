@@ -104,9 +104,9 @@ then
         echo "Btcd restarted for $node"
 
         # mine blocks
-        btcctl --simnet --rpcuser=btcd --rpcpass=btcd generate 10 &> /dev/null
+        btcctl --simnet --rpcuser=btcd --rpcpass=btcd generate 50 &> /dev/null
         echo "Mined coins for $node"
-        mined_amt=`expr $mined_amt + 10`
+        mined_amt=`expr $mined_amt + 50`
     done
     # in case we did't mine enough blocks
     to_mine=`expr 400 - $mined_amt`
