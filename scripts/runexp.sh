@@ -35,7 +35,7 @@ function monitorpendingchannels()
                 sleep 0.8
             elif [ "$has_pending" == "yes" ] ; then
                 # has pending channels
-                btcctl --simnet --rpcuser=btcd --rpcpass=btcd generate 6
+                btcctl --simnet --rpcuser=btcd --rpcpass=btcd generate 6 >>/root/log/btcctl.log 2>&1
                 sleep 0.8
             fi
         else
@@ -104,7 +104,7 @@ then
         echo "Btcd restarted for $node"
 
         # mine blocks
-        btcctl --simnet --rpcuser=btcd --rpcpass=btcd generate 50 &> /dev/null
+        btcctl --simnet --rpcuser=btcd --rpcpass=btcd generate 50 >>/root/log/btcctl.log 2>&1
         echo "Mined coins for $node"
         mined_amt=`expr $mined_amt + 50`
     done
@@ -112,7 +112,7 @@ then
     to_mine=`expr 400 - $mined_amt`
     if [ "$to_mine" -gt "0" ]; then
         echo "Mining coins until we have mined 400"
-        btcctl --simnet --rpcuser=btcd --rpcpass=btcd generate $to_mine &> /dev/null
+        btcctl --simnet --rpcuser=btcd --rpcpass=btcd generate $to_mine >>/root/log/btcctl.log 2>&1
     fi
 fi
 
@@ -132,14 +132,14 @@ for chan in `cat $TOPO_FILE | jq -c '.lnd_channels | .[]'`; do
         # establish p2p connection
         peer_pubkey=`etcdget /nodeinfo/$dst/pubkey`
         peer_ip=`etcdget /nodeinfo/$dst/ip`
-        lncli -n simnet connect $peer_pubkey@$peer_ip:9735 &> /dev/null
+        lncli -n simnet connect $peer_pubkey@$peer_ip:9735 >>/root/log/lncli.log 2>&1
 
         # establish channel
         # we need to retry until succeed because btcd might by syncing
         echo "Creating channel to $dst"
         funding_output=''
         funding_amt=`expr $cap + $cap + 9050`
-        until funding_output=`lncli -n simnet openchannel --node_key=$peer_pubkey --local_amt=$funding_amt --push_amt=$cap 2> /dev/null`
+        until funding_output=`lncli -n simnet openchannel --node_key=$peer_pubkey --local_amt=$funding_amt --push_amt=$cap >>/root/log/lncli.log 2>&1`
         do
             sleep 0.5
         done
