@@ -1,5 +1,5 @@
 #!/bin/bash
-hosts=(spider1)
+hosts=(spider1 spider2 spider3 spider4)
 
 function next_index()
 {
@@ -16,7 +16,7 @@ function next_index()
 function start_container()
 {
 	# name, ip, host
-	ssh $3 -- docker run -itd --name "spider$1" -e NODENAME=$1 -e NODEIP=$2 -e SPIDER_EXP_NAME='hotnets-02' --network spider --ip $2 spider
+	ssh $3 -- docker run -itd --name "spider$1" -e NODENAME=$1 -e NODEIP=$2 -e SPIDER_EXP_NAME='hotnets-03' --network spider --ip $2 spider
 }
 
 function destroy_container()

@@ -1,8 +1,8 @@
 #!/bin/bash
-BUILDROOT="$PWD"
-GOPATH="$PWD/goroot"
-PATH="$PATH:$GOPATH/bin"
-BRANCH='stats'
+export BUILDROOT="$PWD"
+export GOPATH="$PWD/goroot"
+export PATH="$PATH:$GOPATH/bin"
+export BRANCH='stats'
 
 echo "Building lnd and btcd"
 go get -u github.com/golang/dep/cmd/dep
