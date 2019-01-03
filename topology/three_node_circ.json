@@ -1,0 +1,115 @@
+{
+    "nodes": [
+        {
+            "ip": "10.0.1.100", 
+            "name": "0r"
+        }, 
+        {
+            "ip": "10.0.1.101", 
+            "name": "0e"
+        }, 
+        {
+            "ip": "10.0.1.102", 
+            "name": "1r"
+        }, 
+        {
+            "ip": "10.0.1.103", 
+            "name": "1e"
+        }, 
+        {
+            "ip": "10.0.1.104", 
+            "name": "2r"
+        }, 
+        {
+            "ip": "10.0.1.105", 
+            "name": "2e"
+        }
+    ], 
+    "demands": [
+        {
+            "src": "1e", 
+            "dst": "2e", 
+            "rate": 6
+        }, 
+        {
+            "src": "0e", 
+            "dst": "1e", 
+            "rate": 3
+        }, 
+        {
+            "src": "2e", 
+            "dst": "1e", 
+            "rate": 7
+        }, 
+        {
+            "src": "2e", 
+            "dst": "0e", 
+            "rate": 3
+        }, 
+        {
+            "src": "1e", 
+            "dst": "0e", 
+            "rate": 4
+        }, 
+        {
+            "src": "0e", 
+            "dst": "2e", 
+            "rate": 4
+        }
+    ], 
+    "miner": "0r", 
+    "btcd_connections": [
+        {
+            "src": "0r", 
+            "dst": "1r"
+        }, 
+        {
+            "src": "0e", 
+            "dst": "0r"
+        }, 
+        {
+            "src": "1r", 
+            "dst": "2r"
+        }, 
+        {
+            "src": "1e", 
+            "dst": "1r"
+        }, 
+        {
+            "src": "2e", 
+            "dst": "2r"
+        }
+    ], 
+    "lnd_channels": [
+        {
+            "src": "0r", 
+            "dst": "0e", 
+            "capacity": 8000000
+        }, 
+        {
+            "src": "0r", 
+            "dst": "1r", 
+            "capacity": 50000
+        }, 
+        {
+            "src": "0r", 
+            "dst": "2r", 
+            "capacity": 50000
+        }, 
+        {
+            "src": "1r", 
+            "dst": "1e", 
+            "capacity": 8000000
+        }, 
+        {
+            "src": "1r", 
+            "dst": "2r", 
+            "capacity": 50000
+        }, 
+        {
+            "src": "2r", 
+            "dst": "2e", 
+            "capacity": 8000000
+        }
+    ]
+}
