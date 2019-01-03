@@ -16,6 +16,7 @@ cd $GOPATH/src/github.com/lightningnetwork/lnd
 git checkout $BRANCH
 git pull origin $BRANCH
 git apply $BUILDROOT/patches/fixdep.patch
+git apply $BUILDROOT/patches/removeChanSizeLimit.patch
 make && make install
 make btcd
 

@@ -1,5 +1,5 @@
 #!/bin/bash
-hosts=(spider-ec2)
+hosts=(spider1)
 
 function next_index()
 {
