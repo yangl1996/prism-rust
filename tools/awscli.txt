@@ -1,9 +1,0 @@
-Start instance:
-aws ec2 run-instances --launch-template LaunchTemplateId=lt-0065a09a461515b3e
-
-Find testbed instances:
-aws ec2 describe-instances --filters "Name=tag:spider,Values=distributed-testing"
-
-Terminate instance:
-aws ec2 --instance-ids 'id1' 'id2' ...
-
