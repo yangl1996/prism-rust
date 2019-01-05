@@ -214,19 +214,17 @@ function run_on_all
 	done
 }
 
-function send_topo_to_all
+function rsync_testbed_dir
 {
-	# $1: topo file
 	local instances=`cat instances.txt`
 	local pids=""
-	local topo_filename=`basename $1`
 	for instance in $instances ;
 	do
 		local id
 		local ip
 		IFS=',' read -r id ip <<< "$instance"
-		echo "Sending $topo_filename to $id"
-		scp $1 $id:/home/ubuntu/spider-docker/topology/$topo_filename &
+		echo "Syncing spider-docker to $id"
+		rsync -r .. $id:/home/ubuntu/spider-docker &
 		pids="$pids $!"
 	done
 	echo "Waiting for all jobs to finish"
@@ -257,8 +255,8 @@ case "$1" in
 		    Stop an experiment
 		run-all cmd
 		    Run command on all instances
-		send-topo topofile
-		    Send topology file to all instances
+		sync-testbed
+		    Sync testbed directory to remotes
 
 		Notes
 		
@@ -286,6 +284,6 @@ case "$1" in
 		stop_experiment ;;
 	run-all)
 		run_on_all "${@:2}" ;;
-	send-topo)
-		send_topo_to_all $2 ;;
+	sync-testbed)
+		rsync_testbed_dir ;;
 esac
