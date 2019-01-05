@@ -238,31 +238,34 @@ function send_topo_to_all
 
 case "$1" in
 	help)
-		echo "Helper script to run Spider distributed tests"
-		echo ""
-		echo "start-instances n"
-		echo "    Start n EC2 instances"
-		echo "stop-instances"
-		echo "    Terminate EC2 instances"
-		echo "init-docker"
-		echo "    Initialize docker swarm"
-		echo "uninit-docker"
-		echo "    Destroy docker swarm"
-		echo "build-images"
-		echo "    Build docker images" 
-		echo "start-exp topofile expname exptime"
-		echo "    Start an experiment"
-		echo "stop-exp topofile"
-		echo "    Stop an experiment"
-		echo "run-all cmd"
-		echo "    Run command on all instances"
-		echo "send-topo topofile"
-		echo "    Send topology file to all instances"
-		echo ""
-		echo "Notes"
-		echo ""
-		echo "Update all containers"
-		echo "    ./run.sh run-all docker build -t spider spider-docker" ;;
+		cat <<- EOF
+		Helper script to run Spider distributed tests
+
+		start-instances n
+		    Start n EC2 instances
+		stop-instances
+		    Terminate EC2 instances
+		init-docker
+		    Initialize docker swarm
+		uninit-docker
+		    Destroy docker swarm
+		build-images
+		    Build docker images
+		start-exp topofile expname exptime
+		    Start an experiment
+		stop-exp topofile
+		    Stop an experiment
+		run-all cmd
+		    Run command on all instances
+		send-topo topofile
+		    Send topology file to all instances
+
+		Notes
+		
+		Update all containers
+		    ./run.sh run-all docker build -t spider spider-docker
+		EOF
+		;;
 	start-instances)
 		start_instances $2 ;;
 	stop-instances)
