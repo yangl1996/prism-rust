@@ -234,6 +234,18 @@ function rsync_testbed_dir
 	done
 }
 
+function ssh_to_server
+{
+	# $1: which server to ssh to (starting from 1)
+	local instance=`sed -n "$1 p" < instances.txt`
+	local id
+	local ip
+	IFS=',' read -r id ip <<< "$instance"
+	echo "SSH to $id at $ip"
+	ssh $id
+}
+
+
 case "$1" in
 	help)
 		cat <<- EOF
@@ -257,6 +269,8 @@ case "$1" in
 		    Run command on all instances
 		sync-testbed
 		    Sync testbed directory to remotes
+		ssh i
+		    SSH to the i-th server (1-based index)
 
 		Notes
 		
@@ -286,4 +300,6 @@ case "$1" in
 		run_on_all "${@:2}" ;;
 	sync-testbed)
 		rsync_testbed_dir ;;
+	ssh)
+		ssh_to_server $2 ;;
 esac
