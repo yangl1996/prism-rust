@@ -191,6 +191,27 @@ function stop_experiment
     done
 }
 
+function run_on_all
+{
+    # $@: command to run
+    local instances=`cat instances.txt`
+    local pids=""
+    for instance in $instances ;
+    do
+        local id
+        local ip
+        IFS=',' read -r id ip <<< "$instance"
+        echo "Job launched for $id"
+        ssh $id -- "$@" &
+        pids="$pids $!"
+    done
+    echo "Waiting for all jobs to finish"
+    for pid in $pids ;
+    do
+        wait $pid
+    done
+}
+
 case "$1" in
     help)
         echo "Helper script to run Spider distributed tests"
@@ -208,7 +229,9 @@ case "$1" in
         echo "start-exp topofile expname exptime"
         echo "    Start an experiment"
         echo "stop-exp topofile"
-        echo "    Stop an experiment" ;;
+        echo "    Stop an experiment"
+        echo "run-all cmd"
+        echo "    Run command on all instances" ;;
     start-instances)
         start_instances $2 ;;
     stop-instances)
@@ -223,8 +246,10 @@ case "$1" in
         TOPO_FILE=$2
         EXP_NAME=$3
         EXP_TIME=$4
-        start_experiment;;
+        start_experiment ;;
     stop-exp)
         TOPO_FILE=$2
-        stop_experiment;;
+        stop_experiment ;;
+    run-all)
+        run_on_all "${@:2}" ;;
 esac
