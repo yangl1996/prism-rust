@@ -1,0 +1,14 @@
+diff --git a/htlcswitch/link.go b/htlcswitch/link.go
+index 994e5c64..523d8d60 100644
+--- a/htlcswitch/link.go
++++ b/htlcswitch/link.go
+@@ -387,7 +387,8 @@ func (l *channelLink) updateFirebase()  {
+ 		// set it for uploading
+ 		vals[chanID] = curVals
+ 		if _, err := fb.Push(vals); err != nil {
+-			fmt.Println("error when logging to firebase")
++            fmt.Println("Error logging to Firebase")
++			fmt.Println(err)
+ 		}
+ 		i += 1;
+ 		time.Sleep(time.Duration(UPDATE_INTERVAL) * time.Millisecond)
