@@ -15,7 +15,8 @@ function getresult()
 	local succ=''
 	tot=`etcdget /payments/$1/$2/total`
 	succ=`etcdget /payments/$1/$2/success`
-	echo "$1->$2: Total=$tot, Success=$succ"
+	rate=`awk "BEGIN {print $succ/$tot}"`
+	echo "$1->$2: Total=$tot, Success=$succ, Rate=$rate"
 }
 
 for chan in `cat $TOPO_FILE | jq -c '.demands | .[]'`; do
