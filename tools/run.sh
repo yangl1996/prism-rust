@@ -26,17 +26,17 @@ function start_instances
 
 function stop_instances
 {
-   local instances=`cat instances.txt`
-   local instance_ids=""
-   for instance in $instances ;
-   do
-       local id
-       local ip
-       IFS=',' read -r id ip <<< "$instance"
-       instance_ids="$instance_ids $id"
-   done
-   echo "Terminating instances $instance_ids"
-   aws ec2 terminate-instances --instance-ids $instance_ids > aws_stop.log
+    local instances=`cat instances.txt`
+    local instance_ids=""
+    for instance in $instances ;
+    do
+        local id
+        local ip
+        IFS=',' read -r id ip <<< "$instance"
+        instance_ids="$instance_ids $id"
+    done
+    echo "Terminating instances $instance_ids"
+    aws ec2 terminate-instances --instance-ids $instance_ids > aws_stop.log
 }
 
 function build_container
@@ -110,27 +110,29 @@ function build_all
 
 function start_container
 {
-	# $1: node name, $2: ip, $3: host
-	ssh $3 -- docker run -itd --name "spider$1" -e NODENAME=$1 -e NODEIP=$2 -e SPIDER_EXP_NAME="$EXP_NAME" -e TOPO_FILE="$TOPO_FILE" -e EXP_TIME="$EXP_TIME" --network spider --ip $2 spider
+    # $1: node name, $2: ip, $3: host
+    topo_filename=`basename $TOPO_FILE`
+    topo_path="/root/ubuntu/topology/$topo_filename"
+    ssh $3 -- docker run -itd --name "spider$1" -e NODENAME=$1 -e NODEIP=$2 -e SPIDER_EXP_NAME="$EXP_NAME" -e TOPO_FILE="$topo_path" -e EXP_TIME="$EXP_TIME" --network spider --ip $2 spider
 }
 
 function destroy_container
 {
-	# $1: node name, $2: host
-	ssh $2 -- docker kill "spider$1"
-	ssh $2 -- docker rm "spider$1"
+    # $1: node name, $2: host
+    ssh $2 -- docker kill "spider$1"
+    ssh $2 -- docker rm "spider$1"
 }
 
 function next_index()
 {
-	# $1: current index
-	local len=${#hosts[@]}
-	local next=`expr $1 + 1`
-	if [ "$next" -ge "$len" ]
-	then
-		next=0
-	fi
-	echo $next
+    # $1: current index
+    local len=${#hosts[@]}
+    local next=`expr $1 + 1`
+    if [ "$next" -ge "$len" ]
+    then
+        next=0
+    fi
+    echo $next
 }
 
 
@@ -147,15 +149,15 @@ function start_experiment
     done
     local host_idx=0
     local pids=""
-	for node in `cat $TOPO_FILE | jq -rc '.nodes | .[]'`
-	do
-		name=`echo $node | jq -r '.name'`
-		ip=`echo $node | jq -r '.ip'`
+    for node in `cat $TOPO_FILE | jq -rc '.nodes | .[]'`
+    do
+        name=`echo $node | jq -r '.name'`
+        ip=`echo $node | jq -r '.ip'`
         echo "Starting $name"
-		start_container $name $ip ${hosts[$host_idx]} &> /dev/null &
+        start_container $name $ip ${hosts[$host_idx]} &> /dev/null &
         pids="$pids $!"
-		host_idx=`next_index $host_idx`
-	done
+        host_idx=`next_index $host_idx`
+    done
     echo "Waiting for all jobs to finish"
     for pid in $pids ;
     do
@@ -176,14 +178,14 @@ function stop_experiment
     done
     local host_idx=0
     local pids=""
-	for node in `cat $TOPO_FILE | jq -rc '.nodes | .[]'`
-	do
-		name=`echo $node | jq -r '.name'`
+    for node in `cat $TOPO_FILE | jq -rc '.nodes | .[]'`
+    do
+        name=`echo $node | jq -r '.name'`
         echo "Stopping $name"
-		destroy_container $name ${hosts[$host_idx]} &> /dev/null &
+        destroy_container $name ${hosts[$host_idx]} &> /dev/null &
         pids="$pids $!"
-		host_idx=`next_index $host_idx`
-	done
+        host_idx=`next_index $host_idx`
+    done
     echo "Waiting for all jobs to finish"
     for pid in $pids ;
     do
