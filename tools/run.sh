@@ -110,8 +110,8 @@ function build_all
 
 function start_container
 {
-	# $1: node name, $2: ip, $3: host, $4 experiment name
-	ssh $3 -- docker run -itd --name "spider$1" -e NODENAME=$1 -e NODEIP=$2 -e SPIDER_EXP_NAME=$4 --network spider --ip $2 spider
+	# $1: node name, $2: ip, $3: host
+	ssh $3 -- docker run -itd --name "spider$1" -e NODENAME=$1 -e NODEIP=$2 -e SPIDER_EXP_NAME="$EXP_NAME" -e TOPO_FILE="$TOPO_FILE" -e EXP_TIME="$EXP_TIME" --network spider --ip $2 spider
 }
 
 function destroy_container
@@ -136,7 +136,6 @@ function next_index()
 
 function start_experiment
 {
-    # $1: topology file, $2: experiment name
     local instances=`cat instances.txt`
     hosts=()
     for instance in $instances ;
@@ -148,12 +147,12 @@ function start_experiment
     done
     local host_idx=0
     local pids=""
-	for node in `cat $1 | jq -rc '.nodes | .[]'`
+	for node in `cat $TOPO_FILE | jq -rc '.nodes | .[]'`
 	do
 		name=`echo $node | jq -r '.name'`
 		ip=`echo $node | jq -r '.ip'`
         echo "Starting $name"
-		start_container $name $ip ${hosts[$host_idx]} $2 &> /dev/null &
+		start_container $name $ip ${hosts[$host_idx]} &> /dev/null &
         pids="$pids $!"
 		host_idx=`next_index $host_idx`
 	done
@@ -166,7 +165,6 @@ function start_experiment
 
 function stop_experiment
 {
-    # $1: topology file
     local instances=`cat instances.txt`
     hosts=()
     for instance in $instances ;
@@ -178,7 +176,7 @@ function stop_experiment
     done
     local host_idx=0
     local pids=""
-	for node in `cat $1 | jq -rc '.nodes | .[]'`
+	for node in `cat $TOPO_FILE | jq -rc '.nodes | .[]'`
 	do
 		name=`echo $node | jq -r '.name'`
         echo "Stopping $name"
@@ -195,13 +193,22 @@ function stop_experiment
 
 case "$1" in
     help)
-        echo "start-instances n                 Start n EC2 instances"
-        echo "stop-instances                    Terminate EC2 instances"
-        echo "init-docker                       Initialize docker swarm"
-        echo "uninit-docker                     Destroy docker swarm"
-        echo "build-images                      Build docker images" 
-        echo "start-exp topofile expname        Start an experiment"
-        echo "stop-exp topofile                 Stop an experiment" ;;
+        echo "Helper script to run Spider distributed tests"
+        echo ""
+        echo "start-instances n"
+        echo "    Start n EC2 instances"
+        echo "stop-instances"
+        echo "    Terminate EC2 instances"
+        echo "init-docker"
+        echo "    Initialize docker swarm"
+        echo "uninit-docker"
+        echo "    Destroy docker swarm"
+        echo "build-images"
+        echo "    Build docker images" 
+        echo "start-exp topofile expname exptime"
+        echo "    Start an experiment"
+        echo "stop-exp topofile"
+        echo "    Stop an experiment" ;;
     start-instances)
         start_instances $2 ;;
     stop-instances)
@@ -213,7 +220,11 @@ case "$1" in
     build-images)
         build_all ;;
     start-exp)
-        start_experiment $2 $3 ;;
+        TOPO_FILE=$2
+        EXP_NAME=$3
+        EXP_TIME=$4
+        start_experiment;;
     stop-exp)
-        stop_experiment $2 ;;
+        TOPO_FILE=$2
+        stop_experiment;;
 esac
