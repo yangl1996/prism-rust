@@ -214,6 +214,28 @@ function run_on_all
     done
 }
 
+function send_topo_to_all
+{
+    # $1: topo file
+    local instances=`cat instances.txt`
+    local pids=""
+    local topo_filename=`basename $1`
+    for instance in $instances ;
+    do
+        local id
+        local ip
+        IFS=',' read -r id ip <<< "$instance"
+        echo "Sending $topo_filename to $id"
+        scp $1 $id:/home/ubuntu/spider-docker/topology/$topo_filename &
+        pids="$pids $!"
+    done
+    echo "Waiting for all jobs to finish"
+    for pid in $pids ;
+    do
+        wait $pid
+    done
+}
+
 case "$1" in
     help)
         echo "Helper script to run Spider distributed tests"
@@ -233,7 +255,14 @@ case "$1" in
         echo "stop-exp topofile"
         echo "    Stop an experiment"
         echo "run-all cmd"
-        echo "    Run command on all instances" ;;
+        echo "    Run command on all instances"
+        echo "send-topo topofile"
+        echo "    Send topology file to all instances"
+        echo ""
+        echo "Notes"
+        echo ""
+        echo "Update all containers"
+        echo "    ./run.sh run-all docker build -t spider spider-docker" ;;
     start-instances)
         start_instances $2 ;;
     stop-instances)
@@ -254,4 +283,6 @@ case "$1" in
         stop_experiment ;;
     run-all)
         run_on_all "${@:2}" ;;
+    send-topo)
+        send_topo_to_all $2 ;;
 esac

@@ -48,74 +48,74 @@
 		{
 			"src": "0",
 			"dst": "1",
-            "capacity": 100000
+            "capacity": 10000
 		},
 		{
 			"src": "1",
 			"dst": "2",
-            "capacity": 100000
+            "capacity": 10000
 		},
 		{
 			"src": "2",
 			"dst": "3",
-            "capacity": 100000
+            "capacity": 10000
 		},
 		{
 			"src": "3",
 			"dst": "4",
-            "capacity": 100000
+            "capacity": 10000
 		},
 		{
 			"src": "4",
 			"dst": "0",
-            "capacity": 100000
+            "capacity": 10000
 		},
 		{
 			"src": "1",
 			"dst": "3",
-            "capacity": 100000
+            "capacity": 10000
 		}
 	],
 	"demands": [
 		{
 			"src": "0",
 			"dst": "1",
-			"rate": 1
+			"rate": 10
 		},
 		{
 			"src": "0",
 			"dst": "4",
-			"rate": 1
+			"rate": 10
 		},
 		{
 			"src": "1",
 			"dst": "3",
-			"rate": 2
+			"rate": 20
 		},
 		{
 			"src": "2",
 			"dst": "1",
-			"rate": 1
+			"rate": 10
 		},
 		{
 			"src": "2",
 			"dst": "4",
-			"rate": 2
+			"rate": 20
 		},
 		{
 			"src": "3",
 			"dst": "0",
-			"rate": 2
+			"rate": 20
 		},
 		{
 			"src": "3",
 			"dst": "2",
-			"rate": 2
+			"rate": 20
 		},
 		{
 			"src": "4",
 			"dst": "2",
-			"rate": 1
+			"rate": 10
 		}
 	]
 }
