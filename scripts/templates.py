@@ -13,11 +13,14 @@ bitcoind_connect = "connect={}\n"
 lnd_conf = """[Application Options]
 debuglevel=info
 listen=0.0.0.0:9735
+trickledelay=5000
 
 [Bitcoin]
 bitcoin.regtest=1
 bitcoin.active=1
 bitcoin.node=bitcoind
+bitcoin.defaultchanconfs=0
+bitcoin.defaultremotedelay=0
 
 [bitcoind]
 bitcoind.rpcuser=bitcoind
