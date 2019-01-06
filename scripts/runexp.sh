@@ -139,6 +139,9 @@ then
 	fi
 fi
 
+# wait for chain backend to fully sync
+echo 'Waiting for bitcoind to sync'
+waitforline /root/log/lnd.log $lnd_pid 'Chain backend is fully synced'
 # store public key in etcd
 echo "Publishing lnd pubkey"
 pubkey=`lncli -n regtest getinfo | jq -r '.identity_pubkey'`
