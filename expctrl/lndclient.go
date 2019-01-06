@@ -16,7 +16,7 @@ import (
 )
 
 const tlsPath = "/root/.lnd/tls.cert"
-const macPath = "/root/.lnd/data/chain/bitcoin/simnet/admin.macaroon"
+const macPath = "/root/.lnd/data/chain/bitcoin/regtest/admin.macaroon"
 const rpcPort = "10009"
 const rpcPath = "localhost:10009"
 

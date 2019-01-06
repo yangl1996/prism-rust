@@ -69,6 +69,12 @@ while true; do
 		break
 	fi
 done
+# 'connect' in config file won't work. add peers manually
+bitcoind_config=`cat /root/.bitcoin/bitcoin.conf | grep 'connect='`
+for config_line in $bitcoind_config; do
+	peer_ip=${config_line: 8}
+	bitcoin-cli -regtest addnode "$peer_ip" add >>/root/log/bitcoin-cli.log 2>&1
+done
 
 # start lnd
 while true; do

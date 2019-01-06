@@ -61,23 +61,23 @@
     "btcd_connections": [
         {
             "src": "0r", 
+            "dst": "0e"
+        }, 
+        {
+            "src": "0r", 
             "dst": "1r"
         }, 
         {
-            "src": "0e", 
-            "dst": "0r"
+            "src": "0r", 
+            "dst": "1e"
         }, 
         {
-            "src": "1r", 
+            "src": "0r", 
             "dst": "2r"
         }, 
         {
-            "src": "1e", 
-            "dst": "1r"
-        }, 
-        {
-            "src": "2e", 
-            "dst": "2r"
+            "src": "0r", 
+            "dst": "2e"
         }
     ], 
     "lnd_channels": [
@@ -95,7 +95,7 @@
             "src": "0r", 
             "dst": "2r", 
             "capacity": 10000
-        }, 
+        },
         {
             "src": "1r", 
             "dst": "1e", 
