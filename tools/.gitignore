@@ -1,4 +1,3 @@
-aws_start.log
-aws_stop.log
 instances.txt
+nodehostmap.txt
 *.log

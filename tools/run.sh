@@ -7,8 +7,8 @@ function start_instances
 	local instances=`jq -r '.Instances[].InstanceId ' aws_start.log`
 	echo "Waiting for network interfaces to attach"
 	sleep 3
-	rm instances.txt
-	rm ~/.ssh/config.d/spider
+	rm -f instances.txt
+	rm -f ~/.ssh/config.d/spider
 	echo "Querying public IPs and writing to SSH config"
 	for instance in $instances ;
 	do
@@ -149,12 +149,14 @@ function start_experiment
 	done
 	local host_idx=0
 	local pids=""
+	rm -f nodehostmap.txt
 	for node in `cat $TOPO_FILE | jq -rc '.nodes | .[]'`
 	do
 		name=`echo $node | jq -r '.name'`
 		ip=`echo $node | jq -r '.ip'`
 		echo "Starting $name"
 		start_container $name $ip ${hosts[$host_idx]} &> /dev/null &
+		echo "$name,${hosts[$host_idx]}" >> nodehostmap.txt
 		pids="$pids $!"
 		host_idx=`next_index $host_idx`
 	done
@@ -167,24 +169,15 @@ function start_experiment
 
 function stop_experiment
 {
-	local instances=`cat instances.txt`
-	hosts=()
-	for instance in $instances ;
-	do
-		local id
-		local ip
-		IFS=',' read -r id ip <<< "$instance"
-		hosts+=("$id")
-	done
-	local host_idx=0
+	local expconfig=`cat nodehostmap.txt`
 	local pids=""
-	for node in `cat $TOPO_FILE | jq -rc '.nodes | .[]'`
-	do
-		name=`echo $node | jq -r '.name'`
-		echo "Stopping $name"
-		destroy_container $name ${hosts[$host_idx]} &> /dev/null &
+	for nodeinfo in $expconfig; do
+		local node
+		local host
+		IFS=',' read -r node host <<< "$nodeinfo"
+		echo "Stopping $node"
+		destroy_container $node $host &> /dev/null &
 		pids="$pids $!"
-		host_idx=`next_index $host_idx`
 	done
 	echo "Waiting for all jobs to finish"
 	for pid in $pids ;
@@ -245,6 +238,22 @@ function ssh_to_server
 	ssh $id
 }
 
+function attach_to_container
+{
+	# $1: the host of which container to ssh to
+	local expconfig=`cat nodehostmap.txt`
+	for nodeinfo in $expconfig; do
+		local node
+		local host
+		IFS=',' read -r node host <<< "$nodeinfo"
+		if [ "$node" == "$1" ]; then
+			echo "Attaching to $node. ^p^q to detach. DON'T EXIT!"
+			ssh $host -t "bash -ic 'docker attach spider$node'"
+			break
+		fi
+	done
+}
+
 
 case "$1" in
 	help)
@@ -263,7 +272,7 @@ case "$1" in
 		    Build docker images
 		start-exp topofile expname exptime
 		    Start an experiment
-		stop-exp topofile
+		stop-exp
 		    Stop an experiment
 		run-all cmd
 		    Run command on all instances
@@ -271,6 +280,8 @@ case "$1" in
 		    Sync testbed directory to remotes
 		ssh i
 		    SSH to the i-th server (1-based index)
+		attach node
+			Attach to container node
 
 		Notes
 		
@@ -294,7 +305,6 @@ case "$1" in
 		EXP_TIME=$4
 		start_experiment ;;
 	stop-exp)
-		TOPO_FILE=$2
 		stop_experiment ;;
 	run-all)
 		run_on_all "${@:2}" ;;
@@ -302,4 +312,6 @@ case "$1" in
 		rsync_testbed_dir ;;
 	ssh)
 		ssh_to_server $2 ;;
+	attach)
+		attach_to_container $2 ;;
 esac
