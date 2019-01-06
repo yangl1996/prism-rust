@@ -1,115 +1,114 @@
 {
-        "nodes": [
-                {
-                        "ip": "10.0.1.100", 
-                        "name": "0r"
-                }, 
-                {
-                        "ip": "10.0.1.101", 
-                        "name": "1r"
-                }, 
-                {
-                        "ip": "10.0.1.102", 
-                        "name": "2r"
-                }, 
-                {
-                        "ip": "10.0.1.103", 
-                        "name": "3r"
-                }
-        ], 
-        "demands": [
-                {
-                        "src": "1r", 
-                        "dst": "2r", 
-                        "rate": 2
-                }, 
-                {
-                        "src": "3r", 
-                        "dst": "2r", 
-                        "rate": 4
-                }, 
-                {
-                        "src": "3r", 
-                        "dst": "0r", 
-                        "rate": 2
-                }, 
-                {
-                        "src": "3r", 
-                        "dst": "1r", 
-                        "rate": 2
-                }, 
-                {
-                        "src": "2r", 
-                        "dst": "1r", 
-                        "rate": 4
-                }, 
-                {
-                        "src": "0r", 
-                        "dst": "2r", 
-                        "rate": 3
-                }, 
-                {
-                        "src": "2r", 
-                        "dst": "0r", 
-                        "rate": 2
-                }, 
-                {
-                        "src": "1r", 
-                        "dst": "3r", 
-                        "rate": 3
-                }, 
-                {
-                        "src": "2r", 
-                        "dst": "3r", 
-                        "rate": 3
-                }, 
-                {
-                        "src": "1r", 
-                        "dst": "0r", 
-                        "rate": 1
-                }, 
-                {
-                        "src": "0r", 
-                        "dst": "3r", 
-                        "rate": 2
-                }
-        ], 
-        "miner": "0r", 
-        "btcd_connections": [
-                {
-                        "src": "0r", 
-                        "dst": "1r"
-                }, 
-                {
-                        "src": "1r", 
-                        "dst": "2r"
-                }, 
-                {
-                        "src": "2r", 
-                        "dst": "3r"
-                }
-        ], 
-        "lnd_channels": [
-                {
-                        "src": "0r", 
-                        "dst": "1r", 
-                        "capacity": 100000
-                }, 
-                {
-                        "src": "0r", 
-                        "dst": "3r", 
-                        "capacity": 100000
-                }, 
-                {
-                        "src": "1r", 
-                        "dst": "2r", 
-                        "capacity": 100000
-                }, 
-                {
-                        "src": "2r", 
-                        "dst": "3r", 
-                        "capacity": 100000
-                }
-        ]
+    "nodes": [
+        {
+            "ip": "10.0.1.100",
+            "name": "0r"
+        },
+        {
+            "ip": "10.0.1.101",
+            "name": "1r"
+        },
+        {
+            "ip": "10.0.1.102",
+            "name": "2r"
+        },
+        {
+            "ip": "10.0.1.103",
+            "name": "3r"
+        }
+    ],
+    "demands": [
+        {
+            "src": "1r",
+            "dst": "2r",
+            "rate": 2
+        },
+        {
+            "src": "3r",
+            "dst": "2r",
+            "rate": 4
+        },
+        {
+            "src": "3r",
+            "dst": "0r",
+            "rate": 2
+        },
+        {
+            "src": "3r",
+            "dst": "1r",
+            "rate": 2
+        },
+        {
+            "src": "2r",
+            "dst": "1r",
+            "rate": 4
+        },
+        {
+            "src": "0r",
+            "dst": "2r",
+            "rate": 3
+        },
+        {
+            "src": "2r",
+            "dst": "0r",
+            "rate": 2
+        },
+        {
+            "src": "1r",
+            "dst": "3r",
+            "rate": 3
+        },
+        {
+            "src": "2r",
+            "dst": "3r",
+            "rate": 3
+        },
+        {
+            "src": "1r",
+            "dst": "0r",
+            "rate": 1
+        },
+        {
+            "src": "0r",
+            "dst": "3r",
+            "rate": 2
+        }
+    ],
+    "miner": "0r",
+    "btcd_connections": [
+        {
+            "src": "0r",
+            "dst": "1r"
+        },
+        {
+            "src": "0r",
+            "dst": "2r"
+        },
+        {
+            "src": "0r",
+            "dst": "3r"
+        }
+    ],
+    "lnd_channels": [
+        {
+            "src": "0r",
+            "dst": "1r",
+            "capacity": 100000
+        },
+        {
+            "src": "0r",
+            "dst": "3r",
+            "capacity": 100000
+        },
+        {
+            "src": "1r",
+            "dst": "2r",
+            "capacity": 100000
+        },
+        {
+            "src": "2r",
+            "dst": "3r",
+            "capacity": 100000
+        }
+    ]
 }
-
