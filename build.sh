@@ -39,6 +39,8 @@ cp $BUILDROOT/downloads/jq $BUILDROOT/binaries/
 cp $BUILDROOT/downloads/etcd-v3.3.10-linux-amd64/etcd* $BUILDROOT/binaries/
 cp $GOPATH/bin/* $BUILDROOT/binaries/
 cp $GOPATH/src/github.com/lightningnetwork/lnd/expctrl/expctrl $BUILDROOT/binaries/
+rm $BUILDROOT/binaries/btcctl
+rm $BUILDROOT/binaries/btcd
 
 echo "Cleaning up build files"
 rm -rf $GOPATH
