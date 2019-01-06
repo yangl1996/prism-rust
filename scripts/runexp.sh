@@ -33,7 +33,7 @@ function monitorpendingchannels()
 				sleep 0.8
 			elif [ "$has_pending" == "yes" ] ; then
 				# has pending channels
-				btcctl --simnet --rpcuser=btcd --rpcpass=btcd generate 6 >>/root/log/btcctl.log 2>&1
+				bitcoin-cli -regtest generate 6 >>/root/log/bitcoin-cli.log 2>&1 
 				sleep 0.8
 			fi
 		else
@@ -114,25 +114,14 @@ etcdctl set "/nodeinfo/$NODENAME/btcaddr" $btc_addr &> /dev/null
 miner_node=`cat $TOPO_FILE | jq -r '.miner'`
 if [ "$NODENAME" == "$miner_node" ]
 then
-	mined_amt=0
+	mined_amt=100
+	bitcoin-cli -regtest generate 100 >>/root/log/bitcoin-cli.log 2>&1
 	for node in `cat $TOPO_FILE | jq -r '.nodes | .[] | .name'`; do
 		# wait for the node to publish its btc address
 		node_btcaddr=`etcdget /nodeinfo/$node/btcaddr`
 
-		# kill current btcd instance and wait for it to exit
-		echo "Restarting btcd to mine for node $node"
-		killandassert $btcd_pid &> /dev/null
-
-		# start btcd and set mining addr
-		btcd --miningaddr=$node_btcaddr >>/root/log/btcd.log 2>&1 &
-		btcd_pid=$!
-
-		# wait for btcd to restart
-		waitportopen 18556 &> /dev/null
-		echo "Btcd restarted for $node"
-
 		# mine blocks
-		btcctl --simnet --rpcuser=btcd --rpcpass=btcd generate 50 >>/root/log/btcctl.log 2>&1
+		bitcoin-cli -regtest generatetoaddress 50 "$node_btcaddr" >>/root/log/bitcoin-cli.log 2>&1
 		echo "Mined coins for $node"
 		mined_amt=`expr $mined_amt + 50`
 	done
@@ -140,7 +129,7 @@ then
 	to_mine=`expr 400 - $mined_amt`
 	if [ "$to_mine" -gt "0" ]; then
 		echo "Mining coins until we have mined 400"
-		btcctl --simnet --rpcuser=btcd --rpcpass=btcd generate $to_mine >>/root/log/btcctl.log 2>&1
+		bitcoin-cli -regtest generate $to_mine >>/root/log/bitcoin-cli.log 2>&1
 	fi
 fi
 
@@ -233,9 +222,9 @@ expctrl &
 mainpid=$!
 
 sleep $EXP_TIME
-kill $mainpid
-pkill lnd
-pkill btcd
+killandassert $mainpid
+killandassert $lnd_pid
+killandassert $bitcoind_pid
 
 # enter interactive bash
 bash /root/scripts/getresults.sh
