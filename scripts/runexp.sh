@@ -19,9 +19,7 @@ function etcdget()
 function killandassert()
 {
 	kill $1
-	while kill -0 $1; do
-		sleep 0.3
-	done
+	wait $!
 }
 
 function monitorpendingchannels()
@@ -44,33 +42,63 @@ function monitorpendingchannels()
 	done
 }
 
-function killintime()
+function waitforline()
 {
-	sleep $2
-	kill $1
+	# $1: file to watch, $2: pid to monitor, ${@:3}: pid to monitor
+	tail -F -n+0 --pid $2 $1 2>/dev/null | grep -qe "${@:3}"
 }
 
-echo "Generating config files for btcd, etcd and lnd"
+echo "Generating config files for bitcoind, etcd and lnd"
 # create config files
 python3 /root/scripts/bootstrap.py
 
-echo "Starting btcd, etcd and lnd"
-# start btcd, lnd, and etcd
-btcd &> /root/log/btcd.log &
-btcd_pid=$!
-# wait for btcd to start
-waitportopen 18556 &> /dev/null
-echo "Btcd started"
+echo "Starting bitcoind, etcd and lnd"
+# start bitcoind, lnd, and etcd
 
-lnd --noseedbackup --debughtlc &> /root/log/lnd.log &
-# wait for lnd to start
-waitportopen 10009 &> /dev/null
-echo "Lnd started"
+# start bitcoind
+while true; do
+	bitcoind &> /root/log/bitcoind.log &
+	bitcoind_pid=$!
+	# wait for bitcoind to start
+	waitforline /root/log/bitcoind.log $bitcoind_pid 'addcon thread start'
+	if [ $? == 1 ]; then
+		# at this time, bitcoind has exited (in error)
+		echo "Bitcoind did not start correctly"
+	else
+		echo "Bitcoind started"
+		break
+	fi
+done
 
-etcd --config-file ~/.etcd/etcd.conf &> /root/log/etcd.log &
-# wait for etcd to start
-waitportopen 2379 &> /dev/null
-echo "Etcd started"
+# start lnd
+while true; do
+	lnd --noseedbackup --debughtlc &> /root/log/lnd.log &
+	lnd_pid=$!
+	# wait for lnd to start
+	waitforline /root/log/lnd.log $lnd_pid 'Opened wallet'
+	if [ $? == 1 ]; then
+		# at this time, lnd has exited (in error)
+		echo "Lnd did not start correctly"
+	else
+		echo "Lnd started"
+		break
+	fi
+done
+
+# start etcd
+while true; do
+	etcd --config-file ~/.etcd/etcd.conf &> /root/log/etcd.log &
+	etcd_pid=$!
+	# wait for etcd to start
+	waitforline /root/log/etcd.log $etcd_pid 'etcdserver: starting server'
+	if [ $? == 1 ]; then
+		# at this time, etcd has exited (in error)
+		echo "Etcd did not start correctly"
+	else
+		echo "Etcd started"
+		break
+	fi
+done
 
 # store ip in etcd
 echo "Publishing node name and ip address"
@@ -79,7 +107,7 @@ etcdctl set /cluster/haspendingchan init &> /dev/null
 
 # create btc wallet and store address in etcd
 echo "Creating btc wallet"
-btc_addr=`lncli -n simnet newaddress np2wkh | jq -r '.address'`
+btc_addr=`lncli -n regtest newaddress np2wkh | jq -r '.address'`
 etcdctl set "/nodeinfo/$NODENAME/btcaddr" $btc_addr &> /dev/null
 
 # if we are the mining node, mine coins for each node
@@ -118,7 +146,7 @@ fi
 
 # store public key in etcd
 echo "Publishing lnd pubkey"
-pubkey=`lncli -n simnet getinfo | jq -r '.identity_pubkey'`
+pubkey=`lncli -n regtest getinfo | jq -r '.identity_pubkey'`
 etcdctl set "/nodeinfo/$NODENAME/pubkey" "$pubkey" &> /dev/null
 
 # establish channel with peers
@@ -132,14 +160,14 @@ for chan in `cat $TOPO_FILE | jq -c '.lnd_channels | .[]'`; do
 		# establish p2p connection
 		peer_pubkey=`etcdget /nodeinfo/$dst/pubkey`
 		peer_ip=`etcdget /nodeinfo/$dst/ip`
-		lncli -n simnet connect $peer_pubkey@$peer_ip:9735 >>/root/log/lncli.log 2>&1
+		lncli -n regtest connect $peer_pubkey@$peer_ip:9735 >>/root/log/lncli.log 2>&1
 
 		# establish channel
 		# we need to retry until succeed because btcd might by syncing
 		echo "Creating channel to $dst"
 		funding_output=''
 		funding_amt=`expr $cap + $cap + 9050`
-		until funding_output=`lncli -n simnet openchannel --node_key=$peer_pubkey --local_amt=$funding_amt --push_amt=$cap >>/root/log/lncli.log 2>&1`
+		until funding_output=`lncli -n regtest openchannel --node_key=$peer_pubkey --local_amt=$funding_amt --push_amt=$cap >>/root/log/lncli.log 2>&1`
 		do
 			sleep 0.5
 		done
@@ -172,7 +200,7 @@ fi
 echo "Waiting for all channels to get acknowledged"
 while true
 do
-	pending_chans=`lncli -n simnet pendingchannels | jq '.pending_open_channels | length'`
+	pending_chans=`lncli -n regtest pendingchannels | jq '.pending_open_channels | length'`
 	echo "Pending channels: $pending_chans"
 	if (( $pending_chans == 0 )) ; then
 		break
@@ -187,7 +215,7 @@ done
 # wait for itself to receive all channels
 echo "Waiting to see all channels"
 num_channels=`cat $TOPO_FILE | jq '.lnd_channels | length'`
-until [ `lncli -n simnet getnetworkinfo | jq '.num_channels'` == "$num_channels" ]
+until [ `lncli -n regtest getnetworkinfo | jq '.num_channels'` == "$num_channels" ]
 do
 	sleep 1
 done

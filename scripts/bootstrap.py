@@ -22,14 +22,14 @@ for conn in t["btcd_connections"]:
         peer_ip = nodes[peer]
         btcd_peers.append(peer_ip)
 
-btcd_config_string = templates.btcd_conf
+bitcoind_config_string = templates.bitcoind_conf
 
 for peer in btcd_peers:
-    btcd_config_string += templates.btcd_connect.format(peer)
+    bitcoind_config_string += templates.bitcoind_connect.format(peer)
 
-os.makedirs("/root/.btcd", exist_ok=True)
-with open("/root/.btcd/btcd.conf", "w") as f:
-    f.write(btcd_config_string)
+os.makedirs("/root/.bitcoin", exist_ok=True)
+with open("/root/.bitcoin/bitcoin.conf", "w") as f:
+    f.write(bitcoind_config_string)
 
 os.makedirs("/root/.lnd", exist_ok=True)
 with open("/root/.lnd/lnd.conf", "w") as f:

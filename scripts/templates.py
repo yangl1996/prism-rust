@@ -1,23 +1,29 @@
-btcd_conf = """simnet=1
-rpcuser=btcd
-rpcpass=btcd
-listen=0.0.0.0
+bitcoind_conf = """regtest=1
+server=1
+listen=1
+maxconnections=1024
+zmqpubrawblock=tcp://127.0.0.1:28332
+zmqpubrawtx=tcp://127.0.0.1:28333
+rpcuser=bitcoind
+rpcpassword=bitcoind
 """
 
-btcd_connect = "connect={}\n"
+bitcoind_connect = "connect={}\n"
 
 lnd_conf = """[Application Options]
 debuglevel=info
 listen=0.0.0.0:9735
 
 [Bitcoin]
-bitcoin.simnet=1
+bitcoin.regtest=1
 bitcoin.active=1
-bitcoin.node=btcd
+bitcoin.node=bitcoind
 
-[btcd]
-btcd.rpcuser=btcd
-btcd.rpcpass=btcd
+[bitcoind]
+bitcoind.rpcuser=bitcoind
+bitcoind.rpcpass=bitcoind
+bitcoind.zmqpubrawblock=tcp://127.0.0.1:28332
+bitcoind.zmqpubrawtx=tcp://127.0.0.1:28333
 """
 
 etcd_conf = """
