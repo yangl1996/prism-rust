@@ -106,6 +106,7 @@ while true; do
 		break
 	fi
 done
+waitportopen 10009 &> /dev/null
 
 # start etcd
 while true; do
