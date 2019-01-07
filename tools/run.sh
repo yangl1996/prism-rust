@@ -39,20 +39,6 @@ function stop_instances
 	aws ec2 terminate-instances --instance-ids $instance_ids > aws_stop.log
 }
 
-function build_container
-{
-	# $1: instance id
-	scp setup_image.sh $1:
-	ssh $1 -- bash setup_image.sh
-}
-
-function download_binaries
-{
-	# $1: instance id
-	scp download_image.sh $1:
-	ssh $1 -- bash download_image.sh
-}
-
 function init_swarm
 {
 	local instances=`cat instances.txt`
@@ -95,46 +81,6 @@ function destroy_swarm
 	done
 }
 
-function build_all
-{
-	local instances=`cat instances.txt`
-	local pids=""
-	for instance in $instances ;
-	do
-		local id
-		local ip
-		IFS=',' read -r id ip <<< "$instance"
-		echo "Job launched for $id"
-		build_container $id &>"build_$id.log" &
-		pids="$pids $!"
-	done
-	echo "Waiting for all jobs to finish"
-	for pid in $pids ;
-	do
-		wait $pid
-	done
-}
-
-function download_all
-{
-	local instances=`cat instances.txt`
-	local pids=""
-	for instance in $instances ;
-	do
-		local id
-		local ip
-		IFS=',' read -r id ip <<< "$instance"
-		echo "Job launched for $id"
-		download_binaries $id &>"build_$id.log" &
-		pids="$pids $!"
-	done
-	echo "Waiting for all jobs to finish"
-	for pid in $pids ;
-	do
-		wait $pid
-	done
-}
-
 function start_container
 {
 	# $1: node name, $2: ip, $3: host
@@ -161,7 +107,6 @@ function next_index()
 	fi
 	echo $next
 }
-
 
 function start_experiment
 {
@@ -234,8 +179,37 @@ function run_on_all
 	done
 }
 
-function rsync_testbed_dir
+function sync_testbed_single
 {
+	# $1: host id
+	rsync -r .. $id:/home/ubuntu/spider-docker
+}
+
+function repackage_single
+{
+	# $1: host id
+	rsync -r .. $id:/home/ubuntu/spider-docker
+	ssh $id -- /bin/bash /home/ubuntu/spider-docker/tools/remote_helper.sh build_image
+}
+
+function rebuild_single
+{
+	# $1: host id
+	rsync -r .. $id:/home/ubuntu/spider-docker
+	ssh $id -- /bin/bash /home/ubuntu/spider-docker/tools/remote_helper.sh build_bin
+}
+
+function init_image_single
+{
+	# $1: host id
+	rsync -r .. $id:/home/ubuntu/spider-docker
+	ssh $id -- /bin/bash /home/ubuntu/spider-docker/tools/remote_helper.sh download_bin
+}
+
+function execute_on_all
+{
+	# $1: execute function '$1_single'
+	mkdir -p log
 	local instances=`cat instances.txt`
 	local pids=""
 	for instance in $instances ;
@@ -243,8 +217,8 @@ function rsync_testbed_dir
 		local id
 		local ip
 		IFS=',' read -r id ip <<< "$instance"
-		echo "Syncing spider-docker to $id"
-		rsync -r .. $id:/home/ubuntu/spider-docker &
+		echo "Executing $1 on $id"
+		$1_single $id &>log/$1_$id.log &
 		pids="$pids $!"
 	done
 	echo "Waiting for all jobs to finish"
@@ -287,35 +261,54 @@ case "$1" in
 		cat <<- EOF
 		Helper script to run Spider distributed tests
 
-		start-instances n
-		    Start n EC2 instances
-		stop-instances
-		    Terminate EC2 instances
-		init-docker
-		    Initialize docker swarm
-		uninit-docker
-		    Destroy docker swarm
-		build-images
-		    Build docker images
-		fetch-images
-		    Download prebuilt binaries and skip compiling
-		start-exp topofile expname exptime
-		    Start an experiment
-		stop-exp
-		    Stop an experiment
-		run-all cmd
-		    Run command on all instances
-		sync-testbed
-		    Sync testbed directory to remotes
-		ssh i
-		    SSH to the i-th server (1-based index)
-		attach node
-			Attach to container node
+		Manage AWS EC2 Instances
 
-		Notes
-		
-		Update all containers
-		    ./run.sh run-all docker build -t spider spider-docker
+		    start-instances n
+		        Start n EC2 instances
+
+		    stop-instances
+		        Terminate EC2 instances
+
+		Setup Experiment Environment
+
+		    init-docker
+		        Initialize docker swarm
+
+		    uninit-docker
+		        Destroy docker swarm
+
+		Manage Experiment Files
+
+		    sync-testbed
+		        Sync testbed directory to remotes
+
+		    init-image
+		        Download binary files and package docker image
+
+		    repackage-image
+		        Repackage docker image
+
+		    rebuild-binary
+		        Recompile binary files and package docker image
+
+		Control Experiment
+
+		    start-exp topofile expname exptime
+		        Start an experiment
+
+		    stop-exp
+		        Stop an experiment
+
+		Connect to Testbed
+
+		    run-all cmd
+		        Run command on all instances
+
+		    ssh i
+		        SSH to the i-th server (1-based index)
+
+		    attach node
+		        Attach to container node
 		EOF
 		;;
 	start-instances)
@@ -326,10 +319,14 @@ case "$1" in
 		init_swarm ;;
 	uninit-docker)
 		destroy_swarm ;;
-	build-images)
-		build_all ;;
-	fetch-images)
-		download_all ;;
+	sync-testbed)
+		execute_on_all sync_testbed ;;
+	init-image)
+		execute_on_all init_image ;;
+	repackage-image)
+		execute_on_all repackage ;;
+	rebuild-binary)
+		execute_on_all rebuild ;;
 	start-exp)
 		TOPO_FILE=$2
 		EXP_NAME=$3
@@ -339,8 +336,6 @@ case "$1" in
 		stop_experiment ;;
 	run-all)
 		run_on_all "${@:2}" ;;
-	sync-testbed)
-		rsync_testbed_dir ;;
 	ssh)
 		ssh_to_server $2 ;;
 	attach)
