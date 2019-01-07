@@ -46,6 +46,13 @@ function build_container
 	ssh $1 -- bash setup_image.sh
 }
 
+function download_binaries
+{
+	# $1: instance id
+	scp download_image.sh $1:
+	ssh $1 -- bash download_image.sh
+}
+
 function init_swarm
 {
 	local instances=`cat instances.txt`
@@ -99,6 +106,26 @@ function build_all
 		IFS=',' read -r id ip <<< "$instance"
 		echo "Job launched for $id"
 		build_container $id &>"build_$id.log" &
+		pids="$pids $!"
+	done
+	echo "Waiting for all jobs to finish"
+	for pid in $pids ;
+	do
+		wait $pid
+	done
+}
+
+function download_all
+{
+	local instances=`cat instances.txt`
+	local pids=""
+	for instance in $instances ;
+	do
+		local id
+		local ip
+		IFS=',' read -r id ip <<< "$instance"
+		echo "Job launched for $id"
+		download_binaries $id &>"build_$id.log" &
 		pids="$pids $!"
 	done
 	echo "Waiting for all jobs to finish"
@@ -270,6 +297,8 @@ case "$1" in
 		    Destroy docker swarm
 		build-images
 		    Build docker images
+		fetch-images
+		    Download prebuilt binaries and skip compiling
 		start-exp topofile expname exptime
 		    Start an experiment
 		stop-exp
@@ -299,6 +328,8 @@ case "$1" in
 		destroy_swarm ;;
 	build-images)
 		build_all ;;
+	fetch-images)
+		download_all ;;
 	start-exp)
 		TOPO_FILE=$2
 		EXP_NAME=$3
