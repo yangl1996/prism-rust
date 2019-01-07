@@ -50,7 +50,6 @@ cp $BUILDROOT/downloads/jq $BUILDROOT/binaries/
 cp $BUILDROOT/downloads/etcd-v3.3.10-linux-amd64/etcd* $BUILDROOT/binaries/
 cp $GOPATH/bin/* $BUILDROOT/binaries/
 cp $GOPATH/src/github.com/lightningnetwork/lnd/expctrl/expctrl $BUILDROOT/binaries/
-cp $BTCPATH/bitcoin/src/bitcoin $BUILDROOT/binaries/
 cp $BTCPATH/bitcoin/src/bitcoind $BUILDROOT/binaries/
 cp $BTCPATH/bitcoin/src/bitcoin-cli $BUILDROOT/binaries/
 cp $BTCPATH/bitcoin/src/bitcoin-tx $BUILDROOT/binaries/
