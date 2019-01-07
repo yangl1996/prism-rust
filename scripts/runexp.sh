@@ -89,6 +89,14 @@ while true; do
 		echo "Lnd started"
 		break
 	fi
+	waitforline /root/log/lnd.log $lnd_pid 'gRPC proxy started at'
+	if [ $? == 1 ]; then
+		# at this time, lnd has exited (in error)
+		echo "Lnd did not start correctly"
+	else
+		echo "Lnd started"
+		break
+	fi
 done
 
 # start etcd
@@ -120,8 +128,7 @@ etcdctl set "/nodeinfo/$NODENAME/btcaddr" $btc_addr &> /dev/null
 miner_node=`cat $TOPO_FILE | jq -r '.miner'`
 if [ "$NODENAME" == "$miner_node" ]
 then
-	mined_amt=100
-	bitcoin-cli -regtest generate 100 >>/root/log/bitcoin-cli.log 2>&1
+	mined_amt=0
 	for node in `cat $TOPO_FILE | jq -r '.nodes | .[] | .name'`; do
 		# wait for the node to publish its btc address
 		node_btcaddr=`etcdget /nodeinfo/$node/btcaddr`
@@ -131,6 +138,9 @@ then
 		echo "Mined coins for $node"
 		mined_amt=`expr $mined_amt + 50`
 	done
+	# mine 100 more so that all block previously mined are confirmed
+	bitcoin-cli -regtest generate 100 >>/root/log/bitcoin-cli.log 2>&1
+	mined_amt=`expr $mined_amt + 100`
 	# in case we did't mine enough blocks
 	to_mine=`expr 400 - $mined_amt`
 	if [ "$to_mine" -gt "0" ]; then
