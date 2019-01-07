@@ -20,7 +20,7 @@ btc_conn = []
 for node in dt['nodes']:
     if node['name'] == miner:
         continue
-    btc_conn.append({'src': miner, 'dst': node['name']})
+    btc_conn.append({'src': node['name'], 'dst': miner})
 dt['btcd_connections'] = btc_conn
 
 for ch in dt['lnd_channels']:

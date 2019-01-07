@@ -3401,480 +3401,480 @@
     "miner": "0r",
     "btcd_connections": [
         {
-            "src": "0r",
-            "dst": "0e"
+            "src": "0e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "1r"
+            "src": "1r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "1e"
+            "src": "1e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "2r"
+            "src": "2r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "2e"
+            "src": "2e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "3r"
+            "src": "3r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "3e"
+            "src": "3e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "4r"
+            "src": "4r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "4e"
+            "src": "4e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "5r"
+            "src": "5r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "5e"
+            "src": "5e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "6r"
+            "src": "6r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "6e"
+            "src": "6e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "7r"
+            "src": "7r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "7e"
+            "src": "7e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "8r"
+            "src": "8r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "8e"
+            "src": "8e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "9r"
+            "src": "9r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "9e"
+            "src": "9e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "10r"
+            "src": "10r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "10e"
+            "src": "10e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "11r"
+            "src": "11r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "11e"
+            "src": "11e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "12r"
+            "src": "12r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "12e"
+            "src": "12e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "13r"
+            "src": "13r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "13e"
+            "src": "13e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "14r"
+            "src": "14r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "14e"
+            "src": "14e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "15r"
+            "src": "15r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "15e"
+            "src": "15e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "16r"
+            "src": "16r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "16e"
+            "src": "16e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "17r"
+            "src": "17r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "17e"
+            "src": "17e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "18r"
+            "src": "18r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "18e"
+            "src": "18e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "19r"
+            "src": "19r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "19e"
+            "src": "19e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "20r"
+            "src": "20r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "20e"
+            "src": "20e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "21r"
+            "src": "21r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "21e"
+            "src": "21e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "22r"
+            "src": "22r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "22e"
+            "src": "22e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "23r"
+            "src": "23r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "23e"
+            "src": "23e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "24r"
+            "src": "24r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "24e"
+            "src": "24e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "25r"
+            "src": "25r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "25e"
+            "src": "25e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "26r"
+            "src": "26r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "26e"
+            "src": "26e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "27r"
+            "src": "27r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "27e"
+            "src": "27e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "28r"
+            "src": "28r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "28e"
+            "src": "28e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "29r"
+            "src": "29r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "29e"
+            "src": "29e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "30r"
+            "src": "30r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "30e"
+            "src": "30e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "31r"
+            "src": "31r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "31e"
+            "src": "31e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "32r"
+            "src": "32r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "32e"
+            "src": "32e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "33r"
+            "src": "33r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "33e"
+            "src": "33e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "34r"
+            "src": "34r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "34e"
+            "src": "34e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "35r"
+            "src": "35r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "35e"
+            "src": "35e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "36r"
+            "src": "36r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "36e"
+            "src": "36e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "37r"
+            "src": "37r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "37e"
+            "src": "37e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "38r"
+            "src": "38r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "38e"
+            "src": "38e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "39r"
+            "src": "39r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "39e"
+            "src": "39e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "40r"
+            "src": "40r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "40e"
+            "src": "40e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "41r"
+            "src": "41r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "41e"
+            "src": "41e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "42r"
+            "src": "42r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "42e"
+            "src": "42e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "43r"
+            "src": "43r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "43e"
+            "src": "43e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "44r"
+            "src": "44r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "44e"
+            "src": "44e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "45r"
+            "src": "45r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "45e"
+            "src": "45e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "46r"
+            "src": "46r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "46e"
+            "src": "46e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "47r"
+            "src": "47r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "47e"
+            "src": "47e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "48r"
+            "src": "48r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "48e"
+            "src": "48e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "49r"
+            "src": "49r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "49e"
+            "src": "49e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "50r"
+            "src": "50r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "50e"
+            "src": "50e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "51r"
+            "src": "51r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "51e"
+            "src": "51e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "52r"
+            "src": "52r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "52e"
+            "src": "52e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "53r"
+            "src": "53r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "53e"
+            "src": "53e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "54r"
+            "src": "54r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "54e"
+            "src": "54e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "55r"
+            "src": "55r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "55e"
+            "src": "55e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "56r"
+            "src": "56r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "56e"
+            "src": "56e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "57r"
+            "src": "57r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "57e"
+            "src": "57e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "58r"
+            "src": "58r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "58e"
+            "src": "58e",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "59r"
+            "src": "59r",
+            "dst": "0r"
         },
         {
-            "src": "0r",
-            "dst": "59e"
+            "src": "59e",
+            "dst": "0r"
         }
     ],
     "lnd_channels": [
