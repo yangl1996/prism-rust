@@ -1,5 +1,6 @@
 #!/bin/bash
 export BUILDROOT="$PWD"
+export BTCPATH="$PWD/btcroot"
 export GOPATH="$PWD/goroot"
 export PATH="$PATH:$GOPATH/bin"
 export BRANCH='stats'
@@ -24,6 +25,16 @@ cd $GOPATH/src/github.com/lightningnetwork/lnd/expctrl
 go get -d go.etcd.io/etcd/client
 go build
 
+echo "Building bitcoind"
+cd $BTCPATH
+git clone 'https://github.com/bitcoin/bitcoin.git'
+cd "$BTCPATH/bitcoin"
+git checkout 'v0.17.1'
+git apply $BUILDROOT/patches/*.btcpatch
+$BTCPATH/bitcoin/autogen.sh
+$BTCPATH/bitcoin/configure
+make -j4
+
 echo "Download etcd and jq"
 mkdir -p $BUILDROOT/downloads
 wget 'https://github.com/etcd-io/etcd/releases/download/v3.3.10/etcd-v3.3.10-linux-amd64.tar.gz' -O $BUILDROOT/downloads/etcd.tar.gz
@@ -38,8 +49,13 @@ cp $BUILDROOT/downloads/jq $BUILDROOT/binaries/
 cp $BUILDROOT/downloads/etcd-v3.3.10-linux-amd64/etcd* $BUILDROOT/binaries/
 cp $GOPATH/bin/* $BUILDROOT/binaries/
 cp $GOPATH/src/github.com/lightningnetwork/lnd/expctrl/expctrl $BUILDROOT/binaries/
+cp $BTCPATH/bitcoin/src/bitcoin $BUILDROOT/binaries/
+cp $BTCPATH/bitcoin/src/bitcoind $BUILDROOT/binaries/
+cp $BTCPATH/bitcoin/src/bitcoin-cli $BUILDROOT/binaries/
+cp $BTCPATH/bitcoin/src/bitcoin-tx $BUILDROOT/binaries/
 
 echo "Cleaning up build files"
 rm -rf $GOPATH
+rm -rf $BTCPATH
 rm -rf $BUILDROOT/downloads
 

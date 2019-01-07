@@ -1,0 +1,14 @@
+diff --git a/src/chainparams.cpp b/src/chainparams.cpp
+index 93bb3e764..5875bdec0 100644
+--- a/src/chainparams.cpp
++++ b/src/chainparams.cpp
+@@ -281,7 +281,7 @@ class CRegTestParams : public CChainParams {
+ public:
+     CRegTestParams() {
+         strNetworkID = "regtest";
+-        consensus.nSubsidyHalvingInterval = 150;
++        consensus.nSubsidyHalvingInterval = 10000000;
+         consensus.BIP16Exception = uint256();
+         consensus.BIP34Height = 100000000; // BIP34 has not activated on regtest (far in the future so block v1 are not rejected in tests)
+         consensus.BIP34Hash = uint256();
+
