@@ -26,6 +26,7 @@ go get -d go.etcd.io/etcd/client
 go build
 
 echo "Building bitcoind"
+mkdir -p $BTCPATH
 cd $BTCPATH
 git clone 'https://github.com/bitcoin/bitcoin.git'
 cd "$BTCPATH/bitcoin"
