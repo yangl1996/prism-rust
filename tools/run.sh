@@ -96,7 +96,7 @@ function destroy_container
 	ssh $2 -- docker rm "spider$1"
 }
 
-function next_index()
+function next_index
 {
 	# $1: current index
 	local len=${#hosts[@]}
@@ -188,14 +188,12 @@ function sync_testbed_single
 function repackage_single
 {
 	# $1: host id
-	rsync -r .. $id:/home/ubuntu/spider-docker
 	ssh $id -- /bin/bash /home/ubuntu/spider-docker/tools/remote_helper.sh build_image
 }
 
 function rebuild_single
 {
 	# $1: host id
-	rsync -r .. $id:/home/ubuntu/spider-docker
 	ssh $id -- /bin/bash /home/ubuntu/spider-docker/tools/remote_helper.sh build_bin
 }
 
@@ -279,11 +277,11 @@ case "$1" in
 
 		Manage Experiment Files
 
+		    init-image
+		        Sync testbed, download binaries and package image
+
 		    sync-testbed
 		        Sync testbed directory to remotes
-
-		    init-image
-		        Download binary files and package docker image
 
 		    repackage-image
 		        Repackage docker image
