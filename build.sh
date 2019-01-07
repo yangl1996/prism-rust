@@ -4,7 +4,7 @@ export GOPATH="$PWD/goroot"
 export PATH="$PATH:$GOPATH/bin"
 export BRANCH='stats'
 
-echo "Building lnd and btcd"
+echo "Building lnd"
 go get -u github.com/golang/dep/cmd/dep
 go get -d github.com/urfave/cli
 go get -d github.com/vibhaa/lnd
@@ -15,9 +15,8 @@ mv $GOPATH/src/github.com/vibhaa/lnd $GOPATH/src/github.com/lightningnetwork
 cd $GOPATH/src/github.com/lightningnetwork/lnd
 git checkout $BRANCH
 git pull origin $BRANCH
-git apply $BUILDROOT/patches/*.patch
+git apply $BUILDROOT/patches/*.lndpatch
 make && make install
-make btcd
 
 echo "Building experiment controller"
 cp -r $BUILDROOT/expctrl $GOPATH/src/github.com/lightningnetwork/lnd
@@ -39,9 +38,8 @@ cp $BUILDROOT/downloads/jq $BUILDROOT/binaries/
 cp $BUILDROOT/downloads/etcd-v3.3.10-linux-amd64/etcd* $BUILDROOT/binaries/
 cp $GOPATH/bin/* $BUILDROOT/binaries/
 cp $GOPATH/src/github.com/lightningnetwork/lnd/expctrl/expctrl $BUILDROOT/binaries/
-rm $BUILDROOT/binaries/btcctl
-rm $BUILDROOT/binaries/btcd
 
 echo "Cleaning up build files"
 rm -rf $GOPATH
 rm -rf $BUILDROOT/downloads
+
