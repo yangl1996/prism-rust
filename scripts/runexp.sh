@@ -97,6 +97,14 @@ while true; do
 		echo "Lnd started"
 		break
 	fi
+	waitforline /root/log/lnd.log $lnd_pid 'RPC server listening on'
+	if [ $? == 1 ]; then
+		# at this time, lnd has exited (in error)
+		echo "Lnd did not start correctly"
+	else
+		echo "Lnd started"
+		break
+	fi
 done
 
 # start etcd
