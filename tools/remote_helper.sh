@@ -13,7 +13,7 @@ function build_binaries
 {
 	cd $EXPROOT
 
-	bash build.sh
+	bash build.sh $@
 }
 
 function download_binaries
@@ -38,11 +38,9 @@ export PATH="$PATH:/snap/bin"
 
 case "$1" in
 	build_bin)
-		build_binaries
-		build_image ;;
+		build_binaries ${@:2} ;;
 	download_bin)
-		download_binaries
-		build_image ;;
+		download_binaries ;;
 	build_image)
 		build_image ;;
 	cleanup_image)

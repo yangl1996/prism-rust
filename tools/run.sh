@@ -194,10 +194,18 @@ function repackage_single
 function rebuild_single
 {
 	# $1: host id
-	ssh $id -- /bin/bash /home/ubuntu/spider-docker/tools/remote_helper.sh build_bin
+	# ${@:2}: which bins to build
+	ssh $id -- /bin/bash /home/ubuntu/spider-docker/tools/remote_helper.sh build_bin "${@:2}"
 }
 
 function init_image_single
+{
+	# $1: host id
+	rsync -r .. $id:/home/ubuntu/spider-docker
+	ssh $id -- '/bin/bash /home/ubuntu/spider-docker/tools/remote_helper.sh download_bin && /bin/bash /home/ubuntu/spider-docker/tools/remote_helper.sh build_image'
+}
+
+function download_single
 {
 	# $1: host id
 	rsync -r .. $id:/home/ubuntu/spider-docker
@@ -207,6 +215,7 @@ function init_image_single
 function execute_on_all
 {
 	# $1: execute function '$1_single'
+	# ${@:2}: extra params of the function
 	mkdir -p log
 	local instances=`cat instances.txt`
 	local pids=""
@@ -216,7 +225,7 @@ function execute_on_all
 		local ip
 		IFS=',' read -r id ip <<< "$instance"
 		echo "Executing $1 on $id"
-		$1_single $id &>log/$1_$id.log &
+		$1_single $id ${@:2} &>log/$1_$id.log &
 		pids="$pids $!"
 	done
 	echo "Waiting for all jobs to finish"
@@ -286,8 +295,11 @@ case "$1" in
 		    repackage-image
 		        Repackage docker image
 
-		    rebuild-binary
-		        Recompile binary files and package docker image
+		    rebuild-binary bin1 bin2 ...
+		        Recompile bin1, bin2, ... (lnd, expctrl, bitcoind, etcdjq)
+
+		    download-binary
+		        Download precompiled binaries
 
 		Control Experiment
 
@@ -324,7 +336,9 @@ case "$1" in
 	repackage-image)
 		execute_on_all repackage ;;
 	rebuild-binary)
-		execute_on_all rebuild ;;
+		execute_on_all rebuild ${@:2} ;;
+	download-binary)
+		execute_on_all download ;;
 	start-exp)
 		TOPO_FILE=$2
 		EXP_NAME=$3
