@@ -3,7 +3,7 @@ export BUILDROOT="$PWD"
 export BTCPATH="$PWD/btcroot"
 export GOPATH="$PWD/goroot"
 export PATH="$PATH:$GOPATH/bin"
-export BRANCH='stats'
+export BRANCH='new-stats'
 
 BUILD_LND='false'
 BUILD_EXPCTRL='false'
