@@ -36,7 +36,7 @@ if [ "$BUILD_LND" == "true" ] || [ "$BUILD_EXPCTRL" == "true" ] ; then
 	git checkout $BRANCH
 	git pull origin $BRANCH
 	for lndpatch in $BUILDROOT/patches/*.lndpatch; do
-		echo "Applying $filename"
+		echo "Applying $lndpatch"
 		git apply --ignore-space-change --ignore-whitespace $lndpatch
 	done
 fi
