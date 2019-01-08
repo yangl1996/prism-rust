@@ -1,0 +1,26 @@
+diff --git a/build.sh b/build.sh
+index 38eec37..b61e4c0 100644
+--- a/build.sh
++++ b/build.sh
+@@ -3,7 +3,7 @@ export BUILDROOT="$PWD"
+ export BTCPATH="$PWD/btcroot"
+ export GOPATH="$PWD/goroot"
+ export PATH="$PATH:$GOPATH/bin"
+-export BRANCH='new-stats'
++export BRANCH='clean-waterfilling'
+ 
+ BUILD_LND='false'
+ BUILD_EXPCTRL='false'
+diff --git a/expctrl/lndclient.go b/expctrl/lndclient.go
+index 0bc0e73..468b637 100644
+--- a/expctrl/lndclient.go
++++ b/expctrl/lndclient.go
+@@ -34,7 +34,7 @@ func addInvoice (lnd lnrpc.LightningClient, amt int64) (string, error) {
+ func sendPayment (lnd lnrpc.LightningClient, payreq string) (*lnrpc.SendResponse, error) {
+ 	sendReq := &lnrpc.SendRequest{
+ 		PaymentRequest: payreq,
+-		SpiderAlgo:     routing.ShortestPath,
++		SpiderAlgo:     routing.Waterfilling,
+ 	}
+ 	payresp, err := lnd.SendPaymentSync(context.Background(), sendReq)
+ 	return payresp, err
