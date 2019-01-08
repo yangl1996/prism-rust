@@ -10,7 +10,59 @@
 
 ## `run.sh` Usage
 
-Please refer to `./run.sh help`
+```
+Manage AWS EC2 Instances
+
+    start-instances n
+        Start n EC2 instances
+
+    stop-instances
+        Terminate EC2 instances
+
+Setup Experiment Environment
+
+    init-docker
+        Initialize docker swarm
+
+    uninit-docker
+        Destroy docker swarm
+
+Manage Experiment Files
+
+    init-image
+        Sync testbed, download binaries and package image
+
+    sync-testbed
+        Sync testbed directory to remotes
+
+    repackage-image
+        Repackage docker image
+
+    rebuild-binary bin1 bin2 ...
+        Recompile bin1, bin2, ... (lnd, expctrl, bitcoind, etcdjq)
+
+    download-binary
+        Download precompiled binaries
+
+Control Experiment
+
+    start-exp topofile expname exptime
+        Start an experiment
+
+    stop-exp
+        Stop an experiment
+
+Connect to Testbed
+
+    run-all cmd
+        Run command on all instances
+
+    ssh i
+        SSH to the i-th server (1-based index)
+
+    attach node
+        Attach to container node
+```
 
 ## Typical Experiment Flow
 
@@ -18,9 +70,9 @@ Please refer to `./run.sh help`
 ./run.sh start-instances 3
 # wait for about two minutes for EC2 to start and auto-install docker, go, etc.
 ./run.sh init-docker
-./run.sh build-images
+./run.sh init-image
 ./run.sh start-exp ../topology/some-topo-file.json experiment-name 120
-# after the experiment finished
+# after the experiment have finished
 ./run.sh stop-exp
 ./run.sh stop-instances
 ```
