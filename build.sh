@@ -35,7 +35,10 @@ if [ "$BUILD_LND" == "true" ] || [ "$BUILD_EXPCTRL" == "true" ] ; then
 	cd $GOPATH/src/github.com/lightningnetwork/lnd
 	git checkout $BRANCH
 	git pull origin $BRANCH
-	git apply $BUILDROOT/patches/*.lndpatch
+	for lndpatch in $BUILDROOT/patches/*.lndpatch; do
+		echo "Applying $filename"
+		git apply --ignore-space-change --ignore-whitespace $lndpatch
+	done
 fi
 
 if [ "$BUILD_LND" == "true" ] ; then
