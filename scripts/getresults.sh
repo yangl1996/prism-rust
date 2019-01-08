@@ -28,5 +28,5 @@ for chan in `cat $TOPO_FILE | jq -c '.demands | .[]'`; do
 	src=`echo $chan | jq -r '.src'`
 	dst=`echo $chan | jq -r '.dst'`
 	echo `getresult $src $dst`
-	echo `awk "BEGIN {print $total_succ/$total_tot }"`
 done
+echo `awk "BEGIN {print $total_succ/$total_tot }"`
