@@ -42,11 +42,11 @@ func main() {
 					go func (pr string) {
 						lnd, cleanUp := getLNDClient()
 						defer cleanUp()
-						payresp, err := sendPayment(lnd, pr)
 						totMux.Lock()
 						numTot += 1
 						etcd.Set(context.Background(), etcdTotalPath, strconv.Itoa(numTot), nil)
 						totMux.Unlock()
+						payresp, err := sendPayment(lnd, pr)
 						if err == nil && payresp.PaymentError == "" {
 							succMux.Lock()
 							numSucc += 1
