@@ -41,7 +41,7 @@ if [ "$BUILD_LND" == "true" ] || [ "$BUILD_EXPCTRL" == "true" ] ; then
 	done
 fi
 
-if [ "$BUILD_LND" == "true" ] ; then
+if [ "$BUILD_LND" == "true" ] || [ "$BUILD_EXPCTRL" == "true" ] ; then
 	echo "Building lnd"
 	cd $GOPATH/src/github.com/lightningnetwork/lnd
 	make && make install
