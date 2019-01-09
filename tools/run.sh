@@ -17,7 +17,7 @@ function start_instances
 		echo "Host $instance" >> ~/.ssh/config.d/spider
 		echo "    Hostname $ip" >> ~/.ssh/config.d/spider
 		echo "    User ubuntu" >> ~/.ssh/config.d/spider
-		echo "    IdentityFile ~/.ssh/leiy-aws.pem" >> ~/.ssh/config.d/spider
+		echo "    IdentityFile ~/.ssh/spider.pem" >> ~/.ssh/config.d/spider
 		echo "    StrictHostKeyChecking no" >> ~/.ssh/config.d/spider
 		echo "    UserKnownHostsFile=/dev/null" >> ~/.ssh/config.d/spider
 		echo "" >> ~/.ssh/config.d/spider
