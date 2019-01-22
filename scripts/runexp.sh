@@ -242,7 +242,7 @@ for node in `cat $TOPO_FILE | jq -r '.nodes | .[] | .name'`; do
 done
 
 echo "Running experiments"
-expctrl &
+expctrl &> /root/log/exp.log &
 mainpid=$!
 
 sleep $EXP_TIME
