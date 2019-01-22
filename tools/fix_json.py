@@ -31,9 +31,8 @@ for ch in dt['lnd_channels']:
     else:
         print("Invalid channel capacity")
 
-for ch in dt['demands']:
-    if isinstance(ch['rate'], float):
-        ch['rate'] = int(ch['rate'])
+for dm in dt['demands']:
+    dm['rate'] = int(dm['rate'])
 
 with open(filepath, 'w') as f:
     json.dump(dt, f, indent=4)

@@ -10,6 +10,7 @@ import (
 )
 
 func main() {
+    fmt.Println("Experiment starting")
 	etcd := getEtcdKeyClient()
 
 	nodename, _ := os.LookupEnv("NODENAME")
@@ -18,6 +19,8 @@ func main() {
     paymentSize, _ := strconv.ParseInt(paymentSizeStr, 10, 64)
 	//nodeip, _ := os.LookupEnv("NODEIP")
 	topo := parseTopo(topopath)
+
+    var printfMux sync.Mutex
 
 	var senderwg sync.WaitGroup
 	var recverwg sync.WaitGroup
@@ -46,13 +49,26 @@ func main() {
 						numTot += 1
 						etcd.Set(context.Background(), etcdTotalPath, strconv.Itoa(numTot), nil)
 						totMux.Unlock()
+                        printfMux.Lock()
+                        fmt.Printf("payment added\n")
+                        printfMux.Unlock()
 						payresp, err := sendPayment(lnd, pr)
 						if err == nil && payresp.PaymentError == "" {
 							succMux.Lock()
 							numSucc += 1
 							etcd.Set(context.Background(), etcdSuccPath, strconv.Itoa(numSucc), nil)
 							succMux.Unlock()
-						}
+						} else {
+                            if err != nil {
+                                printfMux.Lock()
+                                fmt.Printf("payment rpc error: %v\n", err)
+                                printfMux.Unlock()
+                            } else {
+                                printfMux.Lock()
+                                fmt.Printf("payment lnd error: %v\n", payresp.PaymentError)
+                                printfMux.Unlock()
+                            }
+                        }
 					} (pr)
 				}
 			} (demand)

@@ -173,18 +173,14 @@ for chan in `cat $TOPO_FILE | jq -c '.lnd_channels | .[]'`; do
 	cap=`echo $chan | jq -r '.capacity'`
 	if [ "$NODENAME" == "$src" ]
 	then
-		echo "Establishing P2P connection to $dst"
-		# establish p2p connection
+		# establish p2p connection and create channel
+		# we need to retry until succeed because btcd might by syncing
+		echo "Connecting and creating channel to $dst"
 		peer_pubkey=`etcdget /nodeinfo/$dst/pubkey`
 		peer_ip=`etcdget /nodeinfo/$dst/ip`
-		lncli -n regtest connect $peer_pubkey@$peer_ip:9735 >>/root/log/lncli.log 2>&1
-
-		# establish channel
-		# we need to retry until succeed because btcd might by syncing
-		echo "Creating channel to $dst"
 		funding_output=''
 		funding_amt=`expr $cap + $cap + 9050`
-		until funding_output=`lncli -n regtest openchannel --node_key=$peer_pubkey --local_amt=$funding_amt --push_amt=$cap >>/root/log/lncli.log 2>&1`
+		until funding_output=`lncli -n regtest openchannel --connect=$peer_ip:9735 --node_key=$peer_pubkey --local_amt=$funding_amt --push_amt=$cap >>/root/log/lncli.log 2>&1`
 		do
 			sleep 0.5
 		done
@@ -246,7 +242,7 @@ for node in `cat $TOPO_FILE | jq -r '.nodes | .[] | .name'`; do
 done
 
 echo "Running experiments"
-expctrl &
+expctrl &> /root/log/exp.log &
 mainpid=$!
 
 sleep $EXP_TIME
