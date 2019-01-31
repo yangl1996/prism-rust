@@ -1,17 +1,43 @@
 extern crate ring;
 
 pub struct Block {
-    transactions: [Transaction; 16], // each block holds 16 txn
-    parent: BlockHash,
-    transaction_blocks: [BlockHash; 4], // each block points to 4 txn blocks
-    nonce: u32,
+    //pub transactions: [Transaction; 16], // each block holds 16 txn
+    pub parent: BlockHash,
+    //pub transaction_blocks: [BlockHash; 4], // each block points to 4 txn blocks
+    //pub nonce: u32,
+}
+
+impl std::fmt::Display for Block {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "Block {{\n")?;
+        //write!(f, "  transactions: not implemented")?;
+        write!(f, "  parent: {}\n", self.parent)?;
+        //write!(f, "  transaction blocks: not implemented")?;
+        //write!(f, "  nonce: {}", self.nonce)?;
+        write!(f, "}}")
+    }
+}
+
+impl Block {
+    pub fn serialized(&self) -> [u8; 36] {
+        let mut serialized: [u8; 36] = [0; 36];
+        serialized[..32].clone_from_slice(&self.parent.0);
+        return serialized;
+    }
+
+    /*
+    fn hash(&self) -> BlockHash {
+        // TODO: we don't specifically arrange the bytes in the Block
+        // struct, so the hash depends on how ring serializes the bytes
+        let digest = ring::digest::(&ring::digest::SHA256, Block)
+    }
+    */
 }
 
 #[derive(Eq)]
 pub struct BlockHash(pub [u8; 32]); // little endian u256
 
 impl Ord for BlockHash {
-
     fn cmp(&self, other: &BlockHash) -> std::cmp::Ordering {
         for byte_idx in (1..32).rev() {
             let res = self.0[byte_idx].cmp(&other.0[byte_idx]);
