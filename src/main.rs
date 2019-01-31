@@ -1,7 +1,12 @@
 mod block;
-use block::BlockHash;
 
 fn main() {
-    let test = BlockHash([0; 32]);
-    println!("{}", test);
+    let block = block::Block {
+        parent: block::BlockHash([10; 32]),
+    };
+    println!("{}", block);
+    let serialized = block.serialized();
+    for i in 0..36 {
+        print!("{:>02x}", serialized[i]);
+    }
 }
