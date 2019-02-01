@@ -1,15 +1,55 @@
 use crate::block;
+use std::thread;
+use std::sync::{mpsc, Arc, RwLock};
 
-pub fn mine(block: &mut block::Block, thld: &block::BlockHash) {
-    for nonce in 0..std::u32::MAX {
-        block.nonce = nonce;
-        let hash = block.hash();
-        if hash < *thld {
+const NUM_THREADS: u32 = 4;
+
+pub fn mine(block: &block::Block, thld: &block::BlockHash) -> u32 {
+    let done = Arc::new(RwLock::new(false)); // to tell threads to stop
+    let (tx, rx) = mpsc::channel(); // chan to collect computed nonce
+    let mut thread_handles = Vec::new();
+    for thread_idx in 0..NUM_THREADS {
+        // each thread uses a step of four
+        // e.g. the 3rd thread tries 3, 7, 11, ...
+        let range = (thread_idx..std::u32::MAX).step_by(NUM_THREADS as usize);
+        // create a copy of those variables for every thread
+        let threshold = block::BlockHash(thld.0);
+        let mut block_to_test = block::Block {
+            parent: block::BlockHash(block.parent.0),
+            nonce: 0,
+        };
+        let tx = mpsc::Sender::clone(&tx);
+        let done = done.clone();
+        let handle = thread::spawn(move || {
+            for nonce in range {
+                {
+                    let done = done.read().unwrap();
+                    if *done == true {
+                        return;
+                    }
+                }
+                block_to_test.nonce = nonce;
+                let hash = block_to_test.hash();
+                if hash < threshold {
+                    match tx.send(nonce) {
+                        Ok(()) => return,
+                        Err(_) => return, // just ignore senderror
+                    }
+                }
+            }
             return;
-        }
+        });
+        thread_handles.push(handle);
     }
-    // TODO: we should not arrive here
-    return;
+    let received = rx.recv().unwrap(); // if error, just panic here
+    {
+        let mut done = done.write().unwrap(); // tell threads to stop
+        *done = true;
+    }
+    for handle in thread_handles { // wait for threads to stop
+        handle.join().unwrap();
+    }
+    return received;
 }
 
 #[cfg(test)]
@@ -21,11 +61,12 @@ mod tests {
     fn test_mining() {
         let mut block = block::Block {
             parent: block::BlockHash([10; 32]),
-            nonce: 12345,
+            nonce: 0,
         };
         let mut threshold = block::BlockHash([0; 32]);
         threshold.0[1] = 50;
-        mine(&mut block, &threshold);
+        let nonce = mine(&block, &threshold);
+        block.nonce = nonce;
         assert_eq!(block.hash() < threshold, true);
     }
 }
