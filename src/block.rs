@@ -28,13 +28,15 @@ impl Block {
         return serialized;
     }
 
-    /*
-    fn hash(&self) -> BlockHash {
+    pub fn hash(&self) -> BlockHash {
         // TODO: we don't specifically arrange the bytes in the Block
         // struct, so the hash depends on how ring serializes the bytes
-        let digest = ring::digest::(&ring::digest::SHA256, Block)
+        let serialized = self.serialized();
+        let digest = ring::digest::digest(&ring::digest::SHA256, &serialized);
+        let mut raw_hash: [u8; 32] = [0; 32];
+        raw_hash[..32].clone_from_slice(digest.as_ref());
+        return BlockHash(raw_hash);
     }
-    */
 }
 
 #[derive(Eq)]
