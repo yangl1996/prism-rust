@@ -21,7 +21,7 @@ impl std::fmt::Display for Block {
 }
 
 impl Block {
-    pub fn serialized(&self) -> [u8; 36] {
+    pub fn serialize(&self) -> [u8; 36] {
         // little-endian parent hash + little-endian nonce
         let mut serialized: [u8; 36] = [0; 36];
         for idx in 0..32 {
@@ -34,7 +34,7 @@ impl Block {
     pub fn hash(&self) -> BlockHash {
         // TODO: we don't specifically arrange the bytes in the Block
         // struct, so the hash depends on how ring serializes the bytes
-        let serialized = self.serialized();
+        let serialized = self.serialize();
         let digest = ring::digest::digest(&ring::digest::SHA256, &serialized);
         let mut raw_hash: [u8; 32] = [0; 32];
         raw_hash[..32].clone_from_slice(digest.as_ref());
@@ -131,7 +131,7 @@ mod tests {
                                10, 10, 10, 10, 10, 10, 10, 10, 10, 9]),
             nonce: 12345,
         };
-        let serialized = block.serialized();
+        let serialized = block.serialize();
         let should_be: [u8; 36] = [9, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
                                    10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
                                    10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 57,
