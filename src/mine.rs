@@ -4,7 +4,7 @@ use std::sync::{mpsc, Arc, RwLock};
 
 const NUM_THREADS: u32 = 4;
 
-pub fn mine(block: &block::Block, thld: &block::BlockHash) -> u32 {
+pub fn mine(parent_hash: &block::BlockHash, thld: &block::BlockHash) -> block::Block {
     let done = Arc::new(RwLock::new(false)); // to tell threads to stop
     let (tx, rx) = mpsc::channel(); // chan to collect computed nonce
     let mut thread_handles = Vec::new();
@@ -15,7 +15,7 @@ pub fn mine(block: &block::Block, thld: &block::BlockHash) -> u32 {
         // create a copy of those variables for every thread
         let threshold = block::BlockHash(thld.0);
         let mut block_to_test = block::Block {
-            parent: block::BlockHash(block.parent.0),
+            parent: block::BlockHash(parent_hash.0),
             nonce: 0,
         };
         let tx = mpsc::Sender::clone(&tx);
@@ -49,7 +49,11 @@ pub fn mine(block: &block::Block, thld: &block::BlockHash) -> u32 {
     for handle in thread_handles { // wait for threads to stop
         handle.join().unwrap();
     }
-    return received;
+    let mined = block::Block {
+        parent: block::BlockHash(parent_hash.0),
+        nonce: received,
+    };
+    return mined;
 }
 
 #[cfg(test)]
@@ -59,14 +63,10 @@ mod tests {
 
     #[test]
     fn test_mining() {
-        let mut block = block::Block {
-            parent: block::BlockHash([10; 32]),
-            nonce: 0,
-        };
+        let parent_hash = block::BlockHash([10; 32]);
         let mut threshold = block::BlockHash([0; 32]);
         threshold.0[1] = 50;
-        let nonce = mine(&block, &threshold);
-        block.nonce = nonce;
-        assert_eq!(block.hash() < threshold, true);
+        let mined = mine(&parent_hash, &threshold);
+        assert_eq!(mined.hash() < threshold, true);
     }
 }
