@@ -10,10 +10,10 @@ impl Ord for BlockHash {
             match res {
                 std::cmp::Ordering::Equal => {
                     continue;
-                },
+                }
                 _ => {
                     return res;
-                },
+                }
             }
         }
         return self.0[31].cmp(&other.0[31]);
@@ -54,28 +54,34 @@ mod tests {
 
     #[test]
     fn blockhash_ordering() {
-        let bigger_blockhash = BlockHash([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                                         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                                         0, 0, 0, 0, 0, 0, 0, 1]);
-        let smaller_blockhash = BlockHash([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                                          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                                          0, 0, 0, 0, 0, 0, 0, 0]);
+        let bigger_blockhash = BlockHash([
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 1,
+        ]);
+        let smaller_blockhash = BlockHash([
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0,
+        ]);
         assert_eq!(bigger_blockhash > smaller_blockhash, true);
 
-        let bigger_blockhash = BlockHash([0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                                         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                                         0, 0, 0, 0, 0, 0, 0, 0]);
-        let smaller_blockhash = BlockHash([0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                                          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                                          0, 0, 0, 0, 0, 0, 0, 0]);
+        let bigger_blockhash = BlockHash([
+            0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0,
+        ]);
+        let smaller_blockhash = BlockHash([
+            0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0,
+        ]);
         assert_eq!(bigger_blockhash > smaller_blockhash, true);
 
-        let some_blockhash = BlockHash([0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                                         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                                         0, 0, 0, 0, 0, 0, 0, 0]);
-        let same_blockhash = BlockHash([0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                                          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                                          0, 0, 0, 0, 0, 0, 0, 0]);
+        let some_blockhash = BlockHash([
+            0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0,
+        ]);
+        let same_blockhash = BlockHash([
+            0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0,
+        ]);
         assert_eq!(some_blockhash >= same_blockhash, true);
         assert_eq!(some_blockhash <= same_blockhash, true);
         assert_eq!(some_blockhash == same_blockhash, true);

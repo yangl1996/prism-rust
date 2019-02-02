@@ -2,7 +2,7 @@ extern crate bincode;
 
 use super::block_hash::BlockHash;
 
-const NUM_TXN_BLOCKS: usize = 4;  // how many txn blocks in a core block
+const NUM_TXN_BLOCKS: usize = 4; // how many txn blocks in a core block
 
 #[derive(Serialize, Deserialize)]
 pub struct CoreBlock {
@@ -42,8 +42,6 @@ impl super::Block for CoreBlock {
     }
 }
 
-//pub struct Transaction;
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -53,16 +51,20 @@ mod tests {
     fn block_hash() {
         let block = CoreBlock {
             parent: BlockHash([5; 32]),
-            transaction_blocks: [BlockHash([1; 32]), BlockHash([2; 32]),
-                                 BlockHash([4; 32]), BlockHash([3; 32])],
+            transaction_blocks: [
+                BlockHash([1; 32]),
+                BlockHash([2; 32]),
+                BlockHash([4; 32]),
+                BlockHash([3; 32]),
+            ],
             nonce: 12345,
         };
         let hash = block.hash();
-        let should_be = BlockHash([0xa3, 0x90, 0x46, 0xd3, 0xaf, 0xfa, 0x8b,
-                                   0x05, 0xe6, 0x20, 0x80, 0xe2, 0x67, 0x21,
-                                   0x92, 0xef, 0x04, 0x7a, 0x15, 0xf9, 0xd7,
-                                   0x81, 0x84, 0xcb, 0x0b, 0x0c, 0x0d, 0x30,
-                                   0xdf, 0x8f, 0x8e, 0x55]);
+        let should_be = BlockHash([
+            0xa3, 0x90, 0x46, 0xd3, 0xaf, 0xfa, 0x8b, 0x05, 0xe6, 0x20, 0x80, 0xe2, 0x67, 0x21,
+            0x92, 0xef, 0x04, 0x7a, 0x15, 0xf9, 0xd7, 0x81, 0x84, 0xcb, 0x0b, 0x0c, 0x0d, 0x30,
+            0xdf, 0x8f, 0x8e, 0x55,
+        ]);
         assert_eq!(hash == should_be, true);
     }
 }
