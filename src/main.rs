@@ -1,5 +1,5 @@
 mod block;
-mod mine;
+//mod mine;
 
 fn main() {
     println!("I'm just a placeholder");
