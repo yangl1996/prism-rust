@@ -1,6 +1,6 @@
 extern crate ring;
 
-#[derive(Eq)]
+#[derive(Eq, Serialize, Deserialize)]
 pub struct BlockHash(pub [u8; 32]); // big endian u256
 
 impl Ord for BlockHash {

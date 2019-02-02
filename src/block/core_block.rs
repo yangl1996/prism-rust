@@ -1,21 +1,26 @@
-extern crate byteorder;
-use byteorder::{ByteOrder, LittleEndian};
+extern crate bincode;
 
 use super::block_hash::BlockHash;
 
+const NUM_TXN_BLOCKS: usize = 4;  // how many txn blocks in a core block
+
+#[derive(Serialize, Deserialize)]
 pub struct CoreBlock {
-    //pub transactions: [Transaction; 16], // each block holds 16 txn
     pub parent: BlockHash,
-    //pub transaction_blocks: [BlockHash; 4], // each block points to 4 txn blocks
+    pub transaction_blocks: [BlockHash; NUM_TXN_BLOCKS],
     pub nonce: u32,
 }
 
 impl std::fmt::Display for CoreBlock {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "Block {{\n")?;
+        write!(f, "{{\n")?;
         //write!(f, "  transactions: not implemented")?;
         write!(f, "  parent: {}\n", self.parent)?;
-        //write!(f, "  transaction blocks: not implemented")?;
+        write!(f, "  transaction blocks: {{\n")?;
+        for txn in &self.transaction_blocks {
+            write!(f, "    {},\n", txn)?;
+        }
+        write!(f, "  }}\n")?;
         write!(f, "  nonce: {}\n", self.nonce)?;
         write!(f, "}}")
     }
@@ -23,13 +28,7 @@ impl std::fmt::Display for CoreBlock {
 
 impl super::Block for CoreBlock {
     fn serialize(&self) -> Vec<u8> {
-        // little-endian parent hash + little-endian nonce
-        let mut serialized: [u8; 36] = [0; 36];
-        for idx in 0..32 {
-            serialized[idx] = self.parent.0[31-idx];
-        }
-        LittleEndian::write_u32(&mut serialized[32..36], self.nonce);
-        return serialized.to_vec();
+        return bincode::serialize(&self).unwrap();
     }
 
     fn hash(&self) -> BlockHash {
@@ -51,42 +50,19 @@ mod tests {
     use crate::block::Block;
 
     #[test]
-    fn block_serialization() {
-        let block = CoreBlock {
-            parent: BlockHash([10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-                               10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-                               10, 10, 10, 10, 10, 10, 10, 10, 10, 9]),
-            nonce: 12345,
-        };
-        let serialized = block.serialize();
-        let should_be: [u8; 36] = [9, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-                                   10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-                                   10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 57,
-                                   48, 0,  0];
-        let mut comp = true;
-        for idx in 0..36 {
-            print!("| {}, {} |", serialized[idx], should_be[idx]);
-            if serialized[idx] != should_be[idx] {
-                comp = false;
-            }
-        }
-        assert_eq!(comp, true);
-    }
-
-    #[test]
     fn block_hash() {
         let block = CoreBlock {
-            parent: BlockHash([10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-                               10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-                               10, 10, 10, 10, 10, 10, 10, 10, 10, 9]),
+            parent: BlockHash([5; 32]),
+            transaction_blocks: [BlockHash([1; 32]), BlockHash([2; 32]),
+                                 BlockHash([4; 32]), BlockHash([3; 32])],
             nonce: 12345,
         };
         let hash = block.hash();
-        let should_be = BlockHash([0x58, 0x87, 0xa8, 0xbc, 0xba, 0xde, 0x11,
-                                   0x0e, 0x4b, 0xa7, 0x8f, 0x95, 0x01, 0xe6,
-                                   0x39, 0xd0, 0x5d, 0x1f, 0xf9, 0xdf, 0xd6,
-                                   0xab, 0xd2, 0x1f, 0x93, 0x69, 0x56, 0xa8,
-                                   0x08, 0xab, 0xbb, 0xfb]);
+        let should_be = BlockHash([0xa3, 0x90, 0x46, 0xd3, 0xaf, 0xfa, 0x8b,
+                                   0x05, 0xe6, 0x20, 0x80, 0xe2, 0x67, 0x21,
+                                   0x92, 0xef, 0x04, 0x7a, 0x15, 0xf9, 0xd7,
+                                   0x81, 0x84, 0xcb, 0x0b, 0x0c, 0x0d, 0x30,
+                                   0xdf, 0x8f, 0x8e, 0x55]);
         assert_eq!(hash == should_be, true);
     }
 }
