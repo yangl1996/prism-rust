@@ -1,6 +1,6 @@
 extern crate ring;
 
-trait Hashable {
+pub trait Hashable {
     fn hash(&self) -> Hash;
 }
 
@@ -72,8 +72,6 @@ impl std::fmt::Display for Hash {
         Ok(())
     }
 }
-
-//pub struct Transaction;
 
 #[cfg(test)]
 mod tests {
