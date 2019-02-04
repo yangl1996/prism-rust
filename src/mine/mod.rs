@@ -3,8 +3,9 @@ use std::thread;
 use std::sync::{mpsc, Arc, RwLock};
 
 const NUM_THREADS: u32 = 4;
+const PROPOSAL_THLD: block::hash::Hash 
 
-pub fn mine(parent_hash: &block::BlockHash, thld: &block::BlockHash) -> block::Block {
+pub fn mine(voter_hash: &block::hash::Hash, proposal_hash: &block::hash::Hash, transactions_hash: &block::hash::Hash) -> block::block_header::BlockHeader {
     let done = Arc::new(RwLock::new(false)); // to tell threads to stop
     let (tx, rx) = mpsc::channel(); // chan to collect computed nonce
     let mut thread_handles = Vec::new();
