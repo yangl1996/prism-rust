@@ -1,2 +1,2 @@
-mod block_header;
-mod hash;
+pub mod block_header;
+pub mod hash;

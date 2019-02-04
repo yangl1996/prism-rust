@@ -80,16 +80,28 @@ mod tests {
 
     #[test]
     fn ordering() {
-        let bigger_hash = Hash(hex!("0000000000000000000000000000000000000000000000000000000000000001"));
-        let smaller_hash = Hash(hex!("0000000000000000000000000000000000000000000000000000000000000000"));
+        let bigger_hash = Hash(hex!(
+            "0000000000000000000000000000000000000000000000000000000000000001"
+        ));
+        let smaller_hash = Hash(hex!(
+            "0000000000000000000000000000000000000000000000000000000000000000"
+        ));
         assert_eq!(bigger_hash > smaller_hash, true);
 
-        let bigger_hash = Hash(hex!("0001000000000000000000000000000000000000000000000000000000000001"));
-        let smaller_hash = Hash(hex!("0000010000000000000000000000000000000000000000000000000000000000"));
+        let bigger_hash = Hash(hex!(
+            "0001000000000000000000000000000000000000000000000000000000000001"
+        ));
+        let smaller_hash = Hash(hex!(
+            "0000010000000000000000000000000000000000000000000000000000000000"
+        ));
         assert_eq!(bigger_hash > smaller_hash, true);
 
-        let some_hash = Hash(hex!("0001000000000000000000000000000000000000000000000000000000000000"));
-        let same_hash = Hash(hex!("0001000000000000000000000000000000000000000000000000000000000000"));
+        let some_hash = Hash(hex!(
+            "0001000000000000000000000000000000000000000000000000000000000000"
+        ));
+        let same_hash = Hash(hex!(
+            "0001000000000000000000000000000000000000000000000000000000000000"
+        ));
         assert_eq!(some_hash >= same_hash, true);
         assert_eq!(some_hash <= same_hash, true);
         assert_eq!(some_hash == same_hash, true);
@@ -98,7 +110,9 @@ mod tests {
     #[test]
     fn from_u8() {
         let source = hex!("0101010102020202010101010202020201010101020202020101010102020202");
-        let should_be = Hash(hex!("0101010102020202010101010202020201010101020202020101010102020202"));
+        let should_be = Hash(hex!(
+            "0101010102020202010101010202020201010101020202020101010102020202"
+        ));
         let result: Hash = Hash::from(source);
         assert_eq!(result, should_be);
     }
@@ -106,16 +120,21 @@ mod tests {
     #[test]
     fn into_u8() {
         let should_be = hex!("0101010102020202010101010202020201010101020202020101010102020202");
-        let source = Hash(hex!("0101010102020202010101010202020201010101020202020101010102020202"));
+        let source = Hash(hex!(
+            "0101010102020202010101010202020201010101020202020101010102020202"
+        ));
         let result: [u8; 32] = source.into();
         assert_eq!(result, should_be);
     }
 
     #[test]
     fn hash() {
-        let hash = Hash(hex!("2017201720172017201720172017201720172017201720172017201720172017"));
+        let hash = Hash(hex!(
+            "2017201720172017201720172017201720172017201720172017201720172017"
+        ));
         let hashed_hash = hash.hash();
-        let should_be: [u8; 32] = hex!("cd9b88d7319caaf16bed3fd6d4880284e0283414b0b44c22978f7dc22d741713");
+        let should_be: [u8; 32] =
+            hex!("cd9b88d7319caaf16bed3fd6d4880284e0283414b0b44c22978f7dc22d741713");
         let should_be = Hash(should_be);
         assert_eq!(hashed_hash, should_be);
     }
