@@ -1,6 +1,6 @@
 extern crate ring;
 
-#[derive(Eq, Serialize, Deserialize, Clone)]
+#[derive(Eq, Serialize, Deserialize, Clone, Debug)]
 pub struct Address(pub [u8; 20]);
 
 impl std::convert::From<[u8; 20]> for Address {
@@ -48,5 +48,21 @@ mod tests {
         let some_addr = Address(hex!("0000000000111111111122222222223333333333"));
         let other_addr = Address(hex!("1234000000111111111122222222223333333333"));
         assert_eq!(some_addr == other_addr, false);
+    }
+
+    #[test]
+    fn from_u8() {
+        let source = hex!("1122334455112233445511223344551122334455");
+        let should_be = Address(hex!("1122334455112233445511223344551122334455"));
+        let result: Address = Address::from(source);
+        assert_eq!(should_be, result);
+    }
+
+    #[test]
+    fn into_u8() {
+        let should_be = hex!("1122334455112233445511223344551122334455");
+        let source = Address(hex!("1122334455112233445511223344551122334455"));
+        let result: [u8; 20] = source.into();
+        assert_eq!(should_be, result);
     }
 }
