@@ -1,12 +1,18 @@
-use crate::block::{block_header, hash};
 use crate::block::hash::Hashable;
-use std::thread;
+use crate::block::{block_header, hash};
 use std::sync::{mpsc, Arc, RwLock};
+use std::thread;
 
 const NUM_THREADS: u32 = 4;
-const PROPOSAL_THLD: hash::Hash = hash::Hash(hex!("0001000000000000000000000000000000000000000000000000000000000000"));
+const PROPOSAL_THLD: hash::Hash = hash::Hash(hex!(
+    "0001000000000000000000000000000000000000000000000000000000000000"
+));
 
-pub fn mine(voter_hash: &hash::Hash, proposal_hash: &hash::Hash, transactions_hash: &hash::Hash) -> u32 {
+pub fn mine(
+    voter_hash: &hash::Hash,
+    proposal_hash: &hash::Hash,
+    transactions_hash: &hash::Hash,
+) -> u32 {
     let done = Arc::new(RwLock::new(false)); // to tell threads to stop
     let (tx, rx) = mpsc::channel(); // chan to collect computed nonce
     let mut thread_handles = Vec::new();
@@ -48,7 +54,8 @@ pub fn mine(voter_hash: &hash::Hash, proposal_hash: &hash::Hash, transactions_ha
         let mut done = done.write().unwrap(); // tell threads to stop
         *done = true;
     }
-    for handle in thread_handles { // wait for threads to stop
+    for handle in thread_handles {
+        // wait for threads to stop
         handle.join().unwrap();
     }
     return received;
@@ -58,14 +65,20 @@ pub fn mine(voter_hash: &hash::Hash, proposal_hash: &hash::Hash, transactions_ha
 mod tests {
     use super::mine;
     use super::PROPOSAL_THLD;
-    use crate::block::{block_header, hash};
     use crate::block::hash::Hashable;
+    use crate::block::{block_header, hash};
 
     #[test]
-    fn test_mining() {
-        let voter_hash = hash::Hash(hex!("0101010101010101010101010101010101010101010101010101010101010101"));
-        let proposal_hash = hash::Hash(hex!("0101010101010101010101010101010101010101010101010101010101010101"));
-        let transactions_hash = hash::Hash(hex!("0101010101010101010101010101010101010101010101010101010101010101"));
+    fn mining() {
+        let voter_hash = hash::Hash(hex!(
+            "0101010101010101010101010101010101010101010101010101010101010101"
+        ));
+        let proposal_hash = hash::Hash(hex!(
+            "0101010101010101010101010101010101010101010101010101010101010101"
+        ));
+        let transactions_hash = hash::Hash(hex!(
+            "0101010101010101010101010101010101010101010101010101010101010101"
+        ));
         let mined_nonce = mine(&voter_hash, &proposal_hash, &transactions_hash);
         let mined = block_header::BlockHeader {
             voter_hash: voter_hash,
