@@ -1,15 +1,7 @@
 extern crate bincode;
 extern crate ring;
 
-use super::block_header;
 use super::hash;
-use super::transaction;
-
-pub struct ProposerBlock {
-    header: block_header::BlockHeader,
-    transactions: Vec<transaction::Transaction>,
-    metadata: ProposerMetadata,
-}
 
 pub struct ProposerMetadata {
     pub level_cert: hash::Hash,
