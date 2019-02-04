@@ -1,4 +1,5 @@
 extern crate bincode;
+extern crate ring;
 
 use super::hash;
 
