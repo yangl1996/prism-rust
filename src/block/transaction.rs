@@ -47,23 +47,26 @@ mod tests {
     #[test]
     fn hash() {
         let txns: [Transaction; 3] = [
-        Transaction {
-            source: address::Address([1; 20]),
-            destination: address::Address([1; 20]),
-            amount: 40,
-        },
-        Transaction {
-            source: address::Address([2; 20]),
-            destination: address::Address([3; 20]),
-            amount: 90,
-        },
-        Transaction {
-            source: address::Address([4; 20]),
-            destination: address::Address([5; 20]),
-            amount: 120,
-        }];
+            Transaction {
+                source: address::Address([1; 20]),
+                destination: address::Address([1; 20]),
+                amount: 40,
+            },
+            Transaction {
+                source: address::Address([2; 20]),
+                destination: address::Address([3; 20]),
+                amount: 90,
+            },
+            Transaction {
+                source: address::Address([4; 20]),
+                destination: address::Address([5; 20]),
+                amount: 120,
+            },
+        ];
         let hash = txns.hash();
-        let should_be = hash::Hash(hex!("b22d7cf2e0d5996a88ab5334f0ecaa4b6a0464f1de227700f93bb6aefa4f8e01"));
+        let should_be = hash::Hash(hex!(
+            "b22d7cf2e0d5996a88ab5334f0ecaa4b6a0464f1de227700f93bb6aefa4f8e01"
+        ));
         assert_eq!(hash, should_be);
     }
 }
