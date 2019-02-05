@@ -4,7 +4,7 @@ pub trait Hashable {
     fn hash(&self) -> Hash;
 }
 
-#[derive(Eq, Serialize, Deserialize, Clone, Debug)]
+#[derive(Eq, Serialize, Deserialize, Clone, Debug, Hash)]
 pub struct Hash(pub [u8; 32]); // big endian u256
 
 impl Hashable for Hash {
