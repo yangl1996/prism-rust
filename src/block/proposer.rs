@@ -2,6 +2,21 @@ extern crate bincode;
 extern crate ring;
 
 use super::hash;
+use super::block_header;
+use super::transaction;
+use super::Block;
+
+pub struct ProposerBlock {
+    pub header: block_header::BlockHeader,
+    pub transactions: Vec<transaction::Transaction>,
+    pub metadata:ProposerMetadata,
+}
+
+impl Block for ProposerBlock {
+    fn header(&self) -> &block_header::BlockHeader {
+        return &self.header;
+    }
+}
 
 pub struct ProposerMetadata {
     pub level_cert: hash::Hash,
