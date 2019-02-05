@@ -9,7 +9,7 @@ use super::Block;
 pub struct ProposerBlock {
     pub header: block_header::BlockHeader,
     pub transactions: Vec<transaction::Transaction>,
-    pub metadata:ProposerMetadata,
+    pub metadata: ProposerMetadata,
 }
 
 impl Block for ProposerBlock {
