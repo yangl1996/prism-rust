@@ -45,6 +45,7 @@ mod tests {
     use super::super::proposer;
     use super::super::block_header;
     use super::super::hash;
+    use super::super::Block;
 
     macro_rules! fake_proposer {
         () => {
@@ -71,8 +72,9 @@ mod tests {
         let tree = BlockTree::new(&genesis_pointer);
         let genesis = Rc::clone(&tree.genesis);
         let head = Rc::clone(&tree.head);
-        assert_eq!(genesis.parent.is_none(), true); // check whether it's genesis
-        assert_eq!(head.parent.is_none(), true);    // check whether it's genesis
+        assert_eq!(genesis.parent.is_none(), true);
+        assert_eq!(head.parent.is_none(), true);
+        assert_eq!(genesis.block.hash(), hash::Hash(hex!("29e6703a080f122e9ac455aedfbe9bd1974492df74f88ad970c07b824d4ea292")));
     }
 
     #[test]

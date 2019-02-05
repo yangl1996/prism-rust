@@ -8,4 +8,5 @@ pub mod block_tree;
 
 pub trait Block {
     fn header(&self) -> &block_header::BlockHeader;
+    fn hash(&self) -> hash::Hash;
 }
