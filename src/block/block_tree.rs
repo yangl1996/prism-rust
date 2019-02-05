@@ -3,19 +3,19 @@
 // paper - the set of nodes are all blocks known to the host, and the set of edges
 // are the reference links from a proposer block, as well as reference link from
 // a voter block to its parent block
-use std::rc::Rc;
 use super::Block;
+use std::rc::Rc;
 
-type Link = Rc<Node>;       // a link is a smart pointer to a node
+type Link = Rc<Node>; // a link is a smart pointer to a node
 
 pub struct Node {
-    pub parent: Option<Link>,   // links to its parent in the blockchain
-    pub references: Vec<Link>,  // reference links in the DAG. see the comment above.
-    pub block: Rc<Block>,       // pointer to the block struct itself
+    pub parent: Option<Link>,  // links to its parent in the blockchain
+    pub references: Vec<Link>, // reference links in the DAG. see the comment above.
+    pub block: Rc<Block>,      // pointer to the block struct itself
 }
 
 pub struct BlockTree {
-    pub genesis: Link,          // points to the genesis block of this tree (chain)
+    pub genesis: Link, // points to the genesis block of this tree (chain)
     pub head: Link,
 }
 
@@ -32,20 +32,19 @@ impl BlockTree {
             head: Rc::clone(&pointer_to_genesis_node),
         };
     }
-
     /*
-       pub fn append(&self, succ: &some block type here, Elem: same) -> {
-       }
-     */
+    pub fn append(&self, succ: &some block type here, Elem: same) -> {
+    }
+    */
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use super::super::proposer;
     use super::super::block_header;
     use super::super::hash;
+    use super::super::proposer;
     use super::super::Block;
+    use super::*;
 
     macro_rules! fake_proposer {
         () => {
@@ -58,7 +57,9 @@ mod tests {
                 },
                 transactions: vec![],
                 metadata: proposer::ProposerMetadata {
-                    level_cert: hash::Hash(hex!("0102030405060708010203040506070801020304050607080102030405060708")),
+                    level_cert: hash::Hash(hex!(
+                        "0102030405060708010203040506070801020304050607080102030405060708"
+                    )),
                     ref_links: vec![],
                 },
             }
@@ -74,7 +75,12 @@ mod tests {
         let head = Rc::clone(&tree.head);
         assert_eq!(genesis.parent.is_none(), true);
         assert_eq!(head.parent.is_none(), true);
-        assert_eq!(genesis.block.hash(), hash::Hash(hex!("29e6703a080f122e9ac455aedfbe9bd1974492df74f88ad970c07b824d4ea292")));
+        assert_eq!(
+            genesis.block.hash(),
+            hash::Hash(hex!(
+                "29e6703a080f122e9ac455aedfbe9bd1974492df74f88ad970c07b824d4ea292"
+            ))
+        );
     }
 
     #[test]

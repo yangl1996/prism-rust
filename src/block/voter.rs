@@ -1,11 +1,11 @@
 extern crate bincode;
 extern crate ring;
 
-use super::hash;
 use super::block_header;
+use super::hash;
+use super::hash::Hashable;
 use super::transaction;
 use super::Block;
-use super::hash::Hashable;
 
 pub struct VoterBlock {
     pub header: block_header::BlockHeader,
@@ -77,13 +77,13 @@ impl hash::Hashable for VoterMetadata {
 
 #[cfg(test)]
 mod tests {
+    use super::super::block_header;
     use super::super::hash;
     use super::super::hash::Hashable;
     use super::super::Block;
-    use super::super::block_header;
     use super::Vote;
-    use super::VoterMetadata;
     use super::VoterBlock;
+    use super::VoterMetadata;
 
     macro_rules! fake_voter {
         () => {
@@ -102,7 +102,6 @@ mod tests {
             }
         };
     }
-
 
     #[test]
     fn metadata_hash() {
@@ -141,6 +140,11 @@ mod tests {
     #[test]
     fn block_hash() {
         let block = fake_voter!();
-        assert_eq!(block.hash(), hash::Hash(hex!("29e6703a080f122e9ac455aedfbe9bd1974492df74f88ad970c07b824d4ea292")));
+        assert_eq!(
+            block.hash(),
+            hash::Hash(hex!(
+                "29e6703a080f122e9ac455aedfbe9bd1974492df74f88ad970c07b824d4ea292"
+            ))
+        );
     }
 }
