@@ -167,6 +167,12 @@ mod tests {
             ))),
             false
         );
+
+        // check all genesis blocks are in place
+        assert_eq!(dag.proposer_tree.genesis.block.hash(), proposer_gptr.hash());
+        assert_eq!(dag.voter_trees[0].genesis.block.hash(), gptr_voter_1.hash());
+        assert_eq!(dag.voter_trees[1].genesis.block.hash(), gptr_voter_2.hash());
+        assert_eq!(dag.voter_trees[2].genesis.block.hash(), gptr_voter_3.hash());
     }
 
     /*
