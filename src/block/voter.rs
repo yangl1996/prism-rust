@@ -2,6 +2,21 @@ extern crate bincode;
 extern crate ring;
 
 use super::hash;
+use super::block_header;
+use super::transaction;
+use super::Block;
+
+pub struct VoterBlock {
+    pub header: block_header::BlockHeader,
+    pub transactions: Vec<transaction::Transaction>,
+    pub metadata: VoterMetadata,
+}
+
+impl Block for VoterBlock {
+    fn header(&self) -> &block_header::BlockHeader {
+        return &self.header;
+    }
+}
 
 #[derive(Serialize, Deserialize)]
 pub struct Vote {
