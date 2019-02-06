@@ -9,4 +9,6 @@ pub mod voter;
 pub trait Block {
     fn header(&self) -> &block_header::BlockHeader;
     fn hash(&self) -> hash::Hash;
+    fn reference_links(&self) -> &[hash::Hash];
+    fn parent(&self) -> &hash::Hash;
 }

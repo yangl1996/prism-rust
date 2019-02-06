@@ -20,18 +20,6 @@ pub struct BlockTree {
     pub genesis: Link, // points to the genesis block of this tree (chain)
 }
 
-impl BlockTree {
-    pub fn append(&self, parent: &Link, new: &Rc<Block>) -> Link {
-        let new_node = Node {
-            parent: Some(Rc::clone(parent)),
-            references: vec![],
-            block: Rc::clone(new),
-        };
-        let pointer_to_new_node = Rc::new(new_node);
-        return pointer_to_new_node;
-    }
-}
-
 pub struct BlockDAG {
     pub proposer_tree: BlockTree,
     pub voter_trees: Vec<BlockTree>,
@@ -75,6 +63,23 @@ impl BlockDAG {
             nodes: nodes,
         };
     }
+
+    pub fn append(&mut self, new: &Rc<Block>) -> Link {
+        let parent_ptr = self.nodes.get(new.parent()).unwrap();
+        let mut ref_ptrs = Vec::new();
+        for ref_hash in new.reference_links() {
+            let ref_ptr = self.nodes.get(ref_hash).unwrap();
+            ref_ptrs.push(Rc::clone(ref_ptr));
+        }
+        let new_node = Node {
+            parent: Some(Rc::clone(parent_ptr)),
+            references: ref_ptrs,
+            block: Rc::clone(new),
+        };
+        let pointer_to_new_node = Rc::new(new_node);
+        self.nodes.insert(new.hash(), Rc::clone(&pointer_to_new_node));
+        return pointer_to_new_node;
+    }
 }
 
 #[cfg(test)]
@@ -89,7 +94,7 @@ mod tests {
     use std::rc::Rc;
 
     macro_rules! fake_proposer {
-        ( $parent_hash:expr, $ref_links:expr ) => {{
+        ( $parent_hash:expr, $ref_links:expr, $nonce:expr ) => {{
             let metadata = proposer::ProposerMetadata {
                 level_cert: $parent_hash,
                 ref_links: $ref_links,
@@ -99,7 +104,7 @@ mod tests {
                     voter_hash: hash::Hash([0; 32]),
                     proposal_hash: metadata.hash(),
                     transactions_hash: hash::Hash([0; 32]),
-                    nonce: 12345,
+                    nonce: $nonce,
                 },
                 transactions: vec![],
                 metadata: metadata,
@@ -108,17 +113,19 @@ mod tests {
     }
 
     macro_rules! fake_voter {
-        ( $parent_hashes:expr ) => {{
+        ( $parent_hash:expr, $nonce:expr ) => {{
             let metadata = voter::VoterMetadata {
                 votes: vec![],
-                parent_links: $parent_hashes,
+                parent_merkle_root: hash::Hash([0; 32]),
+                parent_proofs: vec![],
+                parent: $parent_hash,
             };
             voter::VoterBlock {
                 header: block_header::BlockHeader {
                     voter_hash: metadata.hash(),
                     proposal_hash: hash::Hash([0; 32]),
                     transactions_hash: hash::Hash([0; 32]),
-                    nonce: 54321,
+                    nonce: $nonce,
                 },
                 transactions: vec![],
                 metadata: metadata,
@@ -132,20 +139,21 @@ mod tests {
             hash::Hash(hex!(
                 "1122334455667788112233445566778811223344556677881122334455667788"
             )),
-            vec![]
+            vec![],
+            1
         );
         let proposer_gptr: Rc<Block> = Rc::new(genesis_proposer);
 
         let mut voter_gptrs = Vec::new();
-        let g_voter_1 = fake_voter!(vec![hash::Hash(hex!(
+        let g_voter_1 = fake_voter!(hash::Hash(hex!(
             "1111111111111111111111111111111111111111111111111111111111111111"
-        ))]);
-        let g_voter_2 = fake_voter!(vec![hash::Hash(hex!(
+        )), 2);
+        let g_voter_2 = fake_voter!(hash::Hash(hex!(
             "1111111111111111111111111111111111111111111111111111111111111112"
-        ))]);
-        let g_voter_3 = fake_voter!(vec![hash::Hash(hex!(
+        )), 3);
+        let g_voter_3 = fake_voter!(hash::Hash(hex!(
             "1111111111111111111111111111111111111111111111111111111111111113"
-        ))]);
+        )), 4);
         let gptr_voter_1: Rc<Block> = Rc::new(g_voter_1);
         voter_gptrs.push(&gptr_voter_1);
         let gptr_voter_2: Rc<Block> = Rc::new(g_voter_2);
@@ -175,42 +183,68 @@ mod tests {
         assert_eq!(dag.voter_trees[2].genesis.block.hash(), gptr_voter_3.hash());
     }
 
-    /*
-           #[test]
-           fn ref_count() {
-           let genesis_proposer = fake_proposer!();
-           let genesis_pointer: Rc<Block> = Rc::new(genesis_proposer);
-           let tree = BlockTree::new(&genesis_pointer);
-           {
-           let _genesis = Rc::clone(&tree.genesis);
-           assert_eq!(Rc::strong_count(&tree.genesis.block), 2);
-           assert_eq!(Rc::strong_count(&tree.genesis), 2);
-           }
-           assert_eq!(Rc::strong_count(&tree.genesis.block), 2);
-           assert_eq!(Rc::strong_count(&tree.genesis), 1);
-           }
+    #[test]
+    fn append() {
+        let gp = fake_proposer!(
+            hash::Hash(hex!(
+                "1122334455667788112233445566778811223344556677881122334455667788"
+            )),
+            vec![], 1
+        );
+        let p_gp: Rc<Block> = Rc::new(gp);
 
-           #[test]
-           fn append() {
-           let genesis_proposer = fake_proposer!();
-           let genesis_pointer: Rc<Block> = Rc::new(genesis_proposer);
-           let tree = BlockTree::new(&genesis_pointer);
-           let block_1 = fake_proposer!();
-           let block_1_ptr: Rc<Block> = Rc::new(block_1);
-           let block_1_node = tree.append(&tree.genesis, &block_1_ptr);
-           let block_2 = fake_proposer!();
-           let block_2_ptr: Rc<Block> = Rc::new(block_2);
-           let block_2_node = tree.append(&block_1_node, &block_2_ptr);
-           let block_3 = fake_proposer!();
-           let block_3_ptr: Rc<Block> = Rc::new(block_3);
-           let block_3_node = tree.append(&block_1_node, &block_3_ptr);
-    // should look like this
-    //             ----3
-    // G----1----<
-    //             ----2
-    assert_eq!(Rc::ptr_eq(block_3_node.parent.as_ref().unwrap(), &block_1_node), true);
-    assert_eq!(Rc::ptr_eq(block_2_node.parent.as_ref().unwrap(), &block_1_node), true);
-    assert_eq!(Rc::ptr_eq(block_1_node.parent.as_ref().unwrap(), &tree.genesis), true);
+        let mut voter_gptrs = Vec::new();
+        let gv1 = fake_voter!(hash::Hash(hex!(
+            "1111111111111111111111111111111111111111111111111111111111111111"
+        )), 2);
+        let gv2 = fake_voter!(hash::Hash(hex!(
+            "1111111111111111111111111111111111111111111111111111111111111112"
+        )), 3);
+        let gv3 = fake_voter!(hash::Hash(hex!(
+            "1111111111111111111111111111111111111111111111111111111111111113"
+        )), 4);
+        let p_gv1: Rc<Block> = Rc::new(gv1);
+        voter_gptrs.push(&p_gv1);
+        let p_gv2: Rc<Block> = Rc::new(gv2);
+        voter_gptrs.push(&p_gv2);
+        let p_gv3: Rc<Block> = Rc::new(gv3);
+        voter_gptrs.push(&p_gv3);
+
+        let mut dag = BlockDAG::new(&p_gp, voter_gptrs);
+
+        let p1 = fake_proposer!(p_gp.hash(), vec![], 5);
+        let p_p1: Rc<Block> = Rc::new(p1);
+        let n_p1 = dag.append(&p_p1);
+        let v1 = fake_voter!(p_gv1.hash(), 6);
+        let p_v1: Rc<Block> = Rc::new(v1);
+        let n_v1 = dag.append(&p_v1);
+        let v2 = fake_voter!(p_v1.hash(), 7);
+        let p_v2: Rc<Block> = Rc::new(v2);
+        let n_v2 = dag.append(&p_v2);
+        let v3 = fake_voter!(p_v1.hash(), 8);
+        let p_v3: Rc<Block> = Rc::new(v3);
+        let n_v3 = dag.append(&p_v3);
+        let p2 = fake_proposer!(p_p1.hash(), vec![p_v1.hash(), p_v2.hash()], 9);
+        let p_p2: Rc<Block> = Rc::new(p2);
+        let n_p2 = dag.append(&p_p2);
+        // should look like this
+        //        GP          GV1         GV2          GV3
+        //        |           |
+        //        p1    --->  v1
+        //        |     |    / \
+        //        |     |   /   \
+        //        p2 ----> v2   v3
+        
+        // check total number of nodes
+        assert_eq!(dag.nodes.len(), 9);
+
+        // check parent ptrs
+        assert_eq!(Rc::ptr_eq(n_p1.parent.as_ref().unwrap(), &dag.proposer_tree.genesis), true);
+        assert_eq!(Rc::ptr_eq(n_v1.parent.as_ref().unwrap(), &dag.voter_trees[0].genesis), true);
+        assert_eq!(Rc::ptr_eq(n_p2.parent.as_ref().unwrap(), &n_p1), true);
+        assert_eq!(Rc::ptr_eq(n_v2.parent.as_ref().unwrap(), &n_v1), true);
+        assert_eq!(Rc::ptr_eq(n_v3.parent.as_ref().unwrap(), &n_v1), true);
+
+        // TODO: check reference links
     }
-         */
 }
