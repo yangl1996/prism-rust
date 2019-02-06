@@ -246,5 +246,15 @@ mod tests {
         assert_eq!(Rc::ptr_eq(n_v3.parent.as_ref().unwrap(), &n_v1), true);
 
         // TODO: check reference links
+        assert_eq!(n_p1.references.len(), 0);
+        assert_eq!(n_p2.references.len(), 2);
+        assert_eq!(Rc::ptr_eq(&n_p2.references[0], &n_v1), true);
+        assert_eq!(Rc::ptr_eq(&n_p2.references[1], &n_v2), true);
+        assert_eq!(n_v1.references.len(), 1);
+        assert_eq!(Rc::ptr_eq(&n_v1.references[0], &dag.voter_trees[0].genesis), true);
+        assert_eq!(n_v2.references.len(), 1);
+        assert_eq!(Rc::ptr_eq(&n_v2.references[0], &n_v1), true);
+        assert_eq!(n_v3.references.len(), 1);
+        assert_eq!(Rc::ptr_eq(&n_v3.references[0], &n_v1), true);
     }
 }
