@@ -21,6 +21,14 @@ impl Block for VoterBlock {
     fn hash(&self) -> hash::Hash {
         return self.header.hash();
     }
+
+    fn reference_links(&self) -> &[hash::Hash] {
+        return std::slice::from_ref(&self.metadata.parent);
+    }
+
+    fn parent(&self) -> &hash::Hash {
+        return &self.metadata.parent;
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -37,7 +45,9 @@ impl std::fmt::Display for Vote {
 
 pub struct VoterMetadata {
     pub votes: Vec<Vote>,
-    pub parent_links: Vec<hash::Hash>,
+    pub parent_merkle_root: hash::Hash,
+    pub parent_proofs: Vec<hash::Hash>, // not hashed
+    pub parent: hash::Hash,             // not hashed
 }
 
 impl std::fmt::Display for VoterMetadata {
@@ -48,11 +58,13 @@ impl std::fmt::Display for VoterMetadata {
             write!(f, "    {},\n", v)?;
         }
         write!(f, "  ]\n",)?;
-        write!(f, "  parent links: [\n")?;
-        for p in &self.parent_links {
+        write!(f, "  parent merkle root: {},\n", &self.parent_merkle_root)?;
+        write!(f, "  parent proofs: [\n")?;
+        for p in &self.parent_proofs {
             write!(f, "    {},\n", p)?;
         }
-        write!(f, "  ]\n",)?;
+        write!(f, "  ],\n")?;
+        write!(f, "  parent: {},\n", &self.parent)?;
         write!(f, "}}")
     }
 }
@@ -64,10 +76,8 @@ impl hash::Hashable for VoterMetadata {
             let serialized = bincode::serialize(&v).unwrap();
             ctx.update(&serialized);
         }
-        for p in &self.parent_links {
-            let serialized = bincode::serialize(&p).unwrap();
-            ctx.update(&serialized);
-        }
+        let serialized = bincode::serialize(&self.parent_merkle_root).unwrap();
+        ctx.update(&serialized);
         let digest = ctx.finish();
         let mut raw_hash: [u8; 32] = [0; 32];
         raw_hash[0..32].clone_from_slice(digest.as_ref());
@@ -77,31 +87,10 @@ impl hash::Hashable for VoterMetadata {
 
 #[cfg(test)]
 mod tests {
-    use super::super::block_header;
     use super::super::hash;
     use super::super::hash::Hashable;
-    use super::super::Block;
     use super::Vote;
-    use super::VoterBlock;
     use super::VoterMetadata;
-
-    macro_rules! fake_voter {
-        () => {
-            VoterBlock {
-                header: block_header::BlockHeader {
-                    voter_hash: hash::Hash([1; 32]),
-                    proposal_hash: hash::Hash([2; 32]),
-                    transactions_hash: hash::Hash([3; 32]),
-                    nonce: 12345,
-                },
-                transactions: vec![],
-                metadata: VoterMetadata {
-                    votes: vec![],
-                    parent_links: vec![],
-                },
-            }
-        };
-    }
 
     #[test]
     fn metadata_hash() {
@@ -120,7 +109,8 @@ mod tests {
                     )),
                 },
             ],
-            parent_links: vec![
+            parent_merkle_root: hash::Hash(hex!("0102030405060504010203040506050401020304050605040102030405060504")),
+            parent_proofs: vec![
                 hash::Hash(hex!(
                     "0102030405060504010203040506050401020304050605040102030405060504"
                 )),
@@ -128,23 +118,13 @@ mod tests {
                     "0403020104030201040302010403020104030201040302010403020104030201"
                 )),
             ],
+            parent: hash::Hash(hex!("0102030405060504010203040506050401020304050605040102030405060504")),
         };
         let hash = metadata.hash();
         println!("{}", metadata);
         let should_be = hash::Hash(hex!(
-            "4f4577a4f4662f58def9b1324f91048c26c75000d2184a7fd2f1d7122e6aa931"
+                "3f908a200f59575a14d137ab1fb9add88cc64ea1bb64ba31f93b8c51bf878936"
         ));
         assert_eq!(hash, should_be);
-    }
-
-    #[test]
-    fn block_hash() {
-        let block = fake_voter!();
-        assert_eq!(
-            block.hash(),
-            hash::Hash(hex!(
-                "29e6703a080f122e9ac455aedfbe9bd1974492df74f88ad970c07b824d4ea292"
-            ))
-        );
     }
 }
