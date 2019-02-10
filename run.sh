@@ -48,6 +48,23 @@ function stop_instances
 	tput sgr0
 }
 
+function prepare_config
+{
+	local instances=`cat instances.txt`
+	local instance_ids=""
+	for instance in $instances ;
+	do
+		local id
+		local ip
+		IFS=',' read -r id ip <<< "$instance"
+		echo "Generating config files for $id"
+		python3 scripts/gen_etcd_config.py $id $ip instances.txt
+	done
+	tput setaf 2
+	echo "Configuration files written"
+	tput sgr0
+}
+
 function run_on_all
 {
 	# $@: command to run
@@ -98,6 +115,11 @@ case "$1" in
 
 		    stop-instances
 		        Terminate EC2 instances
+		
+		Run Experiment
+		
+		    gen-config
+			    Generate configuration files for nodes
 
 		Connect to Testbed
 
@@ -112,6 +134,8 @@ case "$1" in
 		start_instances $2 ;;
 	stop-instances)
 		stop_instances ;;
+	gen-config)
+		prepare_config ;;
 	run-all)
 		run_on_all "${@:2}" ;;
 	ssh)
