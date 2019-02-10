@@ -1,6 +1,7 @@
 Prism Distributed Testbed
 =========================
 
+
 Setting Up
 ----------
 
@@ -10,7 +11,18 @@ Setting Up
 4. Place this line "Include config.d/spider" at the beginning of ~/.ssh/config
 5. Execute "mkdir -p ~/.ssh/config.d"
 
+
 Usage
 -----
 
 Run "./run.sh help" to view a list of available commands.
+
+
+Directories
+-----------
+
+payload         Scripts/data files used by EC2 machine
+topologies      Topology files
+scripts         Helper scripts for users
+log             Logs of the experiment (auto-created)
+
