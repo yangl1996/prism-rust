@@ -48,8 +48,11 @@ function stop_instances
 	tput sgr0
 }
 
-function prepare_config
+function prepare_payload
 {
+	echo "Deleting existing files"
+	rm -rf payload
+	mkdir -p payload
 	local instances=`cat instances.txt`
 	local instance_ids=""
 	for instance in $instances ;
@@ -59,9 +62,41 @@ function prepare_config
 		IFS=',' read -r id ip <<< "$instance"
 		echo "Generating config files for $id"
 		python3 scripts/gen_etcd_config.py $id $ip instances.txt
+		cp scripts/bootstrap.sh payload/$id/bootstrap.sh
+		cp scripts/bootstrap-etcd.sh payload/$id/bootstrap-etcd.sh
 	done
 	tput setaf 2
-	echo "Configuration files written"
+	echo "Payload written"
+	tput sgr0
+}
+
+function sync_payload_single
+{
+	rsync -r payload/$1/ $1:/home/ubuntu/payload
+}
+
+function execute_on_all
+{
+	# $1: execute function '$1_single'
+	# ${@:2}: extra params of the function
+	local instances=`cat instances.txt`
+	local pids=""
+	for instance in $instances ;
+	do
+		local id
+		local ip
+		IFS=',' read -r id ip <<< "$instance"
+		echo "Executing $1 on $id"
+		$1_single $id ${@:2} &>log/${1}_${id}.log &
+		pids="$pids $!"
+	done
+	echo "Waiting for all jobs to finish"
+	for pid in $pids ;
+	do
+		wait $pid
+	done
+	tput setaf 2
+	echo "Payload pushed to remote servers"
 	tput sgr0
 }
 
@@ -110,32 +145,37 @@ case "$1" in
 
 		Manage AWS EC2 Instances
 
-		    start-instances n
-		        Start n EC2 instances
+			start-instances n
+				Start n EC2 instances
 
-		    stop-instances
-		        Terminate EC2 instances
-		
+			stop-instances
+				Terminate EC2 instances
+
 		Run Experiment
-		
-		    gen-config
-			    Generate configuration files for nodes
+
+			gen-payload
+				Generate scripts and configuration files
+
+			sync-payload
+				Synchronize payload to remote servers
 
 		Connect to Testbed
 
-		    run-all cmd
-		        Run command on all instances
+			run-all cmd
+				Run command on all instances
 
-		    ssh i
-		        SSH to the i-th server (1-based index)
+			ssh i
+				SSH to the i-th server (1-based index)
 		EOF
 		;;
 	start-instances)
 		start_instances $2 ;;
 	stop-instances)
 		stop_instances ;;
-	gen-config)
-		prepare_config ;;
+	gen-payload)
+		prepare_payload ;;
+	sync-payload)
+		execute_on_all sync_payload ;;
 	run-all)
 		run_on_all "${@:2}" ;;
 	ssh)
