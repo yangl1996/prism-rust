@@ -1,6 +1,6 @@
 #!/bin/bash
 
-LAUNCH_TEMPLATE=lt-0065a09a461515b3e
+LAUNCH_TEMPLATE=lt-02226ebae5fbef5f3
 
 function start_instances
 {
@@ -74,6 +74,7 @@ function ssh_to_server
 	ssh $id
 }
 
+mkdir -p log
 case "$1" in
 	help)
 		cat <<- EOF
