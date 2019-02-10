@@ -3,13 +3,13 @@ import os
 
 template = """
 name: '{}'
-data-dir: '/root/.etcd/data'
-wal-dir: '/root/.etcd/wal'
+data-dir: '/home/ubuntu/.etcd/data'
+wal-dir: '/home/ubuntu/.etcd/wal'
 listen-peer-urls: 'http://{}:2380'
 initial-advertise-peer-urls: 'http://{}:2380'
 listen-client-urls: 'http://localhost:2379'
 advertise-client-urls: 'http://localhost:2379'
-initial-cluster-token: 'etcd-spider'
+initial-cluster-token: 'etcd-prism'
 initial-cluster: '{}'
 initial-cluster-state: 'new'
 """
