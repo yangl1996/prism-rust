@@ -25,6 +25,9 @@ function start_instances
 		echo "    UserKnownHostsFile=/dev/null" >> ~/.ssh/config.d/prism
 		echo "" >> ~/.ssh/config.d/prism
 	done
+	tput setaf 2
+	echo "Instance started, SSH config written"
+	tput sgr0
 }
 
 function stop_instances
@@ -40,6 +43,9 @@ function stop_instances
 	done
 	echo "Terminating instances $instance_ids"
 	aws ec2 terminate-instances --instance-ids $instance_ids > log/aws_stop.log
+	tput setaf 2
+	echo "Instances terminated"
+	tput sgr0
 }
 
 function run_on_all
@@ -61,6 +67,9 @@ function run_on_all
 	do
 		wait $pid
 	done
+	tput setaf 2
+	echo "Finished"
+	tput sgr0
 }
 
 function ssh_to_server
@@ -70,7 +79,9 @@ function ssh_to_server
 	local id
 	local ip
 	IFS=',' read -r id ip <<< "$instance"
+	tput setaf 2
 	echo "SSH to $id at $ip"
+	tput sgr0
 	ssh $id
 }
 
