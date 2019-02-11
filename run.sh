@@ -67,6 +67,7 @@ function prepare_payload
 		python3 scripts/gen_etcd_config.py $id $lan instances.txt
 		cp scripts/bootstrap.sh payload/$id/bootstrap.sh
 		cp scripts/bootstrap-etcd.sh payload/$id/bootstrap-etcd.sh
+		cp scripts/bootstrap-sbt.sh payload/$id/bootstrap-sbt.sh
 	done
 	tput setaf 2
 	echo "Payload written"
