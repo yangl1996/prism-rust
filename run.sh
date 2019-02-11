@@ -52,6 +52,13 @@ function stop_instances
 
 function prepare_payload
 {
+	# $1: topology file to use
+	if [ $# -ne 1 ]; then
+		tput setaf 1
+		echo "Required: topology file"
+		tput sgr0
+		exit 1
+	fi
 	echo "Deleting existing files"
 	rm -rf payload
 	mkdir -p payload
@@ -69,6 +76,7 @@ function prepare_payload
 		cp scripts/bootstrap-etcd.sh payload/$id/bootstrap-etcd.sh
 		cp scripts/bootstrap-sbt.sh payload/$id/bootstrap-sbt.sh
 	done
+	python3 scripts/gen_scorex_config.py instances.txt $1
 	tput setaf 2
 	echo "Payload written"
 	tput sgr0
@@ -160,7 +168,7 @@ case "$1" in
 
 		Run Experiment
 
-			gen-payload
+			gen-payload topo
 				Generate scripts and configuration files
 
 			sync-payload
@@ -180,7 +188,7 @@ case "$1" in
 	stop-instances)
 		stop_instances ;;
 	gen-payload)
-		prepare_payload ;;
+		prepare_payload $2 ;;
 	sync-payload)
 		execute_on_all sync_payload ;;
 	run-all)
