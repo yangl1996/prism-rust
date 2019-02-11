@@ -16,7 +16,8 @@ function start_instances
 	for instance in $instances ;
 	do
 		local ip=`aws ec2 describe-instances --instance-ids $instance | jq -r '.Reservations[0].Instances[0].PublicIpAddress'`
-		echo "$instance,$ip" >> instances.txt
+		local lan=`aws ec2 describe-instances --instance-ids $instance | jq -r '.Reservations[0].Instances[0].PrivateIpAddress'`
+		echo "$instance,$ip,$lan" >> instances.txt
 		echo "Host $instance" >> ~/.ssh/config.d/prism
 		echo "    Hostname $ip" >> ~/.ssh/config.d/prism
 		echo "    User ubuntu" >> ~/.ssh/config.d/prism
@@ -38,7 +39,8 @@ function stop_instances
 	do
 		local id
 		local ip
-		IFS=',' read -r id ip <<< "$instance"
+		local lan
+		IFS=',' read -r id ip lan <<< "$instance"
 		instance_ids="$instance_ids $id"
 	done
 	echo "Terminating instances $instance_ids"
@@ -59,9 +61,10 @@ function prepare_payload
 	do
 		local id
 		local ip
-		IFS=',' read -r id ip <<< "$instance"
+		local lan
+		IFS=',' read -r id ip lan <<< "$instance"
 		echo "Generating config files for $id"
-		python3 scripts/gen_etcd_config.py $id $ip instances.txt
+		python3 scripts/gen_etcd_config.py $id $lan instances.txt
 		cp scripts/bootstrap.sh payload/$id/bootstrap.sh
 		cp scripts/bootstrap-etcd.sh payload/$id/bootstrap-etcd.sh
 	done
@@ -85,7 +88,8 @@ function execute_on_all
 	do
 		local id
 		local ip
-		IFS=',' read -r id ip <<< "$instance"
+		local lan
+		IFS=',' read -r id ip lan <<< "$instance"
 		echo "Executing $1 on $id"
 		$1_single $id ${@:2} &>log/${1}_${id}.log &
 		pids="$pids $!"
@@ -109,7 +113,8 @@ function run_on_all
 	do
 		local id
 		local ip
-		IFS=',' read -r id ip <<< "$instance"
+		local lan
+		IFS=',' read -r id ip lan <<< "$instance"
 		echo "Job launched for $id"
 		ssh $id -- "$@" &
 		pids="$pids $!"
@@ -130,7 +135,8 @@ function ssh_to_server
 	local instance=`sed -n "$1 p" < instances.txt`
 	local id
 	local ip
-	IFS=',' read -r id ip <<< "$instance"
+	local lan
+	IFS=',' read -r id ip lan <<< "$instance"
 	tput setaf 2
 	echo "SSH to $id at $ip"
 	tput sgr0

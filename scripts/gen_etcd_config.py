@@ -24,7 +24,7 @@ etcd_nodes_string = ""
 with open(instances_file) as f:
     for line in f:
         i = line.rstrip().split(",")
-        etcd_nodes.append("{}=http://{}:2380".format(i[0], i[1]))
+        etcd_nodes.append("{}=http://{}:2380".format(i[0], i[2]))
     etcd_nodes_string = ','.join(etcd_nodes)
 
 etcd_config_file = template.format(
