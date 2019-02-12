@@ -29,6 +29,7 @@ scorex {{
     blockNetworkTransmissionDelay = 0s
     minerNumber = "{miner_num}"
     txGenerationRate = 1s
+    txsPerBlock = 100
   }}
 
   wallet {{

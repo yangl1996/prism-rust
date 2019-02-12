@@ -5,6 +5,13 @@ LAUNCH_TEMPLATE=lt-02226ebae5fbef5f3
 function start_instances
 {
 	# $1: number of instances to start
+	echo "Really?"
+	select yn in "Yes" "No"; do
+		case $yn in
+			Yes ) break ;;
+			No ) echo "Nothing happened."; exit ;;
+		esac
+	done
 	echo "Launching $1 AWS EC2 instances"
 	aws ec2 run-instances --launch-template LaunchTemplateId=$LAUNCH_TEMPLATE --count $1 > log/aws_start.log
 	local instances=`jq -r '.Instances[].InstanceId ' log/aws_start.log`
@@ -33,6 +40,13 @@ function start_instances
 
 function stop_instances
 {
+	echo "Really?"
+	select yn in "Yes" "No"; do
+		case $yn in
+			Yes ) break ;;
+			No ) echo "Nothing happened."; exit ;;
+		esac
+	done
 	local instances=`cat instances.txt`
 	local instance_ids=""
 	for instance in $instances ;
@@ -75,6 +89,7 @@ function prepare_payload
 		cp scripts/bootstrap.sh payload/$id/bootstrap.sh
 		cp scripts/bootstrap-etcd.sh payload/$id/bootstrap-etcd.sh
 		cp scripts/bootstrap-sbt.sh payload/$id/bootstrap-sbt.sh
+		cp scripts/bootstrap-scorex.sh payload/$id/bootstrap-scorex.sh
 	done
 	python3 scripts/gen_scorex_config.py instances.txt $1
 	tput setaf 2
@@ -85,6 +100,12 @@ function prepare_payload
 function sync_payload_single
 {
 	rsync -r payload/$1/ $1:/home/ubuntu/payload
+}
+
+function start_experiment_single
+{
+	ssh $1 -- 'mkdir -p /home/ubuntu/log'
+	ssh $1 -- 'nohup bash /home/ubuntu/payload/bootstrap.sh &>/home/ubuntu/log/main.log &'
 }
 
 function execute_on_all
@@ -100,7 +121,7 @@ function execute_on_all
 		local lan
 		IFS=',' read -r id ip lan <<< "$instance"
 		echo "Executing $1 on $id"
-		$1_single $id ${@:2} &>log/${1}_${id}.log &
+		$1_single $id ${@:2} &>log/${id}_${1}.log &
 		pids="$pids $!"
 	done
 	echo "Waiting for all jobs to finish"
@@ -109,7 +130,7 @@ function execute_on_all
 		wait $pid
 	done
 	tput setaf 2
-	echo "Payload pushed to remote servers"
+	echo "Finished"
 	tput sgr0
 }
 
@@ -174,6 +195,9 @@ case "$1" in
 			sync-payload
 				Synchronize payload to remote servers
 
+		    start-exp
+		        Start Scorex nodes on each remote servers
+
 		Connect to Testbed
 
 			run-all cmd
@@ -191,6 +215,8 @@ case "$1" in
 		prepare_payload $2 ;;
 	sync-payload)
 		execute_on_all sync_payload ;;
+	start-exp)
+		execute_on_all start_experiment ;;
 	run-all)
 		run_on_all "${@:2}" ;;
 	ssh)
