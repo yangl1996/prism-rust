@@ -213,8 +213,8 @@ case "$1" in
 		  gen-payload topo      Generate scripts and configuration files
 		  sync-payload          Synchronize payload to remote servers
 		  install-deps          Install dependencies on remote servers
-		  start-scorex          Start Scorex nodes on each remote servers
-		  stop-scorex           Stop Scorex nodes on each remote servers
+		  start-scorex          Start Scorex nodes on each remote server
+		  stop-scorex           Stop Scorex nodes on each remote server
 
 		Connect to Testbed
 

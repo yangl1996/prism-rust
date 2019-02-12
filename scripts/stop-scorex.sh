@@ -11,9 +11,14 @@ for pid in $pids; do
 	kill_pids="$kill_pids $!"
 done
 
+pkill java
+
 echo "Waiting for processes to exit"
 for pid in $kill_pids; do
 	wait $pid
 done
+
+echo "All process exited"
+
 rm -f /home/ubuntu/log/scorex.pid
 

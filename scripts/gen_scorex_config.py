@@ -72,6 +72,7 @@ for node in topo['nodes']:
     this = {}
     this['host'] = instances[instance_idx][0]
     this['ip'] = instances[instance_idx][2]
+    this['pubfacing_ip'] = instances[instance_idx][1]
     this['api_port'] = next_free_port[instance_idx]
     next_free_port[instance_idx] += 1
     this['p2p_port'] = next_free_port[instance_idx]
@@ -88,11 +89,16 @@ for name, node in nodes.items():
             peers.append('"{}:{}"'.format(nodes[dst]['ip'], nodes[dst]['p2p_port']))
     node['peer_str'] = ', '.join(peers)
     config_str = template.format(
-        node_name=name, addr=node['ip'], api_port=node['api_port'],
-        p2p_port=node['p2p_port'], peer_string=node['peer_str'],
-        miner_num=miner_num)
+            node_name=name, addr=node['ip'], api_port=node['api_port'],
+            p2p_port=node['p2p_port'], peer_string=node['peer_str'],
+            miner_num=miner_num)
     miner_num += 1
     os.makedirs("payload/{}/scorex-configs".format(node['host']), exist_ok=True)
     with open("payload/{}/scorex-configs/{}.conf".format(node['host'], name), "w") as f:
         f.write(config_str)
+
+# write out node-host association
+with open("nodes.txt", 'w') as f:
+    for name, node in nodes.items():
+        f.write("{},{},{},{},{},{}\n".format(name, node['host'], node['pubfacing_ip'], node['ip'], node['api_port'], node['p2p_port']))
 
