@@ -5,6 +5,12 @@ LAUNCH_TEMPLATE=lt-02226ebae5fbef5f3
 function start_instances
 {
 	# $1: number of instances to start
+	if [ $# -ne 1 ]; then
+		tput setaf 1
+		echo "Required: number of instances to start"
+		tput sgr0
+		exit 1
+	fi
 	echo "Really?"
 	select yn in "Yes" "No"; do
 		case $yn in
@@ -90,6 +96,8 @@ function prepare_payload
 		cp scripts/bootstrap-etcd.sh payload/$id/bootstrap-etcd.sh
 		cp scripts/bootstrap-sbt.sh payload/$id/bootstrap-sbt.sh
 		cp scripts/bootstrap-scorex.sh payload/$id/bootstrap-scorex.sh
+		cp scripts/start-scorex.sh payload/$id/start-scorex.sh
+		cp scripts/stop-scorex.sh payload/$id/stop-scorex.sh
 	done
 	python3 scripts/gen_scorex_config.py instances.txt $1
 	tput setaf 2
@@ -102,10 +110,20 @@ function sync_payload_single
 	rsync -r payload/$1/ $1:/home/ubuntu/payload
 }
 
-function start_experiment_single
+function install_deps_single
 {
 	ssh $1 -- 'mkdir -p /home/ubuntu/log'
-	ssh $1 -- 'nohup bash /home/ubuntu/payload/bootstrap.sh &>/home/ubuntu/log/main.log &'
+	ssh $1 -- 'bash /home/ubuntu/payload/bootstrap.sh &>/home/ubuntu/log/deps.log'
+}
+
+function start_scorex_single
+{
+	ssh $1 -- 'bash /home/ubuntu/payload/start-scorex.sh &>/home/ubuntu/log/start.log'
+}
+
+function stop_scorex_single
+{
+	ssh $1 -- 'bash /home/ubuntu/payload/stop-scorex.sh &>/home/ubuntu/log/stop.log'
 }
 
 function execute_on_all
@@ -162,6 +180,12 @@ function run_on_all
 function ssh_to_server
 {
 	# $1: which server to ssh to (starting from 1)
+	if [ $# -ne 1 ]; then
+		tput setaf 1
+		echo "Required: the index of server to SSH to"
+		tput sgr0
+		exit 1
+	fi
 	local instance=`sed -n "$1 p" < instances.txt`
 	local id
 	local ip
@@ -181,30 +205,21 @@ case "$1" in
 
 		Manage AWS EC2 Instances
 
-			start-instances n
-				Start n EC2 instances
-
-			stop-instances
-				Terminate EC2 instances
+		  start-instances n     Start n EC2 instances
+		  stop-instances        Terminate EC2 instances
 
 		Run Experiment
 
-			gen-payload topo
-				Generate scripts and configuration files
-
-			sync-payload
-				Synchronize payload to remote servers
-
-		    start-exp
-		        Start Scorex nodes on each remote servers
+		  gen-payload topo      Generate scripts and configuration files
+		  sync-payload          Synchronize payload to remote servers
+		  install-deps          Install dependencies on remote servers
+		  start-scorex          Start Scorex nodes on each remote servers
+		  stop-scorex           Stop Scorex nodes on each remote servers
 
 		Connect to Testbed
 
-			run-all cmd
-				Run command on all instances
-
-			ssh i
-				SSH to the i-th server (1-based index)
+		  run-all cmd           Run command on all instances
+		  ssh i                 SSH to the i-th server (1-based index)
 		EOF
 		;;
 	start-instances)
@@ -215,10 +230,18 @@ case "$1" in
 		prepare_payload $2 ;;
 	sync-payload)
 		execute_on_all sync_payload ;;
-	start-exp)
-		execute_on_all start_experiment ;;
+	install-deps)
+		execute_on_all install_deps ;;
+	start-scorex)
+		execute_on_all start_scorex ;;
+	stop-scorex)
+		execute_on_all stop_scorex ;;
 	run-all)
 		run_on_all "${@:2}" ;;
 	ssh)
 		ssh_to_server $2 ;;
+	*)
+		tput setaf 1
+		echo "Unrecognized subcommand '$1'"
+		tput sgr0 ;;
 esac
