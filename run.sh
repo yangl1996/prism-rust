@@ -98,6 +98,7 @@ function prepare_payload
 		cp scripts/bootstrap-scorex.sh payload/$id/bootstrap-scorex.sh
 		cp scripts/start-scorex.sh payload/$id/start-scorex.sh
 		cp scripts/stop-scorex.sh payload/$id/stop-scorex.sh
+		cp scripts/get-scorex-perf.sh payload/$id/get-scorex-perf.sh
 	done
 	python3 scripts/gen_scorex_config.py instances.txt $1
 	tput setaf 2
@@ -150,6 +151,32 @@ function execute_on_all
 	tput setaf 2
 	echo "Finished"
 	tput sgr0
+}
+
+function get_perf
+{
+	local nodes=`cat nodes.txt`
+	local pids=''
+	rm -f perf.txt
+	for node in $nodes; do
+		local name
+		local host
+		IFS=',' read -r name host _ <<< "$node"
+		(
+		perf=`ssh $host -- "bash /home/ubuntu/payload/get-scorex-perf.sh $name" 2>/dev/null`
+		echo "$name,$perf" > "${name}_perf.txt"
+		) &
+		pids="$pids $!"
+	done
+	for pid in $pids; do
+		wait $pid
+	done
+	for node in $nodes; do
+		local name
+		IFS=',' read -r name _ <<< "$node"
+		cat "${name}_perf.txt"
+	done
+	rm *_perf.txt
 }
 
 function run_on_all
@@ -215,6 +242,7 @@ case "$1" in
 		  install-deps          Install dependencies on remote servers
 		  start-scorex          Start Scorex nodes on each remote server
 		  stop-scorex           Stop Scorex nodes on each remote server
+		  get-perf              Collect performance numbers
 
 		Connect to Testbed
 
@@ -236,6 +264,8 @@ case "$1" in
 		execute_on_all start_scorex ;;
 	stop-scorex)
 		execute_on_all stop_scorex ;;
+	get-perf)
+		get_perf ;;
 	run-all)
 		run_on_all "${@:2}" ;;
 	ssh)
