@@ -274,7 +274,7 @@ function query_api
 		exit 1
 	fi
 	IFS=',' read -r name host pubip _ apiport _ <<< "$node"
-	curl "http://$pubip:${apiport}${endpoint}"
+	curl -s "http://$pubip:${apiport}${endpoint}"
 }
 
 mkdir -p log
