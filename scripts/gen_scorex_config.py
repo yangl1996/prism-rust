@@ -22,7 +22,7 @@ scorex {{
   miner {{
     offlineGeneration = true
     targetBlockDelay = 20s
-    blockGenerationDelay = 0ms
+    blockGenerationDelay = 100ms
     rParamX10 = 8
     initialDifficulty = 20
     posAttachmentSize = 1
