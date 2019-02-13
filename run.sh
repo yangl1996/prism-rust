@@ -163,7 +163,7 @@ function get_performance_metrics_single
 function get_protocol_metrics_single
 {
 	local perf
-	perf=`curl -s "http://$3:$4/nodeView/pool" | jq '.transactions | length'`
+	perf=`curl -s "http://$3:$4/stats/txcountchain" | python3 scripts/get_num_trans.py`
 	echo "$1,$perf"
 }
 
