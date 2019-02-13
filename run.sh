@@ -153,19 +153,33 @@ function execute_on_all
 	tput sgr0
 }
 
-function get_perf
+function get_performance_metrics_single
 {
+	local perf
+	perf=`ssh $2 -- "bash /home/ubuntu/payload/get-scorex-perf.sh $1" 2>/dev/null`
+	echo "$1,$perf"
+}
+
+function get_protocol_metrics_single
+{
+	local perf
+	perf=`curl -s "http://$3:$4/nodeView/pool" | jq '.transactions | length'`
+	echo "$1,$perf"
+}
+
+function collect_data
+{
+	# $1: which function to execute
 	local nodes=`cat nodes.txt`
 	local pids=''
 	rm -f perf.txt
 	for node in $nodes; do
 		local name
 		local host
-		IFS=',' read -r name host _ <<< "$node"
-		(
-		perf=`ssh $host -- "bash /home/ubuntu/payload/get-scorex-perf.sh $name" 2>/dev/null`
-		echo "$name,$perf" > "${name}_perf.txt"
-		) &
+		local pubip
+		local apiport
+		IFS=',' read -r name host pubip _ apiport _ <<< "$node"
+		$1_single $name $host $pubip $apiport > "${name}_data.txt" &
 		pids="$pids $!"
 	done
 	for pid in $pids; do
@@ -174,9 +188,9 @@ function get_perf
 	for node in $nodes; do
 		local name
 		IFS=',' read -r name _ <<< "$node"
-		cat "${name}_perf.txt"
+		cat "${name}_data.txt"
 	done
-	rm *_perf.txt
+	rm *_data.txt
 }
 
 function run_on_all
@@ -242,7 +256,8 @@ case "$1" in
 		  install-deps          Install dependencies on remote servers
 		  start-scorex          Start Scorex nodes on each remote server
 		  stop-scorex           Stop Scorex nodes on each remote server
-		  get-perf              Collect performance numbers
+		  get-perf              Collect performance metrics
+		  get-proto             Collect protocol metrics
 
 		Connect to Testbed
 
@@ -265,7 +280,9 @@ case "$1" in
 	stop-scorex)
 		execute_on_all stop_scorex ;;
 	get-perf)
-		get_perf ;;
+		collect_data get_performance_metrics ;;
+	get-proto)
+		collect_data get_protocol_metrics ;;
 	run-all)
 		run_on_all "${@:2}" ;;
 	ssh)
