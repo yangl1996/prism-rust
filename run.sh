@@ -238,6 +238,45 @@ function ssh_to_server
 	ssh $id
 }
 
+function query_api
+{
+	# $1: which node to query
+	# $2: which api to query
+	if [ $# -ne 2 ]; then
+		tput setaf 1
+		echo "Required: node name and API endpoint"
+		tput sgr0
+		echo "API endpoints: blocktime, blockdiff, blocktxncount, blocktxn, balance"
+		exit 1
+	fi
+	case "$2" in
+		blocktime)
+			endpoint="/stats/timechain" ;;
+		blockdiff)
+			endpoint="/stats/diffchain" ;;
+		blocktxncount)
+			endpoint="/stats/txcountchain" ;;
+		blocktxn)
+			endpoint="/debug/txchain" ;;
+		balance)
+			endpoint="/wallet/balances" ;;
+		*)
+			tput setaf 1
+			echo "Unrecognized API endpoint"
+			tput sgr0
+			exit 1 ;;
+	esac
+	node=`cat nodes.txt | grep "$1,"`
+	if [ $? != 0 ]; then
+		tput setaf 1
+		echo "Unrecognized node name"
+		tput sgr0
+		exit 1
+	fi
+	IFS=',' read -r name host pubip _ apiport _ <<< "$node"
+	curl "http://$pubip:${apiport}${endpoint}"
+}
+
 mkdir -p log
 case "$1" in
 	help)
@@ -263,6 +302,7 @@ case "$1" in
 
 		  run-all cmd           Run command on all instances
 		  ssh i                 SSH to the i-th server (1-based index)
+		  show node api         Query the API of a node
 		EOF
 		;;
 	start-instances)
@@ -287,6 +327,8 @@ case "$1" in
 		run_on_all "${@:2}" ;;
 	ssh)
 		ssh_to_server $2 ;;
+	show)
+		query_api $2 $3;;
 	*)
 		tput setaf 1
 		echo "Unrecognized subcommand '$1'"
