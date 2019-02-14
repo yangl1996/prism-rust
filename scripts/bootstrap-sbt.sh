@@ -14,6 +14,7 @@ tar xf /home/ubuntu/download/jvmtop.tar.gz -C /home/ubuntu/download/jvmtop &>/de
 sudo mv /home/ubuntu/download/jvmtop/jvmtop.jar /usr/local/bin
 sudo mv /home/ubuntu/download/jvmtop/jvmtop.sh /usr/local/bin/jvmtop
 sudo chmod +x /usr/local/bin/jvmtop
+rm -rf /home/ubuntu/download/jvmtop
 
 echo "Installing async-profiler"
 wget 'https://github.com/jvm-profiling-tools/async-profiler/releases/download/v1.5/async-profiler-1.5-linux-x64.tar.gz' -O /home/ubuntu/download/async-profiler.tar.gz &>/dev/null
@@ -22,6 +23,9 @@ tar xf /home/ubuntu/download/async-profiler.tar.gz -C /home/ubuntu/download/asyn
 sudo mv /home/ubuntu/download/async-profiler/build /usr/local/bin
 sudo mv /home/ubuntu/download/async-profiler/profiler.sh /usr/local/bin/profiler
 sudo chmod +x /usr/local/bin/profiler
+rm -rf /home/ubuntu/download/async-profiler
+echo 1 | sudo tee /proc/sys/kernel/perf_event_paranoid
+echo 0 | sudo tee /proc/sys/kernel/kptr_restrict
 
 echo "Adding sbt repository"
 echo "deb https://dl.bintray.com/sbt/debian /" | sudo tee -a /etc/apt/sources.list.d/sbt.list

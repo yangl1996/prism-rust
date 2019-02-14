@@ -238,6 +238,27 @@ function ssh_to_server
 	ssh $id
 }
 
+function scp_from_server
+{
+	# $1: server, $2: src path, $3: dst path
+	if [ $# -ne 3 ]; then
+		tput setaf 1
+		echo "Required: the index of server, src path and dst path"
+		tput sgr0
+		exit 1
+	fi
+	local instance=`sed -n "$1 p" < instances.txt`
+	local id
+	local ip
+	local lan
+	IFS=',' read -r id ip lan <<< "$instance"
+	cmd_to_run="scp -r ${id}:${2} $3"
+	tput setaf 2
+	echo "Executing $cmd_to_run"
+	tput sgr0
+	scp -r ${id}:${2} $3
+}
+
 function query_api
 {
 	# $1: which node to query
@@ -303,6 +324,7 @@ case "$1" in
 		  run-all cmd           Run command on all instances
 		  ssh i                 SSH to the i-th server (1-based index)
 		  show node api         Query the API of a node
+		  scp i src dst         Copy file from remote
 		EOF
 		;;
 	start-instances)
@@ -328,7 +350,9 @@ case "$1" in
 	ssh)
 		ssh_to_server $2 ;;
 	show)
-		query_api $2 $3;;
+		query_api $2 $3 ;;
+	scp)
+		scp_from_server $2 $3 $4 ;;
 	*)
 		tput setaf 1
 		echo "Unrecognized subcommand '$1'"
