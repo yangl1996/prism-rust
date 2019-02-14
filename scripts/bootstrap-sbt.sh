@@ -4,7 +4,16 @@ echo "Updating apt cache"
 sudo apt-get update -y
 
 echo "Installing JDK"
-sudo apt-get install default-jdk -y
+sudo apt-get install openjdk-8-jdk -y
+echo 'JAVA_HOME="/usr/lib/jvm/java-8-openjdk-amd64"' | sudo tee -a /etc/environment
+
+echo "Installing jvmtop"
+wget 'https://github.com/patric-r/jvmtop/releases/download/0.8.0/jvmtop-0.8.0.tar.gz' -O /home/ubuntu/download/jvmtop.tar.gz &>/dev/null
+mkdir -p /home/ubuntu/download/jvmtop
+tar xf /home/ubuntu/download/jvmtop.tar.gz -C /home/ubuntu/download/jvmtop &>/dev/null
+sudo mv /home/ubuntu/download/jvmtop/jvmtop.jar /usr/local/bin
+sudo mv /home/ubuntu/download/jvmtop/jvmtop.sh /usr/local/bin/jvmtop
+sudo chmod +x /usr/local/bin/jvmtop
 
 echo "Adding sbt repository"
 echo "deb https://dl.bintray.com/sbt/debian /" | sudo tee -a /etc/apt/sources.list.d/sbt.list
