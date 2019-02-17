@@ -1,35 +1,7 @@
 extern crate bincode;
 extern crate ring;
 
-use super::block_header;
 use super::hash;
-use super::hash::Hashable;
-use super::transaction;
-use super::Block;
-
-pub struct VoterBlock {
-    pub header: block_header::BlockHeader,
-    pub transactions: Vec<transaction::Transaction>,
-    pub metadata: VoterMetadata,
-}
-
-impl Block for VoterBlock {
-    fn header(&self) -> &block_header::BlockHeader {
-        return &self.header;
-    }
-
-    fn hash(&self) -> hash::Hash {
-        return self.header.hash();
-    }
-
-    fn reference_links(&self) -> &[hash::Hash] {
-        return std::slice::from_ref(&self.metadata.parent);
-    }
-
-    fn parent(&self) -> &hash::Hash {
-        return &self.metadata.parent;
-    }
-}
 
 #[derive(Serialize, Deserialize)]
 pub struct Vote {
@@ -109,7 +81,9 @@ mod tests {
                     )),
                 },
             ],
-            parent_merkle_root: hash::Hash(hex!("0102030405060504010203040506050401020304050605040102030405060504")),
+            parent_merkle_root: hash::Hash(hex!(
+                "0102030405060504010203040506050401020304050605040102030405060504"
+            )),
             parent_proofs: vec![
                 hash::Hash(hex!(
                     "0102030405060504010203040506050401020304050605040102030405060504"
@@ -118,12 +92,14 @@ mod tests {
                     "0403020104030201040302010403020104030201040302010403020104030201"
                 )),
             ],
-            parent: hash::Hash(hex!("0102030405060504010203040506050401020304050605040102030405060504")),
+            parent: hash::Hash(hex!(
+                "0102030405060504010203040506050401020304050605040102030405060504"
+            )),
         };
         let hash = metadata.hash();
         println!("{}", metadata);
         let should_be = hash::Hash(hex!(
-                "3f908a200f59575a14d137ab1fb9add88cc64ea1bb64ba31f93b8c51bf878936"
+            "3f908a200f59575a14d137ab1fb9add88cc64ea1bb64ba31f93b8c51bf878936"
         ));
         assert_eq!(hash, should_be);
     }

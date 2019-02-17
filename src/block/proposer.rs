@@ -1,35 +1,7 @@
 extern crate bincode;
 extern crate ring;
 
-use super::block_header;
 use super::hash;
-use super::hash::Hashable;
-use super::transaction;
-use super::Block;
-
-pub struct ProposerBlock {
-    pub header: block_header::BlockHeader,
-    pub transactions: Vec<transaction::Transaction>,
-    pub metadata: ProposerMetadata,
-}
-
-impl Block for ProposerBlock {
-    fn header(&self) -> &block_header::BlockHeader {
-        return &self.header;
-    }
-
-    fn hash(&self) -> hash::Hash {
-        return self.header.hash();
-    }
-
-    fn reference_links(&self) -> &[hash::Hash] {
-        return &self.metadata.ref_links;
-    }
-
-    fn parent(&self) -> &hash::Hash {
-        return &self.metadata.level_cert;
-    }
-}
 
 pub struct ProposerMetadata {
     pub level_cert: hash::Hash,
