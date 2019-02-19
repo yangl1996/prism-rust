@@ -52,7 +52,7 @@ impl hash::Hashable for VoterMetadata {
         ctx.update(&serialized);
         let digest = ctx.finish();
         let mut raw_hash: [u8; 32] = [0; 32];
-        raw_hash[0..32].clone_from_slice(digest.as_ref());
+        raw_hash[0..32].copy_from_slice(digest.as_ref());
         return raw_hash.into();
     }
 }

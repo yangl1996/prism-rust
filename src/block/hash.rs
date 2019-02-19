@@ -13,7 +13,7 @@ impl Hashable for Hash {
         // TODO: wait for try_into to stablize
         //let raw_hash: [u8; 32] = digest.as_ref().try_into().unwrap();
         let mut raw_hash: [u8; 32] = [0; 32];
-        raw_hash[0..32].clone_from_slice(digest.as_ref());
+        raw_hash[0..32].copy_from_slice(digest.as_ref());
         return raw_hash.into();
     }
 }
