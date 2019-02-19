@@ -2,7 +2,7 @@ extern crate bincode;
 extern crate ring;
 
 use super::address;
-use super::hash;
+use crate::hash;
 
 #[derive(Serialize, Deserialize)]
 pub struct Transaction {
@@ -39,8 +39,8 @@ impl hash::Hashable for [Transaction] {
 
 #[cfg(test)]
 mod tests {
+    use crate::hash;
     use super::super::address;
-    use super::super::hash;
     use super::super::hash::Hashable;
     use super::Transaction;
 

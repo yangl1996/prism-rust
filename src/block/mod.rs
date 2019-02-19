@@ -1,11 +1,10 @@
 pub mod address;
 pub mod block_header;
-pub mod hash;
 pub mod proposer;
 pub mod transaction;
 pub mod voter;
 
-use hash::Hashable;
+use crate::hash::{self, Hashable};
 
 pub enum Metadata {
     VoterMetadata(voter::VoterMetadata),

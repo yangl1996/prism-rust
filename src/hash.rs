@@ -1,9 +1,12 @@
 extern crate ring;
 
+/// An object that can be meaningfully hashed.
 pub trait Hashable {
+    /// Hashes the object using SHA256.
     fn hash(&self) -> Hash;
 }
 
+/// A SHA256 hash
 #[derive(Eq, Serialize, Deserialize, Clone, Debug, Hash)]
 pub struct Hash(pub [u8; 32]); // big endian u256
 
