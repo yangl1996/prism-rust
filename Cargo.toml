@@ -1,7 +1,7 @@
 [package]
 name = "prism"
 version = "0.1.0"
-authors = ["Lei Yang <leiy@csail.mit.edu>"]
+authors = []
 edition = "2018"
 
 [dependencies]
