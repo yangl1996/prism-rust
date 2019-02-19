@@ -27,7 +27,7 @@ impl hash::Hashable for BlockHeader {
         let serialized = bincode::serialize(self).unwrap();
         let digest = ring::digest::digest(&ring::digest::SHA256, &serialized);
         let mut raw_hash: [u8; 32] = [0; 32];
-        raw_hash[..32].clone_from_slice(digest.as_ref());
+        raw_hash[..32].copy_from_slice(digest.as_ref());
         return raw_hash.into();
     }
 }
