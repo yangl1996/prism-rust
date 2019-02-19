@@ -1,7 +1,7 @@
 extern crate bincode;
 extern crate ring;
 
-use super::hash;
+use crate::hash;
 
 pub struct ProposerMetadata {
     pub level_cert: hash::Hash,
@@ -39,8 +39,7 @@ impl hash::Hashable for ProposerMetadata {
 
 #[cfg(test)]
 mod tests {
-    use super::super::hash;
-    use super::super::hash::Hashable;
+    use crate::hash::{self, Hashable};
     use super::ProposerMetadata;
 
     #[test]

@@ -5,6 +5,7 @@ extern crate hex_literal;
 
 mod block;
 mod mine;
+mod hash;
 
 fn main() {
     println!("I'm just a placeholder");

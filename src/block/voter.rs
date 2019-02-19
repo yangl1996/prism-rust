@@ -1,7 +1,7 @@
 extern crate bincode;
 extern crate ring;
 
-use super::hash;
+use crate::hash;
 
 #[derive(Serialize, Deserialize)]
 pub struct Vote {
@@ -59,8 +59,7 @@ impl hash::Hashable for VoterMetadata {
 
 #[cfg(test)]
 mod tests {
-    use super::super::hash;
-    use super::super::hash::Hashable;
+    use crate::hash::{self, Hashable};
     use super::Vote;
     use super::VoterMetadata;
 
