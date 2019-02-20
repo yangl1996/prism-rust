@@ -15,7 +15,7 @@ fn find_parent(me: usize) -> usize {
 }
 
 #[inline]
-fn find_buddy(me: usize) -> usize {
+fn find_sibling(me: usize) -> usize {
     match me & 0x1 {
         1 => return me + 1,
         _ => return me - 1,
