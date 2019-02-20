@@ -63,9 +63,7 @@ impl<'a, T: Hashable> MerkleTree<'a, T> {
                 ctx.update(&proof[last_row_begin + last_row_size - 1 - (i << 1)].0);
                 ctx.update(&proof[last_row_begin + last_row_size - 2 - (i << 1)].0);
                 let digest = ctx.finish();
-                let mut raw_hash: [u8; 32] = [0; 32];
-                raw_hash[0..32].copy_from_slice(digest.as_ref());
-                last_row.push(raw_hash.into());
+                last_row.push(digest.into());
             }
 
             // update ptrs
