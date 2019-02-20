@@ -6,7 +6,7 @@ extern crate ring;
 #[derive(Debug)]
 pub struct MerkleTree<'a, T: Hashable> {
     data: &'a [T],
-    proof: Vec<hash::Hash>,
+    proof: Vec<hash::SHA256>,
 }
 
 #[inline]
@@ -29,8 +29,8 @@ fn find_kids(me: usize) -> (usize, usize) {
 
 impl<'a, T: Hashable> MerkleTree<'a, T> {
     fn new(data: &'a [T]) -> Self {
-        let mut proof: Vec<hash::Hash> = vec![];
-        let mut last_row: Vec<hash::Hash> = data.iter().map(|x| x.hash()).collect();
+        let mut proof: Vec<hash::SHA256> = vec![];
+        let mut last_row: Vec<hash::SHA256> = data.iter().map(|x| x.sha256()).collect();
         let mut last_row_size = last_row.len();
         let mut last_row_begin = 0;
 
@@ -88,25 +88,25 @@ mod tests {
     #[test]
     fn new_tree() {
         let input_data = vec![
-            hash::Hash(hex!(
+            hash::SHA256(hex!(
                 "0a0b0c0d0e0f0e0d0a0b0c0d0e0f0e0d0a0b0c0d0e0f0e0d0a0b0c0d0e0f0e0d"
             )),
-            hash::Hash(hex!(
+            hash::SHA256(hex!(
                 "0102010201020102010201020102010201020102010201020102010201020102"
             )),
-            hash::Hash(hex!(
+            hash::SHA256(hex!(
                 "0a0a0a0a0b0b0b0b0a0a0a0a0b0b0b0b0a0a0a0a0b0b0b0b0a0a0a0a0b0b0b0b"
             )),
-            hash::Hash(hex!(
+            hash::SHA256(hex!(
                 "0403020108070605040302010807060504030201080706050403020108070605"
             )),
-            hash::Hash(hex!(
+            hash::SHA256(hex!(
                 "1a2a3a4a1a2a3a4a1a2a3a4a1a2a3a4a1a2a3a4a1a2a3a4a1a2a3a4a1a2a3a4a"
             )),
-            hash::Hash(hex!(
+            hash::SHA256(hex!(
                 "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
             )),
-            hash::Hash(hex!(
+            hash::SHA256(hex!(
                 "0000000100000001000000010000000100000001000000010000000100000001"
             )),
         ];
@@ -114,13 +114,13 @@ mod tests {
         assert_eq!(merkle_tree.proof.len(), 15);
         assert_eq!(
             merkle_tree.proof[0],
-            hash::Hash(hex!(
+            hash::SHA256(hex!(
                 "9d8f0638fa3d46f618dea970df55b53a02f4aa924e8d598af6b5f296fdaabce5"
             ))
         );
         assert_eq!(
             merkle_tree.proof[13],
-            hash::Hash(hex!(
+            hash::SHA256(hex!(
                 "b8027a4fc86778e60f636c12e67d03b7356f1d6d8a8ff486bcdaa3dcf81b714b"
             ))
         );
