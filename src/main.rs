@@ -4,8 +4,9 @@ extern crate serde_derive;
 extern crate hex_literal;
 
 mod block;
-mod mine;
 mod hash;
+mod merkle;
+mod mine;
 
 fn main() {
     println!("I'm just a placeholder");

@@ -59,9 +59,9 @@ impl hash::Hashable for VoterMetadata {
 
 #[cfg(test)]
 mod tests {
-    use crate::hash::{self, Hashable};
     use super::Vote;
     use super::VoterMetadata;
+    use crate::hash::{self, Hashable};
 
     #[test]
     fn metadata_hash() {

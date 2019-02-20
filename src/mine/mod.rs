@@ -1,5 +1,5 @@
-use crate::hash::{self, Hashable};
 use crate::block::block_header;
+use crate::hash::{self, Hashable};
 use std::sync::{mpsc, Arc, RwLock};
 use std::thread;
 
@@ -65,8 +65,8 @@ pub fn mine(
 mod tests {
     use super::mine;
     use super::PROPOSAL_THLD;
-    use crate::hash::{self, Hashable};
     use crate::block::block_header;
+    use crate::hash::{self, Hashable};
 
     #[test]
     fn mining() {

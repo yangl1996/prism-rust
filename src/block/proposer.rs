@@ -39,8 +39,8 @@ impl hash::Hashable for ProposerMetadata {
 
 #[cfg(test)]
 mod tests {
-    use crate::hash::{self, Hashable};
     use super::ProposerMetadata;
+    use crate::hash::{self, Hashable};
 
     #[test]
     fn metadata_hash() {
