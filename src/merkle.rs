@@ -34,6 +34,11 @@ impl<'a, T: Hashable> MerkleTree<'a, T> {
         let mut last_row_size = last_row.len();
         let mut last_row_begin = 0;
 
+        // How we construct the tree and flatten it into a single vector is complicated.
+        // We construct rows from the bottom up, but reverse each row when inserting into
+        // the tree vector. Finally after all rows are added, we reverse the whole tree
+        // vector, so the vector has all rows from the top to the bottom, and from left
+        // to right in each row.
         loop {
             // if the last row contains only one element, append it and we're done
             if last_row_size == 1 {
@@ -107,7 +112,17 @@ mod tests {
         ];
         let merkle_tree = MerkleTree::new(&input_data);
         assert_eq!(merkle_tree.proof.len(), 15);
-        assert_eq!(merkle_tree.proof[0], hash::Hash(hex!("9d8f0638fa3d46f618dea970df55b53a02f4aa924e8d598af6b5f296fdaabce5")));
-        assert_eq!(merkle_tree.proof[13], hash::Hash(hex!("b8027a4fc86778e60f636c12e67d03b7356f1d6d8a8ff486bcdaa3dcf81b714b")));
+        assert_eq!(
+            merkle_tree.proof[0],
+            hash::Hash(hex!(
+                "9d8f0638fa3d46f618dea970df55b53a02f4aa924e8d598af6b5f296fdaabce5"
+            ))
+        );
+        assert_eq!(
+            merkle_tree.proof[13],
+            hash::Hash(hex!(
+                "b8027a4fc86778e60f636c12e67d03b7356f1d6d8a8ff486bcdaa3dcf81b714b"
+            ))
+        );
     }
 }
