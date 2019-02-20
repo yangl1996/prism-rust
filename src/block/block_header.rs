@@ -34,8 +34,8 @@ impl hash::Hashable for BlockHeader {
 
 #[cfg(test)]
 mod tests {
-    use crate::hash::{self, Hashable};
     use super::BlockHeader;
+    use crate::hash::{self, Hashable};
 
     #[test]
     fn hash() {

@@ -39,10 +39,10 @@ impl hash::Hashable for [Transaction] {
 
 #[cfg(test)]
 mod tests {
-    use crate::hash;
     use super::super::address;
     use super::super::hash::Hashable;
     use super::Transaction;
+    use crate::hash;
 
     #[test]
     fn hash() {
