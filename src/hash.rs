@@ -7,7 +7,7 @@ pub trait Hashable {
 }
 
 /// A SHA256 hash
-#[derive(Eq, Serialize, Deserialize, Clone, Debug, Hash)]
+#[derive(Eq, Serialize, Deserialize, Clone, Debug, Hash, Default, Copy)]
 pub struct SHA256(pub [u8; 32]); // big endian u256
 
 impl Hashable for SHA256 {
@@ -81,8 +81,8 @@ impl std::fmt::Display for SHA256 {
 
 #[cfg(test)]
 mod tests {
-    use super::SHA256;
     use super::Hashable;
+    use super::SHA256;
 
     #[test]
     fn ordering() {

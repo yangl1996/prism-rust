@@ -6,7 +6,7 @@ extern crate ring;
 #[derive(Debug)]
 pub struct MerkleTree<'a, T: Hashable> {
     data: &'a [T],
-    proof: Vec<hash::SHA256>,
+    nodes: Vec<hash::SHA256>,
 }
 
 #[inline]
@@ -29,51 +29,60 @@ fn find_kids(me: usize) -> (usize, usize) {
 
 impl<'a, T: Hashable> MerkleTree<'a, T> {
     fn new(data: &'a [T]) -> Self {
-        let mut proof: Vec<hash::SHA256> = vec![];
-        let mut last_row: Vec<hash::SHA256> = data.iter().map(|x| x.sha256()).collect();
-        let mut last_row_size = last_row.len();
-        let mut last_row_begin = 0;
-
-        // How we construct the tree and flatten it into a single vector is complicated.
-        // We construct rows from the bottom up, but reverse each row when inserting into
-        // the tree vector. Finally after all rows are added, we reverse the whole tree
-        // vector, so the vector has all rows from the top to the bottom, and from left
-        // to right in each row.
+        // calculate the size of the tree
+        let mut this_layer_size = data.len();
+        let mut layer_size = vec![];    // size after dup
+        let mut data_size = vec![];     // size before dup
         loop {
-            // if the last row contains only one element, append it and we're done
-            if last_row_size == 1 {
-                proof.append(&mut last_row);
+            data_size.push(this_layer_size);
+            if this_layer_size == 1 {
+                layer_size.push(this_layer_size);
                 break;
             }
-            // if the last row contains odd num of elements, dup the last one
-            else if last_row_size & 0x1 == 1 {
-                // TODO: more idiomatic way of doing this?
-                last_row.push(last_row.last().cloned().unwrap());
-                last_row_size += 1;
+            if this_layer_size & 0x01 == 1 {
+                this_layer_size += 1;
             }
-            // append the last row to the proof
-            last_row.reverse();
-            proof.append(&mut last_row);
-
-            // construct the next row
-            let new_row_size = last_row_size >> 1;
-            for i in 0..new_row_size {
-                // hash the two kids
-                let mut ctx = ring::digest::Context::new(&ring::digest::SHA256);
-                ctx.update(&proof[last_row_begin + last_row_size - 1 - (i << 1)].0);
-                ctx.update(&proof[last_row_begin + last_row_size - 2 - (i << 1)].0);
-                let digest = ctx.finish();
-                last_row.push(digest.into());
-            }
-
-            // update ptrs
-            last_row_begin += last_row_size;
-            last_row_size = new_row_size;
+            layer_size.push(this_layer_size);
+            this_layer_size = this_layer_size >> 1;
         }
-        proof.reverse();
+        let tree_size = layer_size.iter().sum();
+        let tree_rows = layer_size.len();
+
+        // allocate the tree
+        let mut nodes: Vec<hash::SHA256> = vec![Default::default(); tree_size];
+
+        // construct the tree
+        let mut layer_start = tree_size;
+        let mut layers = layer_size.iter().zip(data_size.iter());
+
+        // fill in the bottom layer
+        let (l, d) = layers.next().unwrap();
+        layer_start -= l;
+        let hashed_data: Vec<hash::SHA256> = data.iter().map(|x| x.sha256()).collect();
+        nodes[layer_start..layer_start + d].copy_from_slice(&hashed_data);
+        if l != d {
+            nodes[layer_start + l - 1] = nodes[layer_start + d - 1];
+        }
+
+        // fill in other layers
+        for (l, d) in layers {
+            let last_layer_start = layer_start;
+            layer_start -= l;
+            for i in 0..*d {
+                let mut ctx = ring::digest::Context::new(&ring::digest::SHA256);
+                ctx.update(&nodes[last_layer_start + (i << 1)].0);
+                ctx.update(&nodes[last_layer_start + (i << 1) + 1].0);
+                let digest = ctx.finish();
+                nodes[layer_start + i] = digest.into();
+            }
+            if l != d {
+                nodes[layer_start + l - 1] = nodes[layer_start + d - 1];
+            } 
+        }
+
         return MerkleTree {
             data: data,
-            proof: proof,
+            nodes: nodes,
         };
     }
 }
@@ -109,15 +118,15 @@ mod tests {
             )),
         ];
         let merkle_tree = MerkleTree::new(&input_data);
-        assert_eq!(merkle_tree.proof.len(), 15);
+        assert_eq!(merkle_tree.nodes.len(), 15);
         assert_eq!(
-            merkle_tree.proof[0],
+            merkle_tree.nodes[0],
             hash::SHA256(hex!(
                 "9d8f0638fa3d46f618dea970df55b53a02f4aa924e8d598af6b5f296fdaabce5"
             ))
         );
         assert_eq!(
-            merkle_tree.proof[13],
+            merkle_tree.nodes[13],
             hash::SHA256(hex!(
                 "b8027a4fc86778e60f636c12e67d03b7356f1d6d8a8ff486bcdaa3dcf81b714b"
             ))
