@@ -9,11 +9,6 @@ pub struct MerkleTree<'a, T: Hashable> {
     nodes: Vec<hash::SHA256>,
 }
 
-#[inline]
-fn find_kids(me: usize) -> (usize, usize) {
-    return ((me << 1) + 1, (me << 1) + 2);
-}
-
 impl<'a, T: Hashable> MerkleTree<'a, T> {
     fn new(data: &'a [T]) -> Self {
         // calculate the size of the tree
