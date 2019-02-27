@@ -1,7 +1,5 @@
 use crate::hash::{self, Hashable};
 
-extern crate ring;
-
 /// A Merkle tree.
 #[derive(Debug)]
 pub struct MerkleTree<'a, T: Hashable> {
