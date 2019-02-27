@@ -1,26 +1,44 @@
-use jsonrpc_core::Result;
-use jsonrpc_derive::rpc;
-use jsonrpc_tcp_server;
+use log::{debug, info, warn, error};
+use std::io::{Read, Write};
+use std::net::{Shutdown, TcpListener, TcpStream, self};
+use std::thread;
 
-#[rpc]
-pub trait Rpc {
-    #[rpc(name = "echo")]
-    fn echo(&self, a: String) -> Result<String>;
+fn handle_client(mut stream: TcpStream) {
+    let mut data = [0 as u8; 50]; // using 50 byte buffer
+    while match stream.read(&mut data) {
+        Ok(size) => {
+            // echo everything!
+            stream.write(&data[0..size]).unwrap();
+            true
+        }
+        Err(_) => {
+            println!(
+                "An error occurred, terminating connection with {}",
+                stream.peer_addr().unwrap()
+            );
+            stream.shutdown(Shutdown::Both).unwrap();
+            false
+        }
+    } {}
 }
 
-pub struct RpcImpl;
-impl Rpc for RpcImpl {
-    fn echo(&self, a: String) -> Result<String> {
-        Ok(a)
+fn listener(addr: net::SocketAddr) {
+    let listener = TcpListener::bind(addr).unwrap();
+    for stream in listener.incoming() {
+        match stream {
+            Ok(stream) => {
+                println!("New connection: {}", stream.peer_addr().unwrap());
+                thread::spawn(move || {
+                    // connection succeeded
+                    handle_client(stream)
+                });
+            }
+            Err(e) => {
+                println!("Error: {}", e);
+                /* connection failed */
+            }
+        }
     }
-}
-
-pub fn serve() {
-    let mut io = jsonrpc_core::IoHandler::new();
-    io.extend_with(RpcImpl.to_delegate());
-
-    let server = jsonrpc_tcp_server::ServerBuilder::new(io)
-        .start(&"127.0.0.1:3030".parse().unwrap())
-        .expect("error starting server");
-    server.wait();
+    // close the socket server
+    drop(listener);
 }
