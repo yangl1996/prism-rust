@@ -22,23 +22,20 @@ fn handle_client(mut stream: TcpStream) {
     } {}
 }
 
-fn listener(addr: net::SocketAddr) {
+pub fn p2p_server(addr: net::SocketAddr) {
     let listener = TcpListener::bind(addr).unwrap();
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
-                println!("New connection: {}", stream.peer_addr().unwrap());
+                info!("Accepting new connection from {}", stream.peer_addr().unwrap());
                 thread::spawn(move || {
                     // connection succeeded
                     handle_client(stream)
                 });
             }
             Err(e) => {
-                println!("Error: {}", e);
-                /* connection failed */
+                error!("Failed establishing connection: {}", e);
             }
         }
     }
-    // close the socket server
-    drop(listener);
 }
