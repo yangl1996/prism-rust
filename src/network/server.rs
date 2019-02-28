@@ -1,6 +1,6 @@
-use log::{debug, info, warn, error};
+use log::{debug, error, info, warn};
 use std::io::{Read, Write};
-use std::net::{Shutdown, TcpListener, TcpStream, self};
+use std::net::{self, Shutdown, TcpListener, TcpStream};
 use std::thread;
 
 fn handle_client(mut stream: TcpStream) {
@@ -22,12 +22,15 @@ fn handle_client(mut stream: TcpStream) {
     } {}
 }
 
-pub fn p2p_server(addr: net::SocketAddr) {
-    let listener = TcpListener::bind(addr).unwrap();
+pub fn p2p_server(addr: net::SocketAddr) -> std::io::Result<()> {
+    let listener = TcpListener::bind(addr)?;
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
-                info!("Accepting new connection from {}", stream.peer_addr().unwrap());
+                info!(
+                    "Accepting new connection from {}",
+                    stream.peer_addr().unwrap()
+                );
                 thread::spawn(move || {
                     // connection succeeded
                     handle_client(stream)
@@ -38,4 +41,5 @@ pub fn p2p_server(addr: net::SocketAddr) {
             }
         }
     }
+    Ok(())
 }
