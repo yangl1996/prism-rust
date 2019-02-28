@@ -50,7 +50,7 @@ fn main() {
 
     debug!("Starting P2P server at {}", peer_socket_addr);
     network::server::p2p_server(peer_socket_addr).map_err(|e| {
-        error!("Error starting P2P server: {}", e);
+        error!("Error occurred in P2P server: {}", e);
         process::exit(1);
     });
 }
