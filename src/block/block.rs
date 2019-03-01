@@ -1,4 +1,8 @@
-extern crate bincode;
+/*
+The blockheader and block struct is defined along with their initialization and other functions
+*/
+
+
 extern crate ring;
 use crate::hash::{self, Hashable, SHA256};
 use serde::{Serialize, Deserialize};
