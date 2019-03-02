@@ -5,9 +5,18 @@ use std::io::{Read, Write};
 const MAX_INCOMING_CLIENT: usize = 256;
 const MAX_EVENT: usize = 1024;
 
-struct Connection {
+struct Peer {
     stream: mio::net::TcpStream,
     token: mio::Token,
+}
+
+impl Peer {
+    fn new(stream: mio::net::TcpStream, token: mio::Token) -> std::io::Result<Self> {
+        return Ok(Self {
+            stream: stream,
+            token: token,
+        });
+    }
 }
 
 pub fn p2p_server(addr: std::net::SocketAddr) -> std::io::Result<()> {
@@ -56,9 +65,12 @@ pub fn p2p_server(addr: std::net::SocketAddr) -> std::io::Result<()> {
                                     );
                                     continue;
                                 }
-                                let new_connection = Connection {
-                                    stream: stream,
-                                    token: mio::Token(key),
+                                let new_connection = match Peer::new(stream, mio::Token(key)) {
+                                    Ok(p) => p,
+                                    Err(e) => {
+                                        warn!("Failed initializing incoming peer: {}", e);
+                                        continue;
+                                    },
                                 };
                                 // register the new connection and insert
                                 poll.register(
