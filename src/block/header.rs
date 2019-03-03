@@ -3,7 +3,7 @@ The blockheader and block struct is defined along with their initialization and 
 */
 
 extern crate ring;
-use crate::hash::{self, Hashable, SHA256};
+use super::crypto::hash::{Hashable, SHA256};
 use serde::{Serialize, Deserialize};
 use std::fmt;
 

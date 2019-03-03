@@ -1,8 +1,8 @@
 extern crate ring;
-use crate::hash::{self, Hashable, SHA256};
+use super::crypto::hash::{Hashable, SHA256};
+use super::header::BlockHeader;
 use serde::{Serialize, Deserialize};
 use std::fmt;
-use super::header::BlockHeader;
 
 
 // ToDo: Encoder and decoder for the block?
@@ -18,7 +18,7 @@ pub struct Block<T: Hashable> {
     block_header: BlockHeader,
     /// Content and its sortition proof. The content could be tx, ref or votes.
     content: T,
-    sortition_proof: Vec<hash::SHA256>, //Specific to Prism
+    sortition_proof: Vec<SHA256>, //Specific to Prism
     block_type: BlockType,  //Specific to Prism
 }
 
@@ -31,7 +31,7 @@ impl<T: Hashable> Block<T>{
     }
 
     pub fn new(parent_id: SHA256, timestamp: u64, nonce: u32, content_root: SHA256,
-           sortition_proof: Vec<hash::SHA256>, content: T, extra_content: Vec<u32>, difficulty: u64  ) -> Self {
+           sortition_proof: Vec<SHA256>, content: T, extra_content: Vec<u32>, difficulty: u64  ) -> Self {
         let block_header = BlockHeader::new(parent_id, timestamp, nonce, content_root, extra_content, difficulty);
         let block_type = Block::<T>::sortition(block_header.hash());
         Block {block_header, content, sortition_proof, block_type }
@@ -47,3 +47,4 @@ impl<T: Hashable> fmt::Display for Block<T>  {
         write!(f, "}}")
     }
 }
+
