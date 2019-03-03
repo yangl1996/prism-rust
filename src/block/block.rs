@@ -19,9 +19,7 @@ pub struct Block<T: Hashable> {
     /// Content and its sortition proof. The content could be tx, ref or votes.
     content: T,
     sortition_proof: Vec<hash::SHA256>, //Specific to Prism
-
     block_type: BlockType,  //Specific to Prism
-
 }
 
 // The generic T is used to refer all the (three) content types.
