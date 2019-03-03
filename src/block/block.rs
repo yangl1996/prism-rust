@@ -16,7 +16,6 @@ pub enum BlockType{
 
 pub struct Block<T: Hashable> {
     block_header: BlockHeader,
-
     /// Content and its sortition proof. The content could be tx, ref or votes.
     content: T,
     sortition_proof: Vec<hash::SHA256>, //Specific to Prism
@@ -25,8 +24,7 @@ pub struct Block<T: Hashable> {
 
 }
 
-
-// The hashable generic T is used to define all the (three) types of blocks.
+// The generic T is used to refer all the (three) content types.
 impl<T: Hashable> Block<T>{
 
     /// Sorititions the block into blocktype using the hash of the header
