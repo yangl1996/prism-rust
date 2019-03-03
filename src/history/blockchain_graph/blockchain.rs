@@ -2,6 +2,8 @@ use super::utils::*;
 use super::transaction_pool::TxPool;
 use super::proposer_tree::PropTree;
 use super::voter_chain::VoterChain;
+use super::block::block::{Block, BlockType};
+use super::crypto::hash::{Hashable};
 
 pub struct BlockChainGraph<'a>{
     tx_block_pool: &'a TxPool<'a>,
@@ -32,7 +34,11 @@ impl<'a> BlockChainGraph<'a>{
         return self.voter_chains.len() as u32;
     }
 
-    pub fn add_block<T: Node>(&mut self, node: T){
-        // Check the node type and perform the required function.
+    // todo: T must be a trait which accepts only blocks
+    pub fn add_block_as_node<T: Hashable>(&mut self, block: Block<T>){
+        if block.get_block_type() == BlockType::Transaction{
+
+//            self.tx_block_pool.add_tx_node()
+        }
     }
 }

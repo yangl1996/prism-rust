@@ -10,6 +10,7 @@ pub trait Hashable {
 #[derive(Eq, Serialize, Deserialize, Clone, Debug, Hash, Default, Copy)]
 pub struct H256(pub [u8; 32]); // big endian u256
 
+
 impl Hashable for H256 {
     fn hash(&self) -> H256 {
         return ring::digest::digest(&ring::digest::SHA256, &self.0).into();

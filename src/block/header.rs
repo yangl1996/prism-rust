@@ -9,6 +9,7 @@ use std::fmt;
 // ToDo: Encoder and decoder for the blockheader?
 // ToDo: Create default header function ?
 
+#[derive(Serialize, Deserialize, Clone, Debug, Hash, Default)]
 pub struct BlockHeader{
     ///  Parent Hash
     parent_hash: H256,
@@ -72,8 +73,7 @@ impl Hashable for BlockHeader{
     fn hash(&self) -> H256 {
         // ToDo: Serialize the object into a byte array
         // return the H256 of the byte array
-        let x: [u8; 32] = [0; 32]; // Default (wrong) behaviour
-        return H256(x);
+        return H256::default();
     }
 }
 

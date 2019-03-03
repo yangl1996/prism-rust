@@ -7,7 +7,7 @@ use std::fmt;
 
 // ToDo: Encoder and decoder for the block?
 // ToDo: #[derive(Serialize, Deserialize, Debug)]
-
+#[derive(PartialEq, Clone)]
 pub enum BlockType{
     Transaction,
     Proposer,
@@ -20,6 +20,10 @@ pub struct Block<T: Hashable> {
     content: T,
     sortition_proof: Vec<H256>, //Specific to Prism
     block_type: BlockType,  //Specific to Prism
+}
+
+impl<T: Hashable> Block<T>{
+    pub fn get_block_type(&self) -> BlockType {return self.block_type.clone();}
 }
 
 // The generic T is used to refer all the (three) content types.
@@ -37,7 +41,6 @@ impl<T: Hashable> Block<T>{
         Block {block_header, content, sortition_proof, block_type }
     }
 }
-
 
 impl<T: Hashable> fmt::Display for Block<T>  {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> fmt::Result {
