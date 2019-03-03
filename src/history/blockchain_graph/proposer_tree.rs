@@ -2,6 +2,7 @@ use std::collections::{HashSet};
 use super::utils::*;
 use super::voter_chain::VoterNode;
 
+#[derive(Clone)]
 pub struct PropNode<'a>{
     /// Block Id
     node_id : BlockId,
@@ -21,35 +22,35 @@ pub struct PropNode<'a>{
 
 impl<'a> PropNode<'a>{
 
-    fn set_parent(&mut self, parent_prop_node: &'a PropNode<'a>){
+    pub fn set_parent(&mut self, parent_prop_node: &'a PropNode<'a>){
         self.parent_prop_node = Some(parent_prop_node);
     }
 
-    fn set_level(&mut self, level: u32){
+    pub fn set_level(&mut self, level: u32){
         self.level = level;
     }
 
     /// Add a prop node which refers 'self'.
-    fn add_child(&mut self, child_prop_node: &'a PropNode<'a>){
+    pub fn add_child(&mut self, child_prop_node: &'a PropNode<'a>){
         self.children_prop_node_id.push(child_prop_node);
     }
 
     /// Add a prop node which is referred by 'self'.
-    fn add_referred_nodes(&mut self, referred_prop_node: &'a PropNode<'a>){
+    pub fn add_referred_nodes(&mut self, referred_prop_node: &'a PropNode<'a>){
         self.referred_prop_node_ids.push(referred_prop_node);
     }
 
     /// Add a vote to self
-    fn add_vote(&mut self, vote_node: &'a VoterNode<'a>){
+    pub fn add_vote(&mut self, vote_node: &'a VoterNode<'a>){
         self.votes_node_ids.push(vote_node);
 
     }
 
-    fn change_leadership_status(&mut self, new_status: PropBlockLeaderStatus){
+    pub fn change_leadership_status(&mut self, new_status: PropBlockLeaderStatus){
         self.leadership_status = new_status;
     }
 
-    fn genesis(&self) -> Self{
+    pub fn genesis(&self) -> Self{
         return PropNode::default();
     }
 }
@@ -77,24 +78,39 @@ impl<'a> Node for PropNode<'a>{
 /// Stores all the prop nodes
 pub struct PropTree<'a>{
     /// Genesis node
-    genesis_node: &'a PropNode<'a>,
+    genesis_node: Option<&'a PropNode<'a>>,
     /// Best node on the main chain
-    best_node: &'a PropNode<'a>,
+    best_node: Option<&'a PropNode<'a>>,
     /// Proposer nodes stored level wise
     prop_nodes: Vec< Vec<&'a PropNode<'a>> >,
     /// Leader nodes
     leader_nodes : Vec< Option<&'a PropNode<'a>> >
 }
 
+impl<'a>  Default for PropTree<'a> {
+    fn default() -> Self {
+        let prop_nodes: Vec< Vec<&'a PropNode<'a>> > = vec![];
+        let leader_nodes: Vec< Option<&'a PropNode<'a>> > = vec![];
+        return PropTree {genesis_node: None, best_node: None, prop_nodes, leader_nodes};
+    }
+}
+
+
 impl<'a> PropTree<'a>{
+    pub fn new(genesis_node: &'a PropNode<'a>) -> Self {
+        let mut  default_tree: PropTree<'a> = PropTree::default();
+        default_tree.set_genesis_node(genesis_node);
+        return default_tree;
+    }
+    
     /// Get the best node
-    pub fn get_best_node(&self) -> &'a PropNode<'a>{
-        return &self.best_node;
+    pub fn get_best_node(&self) -> Option<&'a PropNode<'a>>{
+        return self.best_node;
     }
 
     /// Get the level of the best node
-    pub fn get_best_level(&self) -> &u32 {
-        return &self.best_node.level;
+    pub fn get_best_level(&self) -> u32 {
+        return self.best_node.unwrap().level;
     }
 
     /// Get all the proposer nodes at a level
@@ -114,7 +130,7 @@ impl<'a> PropTree<'a>{
     pub fn get_proposer_node_sequence(&self, level: u32) -> Vec<Vec<&PropNode>>{
         let best_level = self.get_best_level();
         let mut proposer_list_sequence :Vec<Vec<&PropNode>> = vec![];
-        for l in 0..*best_level {
+        for l in 0..best_level {
             proposer_list_sequence.push(self.get_proposer_list_at_level(l));
         }
         return proposer_list_sequence;
@@ -129,7 +145,7 @@ impl<'a> PropTree<'a>{
     pub fn get_leader_node_sequence(&self, level: u32) -> Vec<&Option<&'a PropNode<'a>>>{
         let best_level = self.get_best_level();
         let mut leader_sequence :Vec<&Option<&'a PropNode<'a>>> = vec![];
-        for l in 0..*best_level {
+        for l in 0..best_level {
             leader_sequence.push(self.get_leader_node_at_level(l));
         }
         return leader_sequence;
@@ -138,6 +154,15 @@ impl<'a> PropTree<'a>{
     /// Add proposer node
     pub fn add_proposer_node(&mut self, node: &'a PropNode) {
         self.prop_nodes[node.level as usize].push(node);
+    }
+
+    pub fn set_genesis_node(&mut self, node: &'a PropNode<'a>){
+        self.genesis_node = Some(node);
+        self.set_best_node(node);
+    }
+
+    pub fn set_best_node(&mut self, node: &'a PropNode<'a>){
+        self.best_node = Some(node);
     }
 
 }

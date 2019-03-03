@@ -1,7 +1,7 @@
 use super::block::block::{BlockType};
 use super::crypto::hash::{H256};
-use std::collections::{HashSet};
 
+#[derive(Copy, Clone, PartialEq)]
 pub enum BlockId {
     Hash(H256),
 }
@@ -10,19 +10,25 @@ impl std::default::Default for BlockId {
     fn default() -> Self { BlockId::Hash(H256::default()) }
 }
 
+//impl Clone for BlockId {
+//    fn clone(&self) -> BlockId { BlockId::Hash(self); }
+//}
+
+#[derive(Copy, Clone)]
 pub enum PropBlockLeaderStatus{
     ConfirmedLeader,
     PotentialLeader,
     NotALeader
 }
 
+#[derive(Copy, Clone)]
 pub enum VoterBlockStatus{
     OnMainChain,
     Orphan
 }
 
 // Todo: Import enum block type from block
-#[derive(PartialEq)]
+#[derive(PartialEq, Copy, Clone)]
 pub enum NodeType{
     Transaction,
     Proposer,

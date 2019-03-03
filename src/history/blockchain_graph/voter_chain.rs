@@ -2,6 +2,7 @@ use std::collections::{HashSet};
 use super::utils::*;
 use  super::proposer_tree::PropNode;
 
+#[derive(Clone)]
 pub struct VoterNode<'a>{
     /// The chain of the voter node
     chain_id: u16,
@@ -20,12 +21,13 @@ pub struct VoterNode<'a>{
 impl<'a> VoterNode<'a>{
     pub fn set_chain_id(&mut self, chain_id: u16) {self.chain_id = chain_id}
 
-    fn genesis(&self, chain_id: u16) -> Self{
+    pub fn genesis(chain_id: u16) -> Self{
         let mut genesis = VoterNode::default();
         genesis.set_chain_id(chain_id);
         return genesis;
     }
 }
+
 impl<'a> Default for VoterNode<'a> {
     fn default() -> Self {
         let chain_id :u16 = 0;
@@ -38,6 +40,11 @@ impl<'a> Default for VoterNode<'a> {
     }
 }
 
+impl<'a> PartialEq for VoterNode<'a> {
+    fn eq(&self, other: &VoterNode) -> bool {
+        self.node_id == other.node_id
+    }
+}
 
 impl<'a> Node for VoterNode<'a>{
     fn get_type() -> NodeType{ return NodeType::Voter }
@@ -47,45 +54,62 @@ impl<'a> Node for VoterNode<'a>{
 /// Stores all the voter nodes
 pub struct VoterChain<'a>{
     /// Voter chain id
-    id: u16,
+    chain_id: u16,
     /// Genesis node
-    genesis_node: &'a VoterNode<'a>,
+    genesis_node: Option<&'a VoterNode<'a>>,
     /// Best node on the main chain
-    best_node: &'a VoterNode<'a>,
+    best_node: Option<&'a VoterNode<'a>>,
     /// Set of all Voter nodes
-    voter_nodes: HashSet<&'a VoterNode<'a>>
+    voter_nodes: Vec<&'a VoterNode<'a>> //todo: Do we want to move the nodes into this ?
 }
 
-impl<'a> VoterChain<'a> {
-//    /// Initialize the voter tree
-//    pub fn new(id: u16, genesis_node: VoterNode) -> Self {
-//        let best_node: VoterNode =  genesis_node.clone(); Todo: Define clone
-//        let voter_nodes: HashSet<VoterNode> = HashSet::new();
-//        voter_nodes.insert(genesis_node.clone()); Todo: Define insert
-//        return VoterChain {id, genesis_node, best_node, voter_nodes};
-//    }
+impl<'a>  Default for VoterChain<'a> {
+    fn default() -> Self {
+        let voter_nodes: Vec<&'a VoterNode> = vec![];
+        return VoterChain {chain_id: 0, genesis_node: None, best_node: None, voter_nodes};
+    }
+}
+
+impl<'a> VoterChain<'a>{
+    pub fn new(genesis_node: &'a VoterNode<'a>) -> Self {
+        let mut  default_chain: VoterChain<'a> = VoterChain::default();
+        default_chain.set_genesis_node(genesis_node);
+        return default_chain;
+    }
 
     /// Get the best node
-    pub fn get_best_node(&self) -> &VoterNode {
-        return &self.best_node;
+    pub fn get_best_node(&self) -> Option<&'a VoterNode<'a>> {
+        return self.best_node;
     }
 
     /// Get the level of the best node
-    pub fn get_chain_length(&self) -> &u32 {
-        return &self.best_node.level;
+    pub fn get_chain_length(&self) -> u32 {
+        return self.best_node.unwrap().level;
     }
 
     /// Add  voter node
-    pub fn add_voter_node(&mut self, node: VoterNode){
-//        self.tx_nodes.insert(node); Todo: Define a hash insert??
+    pub fn add_node(&mut self, node: &'a VoterNode<'a>){
+        self.voter_nodes.push(node); //Todo: Define a hash insert??
 
-//        if node.parent == self.best_node{
-//            self.best_node = node;
-//        }
-//        else if node.level > self.best_node.level +1 {
-//            //  Todo: Reorg!! Return Success status?
-//        }
-
-
+        if node.parent == self.best_node{
+            self.best_node = Some(node);
+        }
+        else if node.level > self.best_node.unwrap().level +1 {
+            //  Todo: Reorg!! Return Success enum status?
+        }
     }
+
+    pub fn set_chain_id(&mut self, chain_id: u16){
+        self.chain_id = chain_id;
+    }
+
+    pub fn set_genesis_node(&mut self, node: &'a VoterNode<'a>){
+        self.genesis_node = Some(node);
+        self.set_best_node(node);
+    }
+
+    pub fn set_best_node(&mut self, node: &'a VoterNode<'a>){
+        self.best_node = Some(node);
+    }
+
 }
