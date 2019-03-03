@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 #[macro_use]
 extern crate serde_derive;
 extern crate hex_literal;
