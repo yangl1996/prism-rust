@@ -1,9 +1,9 @@
 use super::block::block::{BlockType};
-use super::crypto::hash::{SHA256};
+use super::crypto::hash::{H256};
 use std::collections::{HashSet};
 
 pub enum BlockId {
-    Hash(SHA256),
+    Hash(H256),
 }
 
 pub enum PropBlockLeaderStatus{

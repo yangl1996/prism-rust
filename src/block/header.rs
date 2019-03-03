@@ -1,5 +1,5 @@
 extern crate ring;
-use super::crypto::hash::{Hashable, SHA256};
+use super::crypto::hash::{Hashable, H256};
 use serde::{Serialize, Deserialize};
 use std::fmt;
 
@@ -11,41 +11,41 @@ use std::fmt;
 
 pub struct BlockHeader{
     ///  Parent Hash
-    parent_hash: SHA256,
+    parent_hash: H256,
     /// Block time
     timestamp: u64,
     /// PoW nonce
     nonce: u32,
     /// Merkle root of the block content
-    content_root: SHA256,
+    content_root: H256,
     /// Block content
     extra_content: Vec<u32>, //for debugging purpose
     /// Mining Difficulty
     difficulty: u64,
     /// Hash of the header
-    hash: Option<SHA256>
+    hash: Option<H256>
 }
 
 impl BlockHeader{
 
     /// Create a new block header
-    pub fn new(parent_hash: SHA256, timestamp: u64, nonce: u32, content_root: SHA256,
+    pub fn new(parent_hash: H256, timestamp: u64, nonce: u32, content_root: H256,
                extra_content: Vec<u32>, difficulty: u64 ) -> Self{
         BlockHeader { parent_hash, timestamp, nonce, content_root, extra_content, difficulty, hash: None }
     }
 
-    pub fn parent_hash(&self) -> &SHA256 { &self.parent_hash }
+    pub fn parent_hash(&self) -> &H256 { &self.parent_hash }
 
     /// Get the timestamp field of the header.
     pub fn timestamp(&self) -> u64 { self.timestamp.clone() }
 
     /// Get the content root field of the header.
-    pub fn content_root(&self) -> &SHA256 { &self.content_root }
+    pub fn content_root(&self) -> &H256 { &self.content_root }
 
     /// Get the hash  of extra data field of the header.
     pub fn extra_content(&self) -> &Vec<u32> { &self.extra_content }
 
-    pub fn hash(&self) -> Option<SHA256> {self.hash}
+    pub fn get_hash(&self) -> Option<H256> {self.hash}
 
     /// Replace the old nonce and recompute the hash
     pub fn set_nonce(&mut self, new_nonce: u32) {
@@ -55,7 +55,7 @@ impl BlockHeader{
 
     /// Compute hash of the block. Part of PoW mining
     fn compute_hash(&mut self) {
-        self.hash = Some(self.sha256());
+        self.hash = Some(self.hash());
     }
 
 
@@ -69,11 +69,11 @@ impl BlockHeader{
 }
 
 impl Hashable for BlockHeader{
-    fn sha256(&self) -> SHA256 {
+    fn hash(&self) -> H256 {
         // ToDo: Serialize the object into a byte array
-        // return the SHA256 of the byte array
+        // return the H256 of the byte array
         let x: [u8; 32] = [0; 32]; // Default (wrong) behaviour
-        return SHA256(x);
+        return H256(x);
     }
 }
 
