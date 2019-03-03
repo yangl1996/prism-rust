@@ -1,6 +1,6 @@
 use std::collections::{HashSet};
 use super::utils::*;
-
+use  super::proposer_tree::PropNode;
 
 
 pub struct VoterNode<'a>{
@@ -10,8 +10,12 @@ pub struct VoterNode<'a>{
     block_id : BlockId,
     /// The parent on its chain
     parent: &'a VoterNode<'a>,
+    /// The parent on proposer tree. This will be used for adaptive difficulty.
+    proposer_parent: &'a PropNode<'a>,
     /// Height from the genesis block
-    level: u32
+    level: u32,
+    /// List of votes on proposer blocks.
+    votes: Vec<&'a PropNode<'a>>
 }
 
 
