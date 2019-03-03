@@ -41,15 +41,15 @@ impl<'a> Node for TxNode<'a>{
 /// Stores all the tx nodes
 pub struct TxPool<'a>{
     /// Set of all transaction nodes
-    tx_nodes: HashSet<&'a TxNode<'a>>
+    tx_nodes: Vec<&'a TxNode<'a>>
 }
 
 impl<'a> TxPool<'a>{
     /// Initialize Tx pool
-//    pub fn new() -> Self{
-//        let tx_nodes: HashSet<TxNode> = HashSet::new();
-//        return TxPool{tx_nodes};
-//    }
+    pub fn new() -> Self{
+        let tx_nodes: Vec<&'a TxNode<'a>> = vec![];
+        return TxPool{tx_nodes};
+    }
 
     /// Add a tx node
     pub fn add_tx_node(&mut self, node: TxNode<'a>){

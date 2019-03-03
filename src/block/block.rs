@@ -1,7 +1,7 @@
 extern crate ring;
 use super::crypto::hash::{Hashable, H256};
 use super::header::BlockHeader;
-use serde::{Serialize, Deserialize};
+//use serde::{Serialize, Deserialize};
 use std::fmt;
 
 
