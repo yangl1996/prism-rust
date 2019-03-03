@@ -1,18 +1,12 @@
-/*
-The blockheader and block struct is defined along with their initialization and other functions
-*/
-
-
 extern crate ring;
 use crate::hash::{self, Hashable, SHA256};
 use serde::{Serialize, Deserialize};
 use std::fmt;
 use super::header::BlockHeader;
 
-/*
-ToDo: Encoder and decoder for the block?
-*/
-//#[macro_use]
+
+// ToDo: Encoder and decoder for the block?
+// ToDo: #[derive(Serialize, Deserialize, Debug)]
 
 pub enum BlockType{
     Transaction,
@@ -20,42 +14,38 @@ pub enum BlockType{
     Voter,
 }
 
-//ToDo: #[derive(Serialize, Deserialize, Debug)]
 pub struct Block<T: Hashable> {
-    modifier_id: SHA256,
-    block_type: BlockType,
     block_header: BlockHeader,
-    content_merkle_proof: Vec<hash::SHA256>, //missing lifetime specifier?
+
+    /// Content and its sortition proof. The content could be tx, ref or votes.
     content: T,
-    extra_content: [u8; 50] // 50 is a random number
+    sortition_proof: Vec<hash::SHA256>, //Specific to Prism
+
+    block_type: BlockType,  //Specific to Prism
+
 }
 
 
 // The hashable generic T is used to define all the (three) types of blocks.
 impl<T: Hashable> Block<T>{
-    fn id_to_block_type(modifier_id: SHA256) -> BlockType {
-        return BlockType::Proposer;
+
+    /// Sorititions the block into blocktype using the hash of the header
+    fn sortition(hash: Option<SHA256>) -> BlockType {
+        return BlockType::Proposer; // ToDo: Change this according to logic
     }
 
     pub fn new(parent_id: SHA256, timestamp: u64, nonce: u32, content_root: SHA256,
-           content_merkle_proof: Vec<hash::SHA256>, content: T, extra_content: [u8; 50], difficulty: u64  ) -> Self {
-
-        let extra_content_hash = ring::digest::digest(&ring::digest::SHA256, &extra_content).into();
-        let block_header = BlockHeader::new(parent_id, timestamp, nonce,
-                                            content_root, extra_content_hash, difficulty);
-
-        let modifier_id = block_header.sha256();
-        let block_type = Block::<T>::id_to_block_type(modifier_id);
-        Block { modifier_id, block_type, block_header, content_merkle_proof, content, extra_content }
+           sortition_proof: Vec<hash::SHA256>, content: T, extra_content: Vec<u32>, difficulty: u64  ) -> Self {
+        let block_header = BlockHeader::new(parent_id, timestamp, nonce, content_root, extra_content, difficulty);
+        let block_type = Block::<T>::sortition(block_header.hash());
+        Block {block_header, content, sortition_proof, block_type }
     }
-
 }
 
 
 impl<T: Hashable> fmt::Display for Block<T>  {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> fmt::Result {
         write!(f, "{{\n")?;
-        write!(f, "  Modifier Id: {}\n", self.modifier_id)?;
 //        write!(f, "  Block Type: {}\n", self.block_type)?;
         // Add rest
         write!(f, "}}")
