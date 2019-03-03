@@ -7,9 +7,9 @@ pub enum BlockId {
 }
 
 pub enum PropBlockLeaderStatus{
-    Leader,
-    MaybeLeader,
-    NotLeader
+    ConfirmedLeader,
+    PotentialLeader,
+    NotALeader
 }
 
 pub enum VoterBlockStatus{
@@ -17,7 +17,7 @@ pub enum VoterBlockStatus{
     Orphan
 }
 
-// Todo: Import enum from block
+// Todo: Import enum blocktype from block
 pub enum NodeType{
     Transaction,
     Proposer,

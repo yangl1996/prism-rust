@@ -1,23 +1,8 @@
-/*
-The blockheader and block struct is defined along with their initialization and other functions
-*/
-
 extern crate ring;
 use super::crypto::hash::{Hashable, SHA256};
 use serde::{Serialize, Deserialize};
 use std::fmt;
 
-
-pub struct PersistentModifier{
-    parent_id: SHA256,
-}
-
-/// PersistentModifiers have parent modifiers defined all the way upto genesis blocks.
-impl PersistentModifier{
-    fn new(modifier_id:  SHA256) -> Self{
-        PersistentModifier {parent_id: modifier_id}
-    }
-}
 
 // ToDo: Add the address of the miner
 // ToDo: #[derive(Serialize, Deserialize, Eq, Debug, Clone)]
@@ -26,7 +11,7 @@ impl PersistentModifier{
 
 pub struct BlockHeader{
     ///  Parent Hash
-    parent: PersistentModifier,
+    parent_hash: SHA256,
     /// Block time
     timestamp: u64,
     /// PoW nonce
@@ -44,16 +29,15 @@ pub struct BlockHeader{
 impl BlockHeader{
 
     /// Create a new block header
-    pub fn new(parent_id: SHA256, timestamp: u64, nonce: u32, content_root: SHA256,
+    pub fn new(parent_hash: SHA256, timestamp: u64, nonce: u32, content_root: SHA256,
                extra_content: Vec<u32>, difficulty: u64 ) -> Self{
-        BlockHeader { parent: PersistentModifier::new(parent_id),
-                        timestamp, nonce, content_root, extra_content, difficulty, hash: None }
+        BlockHeader { parent_hash, timestamp, nonce, content_root, extra_content, difficulty, hash: None }
     }
 
-    pub fn parent_hash(&self) -> &SHA256 { &self.parent.parent_id }
+    pub fn parent_hash(&self) -> &SHA256 { &self.parent_hash }
 
     /// Get the timestamp field of the header.
-    pub fn timestamp(&self) -> u64 { self.timestamp }
+    pub fn timestamp(&self) -> u64 { self.timestamp.clone() }
 
     /// Get the content root field of the header.
     pub fn content_root(&self) -> &SHA256 { &self.content_root }
@@ -96,11 +80,13 @@ impl Hashable for BlockHeader{
 impl fmt::Display for BlockHeader {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> fmt::Result {
         write!(f, "{{\n")?;
-        write!(f, "  Parent Id: {}\n", self.parent.parent_id)?;
+        write!(f, "  Parent hash: {}\n", self.parent_hash)?;
         write!(f, "  Timestamp: {}\n", self.timestamp)?;
         write!(f, "  nonce: {}\n", self.nonce)?;
         write!(f, "  content root: {}\n", self.content_root)?;
-//        write!(f, "  extra content : {}\n", self.extra_content)?; ToDo:: To define default param
+//        write!(f, "  extra content : {}\n", self.extra_content)?; //ToDo:: To define display for vec?
+        write!(f, "  difficulty: {}\n", self.difficulty)?;
+//        write!(f, "  hash: {}\n", self.hash)?;
         write!(f, "}}")
         // ToDo: Display more fields
     }
