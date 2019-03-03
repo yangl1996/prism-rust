@@ -10,7 +10,7 @@ pub struct MerkleTree<'a, T: Hashable> {
 }
 
 impl<'a, T: Hashable> MerkleTree<'a, T> {
-    fn new(data: &'a [T]) -> Self {
+    pub fn new(data: &'a [T]) -> Self {
         // calculate the size of the tree
         let mut this_layer_size = data.len();
         let mut layer_size = vec![]; // size after dup
