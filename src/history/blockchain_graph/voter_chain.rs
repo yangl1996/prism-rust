@@ -1,6 +1,7 @@
 //use std::collections::{HashSet}; todo: use this later
 use super::utils::*;
-use  super::proposer_tree::PropNode;
+use super::proposer_tree::PropNode;
+
 
 #[derive(Clone)]
 pub struct VoterNode<'a>{
@@ -16,6 +17,8 @@ pub struct VoterNode<'a>{
     level: u32,
     /// List of votes on proposer nodes.
     votes: Vec<&'a PropNode<'a>>
+//    ///
+//    voter_chain:
 }
 
 impl<'a> VoterNode<'a>{
