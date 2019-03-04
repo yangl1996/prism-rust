@@ -1,4 +1,4 @@
-use std::collections::{HashSet};
+//use std::collections::{HashSet};
 use super::utils::*;
 use super::voter_chain::VoterNode;
 
@@ -50,7 +50,7 @@ impl<'a> PropNode<'a>{
         self.leadership_status = new_status;
     }
 
-    pub fn genesis(&self) -> Self{
+    pub fn genesis() -> Self{
         return PropNode::default();
     }
 }
@@ -58,12 +58,12 @@ impl<'a> PropNode<'a>{
 impl<'a> Default for PropNode<'a> {
     fn default() -> Self {
         let node_id = BlockId::default();
-        let parent_prop_node: Option<&'a PropNode<'a>> = None;
+        let parent_prop_node: Option<& PropNode> = None;
         let level = 0;
-        let children_prop_node_id: Vec<&'a PropNode<'a>> = vec![];
-        let votes_node_ids: Vec<&'a VoterNode<'a>> = vec![];
+        let children_prop_node_id: Vec<& PropNode> = vec![];
+        let votes_node_ids: Vec<& VoterNode> = vec![];
         let leadership_status = PropBlockLeaderStatus::ConfirmedLeader;
-        let referred_prop_node_ids: Vec<&'a PropNode<'a>> = vec![];
+        let referred_prop_node_ids: Vec<& PropNode> = vec![];
         return PropNode {node_id, parent_prop_node, level, children_prop_node_id,
                                     referred_prop_node_ids, votes_node_ids, leadership_status};
     }
@@ -77,34 +77,38 @@ impl<'a> Node for PropNode<'a>{
 
 /// Stores all the prop nodes
 pub struct PropTree<'a>{
-    /// Genesis node
-    genesis_node: Option<&'a PropNode<'a>>,
     /// Best node on the main chain
     best_node: Option<&'a PropNode<'a>>,
     /// Proposer nodes stored level wise
-    prop_nodes: Vec< Vec<&'a PropNode<'a>> >,
+    prop_nodes: Vec< Vec<PropNode<'a>> >,
     /// Leader nodes
     leader_nodes : Vec< Option<&'a PropNode<'a>> >
 }
 
 impl<'a>  Default for PropTree<'a> {
     fn default() -> Self {
-        let prop_nodes: Vec< Vec<&'a PropNode<'a>> > = vec![];
-        let leader_nodes: Vec< Option<&'a PropNode<'a>> > = vec![];
-        return PropTree {genesis_node: None, best_node: None, prop_nodes, leader_nodes};
+        let prop_nodes: Vec< Vec<PropNode> > = vec![];
+        let leader_nodes: Vec< Option<& PropNode> > = vec![];
+        return PropTree {best_node: None, prop_nodes, leader_nodes};
     }
 }
 
 
 impl<'a> PropTree<'a>{
-    pub fn new(genesis_node: &'a PropNode<'a>) -> Self {
-        let mut  default_tree: PropTree<'a> = PropTree::default();
-        default_tree.set_genesis_node(genesis_node);
+    pub fn new(genesis_node: PropNode<'a>) -> Self {
+        let mut  default_tree: PropTree = PropTree::default();
+        // todo: check if the genesis node has level 0.
+        default_tree.add_node(genesis_node);
         return default_tree;
     }
-    
+
+    pub fn genesis_node(&self) -> &PropNode {
+        let genesis_node: &PropNode = &self.prop_nodes[0][0];
+        return genesis_node;
+    }
+
     /// Get the best node
-    pub fn get_best_node(&self) -> Option<&'a PropNode<'a>>{
+    pub fn get_best_node(&self) -> Option<&PropNode>{
         return self.best_node;
     }
 
@@ -114,20 +118,30 @@ impl<'a> PropTree<'a>{
     }
 
     /// Get all the proposer nodes at a level
-    pub fn get_all_node_at_level(&self, level: u32) -> &Vec<&'a PropNode<'a>> {
-        return &self.prop_nodes[level as usize];
+    pub fn get_all_node_at_level(&self, level: u32) -> Vec<& PropNode> {
+        let nodes: &Vec<PropNode> = &self.prop_nodes[level as usize];
+        let mut answer: Vec<& PropNode> = vec![];
+        for node in nodes{
+            answer.push(&node);
+        }
+        return answer;
     }
 
     /// Get all potential leader nodes at a level. Used for List Ledger Decoding
-    pub fn get_proposer_list_at_level(&self, level: u32) -> Vec<&'a PropNode<'a>> {
-        let all_nodes: &Vec<&'a PropNode<'a>> = self.get_all_node_at_level(level);
-        let mut potential_leaders: Vec<&'a PropNode> = Vec::new();
+    pub fn get_proposer_list_at_level(&self, level: u32) -> Vec<& PropNode> {
+        let all_nodes: Vec<& PropNode> = self.get_all_node_at_level(level);
+        let mut potential_leaders: Vec<& PropNode> = Vec::new();
+        for node in all_nodes{
+            if node.leadership_status  == PropBlockLeaderStatus::PotentialLeader{
+                potential_leaders.push(node);
+            }
+        }
         // Todo: filter proposer nodes with maybe leadership status
         return potential_leaders;
     }
 
     /// Get the proposer node list sequence up to a level. Used for List Ledger Decoding
-    pub fn get_proposer_node_sequence(&self, level: u32) -> Vec<Vec<&PropNode>>{
+    pub fn get_proposer_node_sequence(&self) -> Vec<Vec<&PropNode>>{
         let best_level = self.get_best_level();
         let mut proposer_list_sequence :Vec<Vec<&PropNode>> = vec![];
         for l in 0..best_level {
@@ -137,28 +151,22 @@ impl<'a> PropTree<'a>{
     }
 
     /// Get the leader node at a level
-    pub fn get_leader_node_at_level(&self, level: u32) -> &Option<&'a PropNode<'a>>{
+    pub fn get_leader_node_at_level(&self, level: u32) -> &Option<& PropNode>{
         return &self.leader_nodes[level as usize];
     }
 
     /// Get the leader node sequence up to a level
-    pub fn get_leader_node_sequence(&self, level: u32) -> Vec<&Option<&'a PropNode<'a>>>{
-        let best_level = self.get_best_level();
-        let mut leader_sequence :Vec<&Option<&'a PropNode<'a>>> = vec![];
-        for l in 0..best_level {
+    pub fn get_leader_node_sequence(&self, level: u32) -> Vec<&Option<&PropNode<>>>{
+        let mut leader_sequence :Vec<&Option<& PropNode>> = vec![];
+        for l in 0..level {
             leader_sequence.push(self.get_leader_node_at_level(l));
         }
         return leader_sequence;
     }
 
     /// Add proposer node
-    pub fn add_proposer_node(&mut self, node: &'a PropNode) {
+    pub fn add_node(&mut self, node: PropNode<'a>) {
         self.prop_nodes[node.level as usize].push(node);
-    }
-
-    pub fn set_genesis_node(&mut self, node: &'a PropNode<'a>){
-        self.genesis_node = Some(node);
-        self.set_best_node(node);
     }
 
     pub fn set_best_node(&mut self, node: &'a PropNode<'a>){

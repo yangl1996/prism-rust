@@ -1,4 +1,4 @@
-use super::block::block::{BlockType};
+//use super::block::block::{BlockType}; todo: reuse
 use super::crypto::hash::{H256};
 
 #[derive(Copy, Clone, PartialEq)]
@@ -14,7 +14,7 @@ impl std::default::Default for BlockId {
 //    fn clone(&self) -> BlockId { BlockId::Hash(self); }
 //}
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq)]
 pub enum PropBlockLeaderStatus{
     ConfirmedLeader,
     PotentialLeader,
