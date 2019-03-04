@@ -9,13 +9,21 @@ const MAX_EVENT: usize = 1024;
 struct Peer {
     stream: mio::net::TcpStream,
     token: mio::Token,
+    reader: std::io::BufReader<mio::net::TcpStream>,
+    writer: std::io::BufWriter<mio::net::TcpStream>,
 }
 
 impl Peer {
     pub fn new(stream: mio::net::TcpStream, token: mio::Token) -> std::io::Result<Self> {
+        let reader_stream = stream.try_clone()?;
+        let writer_stream = stream.try_clone()?;
+        let bufreader = std::io::BufReader::new(reader_stream);
+        let bufwriter = std::io::BufWriter::new(writer_stream);
         return Ok(Self {
             stream: stream,
             token: token,
+            reader: bufreader,
+            writer: bufwriter,
         });
     }
 }
@@ -109,7 +117,7 @@ impl Server {
                         // we are using edge-triggered events, loop until block
                         loop {
                             let mut buf = [0 as u8; 50];
-                            match connection.stream.read(&mut buf) {
+                            match connection.reader.read(&mut buf) {
                                 Ok(0) => {
                                     // EOF, remove it from the connections set
                                     info!(
@@ -121,7 +129,7 @@ impl Server {
                                 }
                                 Ok(size) => {
                                     // we got some data
-                                    connection.stream.write(&buf[0..size])?;
+                                    connection.writer.write(&buf[0..size])?;
                                 }
                                 Err(e) => {
                                     if e.kind() == std::io::ErrorKind::WouldBlock {
