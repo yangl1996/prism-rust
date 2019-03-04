@@ -49,7 +49,8 @@ fn main() {
     let peer_socket_addr = net::SocketAddr::new(peer_ip, peer_port);
 
     debug!("Starting P2P server at {}", peer_socket_addr);
-    network::server::p2p_server(peer_socket_addr).map_err(|e| {
+    let mut server = network::server::Server::new(peer_socket_addr).unwrap();
+    server.listen().map_err(|e| {
         error!("Error occurred in P2P server: {}", e);
         process::exit(1);
     });
