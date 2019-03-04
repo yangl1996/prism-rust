@@ -32,7 +32,6 @@ pub struct Server {
     peers: slab::Slab<Peer>,
     addr: std::net::SocketAddr,
     poll: mio::Poll,
-    events: mio::Events,
 }
 
 impl Server {
@@ -41,8 +40,30 @@ impl Server {
             peers: slab::Slab::new(),
             addr: addr,
             poll: mio::Poll::new()?,
-            events: mio::Events::with_capacity(MAX_EVENT),
         });
+    }
+
+    pub fn register_new_peer(&mut self, stream: net::TcpStream) -> std::io::Result<()> {
+        // get new slot in the connection set
+        let vacant = self.peers.vacant_entry();
+        let key: usize = vacant.key();
+        if key >= MAX_INCOMING_CLIENT {
+            // too many connections
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "max peer reached, cannot accept new connections",
+            ));
+        }
+        let new_connection = Peer::new(stream, mio::Token(key))?;
+        // register the new connection and insert
+        self.poll.register(
+            &new_connection.stream,
+            new_connection.token,
+            mio::Ready::readable(),
+            mio::PollOpt::edge(),
+        )?;
+        vacant.insert(new_connection);
+        Ok(())
     }
 
     pub fn listen(&mut self) -> std::io::Result<()> {
@@ -60,10 +81,12 @@ impl Server {
             server.local_addr()?
         );
 
-        loop {
-            self.poll.poll(&mut self.events, None)?;
+        let mut events = mio::Events::with_capacity(MAX_EVENT);
 
-            for event in self.events.iter() {
+        loop {
+            self.poll.poll(&mut events, None)?;
+
+            for event in events.iter() {
                 match event.token() {
                     SERVER => {
                         // we have a new connection
@@ -72,33 +95,18 @@ impl Server {
                             // accept the connection
                             match server.accept() {
                                 Ok((stream, client_addr)) => {
-                                    // get new slot in the connection set
-                                    let vacant = self.peers.vacant_entry();
-                                    let key: usize = vacant.key();
-                                    if key >= MAX_INCOMING_CLIENT {
-                                        // too many connections
-                                        warn!(
-                                            "Incoming client max reached, cannot accept {}",
-                                            client_addr
-                                        );
-                                        continue;
-                                    }
-                                    let new_connection = match Peer::new(stream, mio::Token(key)) {
-                                        Ok(p) => p,
-                                        Err(e) => {
-                                            warn!("Failed initializing incoming peer: {}", e);
-                                            continue;
+                                    debug!("New incoming connection from {}", client_addr);
+                                    match self.register_new_peer(stream) {
+                                        Ok(()) => {
+                                            info!("New incoming peer {}", client_addr);
                                         }
-                                    };
-                                    // register the new connection and insert
-                                    self.poll.register(
-                                        &new_connection.stream,
-                                        new_connection.token,
-                                        mio::Ready::readable(),
-                                        mio::PollOpt::edge(),
-                                    )?;
-                                    vacant.insert(new_connection);
-                                    info!("Accepted incoming peer from {}", client_addr);
+                                        Err(e) => {
+                                            error!(
+                                                "Error initializing incoming peer {}: {}",
+                                                client_addr, e
+                                            );
+                                        }
+                                    }
                                 }
                                 Err(e) => {
                                     if e.kind() == std::io::ErrorKind::WouldBlock {
