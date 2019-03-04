@@ -1,7 +1,7 @@
 //use super::block::block::{BlockType}; todo: reuse
 use super::crypto::hash::{H256};
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub enum BlockId {
     Hash(H256),
 }
@@ -14,7 +14,7 @@ impl std::default::Default for BlockId {
 //    fn clone(&self) -> BlockId { BlockId::Hash(self); }
 //}
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Copy)]
 pub enum PropBlockLeaderStatus{
     ConfirmedLeader,
     PotentialLeader,

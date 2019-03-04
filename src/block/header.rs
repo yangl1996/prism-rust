@@ -1,6 +1,6 @@
 extern crate ring;
 use super::crypto::hash::{Hashable, H256};
-//use serde::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize};
 use std::fmt;
 
 
@@ -9,7 +9,7 @@ use std::fmt;
 // ToDo: Encoder and decoder for the blockheader?
 // ToDo: Create default header function ?
 
-#[derive(Serialize, Deserialize, Clone, Debug, Hash, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, Hash, Default, PartialEq)]
 pub struct BlockHeader{
     ///  Parent Hash
     parent_hash: H256,
@@ -59,9 +59,8 @@ impl BlockHeader{
         self.hash = Some(self.hash());
     }
 
-
     /// Check if the block satisfies the PoW difficulty
-    fn check_difficulty(&mut self, difficulty_base: u32) -> bool {
+    fn check_difficulty(&mut self, _difficulty_base: u32) -> bool {
         self.compute_hash();
         // ToDo: Returns true if the hash is less than than the difficulty_base
         return true;

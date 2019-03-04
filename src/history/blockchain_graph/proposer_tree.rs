@@ -1,8 +1,10 @@
 //use std::collections::{HashSet};
 use super::voter_chain::VoterNode;
 use super::utils::*;
+use serde::{Serialize, Deserialize};
 
-#[derive(Clone)]
+//#[derive(Clone)]
+#[derive(Serialize, Clone, PartialEq)]
 pub struct PropNode<'a>{
     /// Block Id
     node_id : BlockId,
@@ -83,6 +85,7 @@ impl<'a> Node for PropNode<'a>{
 
 
 /// Stores all the prop nodes
+#[derive(Serialize, Clone)]
 pub struct PropTree<'a>{
     /// Best node on the main chain
     best_node: Option<&'a PropNode<'a>>,
