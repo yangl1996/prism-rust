@@ -1,6 +1,6 @@
 //use std::collections::{HashSet};
-use super::utils::*;
 use super::voter_chain::VoterNode;
+use super::utils::*;
 
 #[derive(Clone)]
 pub struct PropNode<'a>{
@@ -15,7 +15,7 @@ pub struct PropNode<'a>{
     /// List of Prop nodes referred by this node
     referred_prop_node_ids: Vec<&'a PropNode<'a>>,
     /// List of Voter nodes voted
-    votes_node_ids: Vec<&'a VoterNode<'a>>,
+    votes_node: Vec<&'a VoterNode<'a>>,
     /// Leadership Status
     leadership_status: PropBlockLeaderStatus
 }
@@ -42,7 +42,7 @@ impl<'a> PropNode<'a>{
 
     /// Add a vote to self
     pub fn add_vote(&mut self, vote_node: &'a VoterNode<'a>){
-        self.votes_node_ids.push(vote_node);
+        self.votes_node.push(vote_node);
 
     }
 
@@ -53,6 +53,12 @@ impl<'a> PropNode<'a>{
     pub fn genesis() -> Self{
         return PropNode::default();
     }
+
+    pub fn get_ucb_vote(&self) -> u16 {
+        return self.votes_node.len() as u16;
+    }
+
+//    pub fsk
 }
 
 impl<'a> Default for PropNode<'a> {
@@ -65,7 +71,8 @@ impl<'a> Default for PropNode<'a> {
         let leadership_status = PropBlockLeaderStatus::ConfirmedLeader;
         let referred_prop_node_ids: Vec<& PropNode> = vec![];
         return PropNode {node_id, parent_prop_node, level, children_prop_node_id,
-                                    referred_prop_node_ids, votes_node_ids, leadership_status};
+                                    referred_prop_node_ids,
+            votes_node: votes_node_ids, leadership_status};
     }
 
 }
@@ -82,13 +89,13 @@ pub struct PropTree<'a>{
     /// Proposer nodes stored level wise
     prop_nodes: Vec< Vec<PropNode<'a>> >,
     /// Leader nodes
-    leader_nodes : Vec< Option<&'a PropNode<'a>> >
+    leader_nodes : Vec<&'a PropNode<'a>>
 }
 
 impl<'a>  Default for PropTree<'a> {
     fn default() -> Self {
         let prop_nodes: Vec< Vec<PropNode> > = vec![];
-        let leader_nodes: Vec< Option<& PropNode> > = vec![];
+        let leader_nodes: Vec< & PropNode >  = vec![];
         return PropTree {best_node: None, prop_nodes, leader_nodes};
     }
 }
@@ -151,13 +158,13 @@ impl<'a> PropTree<'a>{
     }
 
     /// Get the leader node at a level
-    pub fn get_leader_node_at_level(&self, level: u32) -> &Option<& PropNode>{
+    pub fn get_leader_node_at_level(&self, level: u32) -> & PropNode{
         return &self.leader_nodes[level as usize];
     }
 
     /// Get the leader node sequence up to a level
-    pub fn get_leader_node_sequence(&self, level: u32) -> Vec<&Option<&PropNode<>>>{
-        let mut leader_sequence :Vec<&Option<& PropNode>> = vec![];
+    pub fn get_leader_node_sequence(&self, level: u32) -> Vec<&PropNode>{
+        let mut leader_sequence :Vec<& PropNode> = vec![];
         for l in 0..level {
             leader_sequence.push(self.get_leader_node_at_level(l));
         }
@@ -172,5 +179,6 @@ impl<'a> PropTree<'a>{
     pub fn set_best_node(&mut self, node: &'a PropNode<'a>){
         self.best_node = Some(node);
     }
+
 
 }

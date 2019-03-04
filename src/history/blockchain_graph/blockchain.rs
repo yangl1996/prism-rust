@@ -37,7 +37,6 @@ impl<'a> BlockChainGraph<'a>{
 
     // todo: T must be a trait which accepts only blocks
     pub fn add_block_as_node<T: Hashable>(&mut self, block: Block<T>){
-
         if block.get_block_type() == BlockType::Transaction{
             // todo: Convert the content into node data. Waiting for Guilia's code.
             let tmp_tx_node = TxNode::default();
