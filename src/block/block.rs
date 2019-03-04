@@ -1,19 +1,25 @@
 extern crate ring;
 use super::crypto::hash::{Hashable, H256};
 use super::header::BlockHeader;
-//use serde::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize};
 use std::fmt;
 
 
 // ToDo: Encoder and decoder for the block?
 // ToDo: #[derive(Serialize, Deserialize, Debug)]
-#[derive(PartialEq, Clone)]
+//#[derive( Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug, Hash, PartialEq)]
 pub enum BlockType{
     Transaction,
     Proposer,
     Voter,
+    None,
+}
+impl std::default::Default for BlockType {
+    fn default() -> Self { BlockType::None }
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, Hash, Default, PartialEq)]
 pub struct Block<T: Hashable> {
     block_header: BlockHeader,
     /// Content and its sortition proof. The content could be tx, ref or votes.
@@ -50,4 +56,3 @@ impl<T: Hashable> fmt::Display for Block<T>  {
         write!(f, "}}")
     }
 }
-
