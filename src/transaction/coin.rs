@@ -1,5 +1,7 @@
+use super::transaction::*;
+
 pub struct Coin{
-    pubkey: u8,
-    nonce: u32,
+    pubkey: PubKey,
+    nonce: Nonce,
     value: u32,
 }
