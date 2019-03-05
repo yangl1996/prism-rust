@@ -4,9 +4,26 @@ use bytes::BufMut;
 use log::{debug, error, info, trace, warn};
 use mio::{self, net};
 use std::io::{Read, Write};
+use std::sync::{Arc, RwLock};
+use std::cell::UnsafeCell;
 
 const MAX_INCOMING_CLIENT: usize = 256;
 const MAX_EVENT: usize = 1024;
+
+struct PeerReaderCell<T>(UnsafeCell<T>);
+
+unsafe impl <T> Send for PeerReaderCell<T> {}
+unsafe impl <T> Sync for PeerReaderCell<T> {}
+
+impl <T> PeerReaderCell<T> {
+    fn new(data: T) -> Self {
+        return Self(UnsafeCell::new(data));
+    }
+
+    fn get(&self) -> *mut T {
+        return self.0.get();
+    }
+}
 
 enum DecodeState {
     Length,
@@ -16,13 +33,13 @@ enum DecodeState {
 struct Peer {
     stream: mio::net::TcpStream,
     token: mio::Token,
-    reader: std::io::BufReader<mio::net::TcpStream>,
+    reader: PeerReaderCell<std::io::BufReader<mio::net::TcpStream>>,
     writer: std::io::BufWriter<mio::net::TcpStream>,
     addr: std::net::SocketAddr,
-    buffer: Vec<u8>,
-    msg_length: usize,
-    read_length: usize,
-    state: DecodeState,
+    buffer: PeerReaderCell<Vec<u8>>,
+    msg_length: PeerReaderCell<usize>,
+    read_length: PeerReaderCell<usize>,
+    state: PeerReaderCell<DecodeState>,
 }
 
 impl Peer {
@@ -35,19 +52,67 @@ impl Peer {
         return Ok(Self {
             stream: stream,
             token: token,
-            reader: bufreader,
+            reader: PeerReaderCell::new(bufreader),
             writer: bufwriter,
             addr: addr,
-            buffer: vec![0; std::mem::size_of::<u32>()],
-            msg_length: std::mem::size_of::<u32>(),
-            read_length: 0,
-            state: DecodeState::Length,
+            buffer: PeerReaderCell::new(vec![0; std::mem::size_of::<u32>()]),
+            msg_length: PeerReaderCell::new(std::mem::size_of::<u32>()),
+            read_length: PeerReaderCell::new(0),
+            state: PeerReaderCell::new(DecodeState::Length),
         });
+    }
+
+    pub fn read(&self) -> std::io::Result<usize> {
+        let reader = self.reader.get();
+        let buffer = self.buffer.get();
+        let msg_length = self.msg_length.get();
+        let read_length = self.read_length.get();
+        let state = self.state.get();
+
+        unsafe {
+        let bytes_read = (*reader).read(&mut (*buffer)[*read_length..*msg_length]);
+        match bytes_read
+        {
+            Ok(0) => {
+                return Ok(0);
+            }
+            Ok(size) => {
+                // we got some data, move the cursor
+                *read_length += size;
+                if *read_length == *msg_length {
+                    // buffer filled, process the buffer
+                    match *state {
+                        DecodeState::Length => {
+                            let message_length =
+                                BigEndian::read_u32(&(*buffer)[0..std::mem::size_of::<u32>()]);
+                            *state = DecodeState::Payload;
+                            *read_length = 0;
+                            *msg_length = message_length as usize;
+                            if (*buffer).capacity() < *msg_length {
+                                (*buffer).resize(*msg_length, 0);
+                            }
+                        }
+                        DecodeState::Payload => {
+                            let new_payload: message::Message =
+                                bincode::deserialize(&(*buffer)[0..*msg_length]).unwrap();
+                            *state = DecodeState::Length;
+                            *read_length = 0;
+                            *msg_length = std::mem::size_of::<u32>();
+                        }
+                    }
+                }
+                return Ok(size);
+            }
+            Err(e) => {
+                return Err(e);
+            }
+        }
+        }
     }
 }
 
 pub struct Server {
-    peers: slab::Slab<Peer>,
+    peers: Arc<RwLock<slab::Slab<Peer>>>,
     addr: std::net::SocketAddr,
     poll: mio::Poll,
 }
@@ -55,15 +120,16 @@ pub struct Server {
 impl Server {
     pub fn new(addr: std::net::SocketAddr) -> std::io::Result<Self> {
         return Ok(Self {
-            peers: slab::Slab::new(),
+            peers: Arc::new(RwLock::new(slab::Slab::new())),
             addr: addr,
             poll: mio::Poll::new()?,
         });
     }
 
-    pub fn register_new_peer(&mut self, stream: net::TcpStream) -> std::io::Result<()> {
+    pub fn register_new_peer(&self, stream: net::TcpStream) -> std::io::Result<()> {
         // get new slot in the connection set
-        let vacant = self.peers.vacant_entry();
+        let mut peers = self.peers.write().unwrap();
+        let vacant = peers.vacant_entry();
         let key: usize = vacant.key();
         if key >= MAX_INCOMING_CLIENT {
             // too many connections
@@ -84,7 +150,7 @@ impl Server {
         Ok(())
     }
 
-    pub fn listen(&mut self) -> std::io::Result<()> {
+    pub fn listen(&self) -> std::io::Result<()> {
         // bind server to passed addr and register to the poll
         let server = net::TcpListener::bind(&self.addr)?;
         const SERVER: mio::Token = mio::Token(std::usize::MAX - 1); // token for server new connection event
@@ -139,48 +205,20 @@ impl Server {
                     }
                     mio::Token(token_id) => {
                         // one of the connected sockets is ready to read
-                        let peer = &mut self.peers[token_id];
+                        let peers = self.peers.read().unwrap();
+                        let peer = &peers[token_id];
                         // we are using edge-triggered events, loop until block
                         loop {
-                            match peer
-                                .reader
-                                .read(&mut peer.buffer[peer.read_length..peer.msg_length])
+                            match peer.read()
                             {
                                 Ok(0) => {
                                     // EOF, remove it from the connections set
+                                    let mut peers = self.peers.write().unwrap();
                                     info!("Peer {} dropped connection", peer.addr);
-                                    self.peers.remove(token_id);
+                                    peers.remove(token_id);
                                     break;
                                 }
-                                Ok(size) => {
-                                    // we got some data, move the cursor
-                                    peer.read_length += size;
-                                    if peer.read_length == peer.msg_length {
-                                        // buffer filled, process the buffer
-                                        match peer.state {
-                                            DecodeState::Length => {
-                                                let message_length = BigEndian::read_u32(
-                                                    &peer.buffer[0..std::mem::size_of::<u32>()],
-                                                );
-                                                peer.state = DecodeState::Payload;
-                                                peer.read_length = 0;
-                                                peer.msg_length = message_length as usize;
-                                                if peer.buffer.capacity() < peer.msg_length {
-                                                    peer.buffer.resize(peer.msg_length, 0);
-                                                }
-                                            }
-                                            DecodeState::Payload => {
-                                                let new_payload: message::Message =
-                                                    bincode::deserialize(
-                                                        &peer.buffer[0..peer.msg_length],
-                                                    )
-                                                    .unwrap();
-                                                peer.state = DecodeState::Length;
-                                                peer.read_length = 0;
-                                                peer.msg_length = std::mem::size_of::<u32>();
-                                            }
-                                        }
-                                    }
+                                Ok(_) => {
                                     continue;
                                 }
                                 Err(e) => {
@@ -188,12 +226,13 @@ impl Server {
                                         // socket is not ready anymore, stop reading
                                         break;
                                     } else {
+                                        let mut peers = self.peers.write().unwrap();
                                         warn!(
                                             "Error reading peer {}, disconnecting: {}",
                                             peer.addr, e
                                         );
-                                        peer.stream.shutdown(std::net::Shutdown::Both)?;
-                                        self.peers.remove(token_id);
+                                        // TODO: we did not shutdown the stream. Cool?
+                                        peers.remove(token_id);
                                         break;
                                     }
                                 }
