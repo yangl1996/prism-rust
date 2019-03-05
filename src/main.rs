@@ -8,6 +8,7 @@ extern crate clap;
 use log::{debug, error, info, warn};
 use std::net;
 use std::process;
+use std::sync::Arc;
 
 use prism::network;
 
@@ -47,9 +48,8 @@ fn main() {
     let peer_socket_addr = net::SocketAddr::new(peer_ip, peer_port);
 
     debug!("Starting P2P server at {}", peer_socket_addr);
-    let mut server = network::server::Server::new(peer_socket_addr).unwrap();
-    server.listen().map_err(|e| {
-        error!("Error occurred in P2P server: {}", e);
-        process::exit(1);
-    });
+    let server = network::server::Server::start(peer_socket_addr).unwrap();
+
+    loop{};
+
 }

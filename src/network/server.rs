@@ -1,21 +1,21 @@
 use super::message;
 use byteorder::{BigEndian, ByteOrder};
-use bytes::BufMut;
 use log::{debug, error, info, trace, warn};
 use mio::{self, net};
+use std::cell::UnsafeCell;
 use std::io::{Read, Write};
 use std::sync::{Arc, RwLock};
-use std::cell::UnsafeCell;
+use std::thread;
 
 const MAX_INCOMING_CLIENT: usize = 256;
 const MAX_EVENT: usize = 1024;
 
 struct PeerReaderCell<T>(UnsafeCell<T>);
 
-unsafe impl <T> Send for PeerReaderCell<T> {}
-unsafe impl <T> Sync for PeerReaderCell<T> {}
+unsafe impl<T> Send for PeerReaderCell<T> {}
+unsafe impl<T> Sync for PeerReaderCell<T> {}
 
-impl <T> PeerReaderCell<T> {
+impl<T> PeerReaderCell<T> {
     fn new(data: T) -> Self {
         return Self(UnsafeCell::new(data));
     }
@@ -70,60 +70,68 @@ impl Peer {
         let state = self.state.get();
 
         unsafe {
-        let bytes_read = (*reader).read(&mut (*buffer)[*read_length..*msg_length]);
-        match bytes_read
-        {
-            Ok(0) => {
-                return Ok(0);
-            }
-            Ok(size) => {
-                // we got some data, move the cursor
-                *read_length += size;
-                if *read_length == *msg_length {
-                    // buffer filled, process the buffer
-                    match *state {
-                        DecodeState::Length => {
-                            let message_length =
-                                BigEndian::read_u32(&(*buffer)[0..std::mem::size_of::<u32>()]);
-                            *state = DecodeState::Payload;
-                            *read_length = 0;
-                            *msg_length = message_length as usize;
-                            if (*buffer).capacity() < *msg_length {
-                                (*buffer).resize(*msg_length, 0);
+            let bytes_read = (*reader).read(&mut (*buffer)[*read_length..*msg_length]);
+            match bytes_read {
+                Ok(0) => {
+                    return Ok(0);
+                }
+                Ok(size) => {
+                    // we got some data, move the cursor
+                    *read_length += size;
+                    if *read_length == *msg_length {
+                        // buffer filled, process the buffer
+                        match *state {
+                            DecodeState::Length => {
+                                let message_length =
+                                    BigEndian::read_u32(&(*buffer)[0..std::mem::size_of::<u32>()]);
+                                *state = DecodeState::Payload;
+                                *read_length = 0;
+                                *msg_length = message_length as usize;
+                                if (*buffer).capacity() < *msg_length {
+                                    (*buffer).resize(*msg_length, 0);
+                                }
+                            }
+                            DecodeState::Payload => {
+                                let new_payload: message::Message =
+                                    bincode::deserialize(&(*buffer)[0..*msg_length]).unwrap();
+                                *state = DecodeState::Length;
+                                *read_length = 0;
+                                *msg_length = std::mem::size_of::<u32>();
                             }
                         }
-                        DecodeState::Payload => {
-                            let new_payload: message::Message =
-                                bincode::deserialize(&(*buffer)[0..*msg_length]).unwrap();
-                            *state = DecodeState::Length;
-                            *read_length = 0;
-                            *msg_length = std::mem::size_of::<u32>();
-                        }
                     }
+                    return Ok(size);
                 }
-                return Ok(size);
+                Err(e) => {
+                    return Err(e);
+                }
             }
-            Err(e) => {
-                return Err(e);
-            }
-        }
         }
     }
 }
 
 pub struct Server {
-    peers: Arc<RwLock<slab::Slab<Peer>>>,
+    peers: RwLock<slab::Slab<Peer>>,
     addr: std::net::SocketAddr,
     poll: mio::Poll,
 }
 
 impl Server {
-    pub fn new(addr: std::net::SocketAddr) -> std::io::Result<Self> {
-        return Ok(Self {
-            peers: Arc::new(RwLock::new(slab::Slab::new())),
+    pub fn start(addr: std::net::SocketAddr) -> std::io::Result<Arc<Self>> {
+        let server = Self {
+            peers: RwLock::new(slab::Slab::new()),
             addr: addr,
             poll: mio::Poll::new()?,
+        };
+        let server_ptr = Arc::new(server);
+        let server_listening = Arc::clone(&server_ptr);
+        thread::spawn(move || {
+            server_listening.listen().unwrap_or_else(|e| {
+                error!("Error occurred in P2P server: {}", e);
+                return;
+            });
         });
+        return Ok(server_ptr);
     }
 
     pub fn register_new_peer(&self, stream: net::TcpStream) -> std::io::Result<()> {
@@ -209,8 +217,7 @@ impl Server {
                         let peer = &peers[token_id];
                         // we are using edge-triggered events, loop until block
                         loop {
-                            match peer.read()
-                            {
+                            match peer.read() {
                                 Ok(0) => {
                                     // EOF, remove it from the connections set
                                     let mut peers = self.peers.write().unwrap();
