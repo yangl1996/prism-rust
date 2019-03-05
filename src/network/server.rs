@@ -1,22 +1,35 @@
 use super::message;
-use log::{debug, error, info, warn};
+use byteorder::{BigEndian, ByteOrder};
+use bytes::BufMut;
+use log::{debug, error, info, trace, warn};
 use mio::{self, net};
 use std::io::{Read, Write};
 
 const MAX_INCOMING_CLIENT: usize = 256;
 const MAX_EVENT: usize = 1024;
 
+enum DecodeState {
+    Length,
+    Payload,
+}
+
 struct Peer {
     stream: mio::net::TcpStream,
     token: mio::Token,
     reader: std::io::BufReader<mio::net::TcpStream>,
     writer: std::io::BufWriter<mio::net::TcpStream>,
+    addr: std::net::SocketAddr,
+    buffer: Vec<u8>,
+    msg_length: usize,
+    read_length: usize,
+    state: DecodeState,
 }
 
 impl Peer {
     pub fn new(stream: mio::net::TcpStream, token: mio::Token) -> std::io::Result<Self> {
         let reader_stream = stream.try_clone()?;
         let writer_stream = stream.try_clone()?;
+        let addr = stream.peer_addr()?;
         let bufreader = std::io::BufReader::new(reader_stream);
         let bufwriter = std::io::BufWriter::new(writer_stream);
         return Ok(Self {
@@ -24,6 +37,11 @@ impl Peer {
             token: token,
             reader: bufreader,
             writer: bufwriter,
+            addr: addr,
+            buffer: vec![0; std::mem::size_of::<u32>()],
+            msg_length: std::mem::size_of::<u32>(),
+            read_length: 0,
+            state: DecodeState::Length,
         });
     }
 }
@@ -121,23 +139,54 @@ impl Server {
                     }
                     mio::Token(token_id) => {
                         // one of the connected sockets is ready to read
-                        let connection = &mut self.peers[token_id];
+                        let peer = &mut self.peers[token_id];
                         // we are using edge-triggered events, loop until block
                         loop {
-                            let mut buf = [0 as u8; 50];
-                            match connection.reader.read(&mut buf) {
+                            match peer
+                                .reader
+                                .read(&mut peer.buffer[peer.read_length..peer.msg_length])
+                            {
                                 Ok(0) => {
                                     // EOF, remove it from the connections set
-                                    info!(
-                                        "Peer {} dropped connection",
-                                        connection.stream.peer_addr()?
-                                    );
+                                    info!("Peer {} dropped connection", peer.addr);
                                     self.peers.remove(token_id);
                                     break;
                                 }
                                 Ok(size) => {
-                                    // we got some data
-                                    connection.writer.write(&buf[0..size])?;
+                                    // we got some data, move the cursor
+                                    peer.read_length += size;
+                                    if peer.read_length == peer.msg_length {
+                                        // buffer filled, process the buffer
+                                        match peer.state {
+                                            DecodeState::Length => {
+                                                let message_length = BigEndian::read_u32(
+                                                    &peer.buffer[0..std::mem::size_of::<u32>()],
+                                                );
+                                                peer.state = DecodeState::Payload;
+                                                peer.read_length = 0;
+                                                peer.msg_length = message_length as usize;
+                                                if peer.buffer.capacity() < peer.msg_length {
+                                                    peer.buffer.resize(peer.msg_length, 0);
+                                                }
+                                            }
+                                            DecodeState::Payload => {
+                                                let new_payload: message::Message =
+                                                    bincode::deserialize(
+                                                        &peer.buffer[0..peer.msg_length],
+                                                    )
+                                                    .unwrap();
+                                                peer.state = DecodeState::Length;
+                                                peer.read_length = 0;
+                                                peer.msg_length = std::mem::size_of::<u32>();
+                                                trace!(
+                                                    "New message from {}: {:?}",
+                                                    &peer.addr,
+                                                    &new_payload
+                                                );
+                                            }
+                                        }
+                                    }
+                                    continue;
                                 }
                                 Err(e) => {
                                     if e.kind() == std::io::ErrorKind::WouldBlock {
@@ -146,10 +195,9 @@ impl Server {
                                     } else {
                                         warn!(
                                             "Error reading peer {}, disconnecting: {}",
-                                            connection.stream.peer_addr()?,
-                                            e
+                                            peer.addr, e
                                         );
-                                        connection.stream.shutdown(std::net::Shutdown::Both)?;
+                                        peer.stream.shutdown(std::net::Shutdown::Both)?;
                                         self.peers.remove(token_id);
                                         break;
                                     }

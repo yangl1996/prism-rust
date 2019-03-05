@@ -9,9 +9,7 @@ use log::{debug, error, info, warn};
 use std::net;
 use std::process;
 
-mod hash;
-mod merkle;
-mod network;
+use prism::network;
 
 const DEFAULT_IP: &str = "127.0.0.1";
 const DEFAULT_P2P_PORT: u16 = 6000;

@@ -17,3 +17,5 @@ log = "0.4"
 stderrlog = "0.4"
 mio = "0.6"
 slab = "0.4"
+bytes = "0.4"
+
