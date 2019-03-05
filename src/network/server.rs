@@ -178,11 +178,6 @@ impl Server {
                                                 peer.state = DecodeState::Length;
                                                 peer.read_length = 0;
                                                 peer.msg_length = std::mem::size_of::<u32>();
-                                                trace!(
-                                                    "New message from {}: {:?}",
-                                                    &peer.addr,
-                                                    &new_payload
-                                                );
                                             }
                                         }
                                     }

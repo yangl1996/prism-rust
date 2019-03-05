@@ -4,7 +4,7 @@ use byteorder::{BigEndian, ByteOrder};
 use std::io::Write;
 use std::time::{Duration, Instant};
 
-const MSG_SIZE: usize = 1024 ;
+const MSG_SIZE: usize = 1024 * 1024 ;
 const REPEAT_TIME: usize = 100000;
 
 fn main() {
@@ -32,5 +32,6 @@ fn main() {
     let end = Instant::now();
     let time = end.duration_since(start).as_micros() as f64;
     let throughput = MSG_SIZE as f64 * REPEAT_TIME as f64 * 1000000.0 / time / 1024.0 / 1024.0;
-    println!("Throughput: {:.3} MB/s", throughput);
+    println!("Message size: {} KB", MSG_SIZE / 1024);
+    println!("Throughput: {:.3} MB/s, {:.2} messages/s", throughput, REPEAT_TIME as f64 * 1000000.0 / time);
 }
