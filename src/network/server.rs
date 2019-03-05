@@ -10,6 +10,14 @@ use std::thread;
 const MAX_INCOMING_CLIENT: usize = 256;
 const MAX_EVENT: usize = 1024;
 
+// PeerReaderCell is UnsafeCell with Send and Sync forcefully marked. It is used to
+// enable interior mutability of Peer. We need it because we use RwLock to control
+// peers, and can only obtain &Peer when obtaining a read lock on peers. Thus, we
+// need to implement read() for &Peer, instead of &mut Peer. By manually ensuring
+// that only one thread has access to the fields wrapped in PeerReaderCell, we don't
+// have data race, and avoid the performance overhead of wrapping those states in
+// Mutex of RwCells.
+
 struct PeerReaderCell<T>(UnsafeCell<T>);
 
 unsafe impl<T> Send for PeerReaderCell<T> {}
