@@ -50,6 +50,8 @@ fn main() {
     debug!("Starting P2P server at {}", peer_socket_addr);
     let server = network::server::Server::start(peer_socket_addr).unwrap();
 
-    loop{};
+    loop{
+        std::thread::park();
+    };
 
 }
