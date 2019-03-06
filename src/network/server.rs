@@ -120,7 +120,7 @@ impl Peer {
 
 pub struct Server {
     peers: RwLock<slab::Slab<Peer>>,
-    addr: std::net::SocketAddr,
+    pub addr: std::net::SocketAddr,
     poll: mio::Poll,
 }
 
@@ -140,6 +140,14 @@ impl Server {
             });
         });
         return Ok(server_ptr);
+    }
+
+    pub fn connect(&self, addr: &std::net::SocketAddr) -> std::io::Result<()> {
+        // we need to estabilsh a stdlib tcp stream, since we need it to block
+        let stream = std::net::TcpStream::connect(addr)?;
+        let mio_stream = net::TcpStream::from_stream(stream)?;
+        self.register_new_peer(mio_stream)?;
+        Ok(())
     }
 
     fn register_new_peer(&self, stream: net::TcpStream) -> std::io::Result<()> {
