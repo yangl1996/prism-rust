@@ -51,7 +51,7 @@ struct Peer {
 }
 
 impl Peer {
-    pub fn new(stream: mio::net::TcpStream, token: mio::Token) -> std::io::Result<Self> {
+    fn new(stream: mio::net::TcpStream, token: mio::Token) -> std::io::Result<Self> {
         let reader_stream = stream.try_clone()?;
         let writer_stream = stream.try_clone()?;
         let addr = stream.peer_addr()?;
@@ -70,7 +70,7 @@ impl Peer {
         });
     }
 
-    pub fn read(&self) -> std::io::Result<usize> {
+    fn read(&self) -> std::io::Result<usize> {
         let reader = self.reader.get();
         let buffer = self.buffer.get();
         let msg_length = self.msg_length.get();
@@ -142,7 +142,7 @@ impl Server {
         return Ok(server_ptr);
     }
 
-    pub fn register_new_peer(&self, stream: net::TcpStream) -> std::io::Result<()> {
+    fn register_new_peer(&self, stream: net::TcpStream) -> std::io::Result<()> {
         // get new slot in the connection set
         let mut peers = self.peers.write().unwrap();
         let vacant = peers.vacant_entry();
@@ -166,7 +166,7 @@ impl Server {
         Ok(())
     }
 
-    pub fn listen(&self) -> std::io::Result<()> {
+    fn listen(&self) -> std::io::Result<()> {
         // bind server to passed addr and register to the poll
         let server = net::TcpListener::bind(&self.addr)?;
         const SERVER: mio::Token = mio::Token(std::usize::MAX - 1); // token for server new connection event
@@ -228,8 +228,9 @@ impl Server {
                             match peer.read() {
                                 Ok(0) => {
                                     // EOF, remove it from the connections set
-                                    let mut peers = self.peers.write().unwrap();
                                     info!("Peer {} dropped connection", peer.addr);
+                                    drop(peers);
+                                    let mut peers = self.peers.write().unwrap();
                                     peers.remove(token_id);
                                     break;
                                 }
@@ -241,11 +242,12 @@ impl Server {
                                         // socket is not ready anymore, stop reading
                                         break;
                                     } else {
-                                        let mut peers = self.peers.write().unwrap();
                                         warn!(
                                             "Error reading peer {}, disconnecting: {}",
                                             peer.addr, e
                                         );
+                                        drop(peers);
+                                        let mut peers = self.peers.write().unwrap();
                                         // TODO: we did not shutdown the stream. Cool?
                                         peers.remove(token_id);
                                         break;
