@@ -1,13 +1,9 @@
-extern crate ring;
 use super::crypto::hash::{Hashable, H256};
 use super::header::BlockHeader;
-use serde::{Serialize, Deserialize};
 use std::fmt;
 
 
 // ToDo: Encoder and decoder for the block?
-// ToDo: #[derive(Serialize, Deserialize, Debug)]
-//#[derive( Clone)]
 #[derive(Serialize, Deserialize, Clone, Debug, Hash, PartialEq)]
 pub enum BlockType{
     Transaction,

@@ -1,12 +1,9 @@
-
-extern crate serde_derive;
-extern crate bincode;
-
 use bincode::{serialize, deserialize};
 use crate::crypto::hash::{Hashable, H256};
 //use std::time::{SystemTime, UNIX_EPOCH};
 use std;
 use std::fmt;
+
 /*
 ToDo: Encoder and decoder for the transaction?
 */

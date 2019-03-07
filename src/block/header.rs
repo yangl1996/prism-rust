@@ -1,6 +1,4 @@
-extern crate ring;
 use super::crypto::hash::{Hashable, H256};
-use serde::{Serialize, Deserialize};
 use std::fmt;
 
 
@@ -83,7 +81,7 @@ impl fmt::Display for BlockHeader {
         write!(f, "  Timestamp: {}\n", self.timestamp)?;
         write!(f, "  nonce: {}\n", self.nonce)?;
         write!(f, "  content root: {}\n", self.content_root)?;
-//        write!(f, "  extra content : {}\n", self.extra_content)?; //ToDo:: To define display for vec?
+//        write!(f, "  extra content : {}\n", self.extra_content)?; //TODO: To define display for vec?
         write!(f, "  difficulty: {}\n", self.difficulty)?;
 //        write!(f, "  hash: {}\n", self.hash)?;
         write!(f, "}}")
