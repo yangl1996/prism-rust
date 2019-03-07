@@ -1,5 +1,3 @@
-extern crate ring;
-
 /// An object that can be meaningfully hashed.
 pub trait Hashable {
     /// Hashes the object using SHA256.
