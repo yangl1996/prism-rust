@@ -23,6 +23,7 @@ fn main() {
      (@arg verbose: -v ... "Increases the verbosity of logging")
      (@arg peer_ip: --ip [IP] "Sets the IP address to listen to peers")
      (@arg peer_port: --port [PORT] "Sets the port to listen to peers")
+     (@arg known_peer: -c --connect ... [PEER] "Sets the peers to connect to")
     )
     .get_matches();
 
@@ -49,6 +50,23 @@ fn main() {
 
     debug!("Starting P2P server at {}", peer_socket_addr);
     let server = network::server::Server::start(peer_socket_addr).unwrap();
+
+    // connect to known peers
+    if let Some(known_peers) = matches.values_of("known_peer") {
+        for peer in known_peers {
+            let addr = match peer.parse::<net::SocketAddr>() {
+                Ok(x) => x,
+                Err(e) => {
+                    error!("Error parsing peer address {}: {}", &peer, e);
+                    continue;
+                },
+            };
+            match server.connect(&addr) {
+                Ok(()) => info!("Connected to outgoing peer {}", &addr),
+                Err(e) => error!("Error connecting to peer {}: {}", addr, e),
+            }
+        }
+    }
 
     loop {
         std::thread::park();
