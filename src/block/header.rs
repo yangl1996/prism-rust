@@ -1,8 +1,9 @@
-use super::crypto::hash::{Hashable, H256};
+use crate::crypto::hash::{Hashable, H256};
 
 // TODO: Add the address of the miner
 
-#[derive(Serialize, Deserialize, Clone, Debug, Hash, Default, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, Hash)]
+// TODO: discuss. PartialEq and Default are removed for now
 pub struct Header{
     /// Hash of the parent block.
     pub parent_hash: H256,
@@ -38,7 +39,7 @@ impl Hashable for Header{
 }
 
 impl std::fmt::Display for Header {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         unimplemented!();
     }
 }
