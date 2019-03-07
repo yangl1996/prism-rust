@@ -4,6 +4,8 @@ pub trait Hashable {
         fn hash(&self) -> H256;
 }
 
+// TODO: if performance is a concern, impelment it as two u128's
+
 /// A SHA256 hash
 #[derive(Eq, Serialize, Deserialize, Clone, Debug, Hash, Default, Copy)]
 pub struct H256(pub [u8; 32]); // big endian u256
@@ -75,5 +77,72 @@ impl std::fmt::Display for H256 {
             write!(f, "{:>02x}", self.0[byte_idx])?;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Hashable;
+    use super::H256;
+
+    #[test]
+    fn ordering() {
+        let bigger_hash = H256(hex!(
+            "0000000000000000000000000000000000000000000000000000000000000001"
+        ));
+        let smaller_hash = H256(hex!(
+            "0000000000000000000000000000000000000000000000000000000000000000"
+        ));
+        assert_eq!(bigger_hash > smaller_hash, true);
+
+        let bigger_hash = H256(hex!(
+            "0001000000000000000000000000000000000000000000000000000000000001"
+        ));
+        let smaller_hash = H256(hex!(
+            "0000010000000000000000000000000000000000000000000000000000000000"
+        ));
+        assert_eq!(bigger_hash > smaller_hash, true);
+
+        let some_hash = H256(hex!(
+            "0001000000000000000000000000000000000000000000000000000000000000"
+        ));
+        let same_hash = H256(hex!(
+            "0001000000000000000000000000000000000000000000000000000000000000"
+        ));
+        assert_eq!(some_hash >= same_hash, true);
+        assert_eq!(some_hash <= same_hash, true);
+        assert_eq!(some_hash == same_hash, true);
+    }
+
+    #[test]
+    fn from_u8() {
+        let source = hex!("0101010102020202010101010202020201010101020202020101010102020202");
+        let should_be = H256(hex!(
+            "0101010102020202010101010202020201010101020202020101010102020202"
+        ));
+        let result: H256 = H256::from(source);
+        assert_eq!(result, should_be);
+    }
+
+    #[test]
+    fn into_u8() {
+        let should_be = hex!("0101010102020202010101010202020201010101020202020101010102020202");
+        let source = H256(hex!(
+            "0101010102020202010101010202020201010101020202020101010102020202"
+        ));
+        let result: [u8; 32] = source.into();
+        assert_eq!(result, should_be);
+    }
+
+    #[test]
+    fn hash() {
+        let hash = H256(hex!(
+            "2017201720172017201720172017201720172017201720172017201720172017"
+        ));
+        let hashed_hash = hash.hash();
+        let should_be: [u8; 32] =
+            hex!("cd9b88d7319caaf16bed3fd6d4880284e0283414b0b44c22978f7dc22d741713");
+        let should_be = H256(should_be);
+        assert_eq!(hashed_hash, should_be);
     }
 }
