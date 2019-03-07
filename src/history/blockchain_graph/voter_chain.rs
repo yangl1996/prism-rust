@@ -1,9 +1,11 @@
 //use std::collections::{HashSet}; todo: use this later
+use serde::{Serialize, Deserialize};
 use super::utils::*;
 use super::proposer_tree::PropNode;
 
 
-#[derive(Clone)]
+//#[derive(Clone)]
+#[derive(Serialize, Clone)]
 pub struct VoterNode<'a>{
     /// The chain of the voter node
     chain_id: u16,
@@ -55,6 +57,7 @@ impl<'a> Node for VoterNode<'a>{
 
 
 /// Stores all the voter nodes
+#[derive(Serialize, Clone)]
 pub struct VoterChain<'a>{
     /// Voter chain id
     chain_id: u16,
