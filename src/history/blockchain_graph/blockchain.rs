@@ -5,6 +5,8 @@ use super::voter_chain::{VoterChain, VoterNode};
 use super::block::block::{Block, BlockType};
 use super::crypto::hash::{Hashable};
 
+
+#[derive(Serialize, Clone)]
 pub struct BlockChainGraph<'a>{
     tx_block_pool: TxPool<'a>,
     prop_block_tree: PropTree<'a>,

@@ -1,8 +1,9 @@
 //use std::collections::{HashSet};
 use super::utils::*;
 use super::proposer_tree::PropNode;
+use serde::{Serialize, Deserialize};
 
-//#[derive( Default)]
+#[derive(Serialize, Clone, PartialEq)]
 pub struct TxNode<'a>{
     /// Block Id
     node_id : BlockId,
@@ -38,11 +39,11 @@ impl<'a> Node for TxNode<'a>{
 }
 
 /// Stores all the tx nodes
+#[derive(Serialize, Clone)]
 pub struct TxPool<'a>{
     /// Set of all transaction nodes
     tx_nodes: Vec<TxNode<'a>>
 }
-
 impl<'a> TxPool<'a>{
     /// Initialize Tx pool
     pub fn new() -> Self{
