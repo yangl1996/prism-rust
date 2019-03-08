@@ -5,7 +5,7 @@ extern crate hex_literal;
 
 mod crypto;
 mod block;
-mod history;
+//mod history;
 mod transaction;
 
 fn main() {
