@@ -1,5 +1,6 @@
 //use super::block::block::{BlockType}; todo: reuse
 use super::crypto::hash::{H256};
+use serde::{Serialize, Deserialize};
 
 #[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub enum BlockId {
@@ -43,37 +44,3 @@ pub trait Node{
 pub trait Genesis{
     fn get_type() -> Self;
 }
-
-/*
-Ignore this
-/// The status of different blocks.
-pub enum TxBlockRefStatus{
-    /// When a proposer block has referenced it
-    Referenced,
-    /// When none of the proposer blocks have referenced it
-    UnReferenced
-}
-pub type PropBlockRefStatus = TxBlockRefStatus;
-
-
-/// The content of blocks. This is a placeholder until Guilia is done with Mining function.
-pub struct TxBlockContent{
-    // List of votes on prop blocks.
-}
-
-impl Hashable for VoterBlockContent {
-    fn sha256(&self) -> SHA256 {
-        let x: [u8; 32] = [0; 32]; // Default (wrong) behaviour
-        return SHA256(x);
-    }
-}
-
-pub type PropBlockContent = TxBlockContent;
-pub type VoterBlockContent = TxBlockContent;
-
-
-type TxBlock = Block<TxBlockContent>;
-type PropBlock = Block<PropBlockContent>;
-type VoterBlock = Block<VoterBlockContent>;
-
-*/
