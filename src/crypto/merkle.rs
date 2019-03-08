@@ -78,8 +78,7 @@ impl<'a, T: Hashable> MerkleTree<'a, T> {
             .unwrap();
         let mut known_index = if self.data.len() & 0x01 == 1 {
             self.nodes.len() - self.data.len() - 1 + data_index
-        }
-        else {
+        } else {
             self.nodes.len() - self.data.len() + data_index
         };
         loop {
