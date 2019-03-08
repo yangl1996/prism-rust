@@ -4,6 +4,7 @@ use super::proposer_tree::{PropTree, PropNode};
 use super::voter_chain::{VoterChain, VoterNode};
 use super::block::block::{Block, BlockType};
 use super::crypto::hash::{Hashable};
+use serde::{Serialize, Deserialize};
 
 
 #[derive(Serialize, Clone)]
