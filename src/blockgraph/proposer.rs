@@ -1,3 +1,5 @@
+/// A proposer tree.
+
 //use std::collections::{HashSet};
 use super::voter_chain::VoterNode;
 use super::utils::*;

@@ -1,3 +1,5 @@
+/// A voter chain.
+
 //use std::collections::{HashSet}; todo: use this later
 use serde::{Serialize, Deserialize};
 use super::utils::*;

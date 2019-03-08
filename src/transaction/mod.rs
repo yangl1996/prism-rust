@@ -4,6 +4,9 @@ use crate::crypto::hash::{Hashable, H256};
 
 // TODO: ECDSA seems outdated. We should use EdDSA.
 
+type PubKey = u8;
+type Signature = u8;
+
 /// A Prism transaction. A transaction takes a set of existing coins and transforms them into a set
 /// of output coins.
 #[derive(Serialize, Deserialize, Debug)]
@@ -19,6 +22,7 @@ impl Hashable for Transaction {
 }
 
 /// An input of a transaction.
+#[derive(Serialize, Deserialize, Debug)]
 struct Input {
     /// A "pointer" to the coin being used.
     previous_output: OutPoint,
@@ -28,11 +32,12 @@ struct Input {
     pubkey: PubKey,
     /// The signature by the coin owner. The coin owner signs this input using its private key to
     /// prove that it really owns this coin.
-    signature: Signagure,
+    signature: Signature,
 }
 
 /// An output of a transaction.
 // TODO: coinbase output (transaction fee). Maybe we don't need that in this case.
+#[derive(Serialize, Deserialize, Debug)]
 struct Output {
     /// The amount of this output.
     value: u64,
@@ -41,6 +46,7 @@ struct Output {
 }
 
 /// A "pointer" to a transaction output
+#[derive(Serialize, Deserialize, Debug)]
 struct OutPoint {
     /// The hash of the transaction being referred to.
     hash: H256,
