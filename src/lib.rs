@@ -6,7 +6,7 @@ extern crate hex_literal;
 extern crate clap;
 
 pub mod crypto;
-//pub mod transaction;
+pub mod transaction;
 pub mod network;
 pub mod block;
 pub mod state;
