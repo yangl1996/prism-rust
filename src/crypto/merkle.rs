@@ -49,8 +49,10 @@ impl<'a, T: Hashable> MerkleTree<'a, T> {
             layer_start -= l;
             for i in 0..*d {
                 let mut ctx = ring::digest::Context::new(&ring::digest::SHA256);
-                ctx.update(&nodes[last_layer_start + (i << 1)].0);
-                ctx.update(&nodes[last_layer_start + (i << 1) + 1].0);
+                let left_hash: [u8; 32] = (&nodes[last_layer_start + (i << 1)]).into();
+                let right_hash: [u8; 32] = (&nodes[last_layer_start + (i << 1) + 1]).into();
+                ctx.update(&left_hash[..]);
+                ctx.update(&right_hash[..]);
                 let digest = ctx.finish();
                 nodes[layer_start + i] = digest.into();
             }
@@ -104,66 +106,66 @@ mod tests {
     macro_rules! gen_merkle_tree_data {
         () => {{
             vec![
-                hash::H256(hex!(
+                (&hex!(
                     "0a0b0c0d0e0f0e0d0a0b0c0d0e0f0e0d0a0b0c0d0e0f0e0d0a0b0c0d0e0f0e0d"
-                )),
-                hash::H256(hex!(
+                )).into(),
+                (&hex!(
                     "0102010201020102010201020102010201020102010201020102010201020102"
-                )),
-                hash::H256(hex!(
+                )).into(),
+                (&hex!(
                     "0a0a0a0a0b0b0b0b0a0a0a0a0b0b0b0b0a0a0a0a0b0b0b0b0a0a0a0a0b0b0b0b"
-                )),
-                hash::H256(hex!(
+                )).into(),
+                (&hex!(
                     "0403020108070605040302010807060504030201080706050403020108070605"
-                )),
-                hash::H256(hex!(
+                )).into(),
+                (&hex!(
                     "1a2a3a4a1a2a3a4a1a2a3a4a1a2a3a4a1a2a3a4a1a2a3a4a1a2a3a4a1a2a3a4a"
-                )),
-                hash::H256(hex!(
+                )).into(),
+                (&hex!(
                     "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
-                )),
-                hash::H256(hex!(
+                )).into(),
+                (&hex!(
                     "0000000100000001000000010000000100000001000000010000000100000001"
-                )),
+                )).into(),
             ]
         }};
     }
 
     #[test]
     fn new_tree() {
-        let input_data = gen_merkle_tree_data!();
+        let input_data: Vec<hash::H256> = gen_merkle_tree_data!();
         let merkle_tree = MerkleTree::new(&input_data);
         assert_eq!(merkle_tree.nodes.len(), 15);
         assert_eq!(
             merkle_tree.nodes[0],
-            hash::H256(hex!(
+            (&hex!(
                 "9d8f0638fa3d46f618dea970df55b53a02f4aa924e8d598af6b5f296fdaabce5"
-            ))
+            )).into()
         );
         assert_eq!(
             merkle_tree.nodes[13],
-            hash::H256(hex!(
+            (&hex!(
                 "b8027a4fc86778e60f636c12e67d03b7356f1d6d8a8ff486bcdaa3dcf81b714b"
-            ))
+            )).into()
         );
     }
 
     #[test]
     fn root() {
-        let input_data = gen_merkle_tree_data!();
+        let input_data: Vec<hash::H256> = gen_merkle_tree_data!();
         let merkle_tree = MerkleTree::new(&input_data);
         let root = merkle_tree.root();
         assert_eq!(
             root,
-            &hash::H256(hex!(
+            &(&hex!(
                 "9d8f0638fa3d46f618dea970df55b53a02f4aa924e8d598af6b5f296fdaabce5"
-            ))
+            )).into()
         );
     }
 
     #[test]
     fn proof() {
-        let input_data = gen_merkle_tree_data!();
+        let input_data: Vec<hash::H256> = gen_merkle_tree_data!();
         let merkle_tree = MerkleTree::new(&input_data);
         let proof = merkle_tree.proof(&input_data[2]);
         assert_eq!(proof[0], &merkle_tree.nodes[10]);
