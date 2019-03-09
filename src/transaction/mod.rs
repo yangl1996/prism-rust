@@ -1,12 +1,9 @@
 pub mod validators;
 
 use crate::crypto::hash::{Hashable, H256};
+use crate::crypto::sign::{PubKey, Signature};
 
 // TODO: ECDSA seems outdated. We should use EdDSA.
-
-type PubKey = u8;
-type Signature = u8;
-
 /// A Prism transaction. A transaction takes a set of existing coins and transforms them into a set
 /// of output coins.
 #[derive(Serialize, Deserialize, Debug)]
