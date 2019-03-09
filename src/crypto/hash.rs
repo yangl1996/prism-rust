@@ -61,13 +61,13 @@ impl Ord for H256 {
 
 impl PartialOrd for H256 {
     fn partial_cmp(&self, other: &H256) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(&other))
+        Some(self.cmp(other))
     }
 }
 
 impl PartialEq for H256 {
     fn eq(&self, other: &H256) -> bool {
-        if (&self.0[0] == &other.0[0]) && (&self.0[1] == &other.0[1]) {
+        if (self.0[0] == other.0[0]) && (self.0[1] == other.0[1]) {
             return true;
         }
         else {
