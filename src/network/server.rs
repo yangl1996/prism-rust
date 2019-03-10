@@ -38,12 +38,12 @@ enum DecodeState {
     Payload,
 }
 
-struct Peer {
+pub struct Peer {
     stream: mio::net::TcpStream,
     token: mio::Token,
     reader: PeerReaderCell<std::io::BufReader<mio::net::TcpStream>>,
     writer: std::io::BufWriter<mio::net::TcpStream>,
-    addr: std::net::SocketAddr,
+    pub addr: std::net::SocketAddr,
     buffer: PeerReaderCell<Vec<u8>>,
     msg_length: PeerReaderCell<usize>,
     read_length: PeerReaderCell<usize>,
@@ -105,6 +105,7 @@ impl Peer {
                                 *state = DecodeState::Length;
                                 *read_length = 0;
                                 *msg_length = std::mem::size_of::<u32>();
+                                message::handle_message(self, &new_payload);
                             }
                         }
                     }

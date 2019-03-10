@@ -3,14 +3,15 @@ use std::io::Write;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::time::Instant;
 
-const MSG_SIZE: usize = 10240;
+const MSG_SIZE: usize = 1024;
 const REPEAT_TIME: usize = 100000;
 
 fn main() {
+    stderrlog::new().verbosity(0).init().unwrap();
     let listen_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 9999);
     let server = prism::network::server::Server::start(listen_addr).unwrap();
 
-    let message = prism::network::message::Message::EchoRequest("a".repeat(MSG_SIZE));
+    let message = prism::network::message::Message::Ping("a".repeat(MSG_SIZE));
     let encoded: Vec<u8> = bincode::serialize(&message).unwrap();
     let length: u32 = encoded.len() as u32;
     let mut length_encoded = [0; 4];
