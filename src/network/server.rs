@@ -120,7 +120,7 @@ impl Peer {
 }
 
 pub struct Server {
-    peers: RwLock<slab::Slab<Peer>>,
+    peers: RwLock<slab::Slab<Arc<Peer>>>,
     pub addr: std::net::SocketAddr,
     poll: mio::Poll,
 }
@@ -163,7 +163,7 @@ impl Server {
                 "max peer reached, cannot accept new connections",
             ));
         }
-        let new_connection = Peer::new(stream, mio::Token(key))?;
+        let new_connection = Arc::new(Peer::new(stream, mio::Token(key))?);
         // register the new connection and insert
         self.poll.register(
             &new_connection.stream,
