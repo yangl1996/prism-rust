@@ -1,4 +1,8 @@
-use super::utils::*;
+mod transaction;
+mod proposer;
+mod voter;
+
+use utils::*;
 use super::transaction_pool::{TxPool, TxNode};
 use super::proposer_tree::{PropTree, PropNode};
 use super::voter_chain::{VoterChain, VoterNode};

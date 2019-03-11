@@ -1,3 +1,5 @@
+/// A transaction pool.
+
 //use std::collections::{HashSet};
 use super::utils::*;
 use super::proposer_tree::PropNode;
