@@ -5,10 +5,15 @@ authors = []
 edition = "2018"
 
 [dependencies]
-ring = "0.14"           #Cryptography
+ring = "0.14"
 byteorder = "1.3"
 bincode = "1.0"
 serde_derive = "1.0"
 serde = "1.0"
 hex-literal = "0.1"
-rocksdb = "0.11"        #Database
+rocksdb = "0.11"
+clap = "2.32"
+log = "0.4"
+stderrlog = "0.4"
+mio = "0.6"
+slab = "0.4"
