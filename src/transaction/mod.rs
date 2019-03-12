@@ -3,6 +3,7 @@ pub mod memory_pool;
 
 use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::sign;
+use bincode::serialize;
 
 /// A Prism transaction. A transaction takes a set of existing coins and transforms them into a set
 /// of output coins.
@@ -15,7 +16,8 @@ pub struct Transaction {
 
 impl Hashable for Transaction {
     fn hash(&self) -> H256 {
-        unimplemented!();
+        //don't know if this is right?
+        return ring::digest::digest(&ring::digest::SHA256, &serialize(self).unwrap()[..]).into();
     }
 }
 

@@ -121,20 +121,14 @@ impl MemoryPool {
         MemoryPool::default()
     }
 
-//    /// Insert verified transaction to the `MemoryPool`
-//    pub fn insert_verified<FC: MemoryPoolFeeCalculator>(&mut self, t: IndexedTransaction, fc: &FC) {
-//        if let Some(entry) = self.make_entry(t, fc) {
-//            let descendants = self.storage.remove_by_parent_hash(&entry.hash);
-//            self.storage.insert(entry);
-//            if let Some(descendants_iter) = descendants.map(|d| d.into_iter()) {
-//                for descendant in descendants_iter {
-//                    if let Some(descendant_entry) = self.make_entry(descendant, fc) {
-//                        self.storage.insert(descendant_entry);
-//                    }
-//                }
-//            }
-//        }
-//    }
+    /// Insert verified transaction to the `MemoryPool`
+    pub fn insert_verified(&mut self, t: Transaction) {
+        if let Some(entry) = self.make_entry(t) {
+
+            self.storage.insert(entry);
+
+        }
+    }
 
 //    /// Iterator over memory pool transactions according to specified strategy
 //    pub fn iter(&self, strategy: OrderingStrategy) -> MemoryPoolIterator {
@@ -226,7 +220,7 @@ impl MemoryPool {
         let ancestors = self.get_ancestors(&t);
         let size = self.get_transaction_size(&t);
         let storage_index = self.get_storage_index();
-        let miner_fee = 0;//we need a function calculate_fee(&t);
+        let miner_fee = 1;//we need a function calculate_fee(&t);
 
         // do not accept any transactions that have negative OR zero fee
         if miner_fee == 0 {
@@ -260,15 +254,31 @@ impl MemoryPool {
         0//TODO: t.serialized_size()
     }
 
-    #[cfg(not(test))]
     fn get_storage_index(&mut self) -> u64 {
         self.storage.counter += 1;
         self.storage.counter
     }
 
-    #[cfg(test)]
-    fn get_storage_index(&self) -> u64 {
-        (self.storage.by_hash.len() % 3usize) as u64
-    }
 }
 
+
+#[cfg(test)]
+pub mod tests {
+    use super::MemoryPool;
+    use super::super::Transaction;
+
+    #[test]
+    fn test_memory_pool_insert_empty_transaction() {
+        let mut pool = MemoryPool::new();
+        pool.insert_verified(empty_tx());
+        assert_eq!(pool.get_transactions_ids().len(), 1);
+        pool.insert_verified(empty_tx());
+        assert_eq!(pool.get_transactions_ids().len(), 1);
+        //println!("{:?}", pool.get(& pool.get_transactions_ids()[0]));
+
+    }
+
+    fn empty_tx() -> Transaction {
+        Transaction {input: vec![], output: vec![], signatures: vec![]}
+    }
+}
