@@ -1,11 +1,12 @@
 pub mod header;
 pub mod miner;
 pub mod validator;
-mod transaction;
-mod proposer;
-mod voter;
+mod transaction_block;
+mod proposer_block;
+mod voter_block;
 
 use crate::crypto::hash::{Hashable, H256};
+use crate::transaction::{Transaction};
 
 /// A block in the Prism blockchain.
 #[derive(Serialize, Deserialize, Debug, Hash)]
@@ -13,12 +14,12 @@ use crate::crypto::hash::{Hashable, H256};
 // quickly generate some fake blocks. PartialEq is also removed for now
 pub struct Block {
     /// The header of the block.
-    header: header::Header,
+    pub header: header::Header,
     /// The content of the block. It could contain transactions, references, or votes, depending on
     /// the block type.
-    content: Content,
+    pub content: Content,
     /// The sortition proof of the block.
-    proof: Vec<H256>,
+    pub sortition_proof: Vec<H256>,
 }
 
 impl Block {
@@ -26,15 +27,34 @@ impl Block {
     // can easily add it. Also, we may not want to decide block type inside new(). It should
     // have been known when calling new(), since we are supplying the content. Miner needs to
     // decide block type, but it should reside within miner logic.
-    
-    /// Create a new block.
-    pub fn new(parent: H256, timestamp: u64, nonce: u32, content_root: H256, sortition_proof: Vec<H256>, content: Content, extra_content: Vec<u32>, difficulty: u64) -> Self {
+
+    /// Create a new block from scratch.
+    pub fn new(parent: H256, timestamp: u64, nonce: u32, content_root: H256, sortition_proof: Vec<H256>,
+               content: Content, extra_content: Vec<u32>, difficulty: [u8; 32]) -> Self {
         let header = header::Header::new(parent, timestamp, nonce, content_root, extra_content, difficulty);
         Self {
             header: header,
             content: content,
-            proof: sortition_proof,
+            sortition_proof: sortition_proof,
         }
+    }
+
+    /// Create a new block from header.
+    pub fn from_header(header: header::Header, sortition_proof: Vec<H256>, content: Content) -> Self {
+        Self {
+            header: header,
+            content: content,
+            sortition_proof: sortition_proof,
+        }
+    }
+
+
+
+}
+
+impl Hashable for Block {
+    fn hash(&self)  -> H256 {
+        unimplemented!();
     }
 }
 
@@ -46,10 +66,20 @@ impl std::fmt::Display for Block {
 
 /// The content of a block. It could contain transactions, references, or votes, depending on the
 /// type of the block.
-#[derive(Serialize, Deserialize, Debug, Hash)]
+#[derive(Serialize, Deserialize, Debug, Hash, Clone)]
 pub enum Content {
-    Transaction(transaction::Content),
-    Proposer(proposer::Content),
-    Voter(voter::Content),
+    Transaction(transaction_block::Content),
+    Proposer(proposer_block::Content),
+    Voter(voter_block::Content),
 }
 
+// todo: This is a bad coding.
+impl Hashable for Content {
+    fn hash(&self) -> H256 {
+        match self {
+            Content::Transaction(c) => c.hash(),
+            Content::Proposer(c) => c.hash(),
+            Content::Voter(c) => c.hash(),
+        }
+    }
+}

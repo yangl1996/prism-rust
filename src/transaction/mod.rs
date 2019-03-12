@@ -5,7 +5,7 @@ use crate::crypto::sign;
 
 /// A Prism transaction. A transaction takes a set of existing coins and transforms them into a set
 /// of output coins.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Hash, Clone)]
 pub struct Transaction {
     input: Vec<Input>,
     output: Vec<Output>,
@@ -14,12 +14,13 @@ pub struct Transaction {
 
 impl Hashable for Transaction {
     fn hash(&self) -> H256 {
+//        return  H256::default();
         unimplemented!();
     }
 }
 
 /// An input of a transaction.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Hash, Clone)]
 struct Input {
     /// The hash of the transaction being referred to.
     hash: H256,
@@ -29,7 +30,7 @@ struct Input {
 
 /// An output of a transaction.
 // TODO: coinbase output (transaction fee). Maybe we don't need that in this case.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Hash, Clone)]
 struct Output {
     /// The amount of this output.
     value: u64,
@@ -37,7 +38,7 @@ struct Output {
     recipient: H256,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Hash, Clone)]
 struct Signature {
     pubkey: sign::PubKey,
     signature: sign::Signature,
