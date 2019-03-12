@@ -4,7 +4,7 @@ use crate::crypto::merkle::{MerkleTree};
 use super::{Block, Content};
 use super::header::Header;
 use std::collections::HashSet;
-use super::{transaction_block, proposer_block, voter_block};
+use super::{transaction, proposer, voter};
 
 extern crate rand; // 0.6.0
 use rand::{Rng};
@@ -40,13 +40,13 @@ impl Miner{
         let mut  content = vec![]; // m voter chains, 1 prop and 1 tx blocks
         /// Adding m different voter block contents
         for i in 0..m{
-            content.push(Content::Voter(voter_block::Content::new(i, self.voter_parent_hash[i as usize].clone(),
-                                                   self.unvoted_proposer_blocks[i as usize].clone())));
+            content.push(Content::Voter(voter::Content::new(i, self.voter_parent_hash[i as usize].clone(),
+                                                            self.unvoted_proposer_blocks[i as usize].clone())));
         }
         /// Adding proposer block content
-        content.push(Content::Proposer(proposer_block::Content::new(self.unreferenced_tx_blocks.clone(), self.unreferenced_prop_blocks.clone())));
+        content.push(Content::Proposer(proposer::Content::new(self.unreferenced_tx_blocks.clone(), self.unreferenced_prop_blocks.clone())));
         /// Adding transaction block content
-        content.push(Content::Transaction(transaction_block::Content::new(self.unconfirmed_txs.clone())));
+        content.push(Content::Transaction(transaction::Content::new(self.unconfirmed_txs.clone())));
         let content_merkle_tree = MerkleTree::new(&content);
 
         /// 2. Creating a header ///

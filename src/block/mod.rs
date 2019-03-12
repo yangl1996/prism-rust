@@ -1,9 +1,9 @@
 pub mod header;
-pub mod miner;
+pub mod pow_miner;
 pub mod validator;
-mod transaction_block;
-mod proposer_block;
-mod voter_block;
+mod transaction;
+mod proposer;
+mod voter;
 
 use crate::crypto::hash::{Hashable, H256};
 use crate::transaction::{Transaction};
@@ -68,9 +68,9 @@ impl std::fmt::Display for Block {
 /// type of the block.
 #[derive(Serialize, Deserialize, Debug, Hash, Clone)]
 pub enum Content {
-    Transaction(transaction_block::Content),
-    Proposer(proposer_block::Content),
-    Voter(voter_block::Content),
+    Transaction(transaction::Content),
+    Proposer(proposer::Content),
+    Voter(voter::Content),
 }
 
 // todo: This is a bad coding.

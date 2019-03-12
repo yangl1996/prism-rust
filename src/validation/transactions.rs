@@ -1,0 +1,3 @@
+/*
+Validation for blocks and transactions.
+*/
