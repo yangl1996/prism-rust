@@ -5,7 +5,7 @@ use crate::crypto::hash::{Hashable, H256};
 #[derive(Serialize, Deserialize, Clone, Debug, Hash)]
 // TODO: discuss. PartialEq and Default are removed for now
 pub struct Header{
-    /// Hash of the parent block.
+    /// Hash of the parent proposer block.
     pub parent_hash: H256,
     /// Block creation time.
     pub timestamp: u64,
@@ -16,14 +16,14 @@ pub struct Header{
     /// Extra content for debugging purposes.
     pub extra_content: Vec<u32>,
     /// Mining difficulty
-    pub difficulty: u64,
+    pub difficulty: [u8; 32],
     // TODO: discuss. Hash is removed for now. Do we need to "cache" the hash of a header?
 }
 
 impl Header{
     /// Create a new block header
     pub fn new(parent_hash: H256, timestamp: u64, nonce: u32, content_root: H256,
-               extra_content: Vec<u32>, difficulty: u64 ) -> Self{
+               extra_content: Vec<u32>, difficulty: [u8; 32] ) -> Self{
         Self{ parent_hash, timestamp, nonce, content_root, extra_content, difficulty}
     }
 

@@ -67,7 +67,7 @@ impl<'a, T: Hashable> MerkleTree<'a, T> {
         };
     }
 
-    fn root(&self) -> &H256 {
+    pub fn root(&self) -> &H256 {
         return &self.nodes[0];
     }
 
@@ -96,6 +96,12 @@ impl<'a, T: Hashable> MerkleTree<'a, T> {
         }
         return results;
     }
+
+    /// Returns the Merkle Proof of data at index i
+    pub fn get_proof_via_index(&self, index: u32)  -> Vec<&H256> {
+        return self.proof(&self.data[index as usize]);
+    }
+
 }
 
 #[cfg(test)]
