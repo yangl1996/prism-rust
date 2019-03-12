@@ -5,6 +5,8 @@ extern crate hex_literal;
 #[macro_use]
 extern crate clap;
 
-pub mod hash;
-pub mod merkle;
+pub mod crypto;
+pub mod transaction;
 pub mod network;
+pub mod block;
+pub mod state;
