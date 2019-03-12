@@ -1,4 +1,5 @@
 pub mod validators;
+pub mod memory_pool;
 
 use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::sign;
