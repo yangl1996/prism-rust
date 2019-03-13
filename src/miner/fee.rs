@@ -1,5 +1,5 @@
 use crate::transaction::Transaction;
-use crate::transaction::memory_pool::MemoryPool;
+use crate::miner::memory_pool::MemoryPool;
 
 /// Transaction fee calculator for memory pool
 pub trait MemoryPoolFeeCalculator {
