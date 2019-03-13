@@ -9,6 +9,8 @@ use super::{transaction, proposer, voter};
 extern crate rand; // 0.6.0
 use rand::{Rng};
 
+/// todo:   The miner should have access to the blockgraph?
+///         This class will be changed a lot once other parts are added
 pub struct Miner{
     /// Proposer block to mine on proposer tree
     proposer_parent_hash: H256,
@@ -17,25 +19,25 @@ pub struct Miner{
     /// Ideally Miner `actor' should have access to these three global data.
     /// Tx block content
     unconfirmed_txs: Vec<Transaction>, // todo: Should be replaced with tx-mem-pool
-    /// Proposer block content
+    /// Proposer block contents
     unreferenced_tx_blocks: Vec<H256>, // todo: Should be replaced with tx_block-mem-pool
     unreferenced_prop_blocks: Vec<H256>, // todo: Should be replaced with unreferenced prop_block-mem-pool
-    /// Voter block content. Each voter chain has a list of un voted proper blocks.
+    /// Voter block content. Each voter chain has its own list of un-voted proper blocks.
     unvoted_proposer_blocks: Vec<Vec<H256>> // todo: Should be replaced with un_voted_block pool
 }
+// todo: Implement default trait
 
 impl Miner{
-    // This function will be used when the miner is initialized or restarted
+    // This function will be used when the miner is restarted
     pub fn new(proposer_parent_hash: H256, voter_parent_hash: Vec<H256>, unconfirmed_txs: Vec<Transaction>,
                unreferenced_tx_blocks: Vec<H256>, unreferenced_prop_blocks: Vec<H256>, unvoted_proposer_blocks: Vec<Vec<H256>> ) ->Self{
         Self {proposer_parent_hash, voter_parent_hash, unconfirmed_txs, unreferenced_tx_blocks, unreferenced_prop_blocks, unvoted_proposer_blocks}
     }
 
-
     // todo: split the function into parts
     pub fn mine(&self) -> Block {
 
-        /// 1. Creating a merkle tree of m+2 contents ///
+        /// 1. Creating a merkle tree with m+2 contents ///
         let m =1000; // todo: Number of chains is fixed for now
         let mut  content = vec![]; // m voter chains, 1 prop and 1 tx blocks
         /// Adding m different voter block contents

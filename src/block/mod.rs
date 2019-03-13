@@ -1,6 +1,5 @@
 pub mod header;
-pub mod pow_miner;
-pub mod validator;
+pub mod miner;
 mod transaction;
 mod proposer;
 mod voter;
@@ -18,16 +17,11 @@ pub struct Block {
     /// The content of the block. It could contain transactions, references, or votes, depending on
     /// the block type.
     pub content: Content,
-    /// The sortition proof of the block.
+    /// The sortition proof of the content.  This 'connects' the content to the content root in the header.
     pub sortition_proof: Vec<H256>,
 }
 
 impl Block {
-    // TODO: discuss. Sortition is removed, as it seems to be the job of the miner/validator. If it is needed, we
-    // can easily add it. Also, we may not want to decide block type inside new(). It should
-    // have been known when calling new(), since we are supplying the content. Miner needs to
-    // decide block type, but it should reside within miner logic.
-
     /// Create a new block from scratch.
     pub fn new(parent: H256, timestamp: u64, nonce: u32, content_root: H256, sortition_proof: Vec<H256>,
                content: Content, extra_content: Vec<u32>, difficulty: [u8; 32]) -> Self {
@@ -41,20 +35,14 @@ impl Block {
 
     /// Create a new block from header.
     pub fn from_header(header: header::Header, sortition_proof: Vec<H256>, content: Content) -> Self {
-        Self {
-            header: header,
-            content: content,
-            sortition_proof: sortition_proof,
-        }
+        Self{header,content,sortition_proof}
     }
-
-
-
 }
 
 impl Hashable for Block {
     fn hash(&self)  -> H256 {
-        unimplemented!();
+        /// Hash of the header seals the block content and the sortition proof
+        return self.header.hash();
     }
 }
 
