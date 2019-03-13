@@ -1,6 +1,4 @@
 pub mod validators;
-pub mod memory_pool;
-pub mod fee;
 
 use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::sign;
@@ -11,9 +9,9 @@ use std::{fmt, cmp};
 /// of output coins.
 #[derive(Serialize, Deserialize, Default, Clone, Debug)]
 pub struct Transaction {
-    inputs: Vec<Input>,
-    outputs: Vec<Output>,
-    signatures: Vec<Signature>
+    pub inputs: Vec<Input>,
+    pub outputs: Vec<Output>,
+    pub signatures: Vec<Signature>
 }
 
 impl Hashable for Transaction {
@@ -27,9 +25,9 @@ impl Hashable for Transaction {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct Input {
     /// The hash of the transaction being referred to.
-    hash: H256,
+    pub hash: H256,
     /// The index of the output in question in that transaction.
-    index: u32
+    pub index: u32
 }
 
 /// An output of a transaction.
@@ -37,13 +35,13 @@ pub struct Input {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct Output {
     /// The amount of this output.
-    value: u64,
+    pub value: u64,
     /// The hash of the public key of the recipient (a.k.a. blockchain address).
-    recipient: H256,
+    pub recipient: H256,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-struct Signature {
+pub struct Signature {
     pubkey: sign::PubKey,
     signature: sign::Signature,
 }

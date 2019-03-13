@@ -7,7 +7,7 @@ use crate::crypto::hash::{Hashable, H256};
 use crate::transaction::{Transaction, Input, IndexedTransaction};
 use std::hash::{Hash, Hasher};
 use bincode::serialize;
-use crate::transaction::fee::MemoryPoolFeeCalculator;
+use crate::miner::fee::MemoryPoolFeeCalculator;
 
 /// Transactions memory pool
 #[derive(Debug)]
@@ -838,9 +838,9 @@ impl<'a> Iterator for MemoryPoolIterator<'a> {
 #[cfg(test)]
 pub mod tests {
     use super::MemoryPool;
-    use super::super::Transaction;
+    use crate::transaction::Transaction;
     use crate::crypto::hash::Hashable;
-    use crate::transaction::fee::{FeeIsOne, FeeIsZero};
+    use crate::miner::fee::{FeeIsOne, FeeIsZero};
 
     #[test]
     fn test_memory_pool_insert_empty_transaction() {
