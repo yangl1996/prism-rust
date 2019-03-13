@@ -26,10 +26,6 @@ impl Header{
                extra_content: Vec<u32>, difficulty: [u8; 32] ) -> Self{
         Self{ parent_hash, timestamp, nonce, content_root, extra_content, difficulty}
     }
-
-    // TODO: discuss. Mining-related logic are removed for now. Removed functions: set_nonce,
-    // compute_hash, check_difficulty. We will do this in the miner logic.
-
 }
 
 impl Hashable for Header{
