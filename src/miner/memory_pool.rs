@@ -1,3 +1,11 @@
+/** Memory pool that holds unconfirmed transactions. Miner picks transactions from memory pool.
+    Methods for memory pool:
+    new()
+    check_double_spend(transaction)
+    insert_verified(transaction) //we need to check_double_spend before insert, NOTE: how to check_double_spend in concurrency?
+    remove_by_hash //if a tx is confirmed, we remove it
+    remove_by_prevout //for all inputs of this tx, we also need to call remove_by_prevout
+    */
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -114,7 +122,7 @@ impl Storage {
         // remember that all inputs of this transaction are spent
         for input in &entry.transaction.inputs {
             let previous_tx = self.by_previous_output.insert(input.clone().into(), entry.hash.clone());
-            assert_eq!(previous_tx, None); // transaction must be verified before => no double spend
+            assert_eq!(previous_tx, None); // transaction must be verified before => no double spend TODO: Gerui: do we keep this?
         }
 
         // add to by_hash storage
@@ -307,19 +315,6 @@ impl MemoryPool {
             miner_fee: miner_fee,
         })
     }
-
-//    fn get_ancestors(&self, t: &Transaction) -> HashSet<H256> {
-//        let mut ancestors: HashSet<H256> = HashSet::new();
-//        let ancestors_entries = t.inputs.iter()
-//            .filter_map(|input| self.storage.get_by_hash(&input.hash));
-//        for ancestor_entry in ancestors_entries {
-//            ancestors.insert(ancestor_entry.hash.clone());
-//            for grand_ancestor in &ancestor_entry.ancestors {
-//                ancestors.insert(grand_ancestor.clone());
-//            }
-//        }
-//        ancestors
-//    }
 
     fn get_transaction_size(&self, t: &Transaction) -> usize {
         serialize(&t).unwrap().len()
