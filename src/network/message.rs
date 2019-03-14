@@ -13,6 +13,7 @@ pub fn handle_message(peer: &Peer, message: &Message) {
         Message::Ping(nonce) => {
             info!("Ping message from {}: {}", peer.addr, nonce);
             peer.write(&Message::Pong(nonce.to_string()));
+            peer.flush();
         },
         Message::Pong(nonce) => {
             info!("Pong message from {}: {}", peer.addr, nonce);
