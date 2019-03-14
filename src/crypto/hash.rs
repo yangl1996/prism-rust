@@ -8,7 +8,7 @@ pub trait Hashable {
 
 /// A SHA256 hash
 #[derive(Eq, Serialize, Deserialize, Clone, Debug, Hash, Default, Copy)]
-pub struct H256([u128; 2]); // big endian u256
+pub struct H256(pub [u128; 2]); // big endian u256
 
 
 impl Hashable for H256 {
