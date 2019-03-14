@@ -12,6 +12,7 @@ pub fn handle_message(peer: &Peer, message: &Message) {
     match message {
         Message::Ping(nonce) => {
             info!("Ping message from {}: {}", peer.addr, nonce);
+            peer.write(&Message::Pong(nonce.to_string()));
         },
         Message::Pong(nonce) => {
             info!("Pong message from {}: {}", peer.addr, nonce);
