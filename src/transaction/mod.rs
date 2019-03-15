@@ -14,7 +14,6 @@ pub struct Transaction {
 
 impl Hashable for Transaction {
     fn hash(&self) -> H256 {
-//        return  H256::default();
         unimplemented!();
     }
 }
