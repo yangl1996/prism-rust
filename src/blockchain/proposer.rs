@@ -32,12 +32,18 @@ impl ProposerNodeData {
         genesis.votes = number_of_voter_chains;
         return genesis;
     }
+
+    /// Returns effective number of permanent votes with 1 - epsilon guarantee
+    pub fn get_lcb_vote(&self, epsilon: f32) -> u16 { unimplemented!(); }
+
 }
 
 #[derive(Serialize, Deserialize, Clone, Ord, Eq, PartialEq, PartialOrd, Hash)]
 pub struct ProposerTree{
     /// Best proposer node on the tree chain -- The node with max level
     pub best_block: H256,
+    /// Best level
+    pub best_level: u32,
     /// Proposer nodes stored level wise
     pub prop_nodes: Vec< Vec<H256> >,
     /// Votes at each level
@@ -52,7 +58,7 @@ impl Default for ProposerTree {
         let prop_nodes :Vec< Vec<H256> > = vec![];
         let all_votes :Vec< Vec<H256> > = vec![];
         let leader_nodes :Vec<Option<H256>> = vec![];
-        return ProposerTree {best_block, prop_nodes, all_votes, leader_nodes};
+        return ProposerTree {best_block, best_level:0, prop_nodes, all_votes, leader_nodes};
     }
 }
 
@@ -63,6 +69,8 @@ impl ProposerTree{
             self.prop_nodes[level as usize].push(block);
         } else if self.prop_nodes.len() == (level - 1) as usize {
             self.prop_nodes[level as usize] = vec![block];
+            self.best_block = block;
+            self.best_level = level;
         } else{
             panic!("Proposer block mined at level without parent block at previous level")
         }
