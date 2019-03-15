@@ -134,18 +134,18 @@ impl BlockChain {
                 for prop_block in content.proposer_block_votes.iter() {
                     /// 3. Adding edge from voter block to proposer votees
                     self.graph.add_edge(block_hash, (*prop_block).clone(), Edge::VoterToProposerVote);
-                    /// 4. Incrementing the votes of the proposer block
+                    /// 4a. Incrementing the votes of the proposer block
                     let proposer_node_data: &NodeData = self.get_node_data(&prop_block);
                     if let NodeData::Proposer(mut node_data) = proposer_node_data {
                         node_data.votes += 1;
-                        /// 5. Adding the vote on proposer tree
+                        /// 4b. Adding the vote on proposer tree
                         self.proposer_tree.add_vote_at_level(block_hash, node_data.level);
                     }
                     else { panic!("Wrong!!") }
 
                 }
 
-                /// 4. Creating voter node data and updating the level of the parent.
+                /// 5a. Creating voter node data and updating the level of the parent.
                 let mut voter_node_data = VoterNodeData::default();
                 let parent_voter_node_data :&NodeData = self.get_node_data(&content.voter_parent_hash);
                 if let NodeData::Voter(node_data) = parent_voter_node_data {
@@ -154,9 +154,8 @@ impl BlockChain {
                     voter_node_data.status = node_data.status
                 }
                 else {panic!("The node data in a voter parent is not correct")};
-
-                /// 5. Adding node data
                 self.node_data.insert(block_hash, NodeData::Voter(voter_node_data));
+
                 /// 6. Updating the voter chain.
                 self.voter_chains[voter_node_data.chain_number as usize].update_voter_chain(
                     block_hash, content.voter_parent_hash, voter_node_data.level
@@ -172,5 +171,16 @@ impl BlockChain {
             Some(node) => { return node; }
             None => panic!("The parent block is not present in the hashmap"),
         }
+    }
+
+    /// Get the best blocks on each voter chain
+    pub fn get_voter_parents(&self) -> Vec<H256> {
+        let voter_parents: Vec<H256> = self.voter_chains.iter().map(|&x| x.best_block).collect();
+        return voter_parents;
+    }
+
+    /// Get the best block on proposer tree
+    pub fn get_proposer_parent(&self) -> H256 {
+        return self.proposer_tree.best_block;
     }
 }
