@@ -7,7 +7,6 @@ use super::status::*;
 use serde::{Serialize, Deserialize};
 use crate::crypto::hash::{H256};
 
-//#[derive(Clone)]
 #[derive(Serialize, Clone, PartialEq)]
 pub struct PropNode<'a>{
     /// Block Id
