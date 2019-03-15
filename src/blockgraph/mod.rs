@@ -45,9 +45,6 @@ impl<'a> BlockChainGraph<'a>{
 
     //todo: Add a restoration function. This requires DB.
 
-    pub fn get_number_of_voter_chains(&self) -> u32{
-        return self.voter_chains.len() as u32;
-    }
 
     /// Add a new block to the graph. This function is called when a new block is received.
     pub fn add_block_as_node(&mut self, block: Block){
@@ -71,7 +68,7 @@ impl<'a> BlockChainGraph<'a>{
 //                parent_prop_node.
 
 //              /// Add the tx block to the tx block pool
-//                self.tx_block_pool.add_node(tx_node); todo: Make this work. Lifetime issues
+//                self.tx_block_pool.add_node(tx_node); // todo: Make this work. Lifetime issues
             },
 
             Content::Proposer(c) => {
@@ -86,13 +83,22 @@ impl<'a> BlockChainGraph<'a>{
                 prop_node.level = parent_prop_node.level + 1;
 
 
+                /// Iterating through the list of proposition blocks referred in the content of the proposer block
+                for prop_block_hash in c.proposer_block_hashes.iter(){
+                    /// Extracting the reference of prop block corresponding to prop_block_hash
+                    let prop_node_referred :&PropNode = self.proposer_tree.get_prop_node_from_block_hash(&prop_block_hash);
+                    /// Adding an (ref) directed edge from prop_node to the prop_node_referred
+                    prop_node.add_prop_reference(prop_node_referred);
+//                    prop_node_referred.add_child_node(&prop_node); // todo: Make it work
+                }
+
                 /// Iterating through the list of transaction blocks referred in the content of the proposer block
                 for tx_block_hash in c.transaction_block_hashes.iter(){
                     /// Extracting the reference of tx block corresponding to tx_block_hash
                     let tx_node_referred :&TxNode = self.tx_block_pool.get_tx_node_from_block_hash(&tx_block_hash);
                     /// Adding an (ref) directed edge from prop_node to the tx_node_referred
                     prop_node.add_tx_reference(tx_node_referred);
-//                    prop_node_referred.add_child_node(&prop_node); // todo: Make it work
+//                    tx_node_referred.add_child_node(&prop_node); // todo: Make it work
                 }
 //                /// Add the prop_node to proposer tree
 //                self.proposer_tree.add_node(prop_node); todo: Make this work. Lifetime issues
