@@ -24,7 +24,7 @@ pub struct Block {
 impl Block {
     /// Create a new block from scratch.
     pub fn new(parent: H256, timestamp: u64, nonce: u32, content_root: H256, sortition_proof: Vec<H256>,
-               content: Content, extra_content: Vec<u32>, difficulty: [u8; 32]) -> Self {
+               content: Content, extra_content: [u8; 32], difficulty: [u8; 32]) -> Self {
         let header = header::Header::new(parent, timestamp, nonce, content_root, extra_content, difficulty);
         Self {
             header: header,

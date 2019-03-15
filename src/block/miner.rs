@@ -55,7 +55,7 @@ impl Miner{
         let timestamp: u64 = 0;
         let nonce: u32 = 0;
         let content_root = *content_merkle_tree.root();
-        let extra_content = vec![]; // Add miner id?
+        let extra_content :[u8; 32] = [0; 32]; // Add miner id?
         let difficulty :[u8; 32] = [0; 32] ; // todo:This should be proposer_parent's difficulty
         let mut header = Header::new(self.proposer_parent_hash, timestamp , nonce, content_root, extra_content, difficulty);
 
