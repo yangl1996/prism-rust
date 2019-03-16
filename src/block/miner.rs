@@ -75,8 +75,8 @@ impl Miner{
         };
 
         /// 4. Creating a block
-        let sortition_proof: Vec<H256> = content_merkle_tree.get_proof_via_index(sortition_id).iter().map(|&x| *x).collect();
-        let mined_block = Block::from_header(header, sortition_proof, content[sortition_id as usize].clone());
+        let sortition_proof: Vec<H256> = content_merkle_tree.get_proof_from_index(sortition_id).iter().map(|&x| *x).collect();
+        let mined_block = Block::from_header(header, content[sortition_id as usize].clone(),  sortition_proof);
         return mined_block;
     }
 

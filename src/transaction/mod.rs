@@ -7,38 +7,40 @@ use crate::crypto::sign;
 /// of output coins.
 #[derive(Serialize, Deserialize, Debug, Hash, Clone)]
 pub struct Transaction {
-    input: Vec<Input>,
-    output: Vec<Output>,
-    signatures: Vec<Signature>
+    pub input: Vec<Input>,
+    pub output: Vec<Output>,
+    pub signatures: Vec<Signature>
 }
 
 impl Hashable for Transaction {
     fn hash(&self) -> H256 {
-        unimplemented!();
+        let serialized = bincode::serialize(self).unwrap();
+        let digest = ring::digest::digest(&ring::digest::SHA256, &serialized);
+        return digest.into();
     }
 }
 
 /// An input of a transaction.
 #[derive(Serialize, Deserialize, Debug, Hash, Clone)]
-struct Input {
+pub struct Input {
     /// The hash of the transaction being referred to.
-    hash: H256,
+    pub hash: H256,
     /// The index of the output in question in that transaction.
-    index: u32
+    pub index: u32
 }
 
 /// An output of a transaction.
 // TODO: coinbase output (transaction fee). Maybe we don't need that in this case.
 #[derive(Serialize, Deserialize, Debug, Hash, Clone)]
-struct Output {
+pub struct Output {
     /// The amount of this output.
-    value: u64,
+    pub value: u64,
     /// The hash of the public key of the recipient (a.k.a. blockchain address).
-    recipient: H256,
+    pub recipient: H256,
 }
 
 #[derive(Serialize, Deserialize, Debug, Hash, Clone)]
-struct Signature {
-    pubkey: sign::PubKey,
-    signature: sign::Signature,
+pub struct Signature {
+    pub pubkey: sign::PubKey,
+    pub signature: sign::Signature,
 }

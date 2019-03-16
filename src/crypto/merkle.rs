@@ -7,10 +7,17 @@ pub struct MerkleTree<'a, T: Hashable> {
     nodes: Vec<H256>,
 }
 
+//todo : Add proof check function
 impl<'a, T: Hashable> MerkleTree<'a, T> {
     pub fn new(data: &'a [T]) -> Self {
         // calculate the size of the tree
         let mut this_layer_size = data.len();
+
+        // todo: Added by Vivek. Lei check this
+        // What default behaviour do we want?
+        if this_layer_size == 0 {
+            return Self {data: data, nodes: vec![]};
+        }
         let mut layer_size = vec![]; // size after dup
         let mut data_size = vec![]; // size before dup
         loop {
@@ -71,6 +78,7 @@ impl<'a, T: Hashable> MerkleTree<'a, T> {
         return &self.nodes[0];
     }
 
+    //  todo: Lei: This should  return Vec<H256>
     fn proof(&self, data: &T) -> Vec<&H256> {
         let mut results = vec![];
         let data_index = self
@@ -98,7 +106,8 @@ impl<'a, T: Hashable> MerkleTree<'a, T> {
     }
 
     /// Returns the Merkle Proof of data at index i
-    pub fn get_proof_via_index(&self, index: u32)  -> Vec<&H256> {
+    /// todo: Lei check this
+    pub fn get_proof_from_index(&self, index: u32)  -> Vec<&H256> {
         return self.proof(&self.data[index as usize]);
     }
 
