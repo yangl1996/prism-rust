@@ -63,7 +63,7 @@ mod tests {
     fn hash_should_be() -> H256 {
         let header_hash_should_be = (&hex!("db7136134bbb9df6fbc46a43e0d27a42d11d460f74d0f57ce6ddbfaf96e386db")).into(); // Calculated on Mar 15, 2019
         return header_hash_should_be;
-    }
+    }   
 
     ///The hash should match
     #[test]
