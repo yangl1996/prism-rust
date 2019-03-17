@@ -47,7 +47,7 @@ mod tests {
 
 
     ///The hash should match
-//    #[test]
+    #[test]
     fn test_hash() {
         let mut header = test_util::sample_header();
         let header_hash_should_be = test_util::sample_header_hash_should_be();
@@ -55,7 +55,7 @@ mod tests {
     }
 
     /// Any changes to the header should change the hash value.
-//    #[test]
+    #[test]
     fn fake_parent(){
         let mut header = test_util::sample_header();
         let header_hash_should_be = test_util::sample_header_hash_should_be();
@@ -65,7 +65,7 @@ mod tests {
         assert_ne!(header.hash(), header_hash_should_be);
     }
 
-//    #[test]
+    #[test]
     fn fake_timestamp(){
         let mut header = test_util::sample_header();
         let header_hash_should_be = test_util::sample_header_hash_should_be();
@@ -74,7 +74,7 @@ mod tests {
         assert_ne!(header.hash(), header_hash_should_be);
     }
 
-//    #[test]
+    #[test]
     fn fake_nonce(){
         let mut header = test_util::sample_header();
         let header_hash_should_be = test_util::sample_header_hash_should_be();
@@ -83,7 +83,7 @@ mod tests {
         assert_ne!(header.hash(), header_hash_should_be);
     }
 
-//    #[test]
+    #[test]
     fn fake_content_root(){
         let mut header = test_util::sample_header();
         let header_hash_should_be = test_util::sample_header_hash_should_be();
@@ -93,7 +93,7 @@ mod tests {
         assert_ne!(header.hash(), header_hash_should_be);
     }
 
-//    #[test]
+    #[test]
     fn fake_extra_content(){
         let mut header = test_util::sample_header();
         let header_hash_should_be = test_util::sample_header_hash_should_be();
@@ -102,7 +102,7 @@ mod tests {
         assert_ne!(header.hash(), header_hash_should_be);
     }
 
-//    #[test]
+    #[test]
     fn fake_difficulty(){
         let mut header = test_util::sample_header();
         let header_hash_should_be = test_util::sample_header_hash_should_be();

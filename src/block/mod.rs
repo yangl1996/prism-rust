@@ -4,7 +4,7 @@ mod transaction;
 mod proposer;
 mod voter;
 mod test_util;
-mod generator;
+
 use crate::crypto::hash::{Hashable, H256};
 
 /// A block in the Prism blockchain.
@@ -34,7 +34,7 @@ impl Block {
     }
 
     /// Create a new block from header.
-    pub fn from_header(header: header::Header, content: Content, sortition_proof: Vec<H256>) -> Self {
+    pub fn from_header(header: header::Header, content: Content,  sortition_proof: Vec<H256>) -> Self {
         Self{header,content,sortition_proof}
     }
 }
@@ -78,44 +78,41 @@ impl Hashable for Content {
 mod tests {
     use crate::crypto::hash::{Hashable};
     use super::test_util;
-    use super::generator;
-
-//    #[test]
+    use rand::{Rng, RngCore};
+    #[test]
     fn check_transaction_content_hash(){
         let transaction_content = test_util::sample_transaction_content();
         let transaction_content_hash_shouldbe = test_util::sample_transaction_content_hash_shouldbe();
         assert_eq!(transaction_content.hash(), transaction_content_hash_shouldbe);
     }
 
-//    #[test]
+    #[test]
     fn check_proposer_content_hash(){
         let proposer_content = test_util::sample_proposer_content1();
         let proposer_content_hash_shouldbe = test_util::sample_proposer_content1_hash_shouldbe();
         assert_eq!(proposer_content.hash(), proposer_content_hash_shouldbe);
     }
 
-//    #[test]
+    #[test]
     fn check_voter_content_hash(){
         let voter_content = test_util::sample_voter_content();
         let voter_content_hash_shouldbe = test_util::sample_voter_content1_hash_shouldbe();
         assert_eq!(voter_content.hash(), voter_content_hash_shouldbe);
     }
 
-//    #[test] // This is a generic block hash test
-    fn check_transaction_block_hash(){
-        let transaction_block = test_util::sample_transaction_block();
+    #[test]
+    fn check_block_hash(){
+        let transaction_block = test_util::sample_transaction_block(); // Arbitrarily choosing tx block
         let transaction_block_hash_shouldbe = test_util::sample_header_hash_should_be();
         assert_eq!(transaction_block.hash(), transaction_block_hash_shouldbe);
     }
 
-//    #[test]
-    fn block_sortition_proof(){
-        let index: u32  = 5; // todo: Make this random
-        let block = test_util::sample_mined_block(5);
-        // todo: Check the sortition proof.
-    }
     #[test]
-    fn test(){
-        generator::header();
+    fn block_sortition_proof(){
+        let mut rng = rand::thread_rng();
+        let index =  rng.gen_range(0, 101);
+        let block = test_util::sample_mined_block(5);
+        // todo: Verify the sortition proof.
     }
+
 }
