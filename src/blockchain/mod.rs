@@ -186,3 +186,31 @@ impl BlockChain {
 }
 
 
+#[cfg(test)]
+mod tests {
+    use crate::crypto::hash::{H256};
+    use super::*;
+    use rand::{Rng, RngCore};
+    
+    #[test]
+    fn blockchain_initialization(){
+        let mut rng = rand::thread_rng();
+        let number_of_chains = 100;
+        let blockchain = BlockChain::new(number_of_chains);
+
+        /// Checking proposer tree's genesis block hash
+        let proposer_genesis_hash_shouldbe: [u8; 32]   = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]; /// Hash vector of proposer genesis block. todo: Shift to a global config  file
+        let proposer_genesis_hash_shouldbe: H256 = (&proposer_genesis_hash_shouldbe).into();
+        assert_eq!(proposer_genesis_hash_shouldbe, blockchain.proposer_tree.best_block);
+
+        /// Checking all voter tree's genesis block hash
+        for chain_number in 0..number_of_chains{
+            let b1 = ((chain_number+1) >> 8) as u8;
+            let b2 = (chain_number+1) as u8;
+            let voter_genesis_hash_shouldbe: [u8; 32]   = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,b1,b2];/// Hash vector of voter genesis block. todo: Shift to a global config  file
+            let voter_genesis_hash_shouldbe: H256 = (&voter_genesis_hash_shouldbe).into();
+            assert_eq!(voter_genesis_hash_shouldbe, blockchain.voter_chains[chain_number as usize].best_block);
+        }
+    }
+
+}

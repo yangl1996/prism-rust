@@ -18,6 +18,14 @@ impl Default for ProposerNodeData {
     }
 }
 
+impl std::fmt::Display for ProposerNodeData {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "level: {}; #votes: {}", self.level, self.votes)?; // Ignoring status for now
+        Ok(())
+    }
+}
+
+
 #[derive(Serialize, Deserialize, Clone, Copy, Ord, Eq, PartialEq, PartialOrd, Hash)]
 pub enum PropBlockLeaderStatus{
     ConfirmedLeader,
@@ -49,7 +57,7 @@ pub struct ProposerTree{
     /// Votes at each level
     pub all_votes: Vec< Vec<H256> >,
     /// Leader nodes
-    pub leader_nodes : Vec<Option<H256>>
+    pub leader_nodes : Vec<Option<H256>> // functionality not implemented
 }
 
 impl Default for ProposerTree {
@@ -85,5 +93,12 @@ impl ProposerTree{
         } else{
             panic!("Proposer block mined at level without parent block at previous level")
         }
+    }
+}
+impl std::fmt::Display for ProposerTree {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "best_block: {}; best_level: {};",
+               self.best_block, self.best_level)?; // Ignoring status for now
+        Ok(())
     }
 }
