@@ -324,29 +324,5 @@ pub mod tests {
         assert_eq!(pool.get_n_transactions_ids(25).len(), 20);
 
     }
-//
-//    fn empty_tx() -> Transaction {
-//        Transaction { inputs: vec![], outputs: vec![], signatures: vec![]}
-//    }
-//
-//    fn default_tx() -> Transaction {
-//        Transaction {
-//            inputs: vec![Input{ hash: H256([0u128;2]), index: 0}],
-//            outputs: vec![Output{ value: 2, recipient: H256([1u128;2])}],
-//            signatures: vec![]}
-//    }
-//
-//    fn fake_tx(input: H256) -> Transaction {
-//        Transaction {
-//            inputs: vec![Input{ hash: input, index: 0}],
-//            outputs: vec![Output{ value: 2, recipient: H256([3u128;2])}],
-//            signatures: vec![]}
-//    }
-//
-//    fn fake2_tx(input: H256) -> Transaction {
-//        Transaction {
-//            inputs: vec![Input{ hash: input, index: 0}],
-//            outputs: vec![Output{ value: 2, recipient: H256([4u128;2])}],
-//            signatures: vec![]}
-//    }
+
 }
