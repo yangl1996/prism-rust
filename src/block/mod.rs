@@ -4,7 +4,7 @@ mod transaction;
 mod proposer;
 mod voter;
 mod test_util;
-
+mod generator;
 use crate::crypto::hash::{Hashable, H256};
 
 /// A block in the Prism blockchain.
@@ -78,41 +78,44 @@ impl Hashable for Content {
 mod tests {
     use crate::crypto::hash::{Hashable};
     use super::test_util;
+    use super::generator;
 
-    #[test]
+//    #[test]
     fn check_transaction_content_hash(){
         let transaction_content = test_util::sample_transaction_content();
         let transaction_content_hash_shouldbe = test_util::sample_transaction_content_hash_shouldbe();
         assert_eq!(transaction_content.hash(), transaction_content_hash_shouldbe);
     }
 
-
-    #[test]
+//    #[test]
     fn check_proposer_content_hash(){
         let proposer_content = test_util::sample_proposer_content1();
         let proposer_content_hash_shouldbe = test_util::sample_proposer_content1_hash_shouldbe();
         assert_eq!(proposer_content.hash(), proposer_content_hash_shouldbe);
     }
 
-    #[test]
+//    #[test]
     fn check_voter_content_hash(){
         let voter_content = test_util::sample_voter_content();
         let voter_content_hash_shouldbe = test_util::sample_voter_content1_hash_shouldbe();
         assert_eq!(voter_content.hash(), voter_content_hash_shouldbe);
     }
 
-
-    #[test] // This is a generic block hash test
+//    #[test] // This is a generic block hash test
     fn check_transaction_block_hash(){
         let transaction_block = test_util::sample_transaction_block();
         let transaction_block_hash_shouldbe = test_util::sample_header_hash_should_be();
         assert_eq!(transaction_block.hash(), transaction_block_hash_shouldbe);
     }
 
-    #[test]
+//    #[test]
     fn block_sortition_proof(){
         let index: u32  = 5; // todo: Make this random
         let block = test_util::sample_mined_block(5);
         // todo: Check the sortition proof.
+    }
+    #[test]
+    fn test(){
+        generator::header();
     }
 }

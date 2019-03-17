@@ -65,7 +65,7 @@ mod tests {
         assert_ne!(header.hash(), header_hash_should_be);
     }
 
-//    #[test]s
+//    #[test]
     fn fake_timestamp(){
         let mut header = test_util::sample_header();
         let header_hash_should_be = test_util::sample_header_hash_should_be();
