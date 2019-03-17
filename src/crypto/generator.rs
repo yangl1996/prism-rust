@@ -4,8 +4,6 @@ It randomly generates objects of the given class
 use super::hash::{Hashable, H256};
 use super::merkle::{MerkleTree};
 use rand::{Rng, RngCore};
-type rgen = rand::prelude::ThreadRng;
-
 
 // todo:: Correct this
 //pub fn merkle_tree(size: u32) -> MerkleTree {
