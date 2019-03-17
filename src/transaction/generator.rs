@@ -4,7 +4,6 @@ It randomly generates objects of the given class
 use crate::crypto::generator as crypto_generator;
 use super::{Transaction,  Input, Output, Signature};
 use rand::{Rng, RngCore};
-type rgen = rand::prelude::ThreadRng;
 
 
 pub fn transaction()  -> Transaction {

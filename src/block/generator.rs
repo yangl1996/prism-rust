@@ -14,7 +14,6 @@ use crate::crypto::generator as crypto_generator;
 use crate::transaction::generator as tx_generator;
 use crate::transaction::{Transaction,  Input, Output, Signature};
 use rand::{Rng, RngCore};
-type rgen = rand::prelude::ThreadRng;
 
 
 pub fn header() -> Header {
