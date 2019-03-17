@@ -29,6 +29,14 @@ impl Default for VoterNodeData {
     }
 }
 
+
+impl std::fmt::Display for VoterNodeData {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "CN: {}; level: {}", self.chain_number, self.level)?; // Ignoring status for now
+        Ok(())
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Copy, Ord, Eq, PartialEq, PartialOrd, Hash)]
 pub enum VoterBlockStatus{
     OnMainChain,
@@ -73,3 +81,12 @@ impl VoterChain{
         }
     }
 }
+
+impl std::fmt::Display for VoterChain {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "CN: {}; best_block: {}; best_level: {}",
+               self.chain_number, self.best_block, self.best_level)?; // Ignoring status for now
+        Ok(())
+    }
+}
+
