@@ -8,10 +8,10 @@ use rand::{Rng, RngCore};
 
 pub fn transaction()  -> Transaction {
     let mut rng = rand::thread_rng();
-    let input_size =  rng.gen_range(1, 5);
-    let input :Vec<Input> = (0..input_size).map(|_| tx_input()).collect();
-    let output_size =  rng.gen_range(1, 5);
-    let output :Vec<Output> = (0..output_size).map(|_| tx_output()).collect();
+    let input_number =  rng.gen_range(1, 5);
+    let input :Vec<Input> = (0..input_number).map(|_| tx_input()).collect();
+    let output_number =  rng.gen_range(1, 5);
+    let output :Vec<Output> = (0..output_number).map(|_| tx_output()).collect();
     let signatures: Vec<Signature> = vec![]; // todo: Add signatures
     return Transaction {input, output, signatures};
 }
