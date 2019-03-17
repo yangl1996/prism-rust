@@ -15,7 +15,7 @@ use crate::crypto::hash::{Hashable, H256};
 use crate::transaction::{Transaction, Input, IndexedTransaction};
 use std::hash::{Hash, Hasher};
 use bincode::serialize;
-use crate::miner::fee::MemoryPoolFeeCalculator;
+use rand::Rng;
 
 /// Transactions memory pool
 #[derive(Debug)]
@@ -59,29 +59,6 @@ pub struct Information {
     pub transactions_count: usize,
     /// Total number of bytes occupied by transactions from the `MemoryPool`
     pub transactions_size_in_bytes: usize,
-}
-
-
-/// Result of checking double spend with
-#[derive(Debug, PartialEq)]
-pub enum DoubleSpendCheckResult {
-    /// No double spend
-    NoDoubleSpend,
-    /// Input {self.1, self.2} of new transaction is already spent in previous final memory-pool transaction {self.0}
-    DoubleSpend(H256, H256, u32),
-    /// Some inputs of new transaction are already spent by non-final memory-pool transactions
-    NonFinalDoubleSpend(NonFinalDoubleSpendSet),
-}
-
-/// Set of transaction outputs, which can be replaced if newer transaction
-/// replaces non-final transaction in memory pool
-#[derive(Debug, PartialEq)]
-pub struct NonFinalDoubleSpendSet {
-    /// Double-spend outputs (outputs of newer transaction, which are also spent by nonfinal transactions of mempool)
-    pub double_spends: HashSet<HashedOutPoint>,
-    /// Outputs which also will be removed from memory pool in case of newer transaction insertion
-    /// (i.e. outputs of nonfinal transactions && their descendants)
-    pub dependent_spends: HashSet<HashedOutPoint>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -162,47 +139,14 @@ impl Storage {
             })
     }
 
-    pub fn check_double_spend(&self, transaction: &Transaction) -> DoubleSpendCheckResult {
-        let mut double_spends: HashSet<HashedOutPoint> = HashSet::new();
-        let mut dependent_spends: HashSet<HashedOutPoint> = HashSet::new();
-
+    pub fn is_double_spend(&self, transaction: &Transaction) -> bool {
         for input in &transaction.inputs {
-            // find transaction that spends the same output
-            let prevout: HashedOutPoint = input.clone().into();
-            if let Some(entry_hash) = self.by_previous_output.get(&prevout).cloned() {
-                // check if this is final transaction. If so, that's a potential double-spend error
-                let entry = self.by_hash.get(&entry_hash).expect("checked that it exists line above; qed");
-                if false {//entry.transaction.is_final() { we don't have is_final function
-                    return DoubleSpendCheckResult::DoubleSpend(entry_hash,	 prevout.out_point.hash, prevout.out_point.index);
-                }
-                // else remember this double spend
-                double_spends.insert(prevout.clone());
-                // and 'virtually' remove entry && all descendants from mempool
-                let mut queue: VecDeque<HashedOutPoint> = VecDeque::new();
-                queue.push_back(prevout);
-                while let Some(dependent_prevout) = queue.pop_front() {
-                    // if the same output is already spent with another in-pool transaction
-                    if let Some(dependent_entry_hash) = self.by_previous_output.get(&dependent_prevout).cloned() {
-                        let dependent_entry = self.by_hash.get(&dependent_entry_hash).expect("checked that it exists line above; qed");
-                        let dependent_outputs: Vec<_> = dependent_entry.transaction.outputs.iter().enumerate().map(|(idx, _)| Input {
-                            hash: dependent_entry_hash.clone(),
-                            index: idx as u32,
-                        }.into()).collect();
-                        dependent_spends.extend(dependent_outputs.clone());
-                        queue.extend(dependent_outputs);
-                    }
-                }
+            if self.is_output_spent(input) {
+                return true;
             }
         }
 
-        if double_spends.is_empty() {
-            DoubleSpendCheckResult::NoDoubleSpend
-        } else {
-            DoubleSpendCheckResult::NonFinalDoubleSpend(NonFinalDoubleSpendSet {
-                double_spends: double_spends,
-                dependent_spends: dependent_spends,
-            })
-        }
+        false
     }
 
     pub fn remove_by_prevout(&mut self, prevout: &Input) -> Option<Vec<IndexedTransaction>> {
@@ -228,6 +172,16 @@ impl Storage {
         self.by_hash.keys().cloned().collect()
     }
 
+    pub fn get_n_transactions_ids(&self, n: usize) -> Vec<H256> {
+        let ids: Vec<H256> = self.by_hash.keys().cloned().collect();
+        if ids.len() > n {
+            rand::seq::sample_slice(&mut rand::thread_rng(), &ids, n)
+        } else {
+            ids
+        }
+
+    }
+
 }
 
 impl Default for MemoryPool {
@@ -245,8 +199,8 @@ impl MemoryPool {
     }
 
     /// Insert verified transaction to the `MemoryPool`
-    pub fn insert_verified<FC: MemoryPoolFeeCalculator>(&mut self, t: IndexedTransaction, fc: &FC) {
-        if let Some(entry) = self.make_entry(t, fc) {
+    pub fn insert_verified(&mut self, t: IndexedTransaction) {
+        if let Some(entry) = self.make_entry(t) {
             self.storage.insert(entry);
         }
     }
@@ -258,8 +212,8 @@ impl MemoryPool {
     }
 
     /// Checks if `transaction` spends some outputs, already spent by inpool transactions.
-    pub fn check_double_spend(&self, transaction: &Transaction) -> DoubleSpendCheckResult {
-        self.storage.check_double_spend(transaction)
+    pub fn is_double_spend(&self, transaction: &Transaction) -> bool {
+        self.storage.is_double_spend(transaction)
     }
 
     /// Removes transaction (and all its descendants) which has spent given output
@@ -291,10 +245,12 @@ impl MemoryPool {
         }
     }
 
-    /// Returns TXIDs of all transactions in `MemoryPool` (as in GetRawMemPool RPC)
-    /// https://bitcoin.org/en/developer-reference#getrawmempool
     pub fn get_transactions_ids(&self) -> Vec<H256> {
         self.storage.get_transactions_ids()
+    }
+
+    pub fn get_n_transactions_ids(&self, n: usize) -> Vec<H256> {
+        self.storage.get_n_transactions_ids(n)
     }
 
     /// Returns true if output was spent
@@ -302,10 +258,10 @@ impl MemoryPool {
         self.storage.is_output_spent(prevout)
     }
 
-    fn make_entry<FC: MemoryPoolFeeCalculator>(&mut self, t: IndexedTransaction, fc: &FC) -> Option<Entry> {
+    fn make_entry(&mut self, t: IndexedTransaction) -> Option<Entry> {
         let size = self.get_transaction_size(&t.raw);
         let storage_index = self.get_storage_index();
-        let miner_fee = fc.calculate(self, &t.raw);
+        let miner_fee = 0;
 
         Some(Entry {
             transaction: t.raw,
@@ -333,66 +289,64 @@ pub mod tests {
     use crate::transaction::{Transaction, Input, Output};
     use crate::crypto::hash::{Hashable, H256};
     use crate::miner::fee::{FeeIsOne, FeeIsZero};
+    use crate::transaction::transaction_builder::TransactionBuilder;
 
     #[test]
     fn test_memory_pool_insert_one_transaction() {
         let mut pool = MemoryPool::new();
-        pool.insert_verified(default_tx().into(), &FeeIsZero);
+        pool.insert_verified(TransactionBuilder::random_transaction_builder().into());
         assert_eq!(pool.get_transactions_ids().len(), 1);
         let id = pool.get_transactions_ids()[0];
-        println!("{:?}", pool.get(&id));
-        println!("{:?}", (&id));
         pool.remove_by_hash(&id);
         assert_eq!(pool.get_transactions_ids().len(), 0);
-
     }
 
     #[test]
-    fn test_memory_pool_insert_two_transaction() {
+    fn test_memory_pool_doublespend_transaction() {
         let mut pool = MemoryPool::new();
-        pool.insert_verified(default_tx().into(), &FeeIsZero);
+        pool.insert_verified(TransactionBuilder::random_transaction_builder().into());
         assert_eq!(pool.get_transactions_ids().len(), 1);
         let id = pool.get_transactions_ids()[0];
-        pool.insert_verified(fake_tx(id.clone()).into(), &FeeIsZero);
-        println!("{:?}",pool.information());
+        pool.insert_verified(TransactionBuilder::random_transaction_builder().add_input(id, 0).into());
         assert_eq!(pool.get_transactions_ids().len(), 2);
-
+        let tx: Transaction = TransactionBuilder::random_transaction_builder().add_input(id, 0).into();
+        assert_eq!(pool.is_double_spend(&tx), true);
     }
 
     #[test]
-    fn test_memory_pool_insert_doublespend_transaction() {//should fail
+    fn test_memory_pool_insert_multiple_transaction() {
         let mut pool = MemoryPool::new();
-        pool.insert_verified(default_tx().into(), &FeeIsZero);
-        assert_eq!(pool.get_transactions_ids().len(), 1);
-        let id = pool.get_transactions_ids()[0];
-        pool.insert_verified(fake_tx(id.clone()).into(), &FeeIsZero);
-        assert_eq!(pool.get_transactions_ids().len(), 2);
-        pool.insert_verified(fake2_tx(id.clone()).into(), &FeeIsZero);
+        for i in 0..20 {
+            pool.insert_verified(TransactionBuilder::random_transaction_builder().into());
+        }
+        assert_eq!(pool.get_transactions_ids().len(), 20);
+        assert_eq!(pool.get_n_transactions_ids(15).len(), 15);
+        assert_eq!(pool.get_n_transactions_ids(25).len(), 20);
 
     }
-
-    fn empty_tx() -> Transaction {
-        Transaction { inputs: vec![], outputs: vec![], signatures: vec![]}
-    }
-
-    fn default_tx() -> Transaction {
-        Transaction {
-            inputs: vec![Input{ hash: H256([0u128;2]), index: 0}],
-            outputs: vec![Output{ value: 2, recipient: H256([1u128;2])}],
-            signatures: vec![]}
-    }
-
-    fn fake_tx(input: H256) -> Transaction {
-        Transaction {
-            inputs: vec![Input{ hash: input, index: 0}],
-            outputs: vec![Output{ value: 2, recipient: H256([3u128;2])}],
-            signatures: vec![]}
-    }
-
-    fn fake2_tx(input: H256) -> Transaction {
-        Transaction {
-            inputs: vec![Input{ hash: input, index: 0}],
-            outputs: vec![Output{ value: 2, recipient: H256([4u128;2])}],
-            signatures: vec![]}
-    }
+//
+//    fn empty_tx() -> Transaction {
+//        Transaction { inputs: vec![], outputs: vec![], signatures: vec![]}
+//    }
+//
+//    fn default_tx() -> Transaction {
+//        Transaction {
+//            inputs: vec![Input{ hash: H256([0u128;2]), index: 0}],
+//            outputs: vec![Output{ value: 2, recipient: H256([1u128;2])}],
+//            signatures: vec![]}
+//    }
+//
+//    fn fake_tx(input: H256) -> Transaction {
+//        Transaction {
+//            inputs: vec![Input{ hash: input, index: 0}],
+//            outputs: vec![Output{ value: 2, recipient: H256([3u128;2])}],
+//            signatures: vec![]}
+//    }
+//
+//    fn fake2_tx(input: H256) -> Transaction {
+//        Transaction {
+//            inputs: vec![Input{ hash: input, index: 0}],
+//            outputs: vec![Output{ value: 2, recipient: H256([4u128;2])}],
+//            signatures: vec![]}
+//    }
 }

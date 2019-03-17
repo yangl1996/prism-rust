@@ -1,4 +1,5 @@
 pub mod validators;
+pub mod transaction_builder;
 
 use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::sign;
@@ -16,8 +17,7 @@ pub struct Transaction {
 
 impl Hashable for Transaction {
     fn hash(&self) -> H256 {
-        //don't know if this is right?
-        return ring::digest::digest(&ring::digest::SHA256, &serialize(self).unwrap()[..]).into();
+        return ring::digest::digest(&ring::digest::SHA256, &serialize(self).unwrap()).into();
     }
 }
 
@@ -83,3 +83,4 @@ impl cmp::PartialEq for IndexedTransaction {
         self.hash == other.hash
     }
 }
+
