@@ -69,7 +69,7 @@ impl VoterChain{
             panic!("A new longer fork has emerged");
         }
         // A side_chain block mined.
-        else if self.best_level < (level +1) {
+        else if self.best_level <= (level +1) {
             // Do nothing.
         }
         // Rollback required
