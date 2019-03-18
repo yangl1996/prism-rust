@@ -12,7 +12,6 @@ use petgraph::{Directed, Undirected, graph::NodeIndex};
 use petgraph::graphmap::GraphMap;
 
 
-
 #[derive(Serialize, Deserialize, Clone, Copy, Ord, Eq, PartialEq, PartialOrd, Hash)]
 pub enum NodeData{
     Proposer(ProposerNodeData),
@@ -190,27 +189,62 @@ impl BlockChain {
 mod tests {
     use crate::crypto::hash::{H256};
     use super::*;
+    use crate::block::generator as block_generator;
+    use crate::block::{Block};
     use rand::{Rng, RngCore};
-    
-    #[test]
+
+    // At initialization the blockchain only consists of (m+1) genesis blocks.
+    // The hash of these genesis nodes in the blockchain graph are fixed for now
+    // because we have designed the genesis blocks themselves.
+//    #[test]
     fn blockchain_initialization(){
-        let mut rng = rand::thread_rng();
-        let number_of_chains = 100;
-        let blockchain = BlockChain::new(number_of_chains);
+        let blockchain = BlockChain::new(10);
 
         /// Checking proposer tree's genesis block hash
         let proposer_genesis_hash_shouldbe: [u8; 32]   = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]; /// Hash vector of proposer genesis block. todo: Shift to a global config  file
         let proposer_genesis_hash_shouldbe: H256 = (&proposer_genesis_hash_shouldbe).into();
         assert_eq!(proposer_genesis_hash_shouldbe, blockchain.proposer_tree.best_block);
 
-        /// Checking all voter tree's genesis block hash
-        for chain_number in 0..number_of_chains{
+        /// Checking all voter tree's genesis block hashes
+        for chain_number in 0..10{
             let b1 = ((chain_number+1) >> 8) as u8;
             let b2 = (chain_number+1) as u8;
             let voter_genesis_hash_shouldbe: [u8; 32]   = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,b1,b2];/// Hash vector of voter genesis block. todo: Shift to a global config  file
             let voter_genesis_hash_shouldbe: H256 = (&voter_genesis_hash_shouldbe).into();
             assert_eq!(voter_genesis_hash_shouldbe, blockchain.voter_chains[chain_number as usize].best_block);
         }
+    }
+
+    #[test]
+    fn blockchain_proposer_tree_growth(){
+        let mut rng = rand::thread_rng();
+        let mut blockchain = BlockChain::new(10);
+
+        let mut prop_best_block :H256 = blockchain.proposer_tree.best_block;
+        let mut voter_best_blocks: Vec<H256> = (0..10).map( |i| blockchain.voter_chains[i].best_block).collect();
+
+        let mut tx_block_vec : Vec<Block> = vec![];
+        let mut unrefered_tx_block_index = 0;
+        let mut prop_block_vec : Vec<Block> = vec![];
+        let mut voter_block_vec : Vec<Vec<Block>> = vec![];
+        println!("Initialized blockchain");
+        println!("Step 1: Node count:{}",blockchain.graph.node_count());
+        /// Mine 5 tx block's with prop_best_block as the parent
+        let tx_block_5: Vec<Block> = block_generator::tx_blocks_with_parent_hash(5, prop_best_block);
+        tx_block_vec.extend(tx_block_5.iter().cloned());
+        unrefered_tx_block_index += 5;
+
+        /// Adding the tx blocks to blockchain
+        for i in 0..5{
+            blockchain.add_block_as_node(tx_block_5[i].clone());
+        }
+
+        println!("Added 5 tx blocks on prop parent {}", prop_best_block);
+        println!("Step 2: Node count:{}",blockchain.graph.node_count());
+
+        /// Generate a proposer block with prop_best_block as the parent which contains above  5 tx blocks
+        let mut prop_block_best1 = block_generator::prop_block1_with_parent_hash(
+            prop_best_block,  tx_block_5.iter().map( |x| x.hash()).collect());
     }
 
 }

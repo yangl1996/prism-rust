@@ -4,11 +4,12 @@ mod transaction;
 mod proposer;
 mod voter;
 mod test_util;
+pub mod generator;
 
 use crate::crypto::hash::{Hashable, H256};
 
 /// A block in the Prism blockchain.
-#[derive(Serialize, Deserialize, Debug, Hash)]
+#[derive(Serialize, Deserialize, Debug, Hash, Clone)]
 // TODO: discuss. I removed Default trait. It seems that the only place that it will be needed is in tests, to
 // quickly generate some fake blocks. PartialEq is also removed for now
 pub struct Block {
