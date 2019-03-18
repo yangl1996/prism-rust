@@ -1,10 +1,12 @@
 /** Memory pool that holds unconfirmed transactions. Miner picks transactions from memory pool.
     Methods for memory pool:
     new()
-    check_double_spend(transaction)
+    is_double_spend(transaction)
     insert_verified(transaction) //we need to check_double_spend before insert, NOTE: how to check_double_spend in concurrency?
     remove_by_hash //if a tx is confirmed, we remove it
     remove_by_prevout //for all inputs of this tx, we also need to call remove_by_prevout
+    get_n_transactions(n) //get n transactions
+    get_n_transactions_ids(n) //just hash of transactions
     */
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -182,6 +184,17 @@ impl Storage {
 
     }
 
+    pub fn get_n_transactions(&self, n: usize) -> Vec<Transaction> {
+        let ids: Vec<H256> = self.by_hash.keys().cloned().collect();
+        let rids =
+            if ids.len() > n {
+                rand::seq::sample_slice(&mut rand::thread_rng(), &ids, n)
+            } else {
+                ids
+            };
+        rids.iter().map(|id|self.read_by_hash(id).unwrap().clone()).collect()
+    }
+
 }
 
 impl Default for MemoryPool {
@@ -253,6 +266,10 @@ impl MemoryPool {
         self.storage.get_n_transactions_ids(n)
     }
 
+    pub fn get_n_transactions(&self, n: usize) -> Vec<Transaction> {
+        self.storage.get_n_transactions(n)
+    }
+
     /// Returns true if output was spent
     pub fn is_spent(&self, prevout: &Input) -> bool {
         self.storage.is_output_spent(prevout)
@@ -322,7 +339,8 @@ pub mod tests {
         assert_eq!(pool.get_transactions_ids().len(), 20);
         assert_eq!(pool.get_n_transactions_ids(15).len(), 15);
         assert_eq!(pool.get_n_transactions_ids(25).len(), 20);
-
+        assert_eq!(pool.get_n_transactions(15).len(), 15);
+        assert_eq!(pool.get_n_transactions(25).len(), 20);
     }
 
 }
