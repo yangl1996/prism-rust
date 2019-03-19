@@ -10,8 +10,8 @@ use std::{fmt, cmp};
 /// of output coins.
 #[derive(Serialize, Deserialize, Default, Clone, Debug)]
 pub struct Transaction {
-    pub inputs: Vec<Input>,
-    pub outputs: Vec<Output>,
+    pub input: Vec<Input>,
+    pub output: Vec<Output>,
     pub signatures: Vec<Signature>
 }
 
