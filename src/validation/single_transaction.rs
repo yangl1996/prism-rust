@@ -38,7 +38,7 @@ impl TransactionValidator for AllValidator {
 pub mod tests {
     use super::{NonEmptyValidator, TransactionValidator};
     use crate::transaction::transaction_builder::TransactionBuilder;
-    use crate::validation::transaction::AllValidator;
+    use crate::validation::single_transaction::AllValidator;
 
     #[test]
     fn test_allvalidator() {
