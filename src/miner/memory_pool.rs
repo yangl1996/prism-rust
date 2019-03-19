@@ -99,7 +99,7 @@ impl Storage {
         self.transactions_size_in_bytes += entry.size;
 
         // remember that all inputs of this transaction are spent
-        for input in &entry.transaction.inputs {
+        for input in &entry.transaction.input {
             let previous_tx = self.by_previous_output.insert(input.clone().into(), entry.hash.clone());
             assert_eq!(previous_tx, None); // transaction must be verified before => no double spend TODO: Gerui: do we keep this?
         }
@@ -131,7 +131,7 @@ impl Storage {
                 self.transactions_size_in_bytes -= entry.size;
 
                 // forget that all inputs of this transaction are spent
-                for input in &entry.transaction.inputs {
+                for input in &entry.transaction.input {
                     let spent_in_tx = self.by_previous_output.remove(&input.clone().into())
                         .expect("by_spent_output is filled for each incoming transaction inputs; so the drained value should exist; qed");
                     assert_eq!(&spent_in_tx, h);
@@ -142,7 +142,7 @@ impl Storage {
     }
 
     pub fn is_double_spend(&self, transaction: &Transaction) -> bool {
-        for input in &transaction.inputs {
+        for input in &transaction.input {
             if self.is_output_spent(input) {
                 return true;
             }
@@ -159,7 +159,7 @@ impl Storage {
         while let Some(prevout) = queue.pop_front() {
             if let Some(entry_hash) = self.by_previous_output.get(&prevout.clone().into()).cloned() {
                 let entry = self.remove_by_hash(&entry_hash).expect("checked that it exists line above; qed");
-                queue.extend(entry.transaction.outputs.iter().enumerate().map(|(idx, _)| Input {
+                queue.extend(entry.transaction.output.iter().enumerate().map(|(idx, _)| Input {
                     hash: entry_hash.clone(),
                     index: idx as u32,
                 }));

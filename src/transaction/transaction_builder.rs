@@ -26,7 +26,7 @@ impl Into<IndexedTransaction> for TransactionBuilder {
 
 impl TransactionBuilder {
     pub fn add_output(mut self, value: u64, recipient: H256) -> TransactionBuilder {
-        self.transaction.outputs.push(Output {
+        self.transaction.output.push(Output {
             value: value,
             recipient: recipient,
         });
@@ -34,7 +34,7 @@ impl TransactionBuilder {
     }
 
     pub fn set_output(mut self, value: u64, recipient: H256) -> TransactionBuilder {
-        self.transaction.outputs = vec![Output {
+        self.transaction.output = vec![Output {
             value: value,
             recipient: recipient,
         }];
@@ -42,7 +42,7 @@ impl TransactionBuilder {
     }
 
     pub fn add_input(mut self, hash: H256, index: u32) -> TransactionBuilder {
-        self.transaction.inputs.push(Input {
+        self.transaction.input.push(Input {
             hash: hash,
             index: index,
         });
@@ -50,7 +50,7 @@ impl TransactionBuilder {
     }
 
     pub fn set_input(mut self, hash: H256, index: u32) -> TransactionBuilder {
-        self.transaction.inputs = vec![Input {
+        self.transaction.input = vec![Input {
             hash: hash,
             index: index,
         }];
