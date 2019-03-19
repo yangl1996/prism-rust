@@ -14,3 +14,4 @@ pub mod network;
 pub mod block;
 pub mod state;
 pub mod miner;
+pub mod validation;

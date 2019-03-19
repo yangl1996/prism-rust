@@ -1,4 +1,3 @@
-pub mod validators;
 pub mod transaction_builder;
 
 use crate::crypto::hash::{Hashable, H256};
