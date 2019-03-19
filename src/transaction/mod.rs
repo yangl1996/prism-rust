@@ -22,7 +22,7 @@ impl Hashable for Transaction {
 }
 
 /// An input of a transaction.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Input {
     /// The hash of the transaction being referred to.
     pub hash: H256,
@@ -32,7 +32,7 @@ pub struct Input {
 
 /// An output of a transaction.
 // TODO: coinbase output (transaction fee). Maybe we don't need that in this case.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Output {
     /// The amount of this output.
     pub value: u64,
@@ -40,7 +40,7 @@ pub struct Output {
     pub recipient: H256,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Hash)]
 pub struct Signature {
     pubkey: sign::PubKey,
     signature: sign::Signature,
@@ -52,22 +52,15 @@ pub struct IndexedTransaction {
     pub raw: Transaction,
 }
 
-impl From<&'static str> for Transaction {
-    fn from(s: &'static str) -> Self {
-        unimplemented!()
-        //deserialize(&s.from_hex::<Vec<u8>>().unwrap() as &[u8]).unwrap()
-    }
-}
-
-impl<T> From<T> for IndexedTransaction where Transaction: From<T> {
-    fn from(other: T) -> Self {
-        let tx = Transaction::from(other);
-        IndexedTransaction {
-            hash: tx.hash(),
-            raw: tx,
-        }
-    }
-}
+//impl<T> From<T> for IndexedTransaction where Transaction: From<T> {
+//    fn from(other: T) -> Self {
+//        let tx = Transaction::from(other);
+//        IndexedTransaction {
+//            hash: tx.hash(),
+//            raw: tx,
+//        }
+//    }
+//}
 
 impl IndexedTransaction {
     pub fn new(hash: H256, transaction: Transaction) -> Self {
