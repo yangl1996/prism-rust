@@ -4,7 +4,7 @@
     is_double_spend(transaction)
     insert_verified(transaction) //we need to check_double_spend before insert, NOTE: how to check_double_spend in concurrency?
     remove_by_hash //if a tx is confirmed, we remove it
-    remove_by_prevout //for all inputs of this tx, we also need to call remove_by_prevout
+    remove_by_prevout //for all inputs of this tx, we also need to call remove_by_prevout. to discuss: remove_by_prevout can replace remove_by_hash?
     get_n_transactions(n) //get n transactions
     get_n_transactions_hash(n) //just hash of transactions
     */
@@ -200,7 +200,7 @@ impl Default for MemoryPool {
 impl MemoryPool {
     /// Creates new memory pool
     pub fn new() -> Self {
-        MemoryPool::default()
+        Self::default()
     }
 
     /// Insert verified transaction to the `MemoryPool`
@@ -282,12 +282,12 @@ pub mod tests {
     use super::MemoryPool;
     use crate::transaction::{Transaction, Input, Output};
     use crate::crypto::hash::{Hashable, H256};
-    use crate::transaction::transaction_builder::TransactionBuilder;
+    use crate::transaction::generator;
 
     #[test]
     fn test_memory_pool_insert_one_transaction() {
         let mut pool = MemoryPool::new();
-        pool.insert_verified(TransactionBuilder::random_transaction_builder().into());
+        pool.insert_verified(generator::random_transaction_builder().into());
         assert_eq!(pool.get_transactions_hash().len(), 1);
         let h = pool.get_transactions_hash()[0];
         pool.remove_by_hash(&h);
@@ -297,13 +297,13 @@ pub mod tests {
     #[test]
     fn test_memory_pool_doublespend_transaction() {
         let mut pool = MemoryPool::new();
-        pool.insert_verified(TransactionBuilder::random_transaction_builder().into());
+        pool.insert_verified(generator::random_transaction_builder().into());
         assert_eq!(pool.get_transactions_hash().len(), 1);
         let h = pool.get_transactions_hash()[0];
-        let tx: Transaction = TransactionBuilder::random_transaction_builder().add_input(h, 0).into();
+        let tx: Transaction = generator::random_transaction_builder().add_input(h, 0).into();
         pool.insert_verified(tx.clone().into());
         assert_eq!(pool.get_transactions_hash().len(), 2);
-        let tx_2: Transaction = TransactionBuilder::random_transaction_builder().add_input(h, 0).into();
+        let tx_2: Transaction = generator::random_transaction_builder().add_input(h, 0).into();
         assert_eq!(pool.is_double_spend(&tx), true);
         assert_eq!(pool.is_double_spend(&tx_2), true);
     }
@@ -313,7 +313,7 @@ pub mod tests {
         let mut pool = MemoryPool::new();
         let mut v = vec![];
         for i in 0..20 {
-            let tx: Transaction = TransactionBuilder::random_transaction_builder().into();
+            let tx: Transaction = generator::random_transaction_builder().into();
             v.push(tx.hash());
             pool.insert_verified(tx.into());
         }

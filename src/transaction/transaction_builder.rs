@@ -57,17 +57,7 @@ impl TransactionBuilder {
         self
     }
 
-    pub fn random_transaction_builder() -> Self {
-        let mut tb = TransactionBuilder::default();
-        let mut rng = thread_rng();
-        for i in 0..rng.gen_range(1,5) {
-            tb = tb.add_input(generator::h256(), rng.gen_range(1,5));
-        }
-        for i in 0..rng.gen_range(1,5) {
-            tb = tb.add_output(rng.gen_range(100,200), generator::h256());
-        }
-        tb
-    }
+
 }
 
 #[cfg(test)]
@@ -83,9 +73,4 @@ pub mod tests {
         println!("{:?}",tb);
     }
 
-    #[test]
-    fn test_random_transaction_builder() {
-        let mut tb = TransactionBuilder::random_transaction_builder();
-        println!("{:?}",tb);
-    }
 }
