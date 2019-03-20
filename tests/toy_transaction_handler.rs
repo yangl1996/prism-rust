@@ -5,6 +5,7 @@ use prism::transaction::{generator as transaction_generator, Transaction, Indexe
 use prism::crypto::hash::Hashable;
 use std::sync::{Arc, RwLock};
 
+/// tests the integration of validator, mempool, and state. not a functional handler
 #[test]
 fn combine_validator_mempool_state() {
 
