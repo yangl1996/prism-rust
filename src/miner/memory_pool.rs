@@ -22,6 +22,8 @@ use rand::Rng;
 pub struct MemoryPool {
     /// Transactions storage
     storage: Storage,
+    //future: pending storage: txs whose input is in pool (or in pending?)
+    //future: orphan storage: txs whose input can't be found in utxo or pool
 }
 
 /// transactions storage
@@ -141,6 +143,7 @@ impl Storage {
     }
 
     pub fn remove_by_prevout(&mut self, prevout: &Input) -> Option<Vec<IndexedTransaction>> {
+        //use a deque to recursively remove, in case there are multi level dependency between txs.
         let mut queue: VecDeque<Input> = VecDeque::new();
         let mut removed: Vec<IndexedTransaction> = Vec::new();
         queue.push_back(prevout.clone());
