@@ -39,6 +39,10 @@ impl StateStorage {
             }
         }
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.by_transaction_hash.is_empty()
+    }
 }
 
 #[cfg(test)]
