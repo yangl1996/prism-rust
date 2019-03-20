@@ -15,11 +15,11 @@ fn combine_validator_mempool_state() {
     let validator = ValidatorCollection::new(
         vec![Box::new(NonEmptyValidator{}), Box::new(InputInStateValidator::new(state.clone()))]
     );
-    // we generate 50 toy transactions
+    // we generate 50 toy transactions, and validate, and insert to mempool
     for i in 0..50 {
         // unconfirmed transaction received
         let tx: Transaction = transaction_generator::random_transaction_builder().into();
-        // since now state is empty, we have to add fake states, which is tx.input
+        // since now state is empty, we have to add fake states, which is tx.input, you may comment this block and see that validator rejects these transactions
         {
             let mut state = state.write().unwrap();
             tx.input.iter().for_each(|input|state.insert(&input.hash, &input.index));
@@ -52,19 +52,17 @@ fn combine_validator_mempool_state() {
             };
         });
     }
-    // we remove the spent coins
+    // we remove the spent coins and we add transactions outputs to state
     {
         let mut state = state.write().unwrap();
+        // we remove the spent coins
         tx_to_mine.iter().for_each(|tx| tx.input.iter().for_each(|input|state.remove(&input.hash, &input.index)));
         // now state should be empty
         assert!(state.is_empty());
-    }
-
-    // then we add them to state
-    {
-        let mut state = state.write().unwrap();
+        // we add transactions outputs to state
         tx_to_mine.iter().for_each(|tx| state.add(tx));
     }
+
     //check these transactions are in the state
     {
         let state = state.read().unwrap();
