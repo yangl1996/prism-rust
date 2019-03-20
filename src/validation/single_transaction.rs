@@ -1,7 +1,10 @@
 /*
 Validation for blocks and transactions.
 */
-use crate::transaction::Transaction;
+use crate::transaction::{Transaction, Input};
+use crate::state::StateStorage;
+use std::sync::{RwLock, Arc};
+
 pub trait TransactionValidator {
     fn is_valid(&self, transaction: &Transaction) -> bool;
 }
@@ -14,12 +17,20 @@ impl TransactionValidator for NonEmptyValidator {
     }
 }
 
-pub struct SignatureValidator;
+pub struct InputInStateValidator {
+    state: Arc<RwLock<StateStorage>>,
+}
 
-impl TransactionValidator for SignatureValidator {
+impl TransactionValidator for InputInStateValidator {
     fn is_valid(&self, transaction: &Transaction) -> bool {
-        unimplemented!()
-        //transaction.input.len() == transaction.signatures.len()
+        let state = self.state.read().unwrap();
+        transaction.input.iter().all(|input|state.contains(&input.hash,&input.index))
+    }
+}
+
+impl InputInStateValidator {
+    pub fn new(state: Arc<RwLock<StateStorage>>) -> Self {
+        Self { state }
     }
 }
 
