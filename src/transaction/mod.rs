@@ -51,15 +51,14 @@ pub struct IndexedTransaction {
     pub raw: Transaction,
 }
 
-//impl<T> From<T> for IndexedTransaction where Transaction: From<T> {
-//    fn from(other: T) -> Self {
-//        let tx = Transaction::from(other);
-//        IndexedTransaction {
-//            hash: tx.hash(),
-//            raw: tx,
-//        }
-//    }
-//}
+impl From<Transaction> for IndexedTransaction {
+    fn from(tx: Transaction) -> Self {
+        IndexedTransaction {
+            hash: tx.hash(),
+            raw: tx,
+        }
+    }
+}
 
 impl IndexedTransaction {
     pub fn new(hash: H256, transaction: Transaction) -> Self {

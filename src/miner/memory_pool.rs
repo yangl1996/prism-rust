@@ -6,12 +6,10 @@
     remove_by_hash //if a tx is confirmed, we remove it
     remove_by_prevout //for all inputs of this tx, we also need to call remove_by_prevout
     get_n_transactions(n) //get n transactions
-    get_n_transactions_ids(n) //just hash of transactions
+    get_n_transactions_hash(n) //just hash of transactions
     */
-use std::cmp::Ordering;
 use std::collections::HashMap;
-use std::collections::HashSet;
-use std::collections::BTreeSet;
+use std::collections::BTreeMap;
 use std::collections::VecDeque;
 use crate::crypto::hash::{Hashable, H256};
 use crate::transaction::{Transaction, Input, IndexedTransaction};
@@ -31,12 +29,12 @@ pub struct MemoryPool {
 struct Storage {
     /// Throughout transactions counter
     counter: u64,
-    /// Total transactions size (when serialized) in bytes
-    transactions_size_in_bytes: usize,
     /// By-hash storage
     by_hash: HashMap<H256, Entry>,
     /// Transactions by previous output
     by_previous_output: HashMap<HashedOutPoint, H256>,
+    /// Storage for order by storage index, it is equivalent to FIFO
+    by_storage_index: BTreeMap<u64, H256>,
 }
 
 /// Single entry
@@ -46,21 +44,10 @@ pub struct Entry {
     pub transaction: Transaction,
     /// Transaction hash (stored for effeciency)
     pub hash: H256,
-    /// Transaction size (stored for effeciency)
-    pub size: usize,
     /// Throughout index of this transaction in memory pool (non persistent)
     pub storage_index: u64,
     /// Transaction fee (stored for efficiency)
     pub miner_fee: u64,
-}
-
-/// Information on current `MemoryPool` state
-#[derive(Debug)]
-pub struct Information {
-    /// Number of transactions currently in the `MemoryPool`
-    pub transactions_count: usize,
-    /// Total number of bytes occupied by transactions from the `MemoryPool`
-    pub transactions_size_in_bytes: usize,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -79,7 +66,7 @@ impl From<Input> for HashedOutPoint {
 
 impl Hash for HashedOutPoint {
     fn hash<H>(&self, state: &mut H) where H: Hasher {
-        state.write(&serialize(&self.out_point).unwrap()[..]);
+        state.write(&serialize(&self.out_point).unwrap());
         state.finish();
     }
 }
@@ -88,21 +75,22 @@ impl Storage {
     pub fn new() -> Self {
         Storage {
             counter: 0,
-            transactions_size_in_bytes: 0,
             by_hash: HashMap::new(),
             by_previous_output: HashMap::new(),
+            by_storage_index: BTreeMap::new(),
         }
     }
 
     pub fn insert(&mut self, entry: Entry) {
-        // update pool information
-        self.transactions_size_in_bytes += entry.size;
 
         // remember that all inputs of this transaction are spent
         for input in &entry.transaction.input {
             let previous_tx = self.by_previous_output.insert(input.clone().into(), entry.hash.clone());
             assert_eq!(previous_tx, None); // transaction must be verified before => no double spend TODO: Gerui: do we keep this?
         }
+
+        // add to by_storage_index
+        self.by_storage_index.insert(entry.storage_index, entry.hash.clone());
 
         // add to by_hash storage
         self.by_hash.insert(entry.hash.clone(), entry);
@@ -125,10 +113,8 @@ impl Storage {
     }
 
     pub fn remove_by_hash(&mut self, h: &H256) -> Option<Entry> {
-        self.by_hash.remove(h)
+        let entry = self.by_hash.remove(h)
             .map(|entry| {
-                // update pool information
-                self.transactions_size_in_bytes -= entry.size;
 
                 // forget that all inputs of this transaction are spent
                 for input in &entry.transaction.input {
@@ -137,8 +123,11 @@ impl Storage {
                     assert_eq!(&spent_in_tx, h);
                 }
 
+                self.by_storage_index.remove(&entry.storage_index);
+
                 entry
-            })
+            });
+        entry
     }
 
     pub fn is_double_spend(&self, transaction: &Transaction) -> bool {
@@ -159,9 +148,9 @@ impl Storage {
         while let Some(prevout) = queue.pop_front() {
             if let Some(entry_hash) = self.by_previous_output.get(&prevout.clone().into()).cloned() {
                 let entry = self.remove_by_hash(&entry_hash).expect("checked that it exists line above; qed");
-                queue.extend(entry.transaction.output.iter().enumerate().map(|(idx, _)| Input {
+                queue.extend(entry.transaction.output.iter().enumerate().map(|(hx, _)| Input {
                     hash: entry_hash.clone(),
-                    index: idx as u32,
+                    index: hx as u32,
                 }));
                 removed.push(IndexedTransaction::new(entry.hash, entry.transaction));
             }
@@ -170,29 +159,29 @@ impl Storage {
         Some(removed)
     }
 
-    pub fn get_transactions_ids(&self) -> Vec<H256> {
-        self.by_hash.keys().cloned().collect()
+    pub fn get_transactions_hash(&self) -> Vec<H256> {
+        self.by_storage_index.values().cloned().collect()
     }
 
-    pub fn get_n_transactions_ids(&self, n: usize) -> Vec<H256> {
-        let ids: Vec<H256> = self.by_hash.keys().cloned().collect();
-        if ids.len() > n {
-            rand::seq::sample_slice(&mut rand::thread_rng(), &ids, n)
+    pub fn get_n_random_transactions_hash(&self, n: usize) -> Vec<H256> {
+        let hashes: Vec<H256> = self.by_hash.keys().cloned().collect();
+        if hashes.len() > n {
+            rand::seq::sample_slice(&mut rand::thread_rng(), &hashes, n)
         } else {
-            ids
+            hashes
         }
 
     }
 
+    /// get n transaction hashes by fifo, similar to below
+    pub fn get_n_transactions_hash(&self, n: usize) -> Vec<H256> {
+        self.by_storage_index.values().take(n).cloned().collect()
+
+    }
+
+    /// get n transaction by fifo
     pub fn get_n_transactions(&self, n: usize) -> Vec<Transaction> {
-        let ids: Vec<H256> = self.by_hash.keys().cloned().collect();
-        let rids =
-            if ids.len() > n {
-                rand::seq::sample_slice(&mut rand::thread_rng(), &ids, n)
-            } else {
-                ids
-            };
-        rids.iter().map(|id|self.read_by_hash(id).unwrap().clone()).collect()
+        self.by_storage_index.values().take(n).map(|h|self.read_by_hash(h).unwrap().clone()).collect()
     }
 
 }
@@ -212,6 +201,7 @@ impl MemoryPool {
     }
 
     /// Insert verified transaction to the `MemoryPool`
+    /// Important: must check is_double_spend before insert a transaction.
     pub fn insert_verified(&mut self, t: IndexedTransaction) {
         if let Some(entry) = self.make_entry(t) {
             self.storage.insert(entry);
@@ -219,24 +209,23 @@ impl MemoryPool {
     }
 
     /// Removes single transaction by its hash.
-    /// All descedants remain in the pool.
+    /// when a transaction is confirmed, call this and also call remove_by_prevout(input) for all its inputs
     pub fn remove_by_hash(&mut self, h: &H256) -> Option<Transaction> {
         self.storage.remove_by_hash(h).map(|entry| entry.transaction)
     }
 
-    /// Checks if `transaction` spends some outputs, already spent by inpool transactions.
+    /// Checks if `transaction` double spends some outputs, already spent by inpool transactions.
+    /// Important: must check this before insert a transaction.
     pub fn is_double_spend(&self, transaction: &Transaction) -> bool {
         self.storage.is_double_spend(transaction)
     }
 
     /// Removes transaction (and all its descendants) which has spent given output
+    /// Important: when a transaction is confirmed, call remove_by_prevout(input) for all input in
+    /// the confirmed transaction. This eliminates unwanted conflicting (double-spending)
+    /// transactions.
     pub fn remove_by_prevout(&mut self, prevout: &Input) -> Option<Vec<IndexedTransaction>> {
         self.storage.remove_by_prevout(prevout)
-    }
-
-    /// Reads single transaction by its hash.
-    pub fn read_by_hash(&self, h: &H256) -> Option<&Transaction> {
-        self.storage.read_by_hash(h)
     }
 
     /// Get transaction by hash
@@ -249,34 +238,24 @@ impl MemoryPool {
         self.storage.contains(hash)
     }
 
-    /// Returns information on `MemoryPool` (as in GetMemPoolInfo RPC)
-    /// https://bitcoin.org/en/developer-reference#getmempoolinfo
-    pub fn information(&self) -> Information {
-        Information {
-            transactions_count: self.storage.by_hash.len(),
-            transactions_size_in_bytes: self.storage.transactions_size_in_bytes,
-        }
+    pub fn get_transactions_hash(&self) -> Vec<H256> {
+        self.storage.get_transactions_hash()
     }
 
-    pub fn get_transactions_ids(&self) -> Vec<H256> {
-        self.storage.get_transactions_ids()
-    }
-
-    pub fn get_n_transactions_ids(&self, n: usize) -> Vec<H256> {
-        self.storage.get_n_transactions_ids(n)
+    pub fn get_n_transactions_hash(&self, n: usize) -> Vec<H256> {
+        self.storage.get_n_transactions_hash(n)
     }
 
     pub fn get_n_transactions(&self, n: usize) -> Vec<Transaction> {
         self.storage.get_n_transactions(n)
     }
 
-    /// Returns true if output was spent
+    /// Returns true if output was spent by some inpool transaction
     pub fn is_spent(&self, prevout: &Input) -> bool {
         self.storage.is_output_spent(prevout)
     }
 
     fn make_entry(&mut self, t: IndexedTransaction) -> Option<Entry> {
-        let size = self.get_transaction_size(&t.raw);
         let storage_index = self.get_storage_index();
         let miner_fee = 0;
 
@@ -284,13 +263,8 @@ impl MemoryPool {
             transaction: t.raw,
             hash: t.hash,
             storage_index: storage_index,
-            size: size,
             miner_fee: miner_fee,
         })
-    }
-
-    fn get_transaction_size(&self, t: &Transaction) -> usize {
-        serialize(&t).unwrap().len()
     }
 
     fn get_storage_index(&mut self) -> u64 {
@@ -312,33 +286,39 @@ pub mod tests {
     fn test_memory_pool_insert_one_transaction() {
         let mut pool = MemoryPool::new();
         pool.insert_verified(TransactionBuilder::random_transaction_builder().into());
-        assert_eq!(pool.get_transactions_ids().len(), 1);
-        let id = pool.get_transactions_ids()[0];
-        pool.remove_by_hash(&id);
-        assert_eq!(pool.get_transactions_ids().len(), 0);
+        assert_eq!(pool.get_transactions_hash().len(), 1);
+        let h = pool.get_transactions_hash()[0];
+        pool.remove_by_hash(&h);
+        assert_eq!(pool.get_transactions_hash().len(), 0);
     }
 
     #[test]
     fn test_memory_pool_doublespend_transaction() {
         let mut pool = MemoryPool::new();
         pool.insert_verified(TransactionBuilder::random_transaction_builder().into());
-        assert_eq!(pool.get_transactions_ids().len(), 1);
-        let id = pool.get_transactions_ids()[0];
-        pool.insert_verified(TransactionBuilder::random_transaction_builder().add_input(id, 0).into());
-        assert_eq!(pool.get_transactions_ids().len(), 2);
-        let tx: Transaction = TransactionBuilder::random_transaction_builder().add_input(id, 0).into();
+        assert_eq!(pool.get_transactions_hash().len(), 1);
+        let h = pool.get_transactions_hash()[0];
+        let tx: Transaction = TransactionBuilder::random_transaction_builder().add_input(h, 0).into();
+        pool.insert_verified(tx.clone().into());
+        assert_eq!(pool.get_transactions_hash().len(), 2);
+        let tx_2: Transaction = TransactionBuilder::random_transaction_builder().add_input(h, 0).into();
         assert_eq!(pool.is_double_spend(&tx), true);
+        assert_eq!(pool.is_double_spend(&tx_2), true);
     }
 
     #[test]
-    fn test_memory_pool_insert_multiple_transaction() {
+    fn test_memory_pool_multiple_transaction_and_fifo() {
         let mut pool = MemoryPool::new();
+        let mut v = vec![];
         for i in 0..20 {
-            pool.insert_verified(TransactionBuilder::random_transaction_builder().into());
+            let tx: Transaction = TransactionBuilder::random_transaction_builder().into();
+            v.push(tx.hash());
+            pool.insert_verified(tx.into());
         }
-        assert_eq!(pool.get_transactions_ids().len(), 20);
-        assert_eq!(pool.get_n_transactions_ids(15).len(), 15);
-        assert_eq!(pool.get_n_transactions_ids(25).len(), 20);
+        assert_eq!(pool.get_transactions_hash().len(), 20);
+        assert_eq!(pool.get_n_transactions_hash(15).len(), 15);
+        assert_eq!(pool.get_n_transactions_hash(15)[..], v[..15]);//test the fifoproperty: we get the first 15 txs.
+        assert_eq!(pool.get_n_transactions_hash(25).len(), 20);
         assert_eq!(pool.get_n_transactions(15).len(), 15);
         assert_eq!(pool.get_n_transactions(25).len(), 20);
     }
