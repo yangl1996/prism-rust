@@ -282,7 +282,6 @@ pub mod tests {
     use super::MemoryPool;
     use crate::transaction::{Transaction, Input, Output};
     use crate::crypto::hash::{Hashable, H256};
-    use crate::miner::fee::{FeeIsOne, FeeIsZero};
     use crate::transaction::transaction_builder::TransactionBuilder;
 
     #[test]
