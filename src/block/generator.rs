@@ -30,7 +30,7 @@ pub fn header() -> Header {
 }
 
 /// Returns a random tx_content filled with 1-10 transactions
-pub fn tx_content()  -> Tx_Content {
+fn tx_content()  -> Tx_Content {
     let mut rng = rand::thread_rng();
     let tx_number =  rng.gen_range(1, 10);
     let transactions :Vec<Transaction> = (0..tx_number).map(|_| tx_generator::transaction()).collect();

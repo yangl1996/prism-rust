@@ -25,7 +25,6 @@ impl std::fmt::Display for ProposerNodeData {
     }
 }
 
-
 impl ProposerNodeData{
     pub fn increment_vote(&mut self){
         self.votes += 1;
@@ -46,10 +45,8 @@ impl ProposerNodeData {
         genesis.votes = number_of_voter_chains;
         return genesis;
     }
-
     /// Returns effective number of permanent votes with 1 - epsilon guarantee
     pub fn get_lcb_vote(&self, epsilon: f32) -> u16 { unimplemented!(); }
-
 }
 
 #[derive(Serialize, Deserialize, Clone, Ord, Eq, PartialEq, PartialOrd, Hash)]
@@ -61,7 +58,7 @@ pub struct ProposerTree{
     /// Proposer nodes stored level wise
     pub prop_nodes: Vec< Vec<H256> >,
     /// Votes at each level
-    pub all_votes: Vec< Vec<H256> >,
+    pub all_votes: Vec< Vec<H256> >, // Can be removed
     /// Leader nodes
     pub leader_nodes : Vec<Option<H256>> // functionality not implemented
 }
@@ -103,6 +100,7 @@ impl ProposerTree{
         }
     }
 }
+
 impl std::fmt::Display for ProposerTree {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "best_block: {}; best_level: {};",

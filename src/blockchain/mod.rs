@@ -51,9 +51,9 @@ pub struct BlockChain{
     pub proposer_tree: ProposerTree,
     pub voter_chains: Vec<VoterChain>,
     /// Contains data about the proposer nodes.
-    proposer_node_data_map:HashMap<H256, ProposerNodeData>,
+    proposer_node_data_map: HashMap<H256, ProposerNodeData>,
     /// Contains data about the voter nodes.
-    voter_node_data_map:HashMap<H256, VoterNodeData>
+    voter_node_data_map: HashMap<H256, VoterNodeData>
 }
 
 impl BlockChain {
@@ -84,7 +84,7 @@ impl BlockChain {
             let voter_genesis_node = VoterNodeData::genesis(chain_number as u16);
             let b1 = ((chain_number+1) >> 8) as u8;
             let b2 = (chain_number+1) as u8;
-            let voter_hash_vec: [u8; 32]   = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,b1,b2];/// Hash vector of voter genesis block. todo: Shift to a global config  file
+            let voter_hash_vec: [u8; 32]   = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,b1,b2]; /// Hash vector of voter genesis block. todo: Shift to a global config  file
             let voter_hash : H256 =  (&voter_hash_vec).into();
             graph.add_node(voter_hash);
             /// Add node data in the hashmap
@@ -93,7 +93,6 @@ impl BlockChain {
             let voter_chain = VoterChain::new(chain_number, voter_hash);
             voter_chains.push(voter_chain);
             proposer_tree.add_vote_at_level(voter_hash, 0);
-
         }
         return Self{graph, proposer_tree, voter_chains, proposer_node_data_map: proposer_node_data, voter_node_data_map: voter_node_data };
     }
@@ -123,7 +122,7 @@ impl BlockChain {
                 for prop_hash in content.proposer_block_hashes.iter(){
                     self.graph.add_edge(block_hash, *prop_hash, Edge::ProposerToProposerReference);
                 }
-                //println!("Number of tx blocks referred {}", content.transaction_block_hashes.len());
+                        println!("Number of tx blocks referred {}", content.transaction_block_hashes.len());
 
                 /// 3. Iterate through the list of transaction block hashes referred in the content of the given proposer block
                 for tx_hash in content.transaction_block_hashes.iter(){
@@ -139,7 +138,6 @@ impl BlockChain {
                 self.proposer_node_data_map.insert(block_hash, proposer_node_data);
 
                 /// 6. Add the block to the proposer tree.
-//        //println!("Add the prop block at level {}", proposer_node_data.level);
                 self.proposer_tree.add_block_at_level(block_hash, proposer_node_data.level);
             },
 
@@ -157,9 +155,7 @@ impl BlockChain {
 
                     /// 4 Incrementing the votes of the proposer block
                     let ref mut proposer_node_data = self.proposer_node_data_map.get_mut(&prop_block_hash).unwrap();
-//                        [&prop_block_hash];
                     proposer_node_data.votes += 1;
-//            //println!("Voter added on {}, with total votes {}", prop_block_hash, proposer_node_data.votes);
                     self.proposer_tree.add_vote_at_level(block_hash, proposer_node_data.level);
                 }
 
@@ -179,7 +175,6 @@ impl BlockChain {
         };
     }
 
-
     /// Get the best blocks on each voter chain
     pub fn get_voter_parents(&self) -> Vec<H256> {
         let voter_parents: Vec<H256> = self.voter_chains.iter().map(|&x| x.best_block).collect();
@@ -190,6 +185,14 @@ impl BlockChain {
     pub fn get_proposer_parent(&self) -> H256 {
         return self.proposer_tree.best_block;
     }
+
+    /*
+    Functions to add
+    1. Longest chain on voter chain i
+    2. Votes on the longest chain.
+    3. Votes on a proposer level
+    */
+
 }
 
 
@@ -244,14 +247,14 @@ mod tests {
         let mut voter_block_vec: Vec<Vec<Block>> = vec![];
 
 
-//println!("\nStep 1:  Initialized blockchain");
+        println!("\nStep 1:  Initialized blockchain");
         assert_eq!(11, blockchain.graph.node_count(), "Expecting 11 nodes corresponding to 11 genesis blocks");
         assert_eq!(0, blockchain.graph.edge_count(), "Expecting 0 edges");
-//println!("Result 1: Node count:{}, Edge count {}",blockchain.graph.node_count(), blockchain.graph.edge_count());
+        println!("Result 1: Node count:{}, Edge count {}",blockchain.graph.node_count(), blockchain.graph.edge_count());
 
 
 
-//println!("\nStep 2:   Added 5 tx blocks on prop parent");
+        println!("\nStep 2:   Added 5 tx blocks on prop genesis");
         /// Mine 5 tx block's with prop_best_block as the parent
         let tx_block_5: Vec<Block> = test_util::tx_blocks_with_parent_hash(5, blockchain.proposer_tree.best_block);
         tx_block_vec.extend(tx_block_5.iter().cloned());
@@ -259,10 +262,10 @@ mod tests {
         for i in 0..5{ blockchain.add_block_as_node(tx_block_vec[i].clone()); }
         assert_eq!(16, blockchain.graph.node_count(), "Expecting 16 nodes corresponding to 11 genesis blocks and  5 tx blocks");
         assert_eq!(5, blockchain.graph.edge_count(), "Expecting 5 edges");
-//println!("Result 2: Node count:{}, Edge count {}",blockchain.graph.node_count(), blockchain.graph.edge_count());
+        println!("Result 2: Node count:{}, Edge count {}",blockchain.graph.node_count(), blockchain.graph.edge_count());
 
 
-//println!("\nStep 3:   Added prop block referring these 5 tx blocks");
+        println!("\nStep 3:   Added prop block referring these 5 tx blocks");
         /// Generate a proposer block with prop_parent_block as the parent which referencing the above 5 tx blocks
         let prop_block1 = test_util::prop_block(blockchain.proposer_tree.best_block,
    tx_block_vec[0..5].iter().map( |x| x.hash()).collect(), vec![]);
@@ -272,10 +275,10 @@ mod tests {
         assert_eq!(prop_block1_hash, blockchain.proposer_tree.best_block, "Proposer best block");
         assert_eq!(17, blockchain.graph.node_count(), "Expecting 16 nodes corresponding to 11 genesis blocks and  5 tx blocks and 1 prop block");
         assert_eq!(11, blockchain.graph.edge_count(), "Expecting 11 edges");
-//println!("Result 3: Node count:{}, Edge count {}",blockchain.graph.node_count(), blockchain.graph.edge_count());
+        println!("Result 3: Node count:{}, Edge count {}",blockchain.graph.node_count(), blockchain.graph.edge_count());
 
 
-//println!("\nStep 4:    Add 10 voter blocks voting on proposer block at level 1");
+        println!("\nStep 4:    Add 10 voter blocks voting on proposer block at level 1");
         for i in 0..n_voter_chains{
             let voter_block = test_util::voter_block(blockchain.proposer_tree.best_block,
         i as u16, blockchain.voter_chains[i as usize].best_block, vec![prop_block1_hash] );
@@ -285,11 +288,11 @@ mod tests {
         let prop_block1_votes =  blockchain.proposer_node_data_map[&prop_block1_hash].votes;
         assert_eq!(31, blockchain.graph.edge_count());
         assert_eq!(10, prop_block1_votes, "prop block 1 should have 10 votes" );
-//println!("Result 4: Node count:{}, Edge count {}",blockchain.graph.node_count(), blockchain.graph.edge_count());
+        println!("Result 4: Node count:{}, Edge count {}",blockchain.graph.node_count(), blockchain.graph.edge_count());
 //        blockchain = print_edges(blockchain);
 
 
-//println!("\nStep 5:   Mining 5 tx blocks, 2 prop blocks at level 2 with 3+5 tx refs");
+        println!("\nStep 5:   Mining 5 tx blocks, 2 prop blocks at level 2 with 3, 5 tx refs");
         unreferred_tx_block_index += 5;
         let tx_block_5: Vec<Block> = test_util::tx_blocks_with_parent_hash(5, blockchain.proposer_tree.best_block);
         tx_block_vec.extend(tx_block_5.iter().cloned());
@@ -310,9 +313,9 @@ mod tests {
         assert_ne!(prop_block2b_hash, blockchain.proposer_tree.best_block, "prop 2b is not best block");
         assert_eq!(34, blockchain.graph.node_count(), "Expecting 16 nodes corresponding to 11 genesis blocks and  5 tx blocks and 1 prop block");
         assert_eq!(46, blockchain.graph.edge_count(), "Expecting 11 edges");
-//println!("Result 5: Node count:{}, Edge count {}",blockchain.graph.node_count(), blockchain.graph.edge_count());
+        println!("Result 5: Node count:{}, Edge count {}",blockchain.graph.node_count(), blockchain.graph.edge_count());
 
-//println!("\nStep 6:   Add 7+3 votes on proposer blocks at level 2");
+        println!("\nStep 6:   Add 7+3 votes on proposer blocks at level 2");
         for i in 0..7{
             let voter_block = test_util::voter_block(prop_block2a_hash,
             i as u16, blockchain.voter_chains[i as usize].best_block, vec![prop_block2a_hash] );
@@ -330,9 +333,9 @@ mod tests {
         assert_eq!(10, blockchain.proposer_tree.all_votes[1].len(), "Level 2 total votes should have 10",);
         assert_eq!(44, blockchain.graph.node_count(), "Expecting 16 nodes corresponding to 11 genesis blocks and  5 tx blocks and 1 prop block");
         assert_eq!(66, blockchain.graph.edge_count(), "Expecting 11 edges");
-//println!("Result 6: Node count:{}, Edge count {}",blockchain.graph.node_count(), blockchain.graph.edge_count());
+        println!("Result 6: Node count:{}, Edge count {}",blockchain.graph.node_count(), blockchain.graph.edge_count());
 
-//println!("\nStep 7:   Mining 4 tx block and 1 prop block referring 4 tx blocks + prop_block_2b)");
+        println!("\nStep 7:   Mining 4 tx block and 1 prop block referring 4 tx blocks + prop_block_2b)");
         unreferred_tx_block_index += 5;
         let tx_block_4: Vec<Block> = test_util::tx_blocks_with_parent_hash(4, blockchain.proposer_tree.best_block);
         tx_block_vec.extend(tx_block_4.iter().cloned());
@@ -345,10 +348,10 @@ mod tests {
         assert_eq!(prop_block3_hash, blockchain.proposer_tree.best_block, "Proposer best block");
         assert_eq!(49, blockchain.graph.node_count(), "Expecting 16 nodes corresponding to 11 genesis blocks and  5 tx blocks and 1 prop block");
         assert_eq!(76, blockchain.graph.edge_count(), "Expecting 11 edges");
-//println!("Result 7: Node count:{}, Edge count {}",blockchain.graph.node_count(), blockchain.graph.edge_count());
+        println!("Result 7: Node count:{}, Edge count {}",blockchain.graph.node_count(), blockchain.graph.edge_count());
 
 
-//println!("\nStep 8:  Mining only 3+3 voter blocks voting on none + prob_block3");
+        println!("\nStep 8:  Mining only 3+3 voter blocks voting on none + prob_block3");
         for i in 0..3{
             let voter_block = test_util::voter_block(prop_block2a_hash, // Mining on 2a (because 3 hasnt showed up yet)
             i as u16, blockchain.voter_chains[i as usize].best_block, vec![] );
@@ -361,9 +364,9 @@ mod tests {
         }
         assert_eq!(55, blockchain.graph.node_count(), "Expecting 16 nodes corresponding to 11 genesis blocks and  5 tx blocks and 1 prop block");
         assert_eq!(88, blockchain.graph.edge_count(), "Expecting 11 edges");
-//println!("Result 8: Node count:{}, Edge count {}",blockchain.graph.node_count(), blockchain.graph.edge_count());
+        println!("Result 8: Node count:{}, Edge count {}",blockchain.graph.node_count(), blockchain.graph.edge_count());
 
-//println!("\nStep 9:   Mining 2 tx block and 1 prop block referring the 2 tx blocks");
+        println!("\nStep 9:   Mining 2 tx block and 1 prop block referring the 2 tx blocks");
         unreferred_tx_block_index += 4;
         let tx_block_2: Vec<Block> = test_util::tx_blocks_with_parent_hash(2, blockchain.proposer_tree.best_block);
         tx_block_vec.extend(tx_block_2.iter().cloned());
@@ -376,9 +379,9 @@ mod tests {
         assert_eq!(prop_block4_hash, blockchain.proposer_tree.best_block, "Proposer best block");
         assert_eq!(58, blockchain.graph.node_count(), "Expecting 16 nodes corresponding to 11 genesis blocks and  5 tx blocks and 1 prop block");
         assert_eq!(93, blockchain.graph.edge_count(), "Expecting 11 edges");
-//println!("Result 9: Node count:{}, Edge count {}",blockchain.graph.node_count(), blockchain.graph.edge_count());
+        println!("Result 9: Node count:{}, Edge count {}",blockchain.graph.node_count(), blockchain.graph.edge_count());
 
-//println!("\nStep 10: 1-6 voter chains vote on prop4 and 6-10 voter blocks vote on prop3 and prop4" );
+        println!("\nStep 10: 1-6 voter chains vote on prop4 and 6-10 voter blocks vote on prop3 and prop4" );
         for i in 0..6{
             let voter_block = test_util::voter_block(prop_block4_hash, // Mining on 2a (because 3 hasnt showed up yet)
             i as u16, blockchain.voter_chains[i as usize].best_block, vec![prop_block4_hash] );
@@ -391,7 +394,7 @@ mod tests {
         }
         assert_eq!(68, blockchain.graph.node_count(), "Expecting 16 nodes corresponding to 11 genesis blocks and  5 tx blocks and 1 prop block");
         assert_eq!(117, blockchain.graph.edge_count(), "Expecting 11 edges");
-//println!("Result 9: Node count:{}, Edge count {}",blockchain.graph.node_count(), blockchain.graph.edge_count());
+        println!("Result 9: Node count:{}, Edge count {}",blockchain.graph.node_count(), blockchain.graph.edge_count());
 
         /// Checking the voter chain growth
         for i in 0..6{
@@ -400,13 +403,9 @@ mod tests {
             assert_eq!(3, blockchain.voter_chains[i as usize].best_level);
         }
 
-        let graphml = GraphMl::new(&blockchain.graph);
-        let graph_xml = graphml.pretty_print(true).export_node_weights_display().export_edge_weights_display().to_string();
-//        println!("{}", result);
-        fs::write("graph_xml/blockchain_graph.graphml", graph_xml).expect("Unable to write file");
+        
 
-
-//println!("\n");
+        println!("\n");
 //        print_edges(blockchain);
     }
 
@@ -414,7 +413,7 @@ mod tests {
     fn print_edges(blockchain: BlockChain) -> BlockChain {
         let all_edges = blockchain.graph.all_edges();
         for edge in all_edges{
-            println!("Edge weight,{}", edge.2);
+           println!("Edge weight,{}", edge.2);
         }
         return blockchain;
     }
