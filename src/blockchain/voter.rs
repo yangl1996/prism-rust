@@ -59,21 +59,23 @@ impl VoterChain{
     }
 
     pub fn update_voter_chain(&mut self, block: H256, block_parent: H256, level: u32) {
-        // New best block mined over the preivous best block
-        if self.best_level== level+1 && self.best_block == block_parent  {
+//        println!("Level {}. Bets level {}", level, self.best_level);
+        // New best block mined over the previous best block
+        if self.best_level== level-1 && self.best_block == block_parent  {
+//            println!("New best level {} for chain {}",  self.best_level, self.chain_number);
             self.best_level += 1;
             self.best_block =  block;
         }
         // Rollback required
-        else if self.best_level== level+1  && self.best_block != block_parent{
-            panic!("A new longer fork has emerged");
+        else if self.best_level== level-1  && self.best_block != block_parent{
+            panic!("A new fork has emerged");
         }
         // A side_chain block mined.
-        else if self.best_level <= (level +1) {
+        else if self.best_level >= level {
             // Do nothing.
         }
         // Rollback required
-        else if self.best_level > (level +1) {
+        else if self.best_level < level-1 {
             panic!("A new super longer fork has emerged");
         }
         else{

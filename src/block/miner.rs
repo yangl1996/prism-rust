@@ -51,7 +51,7 @@ impl Miner{
         content.push(Content::Transaction(transaction::Content::new(self.unconfirmed_txs.clone())));
         let content_merkle_tree = MerkleTree::new(&content);
 
-        /// 2. Creating a header ///
+        /// 2. Creating a header
         let timestamp: u64 = 0;
         let nonce: u32 = 0;
         let content_root = *content_merkle_tree.root();

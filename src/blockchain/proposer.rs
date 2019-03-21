@@ -26,6 +26,12 @@ impl std::fmt::Display for ProposerNodeData {
 }
 
 
+impl ProposerNodeData{
+    pub fn increment_vote(&mut self){
+        self.votes += 1;
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Copy, Ord, Eq, PartialEq, PartialOrd, Hash)]
 pub enum PropBlockLeaderStatus{
     ConfirmedLeader,
@@ -73,10 +79,11 @@ impl Default for ProposerTree {
 impl ProposerTree{
     ///  Adding a proposer block at a level
     pub fn add_block_at_level(&mut self, block: H256, level: u32){
-        if self.prop_nodes.len() >= level as usize {
+//        println!("prop tree num levels {}", self.prop_nodes.len());
+        if self.prop_nodes.len() >= (level + 1) as usize {
             self.prop_nodes[level as usize].push(block);
-        } else if self.prop_nodes.len() == (level - 1) as usize {
-            self.prop_nodes[level as usize] = vec![block];
+        } else if self.prop_nodes.len()== level as usize {
+            self.prop_nodes.push(vec![block]); // start a new level
             self.best_block = block;
             self.best_level = level;
         } else{
@@ -86,10 +93,11 @@ impl ProposerTree{
 
     /// Adding a vote at a level
     pub fn add_vote_at_level(&mut self, vote: H256, level: u32){
-        if self.all_votes.len() >= level as usize {
+//        println!("prop tree votes levels {}. Level of vote added {}", self.all_votes.len(), level);
+        if self.all_votes.len() >= (level + 1) as usize {
             self.all_votes[level as usize].push(vote);
-        } else if self.all_votes.len() == (level - 1) as usize {
-            self.all_votes[level as usize] = vec![vote];
+        } else if self.all_votes.len() == level as usize {
+            self.all_votes.push(vec![vote]);
         } else{
             panic!("Proposer block mined at level without parent block at previous level")
         }
