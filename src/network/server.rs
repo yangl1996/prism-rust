@@ -1,215 +1,47 @@
 use super::message;
+use super::peer::{self, ReadResult};
 use byteorder::{BigEndian, ByteOrder};
 use log::{debug, error, info, trace, warn};
 use mio::{self, net};
-use std::cell::UnsafeCell;
 use std::io::{Read, Write};
-use std::sync::{Arc, RwLock, Mutex};
+use std::sync::mpsc;
 use std::thread;
 
 const MAX_INCOMING_CLIENT: usize = 256;
 const MAX_EVENT: usize = 1024;
 
-// PeerReaderCell is UnsafeCell with Send and Sync forcefully marked. It is used to
-// enable interior mutability of Peer. We need it because we use RwLock to control
-// peers, and can only obtain &Peer when obtaining a read lock on peers. Thus, we
-// need to implement read() for &Peer, instead of &mut Peer. By manually ensuring
-// that only one thread has access to the fields wrapped in PeerReaderCell, we don't
-// have data race, and avoid the performance overhead of wrapping those states in
-// Mutex of RwCells.
-
-struct PeerReaderCell<T>(UnsafeCell<T>);
-
-unsafe impl<T> Send for PeerReaderCell<T> {}
-unsafe impl<T> Sync for PeerReaderCell<T> {}
-
-impl<T> PeerReaderCell<T> {
-    fn new(data: T) -> Self {
-        return Self(UnsafeCell::new(data));
-    }
-
-    fn get(&self) -> *mut T {
-        return self.0.get();
-    }
-}
-
-enum DecodeState {
-    Length,
-    Payload,
-}
-
-pub struct Peer {
-    stream: mio::net::TcpStream,
-    token: mio::Token,
-    reader: PeerReaderCell<std::io::BufReader<mio::net::TcpStream>>,
-    writer: Mutex<std::io::BufWriter<mio::net::TcpStream>>,
-    pub addr: std::net::SocketAddr,
-    buffer: PeerReaderCell<Vec<u8>>,
-    msg_length: PeerReaderCell<usize>,
-    read_length: PeerReaderCell<usize>,
-    state: PeerReaderCell<DecodeState>,
-}
-
-impl Peer {
-    fn new(stream: mio::net::TcpStream, token: mio::Token) -> std::io::Result<Self> {
-        let reader_stream = stream.try_clone()?;
-        let writer_stream = stream.try_clone()?;
-        let addr = stream.peer_addr()?;
-        let bufreader = std::io::BufReader::new(reader_stream);
-        let bufwriter = std::io::BufWriter::new(writer_stream);
-        return Ok(Self {
-            stream: stream,
-            token: token,
-            reader: PeerReaderCell::new(bufreader),
-            writer: Mutex::new(bufwriter),
-            addr: addr,
-            buffer: PeerReaderCell::new(vec![0; std::mem::size_of::<u32>()]),
-            msg_length: PeerReaderCell::new(std::mem::size_of::<u32>()),
-            read_length: PeerReaderCell::new(0),
-            state: PeerReaderCell::new(DecodeState::Length),
-        });
-    }
-
-    pub fn write(&self, message: &message::Message) -> std::io::Result<()> {
-        let encoded: Vec<u8> = bincode::serialize(message).unwrap();
-        let msg_length: u32 = encoded.len() as u32;
-        let mut encoded_length = [0; 4];
-        BigEndian::write_u32(&mut encoded_length, msg_length);
-        let mut writer = self.writer.lock().unwrap();
-
-        let mut cursor = 0;
-        loop {
-            match (*writer).write(&encoded_length[cursor..4]) {
-                Ok(size) => cursor += size,
-                Err(e) => {
-                    if e.kind() == std::io::ErrorKind::WouldBlock {
-                        // this op would have blocked. try again
-                        continue;
-                    }
-                    else {
-                        return Err(e);
-                    }
-                }
-            }
-
-            if cursor == 4 {
-                break;
-            }
-        }
-
-        let mut cursor = 0;
-        loop {
-            match (*writer).write(&encoded[cursor..msg_length as usize]) {
-                Ok(size) => cursor += size,
-                Err(e) => {
-                    if e.kind() == std::io::ErrorKind::WouldBlock {
-                        // this op would have blocked. try again
-                        continue;
-                    }
-                    else {
-                        return Err(e);
-                    }
-                }
-            }
-
-            if cursor == msg_length as usize {
-                break;
-            }
-        }
-
-        return Ok(());
-    }
-
-    pub fn flush(&self) -> std::io::Result<()> {
-        let mut writer = self.writer.lock().unwrap();
-        (*writer).flush()?;
-        return Ok(());
-    }
-
-    fn read(&self) -> std::io::Result<usize> {
-        let reader = self.reader.get();
-        let buffer = self.buffer.get();
-        let msg_length = self.msg_length.get();
-        let read_length = self.read_length.get();
-        let state = self.state.get();
-
-        unsafe {
-            let bytes_read = (*reader).read(&mut (*buffer)[*read_length..*msg_length]);
-            match bytes_read {
-                Ok(0) => {
-                    return Ok(0);
-                }
-                Ok(size) => {
-                    // we got some data, move the cursor
-                    *read_length += size;
-                    if *read_length == *msg_length {
-                        // buffer filled, process the buffer
-                        match *state {
-                            DecodeState::Length => {
-                                let message_length =
-                                    BigEndian::read_u32(&(*buffer)[0..std::mem::size_of::<u32>()]);
-                                *state = DecodeState::Payload;
-                                *read_length = 0;
-                                *msg_length = message_length as usize;
-                                if (*buffer).capacity() < *msg_length {
-                                    (*buffer).resize(*msg_length, 0);
-                                }
-                            }
-                            DecodeState::Payload => {
-                                let new_payload: message::Message =
-                                    bincode::deserialize(&(*buffer)[0..*msg_length]).unwrap();
-                                *state = DecodeState::Length;
-                                *read_length = 0;
-                                *msg_length = std::mem::size_of::<u32>();
-                                message::handle_message(self, &new_payload);
-                            }
-                        }
-                    }
-                    return Ok(size);
-                }
-                Err(e) => {
-                    return Err(e);
-                }
-            }
-        }
-    }
-}
-
-pub struct Server {
-    peers: RwLock<slab::Slab<Arc<Peer>>>,
-    pub addr: std::net::SocketAddr,
+pub struct Context {
+    peers: slab::Slab<peer::Context>,
+    addr: std::net::SocketAddr,
     poll: mio::Poll,
 }
 
-impl Server {
-    pub fn start(addr: std::net::SocketAddr) -> std::io::Result<Arc<Self>> {
+impl Context {
+    /// Create a new server context.
+    pub fn new(addr: std::net::SocketAddr) -> std::io::Result<Self> {
         let server = Self {
-            peers: RwLock::new(slab::Slab::new()),
+            peers: slab::Slab::new(),
             addr: addr,
             poll: mio::Poll::new()?,
         };
-        let server_ptr = Arc::new(server);
-        let server_listening = Arc::clone(&server_ptr);
+        return Ok(server);
+    }
+
+    /// Start a new server context.
+    pub fn start(mut self) -> std::io::Result<()> {
         thread::spawn(move || {
-            server_listening.listen().unwrap_or_else(|e| {
+            self.listen().unwrap_or_else(|e| {
                 error!("Error occurred in P2P server: {}", e);
                 return;
             });
         });
-        return Ok(server_ptr);
+        return Ok(());
     }
-
-    pub fn connect(&self, addr: &std::net::SocketAddr) -> std::io::Result<Arc<Peer>> {
-        // we need to estabilsh a stdlib tcp stream, since we need it to block
-        let stream = std::net::TcpStream::connect(addr)?;
-        let mio_stream = net::TcpStream::from_stream(stream)?;
-        return self.register_new_peer(mio_stream);
-    }
-
-    fn register_new_peer(&self, stream: net::TcpStream) -> std::io::Result<Arc<Peer>> {
-        // get new slot in the connection set
-        let mut peers = self.peers.write().unwrap();
-        let vacant = peers.vacant_entry();
+    
+    /// Register a TCP stream in the event loop, and initialize peer context.
+    fn register(&mut self, stream: net::TcpStream) -> std::io::Result<()> {
+        // get a new slot in the connection set
+        let vacant = self.peers.vacant_entry();
         let key: usize = vacant.key();
         if key >= MAX_INCOMING_CLIENT {
             // too many connections
@@ -218,26 +50,28 @@ impl Server {
                 "max peer reached, cannot accept new connections",
             ));
         }
-        let new_connection = Arc::new(Peer::new(stream, mio::Token(key))?);
         // register the new connection and insert
         self.poll.register(
-            &new_connection.stream,
-            new_connection.token,
+            &stream,
+            mio::Token(key),
             mio::Ready::readable(),
             mio::PollOpt::edge(),
         )?;
-        let return_copy = Arc::clone(&new_connection);
-        vacant.insert(new_connection);
-        return Ok(return_copy);
+        let ctx = peer::Context::new(stream, mio::Token(key))?;
+        vacant.insert(ctx);
+        return Ok(());
     }
 
-    fn listen(&self) -> std::io::Result<()> {
+    /// The main event loop of the server.
+    fn listen(&mut self) -> std::io::Result<()> {
         // bind server to passed addr and register to the poll
         let server = net::TcpListener::bind(&self.addr)?;
-        const SERVER: mio::Token = mio::Token(std::usize::MAX - 1); // token for server new connection event
+
+        // token for server new connection event
+        const INCOMING: mio::Token = mio::Token(std::usize::MAX - 1); 
         self.poll.register(
             &server,
-            SERVER,
+            INCOMING,
             mio::Ready::readable(),
             mio::PollOpt::edge(),
         )?;
@@ -246,6 +80,7 @@ impl Server {
             server.local_addr()?
         );
 
+        // initialize space for polled events
         let mut events = mio::Events::with_capacity(MAX_EVENT);
 
         loop {
@@ -253,7 +88,7 @@ impl Server {
 
             for event in events.iter() {
                 match event.token() {
-                    SERVER => {
+                    INCOMING => {
                         // we have a new connection
                         // we are using edge-triggered events, loop until block
                         loop {
@@ -261,8 +96,8 @@ impl Server {
                             match server.accept() {
                                 Ok((stream, client_addr)) => {
                                     debug!("New incoming connection from {}", client_addr);
-                                    match self.register_new_peer(stream) {
-                                        Ok(_) => {
+                                    match self.register(stream) {
+                                        Ok(()) => {
                                             info!("New incoming peer {}", client_addr);
                                         }
                                         Err(e) => {
@@ -286,20 +121,21 @@ impl Server {
                     }
                     mio::Token(token_id) => {
                         // one of the connected sockets is ready to read
-                        let peers = self.peers.read().unwrap();
-                        let peer = &peers[token_id];
+                        let peer = &mut self.peers[token_id];
                         // we are using edge-triggered events, loop until block
                         loop {
                             match peer.read() {
-                                Ok(0) => {
+                                Ok(ReadResult::EOF) => {
                                     // EOF, remove it from the connections set
                                     info!("Peer {} dropped connection", peer.addr);
-                                    drop(peers);
-                                    let mut peers = self.peers.write().unwrap();
-                                    peers.remove(token_id);
+                                    self.peers.remove(token_id);
                                     break;
                                 }
-                                Ok(_) => {
+                                Ok(ReadResult::Continue) => {
+                                    continue;
+                                }
+                                Ok(ReadResult::Message(m)) => {
+                                    info!("New message");
                                     continue;
                                 }
                                 Err(e) => {
@@ -311,10 +147,8 @@ impl Server {
                                             "Error reading peer {}, disconnecting: {}",
                                             peer.addr, e
                                         );
-                                        drop(peers);
-                                        let mut peers = self.peers.write().unwrap();
                                         // TODO: we did not shutdown the stream. Cool?
-                                        peers.remove(token_id);
+                                        self.peers.remove(token_id);
                                         break;
                                     }
                                 }
@@ -328,3 +162,17 @@ impl Server {
         Ok(())
     }
 }
+
+/*
+pub struct ServerHandler {
+    pub addr: std::net::SocketAddr,
+}
+
+    /// Connect to a peer, and register this peer
+    pub fn connect(&self, addr: &std::net::SocketAddr) -> std::io::Result<Arc<Peer>> {
+        // we need to estabilsh a stdlib tcp stream, since we need it to block
+        let stream = std::net::TcpStream::connect(addr)?;
+        let mio_stream = net::TcpStream::from_stream(stream)?;
+        return self.register_new_peer(mio_stream);
+  }
+  */

@@ -1,5 +1,5 @@
 use log::{debug, error, info, trace, warn};
-use super::server::Peer;
+//use super::server::Peer;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Message {
@@ -7,6 +7,7 @@ pub enum Message {
     Pong(String),
 }
 
+/*
 /// Takes the reference to a message and processes it.
 pub fn handle_message(peer: &Peer, message: &Message) {
     match message {
@@ -20,3 +21,4 @@ pub fn handle_message(peer: &Peer, message: &Message) {
         },
     }
 }
+*/
