@@ -9,8 +9,8 @@ use std::sync::{Arc, RwLock};
 #[test]
 fn combine_validator_mempool_state() {
 
-    let mut mempool: Arc<RwLock<MemoryPool>> = Arc::new(RwLock::new(MemoryPool::new()));
-    let mut state: Arc<RwLock<StateStorage>> = Arc::new(RwLock::new(StateStorage::new()));
+    let mempool: Arc<RwLock<MemoryPool>> = Arc::new(RwLock::new(MemoryPool::new()));
+    let state: Arc<RwLock<StateStorage>> = Arc::new(RwLock::new(StateStorage::new()));
     // A toy validator: only have two simple validators, a non-empty validator, and a input-in-state validator
     // Don't know if we need Arc and RwLock for validator? How? Lock for individual or whole validator?
     let validator = ValidatorCollection::new(

@@ -231,10 +231,11 @@ impl MemoryPool {
         self.storage.remove_by_prevout(prevout)
     }
 
-    /// Get transaction by hash
-    pub fn get(&self, hash: &H256) -> Option<&Transaction> {
-        self.storage.get_by_hash(hash).map(|entry| &entry.transaction)
-    }
+//We don't use it for now
+//    /// Get transaction by hash
+//    pub fn get(&self, hash: &H256) -> Option<&Transaction> {
+//        self.storage.get_by_hash(hash).map(|entry| &entry.transaction)
+//    }
 
     /// Checks if transaction is in the mempool
     pub fn contains(&self, hash: &H256) -> bool {
