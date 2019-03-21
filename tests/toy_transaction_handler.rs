@@ -43,7 +43,7 @@ fn combine_validator_mempool_state() {
         mempool.get_n_transactions(50)
     };
     assert_eq!(tx_to_mine.len(), 50);
-    // just assume these transactions are mined and confirmed (miner and blockchain is not involved in this example)
+    // just assume these transactions are mined in a block (miner and blockchain is not involved in this example)
     // so we remove them from mempool
     {
         let mut mempool = mempool.write().unwrap();
