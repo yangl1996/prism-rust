@@ -1,8 +1,8 @@
 pub mod header;
 pub mod miner;
-mod transaction;
-mod proposer;
-mod voter;
+pub mod transaction;
+pub mod proposer;
+pub mod voter;
 mod test_util;
 pub mod generator;
 
