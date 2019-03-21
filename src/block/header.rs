@@ -3,7 +3,7 @@ use crate::crypto::hash::{Hashable, H256};
 
 #[derive(Serialize, Deserialize, Clone, Debug, Hash)]
 pub struct Header{
-    /// Hash of the parent proposer block.
+    /// Hash of the parent proposer block. Every block has a parent proposer block.
     pub parent_hash: H256,
     /// Block creation time.
     pub timestamp: u64,
@@ -21,7 +21,7 @@ impl Header{
     /// Create a new block header
     pub fn new(parent_hash: H256, timestamp: u64, nonce: u32, content_root: H256,
                extra_content: [u8; 32], difficulty: [u8; 32] ) -> Self{
-        Self{ parent_hash, timestamp, nonce, content_root, extra_content, difficulty}
+        Self {parent_hash, timestamp, nonce, content_root, extra_content, difficulty}
     }
 }
 
