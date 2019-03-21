@@ -6,6 +6,7 @@ use crate::transaction::Transaction;
 pub struct StateStorage {
     /// Stores state/utxo ( transaction_hash, indices:=set(index) ) by a hashmap
     by_transaction_hash: HashMap<H256, HashSet<u32>>,
+    // for now it does not store the value of the coin
 }
 
 impl StateStorage {
