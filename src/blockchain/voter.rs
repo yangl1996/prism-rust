@@ -18,13 +18,17 @@ impl VoterNodeData {
         genesis.status = VoterBlockStatus::OnMainChain;
         return genesis;
     }
+
+    pub fn is_on_longest_chain(&self) -> bool{
+        return self.status == VoterBlockStatus::OnMainChain;
+    }
 }
 
 impl Default for VoterNodeData {
     fn default() -> Self {
         let chain_number :u16 = 0;
         let level = 0;
-        let status = VoterBlockStatus::Orphan;
+        let status = VoterBlockStatus::OnMainChain;
         return VoterNodeData {chain_number, level, status};
     }
 }
