@@ -11,7 +11,7 @@ use std::sync::mpsc;
 const MAX_INCOMING_CLIENT: usize = 256;
 const MAX_EVENT: usize = 1024;
 
-pub fn new(addr: std::net::SocketAddr) -> std::io::Result<(Context, Handler)> {
+pub fn new(addr: std::net::SocketAddr) -> std::io::Result<(Context, Handle)> {
     let (connect_req_sender, connect_req_receiver) = channel::channel();
     let ctx = Context {
         peers: slab::Slab::new(),
@@ -19,10 +19,10 @@ pub fn new(addr: std::net::SocketAddr) -> std::io::Result<(Context, Handler)> {
         poll: mio::Poll::new()?,
         connect_req_chan: connect_req_receiver,
     };
-    let handler = Handler {
+    let handle = Handle {
         connect_req_chan: connect_req_sender,
     };
-    return Ok((ctx, handler));
+    return Ok((ctx, handle));
 }
 
 pub struct Context {
@@ -45,7 +45,7 @@ impl Context {
     }
     
     /// Register a TCP stream in the event loop, and initialize peer context.
-    fn register(&mut self, stream: net::TcpStream) -> std::io::Result<peer::Handler> {
+    fn register(&mut self, stream: net::TcpStream) -> std::io::Result<peer::Handle> {
         // get a new slot in the connection set
         let vacant = self.peers.vacant_entry();
         let key: usize = vacant.key();
@@ -68,7 +68,7 @@ impl Context {
             mio::Ready::readable(),
             mio::PollOpt::edge(),
         )?;
-        let (ctx, handler) = peer::new(stream)?;
+        let (ctx, handle) = peer::new(stream)?;
 
         // register the writer queue
         self.poll.register(
@@ -78,13 +78,13 @@ impl Context {
             mio::PollOpt::edge() | mio::PollOpt::oneshot(),
         )?;
 
-        // insert the context and return the handler
+        // insert the context and return the handle
         vacant.insert(ctx);
-        return Ok(handler);
+        return Ok(handle);
     }
 
     /// Connect to a peer, and register this peer
-    fn connect(&mut self, addr: &std::net::SocketAddr) -> std::io::Result<peer::Handler> {
+    fn connect(&mut self, addr: &std::net::SocketAddr) -> std::io::Result<peer::Handle> {
         // we need to estabilsh a stdlib tcp stream, since we need it to block
         let stream = std::net::TcpStream::connect(addr)?;
         let mio_stream = net::TcpStream::from_stream(stream)?;
@@ -133,8 +133,8 @@ impl Context {
                             // get the connect request from the channel
                             match self.connect_req_chan.try_recv() {
                                 Ok(req) => {
-                                    let handler = self.connect(&req.addr)?;
-                                    req.result_chan.send(Ok(handler)).unwrap();
+                                    let handle = self.connect(&req.addr)?;
+                                    req.result_chan.send(Ok(handle)).unwrap();
                                 }
                                 Err(e) => {
                                     match e {
@@ -302,12 +302,12 @@ impl Context {
     }
 }
 
-pub struct Handler {
+pub struct Handle {
     connect_req_chan: channel::Sender<ConnectRequest>
 }
 
-impl Handler {
-    pub fn connect(&self, addr: std::net::SocketAddr) -> std::io::Result<peer::Handler> {
+impl Handle {
+    pub fn connect(&self, addr: std::net::SocketAddr) -> std::io::Result<peer::Handle> {
         let (sender, receiver) = mpsc::channel();
         let request = ConnectRequest {
             addr: addr,
@@ -321,5 +321,5 @@ impl Handler {
 
 struct ConnectRequest {
     addr: std::net::SocketAddr,
-    result_chan: mpsc::Sender<std::io::Result<peer::Handler>>
+    result_chan: mpsc::Sender<std::io::Result<peer::Handle>>
 }
