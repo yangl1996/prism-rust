@@ -203,7 +203,7 @@ impl Context {
                                                 continue;
                                             }
                                             Ok(ReadResult::Message(m)) => {
-                                                info!("New message");
+                                                self.new_msg_chan.send((m, peer.handle.clone()));
                                                 continue;
                                             }
                                             Err(e) => {
