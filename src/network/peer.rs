@@ -172,14 +172,15 @@ pub fn new(stream: mio::net::TcpStream) -> std::io::Result<(Context, Handle)> {
         written_length: 0,
         state: WriteState::Payload,
     };
+    let handle = Handle {
+        write_queue: write_sender,
+    };
     let ctx = Context {
         addr: addr,
         stream: stream,
         reader: read_ctx,
         writer: write_ctx,
-    };
-    let handle = Handle {
-        write_queue: write_sender,
+        handle: handle.clone(),
     };
     return Ok((ctx, handle));
 }
@@ -189,8 +190,10 @@ pub struct Context {
     pub stream: mio::net::TcpStream,
     pub reader: ReadContext,
     pub writer: WriteContext,
+    pub handle: Handle,
 }
 
+#[derive(Clone)]
 pub struct Handle {
     write_queue: channel::Sender<message::Message>
 }
