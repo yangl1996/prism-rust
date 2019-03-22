@@ -26,7 +26,7 @@ pub enum Edge{
     VoterToProposerVote,
     VoterToProposerParentAndVote, // When a proposer block is both voted and proposer parent
     VoterToVoterParent,
-    /// Reverse Edges (Not all used)
+    /// Reverse Edges (Not all have to be used)
     TransactionFromProposerParent,
     /// Prop edge types
     ProposerFromProposerParent,
