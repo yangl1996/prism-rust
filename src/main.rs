@@ -49,7 +49,8 @@ fn main() {
     let peer_socket_addr = net::SocketAddr::new(peer_ip, peer_port);
 
     debug!("Starting P2P server at {}", peer_socket_addr);
-    let server = network::server::Server::start(peer_socket_addr).unwrap();
+    let (ctx, server) = network::server::new(peer_socket_addr).unwrap();
+    ctx.start();
 
     // connect to known peers
     if let Some(known_peers) = matches.values_of("known_peer") {
@@ -61,8 +62,8 @@ fn main() {
                     continue;
                 },
             };
-            match server.connect(&addr) {
-                Ok(()) => info!("Connected to outgoing peer {}", &addr),
+            match server.connect(addr) {
+                Ok(_) => info!("Connected to outgoing peer {}", &addr),
                 Err(e) => error!("Error connecting to peer {}: {}", addr, e),
             }
         }
