@@ -149,7 +149,7 @@ impl WriteContext {
     }
 }
 
-pub fn new(stream: mio::net::TcpStream) -> std::io::Result<(Context, Handler)> {
+pub fn new(stream: mio::net::TcpStream) -> std::io::Result<(Context, Handle)> {
     let reader_stream = stream.try_clone()?;
     let writer_stream = stream.try_clone()?;
     let addr = stream.peer_addr()?;
@@ -178,10 +178,10 @@ pub fn new(stream: mio::net::TcpStream) -> std::io::Result<(Context, Handler)> {
         reader: read_ctx,
         writer: write_ctx,
     };
-    let handler = Handler {
+    let handle = Handle {
         write_queue: write_sender,
     };
-    return Ok((ctx, handler));
+    return Ok((ctx, handle));
 }
 
 pub struct Context {
@@ -191,11 +191,11 @@ pub struct Context {
     pub writer: WriteContext,
 }
 
-pub struct Handler {
+pub struct Handle {
     write_queue: channel::Sender<message::Message>
 }
 
-impl Handler {
+impl Handle {
     pub fn write(&self, msg: message::Message) {
         self.write_queue.send(msg).unwrap();
         return;
