@@ -163,11 +163,10 @@ pub fn sample_voter_content1_hash_shouldbe() -> H256 {
 }
 
 
-// The block with valid sortition prood is produced.
+// The block with valid sortition proof is mined.
 pub fn sample_mined_block(index: u32) -> Block {
     let m : u32 = 100; // number of  voter trees
     let mut content_hash_vec : Vec<H256> = vec![];
-
 
     /// Adding voter content
     for i in 0..m {
