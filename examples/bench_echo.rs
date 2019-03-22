@@ -7,12 +7,10 @@ const REPEAT_TIME: usize = 100000;
 fn main() {
     stderrlog::new().verbosity(0).init().unwrap();
     let server1_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 9998);
-    let (ctx, server1) = prism::network::server::new(server1_addr).unwrap();
-    ctx.start();
+    let server1 = prism::network::start(server1_addr).unwrap();
 
     let server2_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 9999);
-    let (ctx, server2) = prism::network::server::new(server2_addr).unwrap();
-    ctx.start();
+    let server2 = prism::network::start(server2_addr).unwrap();
 
     let peer = server2.connect(server1_addr).unwrap();
 
