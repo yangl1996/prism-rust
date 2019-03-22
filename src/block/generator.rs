@@ -64,6 +64,8 @@ fn proposer_content1() -> Proposer_Content{
     let proposer_block_hashes :Vec<H256> = vec![];
     return Proposer_Content {transaction_block_hashes, proposer_block_hashes};
 }
+
+/// Returns a prop_block with 10 length sortition proof.
 pub fn prop_block1() -> Block{
     let header = header();
     let content = Content::Proposer(proposer_content1());
@@ -80,6 +82,8 @@ fn proposer_content2() -> Proposer_Content{
     let proposer_block_hashes :Vec<H256> = (0..prop_block_number).map(|_| prop_block1().hash()).collect();
     return Proposer_Content {transaction_block_hashes, proposer_block_hashes};
 }
+
+/// Returns a prop_block with 10 length sortition proof and a couple of references to prop blocks1
 pub fn prop_block2() -> Block{
     let header = header();
     let content = Content::Proposer(proposer_content2());
@@ -105,7 +109,7 @@ pub fn voter_block(chain_number: u16) -> Block{
 
 /// Returns a voter block w.p 0.1, tx block w.p .898 and prop block w.p 0.002.
 /// These blocks are mined randomly.
-pub fn mine_block() -> Block {
+pub fn block() -> Block {
     let mut rng = rand::thread_rng();
     let n1: f32 = rng.gen();
     if n1 < 0.1 {
@@ -114,7 +118,12 @@ pub fn mine_block() -> Block {
     } else if n1 < 0.998 {
         return tx_block();
     } else {
-        return prop_block1();
+        let n2: f32 = rng.gen();
+        if n2 < 0.1 {
+            return prop_block2();
+        }  else{
+            return prop_block1();
+        }
     }
 }
 
