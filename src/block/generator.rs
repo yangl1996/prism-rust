@@ -15,6 +15,12 @@ use crate::transaction::{Transaction,  Input, Output, Signature};
 use crate::crypto::generator as crypto_generator;
 use crate::transaction::generator as tx_generator;
 
+/// To shift the constants to separate file
+const SORTITION_PROOF_SIZE: u16 = 10;
+const TX_BLOCK_SIZE: u32 = 750; //  750 txs correspond to 200 KB.
+const PROP_BLOCK_SIZE: u32 = 500; //  500 tx block refs correspond to 20KB.
+const NUM_VOTER_CHAINS: u16 = 1_000;
+
 use rand::{Rng, RngCore};
 
 /// Returns a random header (with randomly filled fields)
@@ -29,10 +35,15 @@ pub fn header() -> Header {
     return Header::new(parent_hash, timestamp, nonce, content_root, extra_content, difficulty)
 }
 
+/// Returns a random H256 vec of size SORTITION_PROOF_SIZE.
+fn sortition_proof() -> Vec<H256> {
+    return (0..SORTITION_PROOF_SIZE).map(|_| crypto_generator::H256()).collect();
+}
+
 /// Returns a random tx_content filled with 1-10 transactions
 fn tx_content()  -> Tx_Content {
     let mut rng = rand::thread_rng();
-    let tx_number =  rng.gen_range(1, 10);
+    let tx_number =  rng.gen_range(TX_BLOCK_SIZE-20,TX_BLOCK_SIZE+20);
     let transactions :Vec<Transaction> = (0..tx_number).map(|_| tx_generator::transaction()).collect();
     return Tx_Content {transactions};
 }
@@ -41,22 +52,72 @@ fn tx_content()  -> Tx_Content {
 pub fn tx_block() -> Block{
     let header = header();
     let content = Content::Transaction(tx_content());
-    let sortition_proof :Vec<H256> = (0..10).map(|_| crypto_generator::H256()).collect();
+    let sortition_proof = sortition_proof();
+    return Block{header, content, sortition_proof};
+}
+
+/// no references to prop blocks.
+fn proposer_content1() -> Proposer_Content{
+    let mut rng = rand::thread_rng();
+    let tx_block_number =  rng.gen_range(PROP_BLOCK_SIZE-20, PROP_BLOCK_SIZE+20);
+    let transaction_block_hashes :Vec<H256> = (0..tx_block_number).map(|_| tx_block().hash()).collect();
+    let proposer_block_hashes :Vec<H256> = vec![];
+    return Proposer_Content {transaction_block_hashes, proposer_block_hashes};
+}
+pub fn prop_block1() -> Block{
+    let header = header();
+    let content = Content::Proposer(proposer_content1());
+    let sortition_proof = sortition_proof();
+    return Block{header, content, sortition_proof};
+}
+
+/// has references to prop blocks.
+fn proposer_content2() -> Proposer_Content{
+    let mut rng = rand::thread_rng();
+    let tx_block_number =  rng.gen_range(PROP_BLOCK_SIZE-20, PROP_BLOCK_SIZE+20);
+    let transaction_block_hashes :Vec<H256> = (0..tx_block_number).map(|_| tx_block().hash()).collect();
+    let prop_block_number =  rng.gen_range(1, 2);
+    let proposer_block_hashes :Vec<H256> = (0..prop_block_number).map(|_| prop_block1().hash()).collect();
+    return Proposer_Content {transaction_block_hashes, proposer_block_hashes};
+}
+pub fn prop_block2() -> Block{
+    let header = header();
+    let content = Content::Proposer(proposer_content2());
+    let sortition_proof = sortition_proof();
+    return Block{header, content, sortition_proof};
+}
+
+fn voter_content(chain_number: u16) -> Voter_Content{
+    let mut rng = rand::thread_rng();
+    let voter_parent_hash = crypto_generator::H256();
+    let prop_block_number =  rng.gen_range(0, 3); // One average 1 prop block
+    let proposer_block_votes :Vec<H256> = (0..prop_block_number).map(|_| prop_block1().hash()).collect();
+    return Voter_Content {chain_number, voter_parent_hash, proposer_block_votes};
+}
+pub fn voter_block(chain_number: u16) -> Block{
+    let header = header();
+    let content = Content::Voter(voter_content(chain_number));
+    let sortition_proof = sortition_proof();
     return Block{header, content, sortition_proof};
 }
 
 
-//pub fn voter_content(chain_number: u16, proposer_block_votes: Vec<H256>) -> Voter_Content{
-//    let voter_parent_hash = crypto_generator::H256();
-//    return Voter_Content {chain_number, voter_parent_hash, proposer_block_votes};
-//}
-//
-//pub fn voter_block(chain_number: u16) -> Block{
-//    let header = header();
-//    let content = Content::Voter(voter_content(chain_number));
-//    let sortition_proof :Vec<H256> = (0..10).map(|_| crypto_generator::H256()).collect();
-//    return Block{header, content, sortition_proof};
-//}
+
+/// Returns a voter block w.p 0.1, tx block w.p .898 and prop block w.p 0.002.
+/// These blocks are mined randomly.
+pub fn mine_block() -> Block {
+    let mut rng = rand::thread_rng();
+    let n1: f32 = rng.gen();
+    if n1 < 0.1 {
+        let chain_number: u16 = rng.gen_range(0,NUM_VOTER_CHAINS);
+        return voter_block(chain_number);
+    } else if n1 < 0.998 {
+        return tx_block();
+    } else {
+        return prop_block1();
+    }
+}
+
 
 //pub fn mining(tx_content: tx_Content, proposer_content: Proposer_Content,
 //            mut voter_content: Voter_Content, index: u16) ->  Block { //for now all voter contents are the same
