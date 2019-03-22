@@ -4,8 +4,6 @@ extern crate serde_derive;
 extern crate hex_literal;
 #[macro_use]
 extern crate clap;
-#[macro_use]
-extern crate rand;
 
 
 pub mod crypto;
