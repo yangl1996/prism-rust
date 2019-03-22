@@ -49,8 +49,7 @@ fn main() {
     let peer_socket_addr = net::SocketAddr::new(peer_ip, peer_port);
 
     debug!("Starting P2P server at {}", peer_socket_addr);
-    let (ctx, server) = network::server::new(peer_socket_addr).unwrap();
-    ctx.start();
+    let server = network::start(peer_socket_addr).unwrap();
 
     // connect to known peers
     if let Some(known_peers) = matches.values_of("known_peer") {

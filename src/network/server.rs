@@ -11,13 +11,14 @@ use std::sync::mpsc;
 const MAX_INCOMING_CLIENT: usize = 256;
 const MAX_EVENT: usize = 1024;
 
-pub fn new(addr: std::net::SocketAddr) -> std::io::Result<(Context, Handle)> {
+pub fn new(addr: std::net::SocketAddr, msg_sink: mpsc::Sender<(message::Message, peer::Handle)>) -> std::io::Result<(Context, Handle)> {
     let (connect_req_sender, connect_req_receiver) = channel::channel();
     let ctx = Context {
         peers: slab::Slab::new(),
         addr: addr,
         poll: mio::Poll::new()?,
         connect_req_chan: connect_req_receiver,
+        new_msg_chan: msg_sink,
     };
     let handle = Handle {
         connect_req_chan: connect_req_sender,
@@ -30,6 +31,7 @@ pub struct Context {
     addr: std::net::SocketAddr,
     poll: mio::Poll,
     connect_req_chan: channel::Receiver<ConnectRequest>,
+    new_msg_chan: mpsc::Sender<(message::Message, peer::Handle)>,
 }
 
 impl Context {

@@ -9,8 +9,7 @@ fn main() {
 
     for i in 0..5 {
         let listen_addr = SocketAddr::new(localhost, port + i);
-        let (ctx, server) = prism::network::server::new(listen_addr).unwrap();
-        ctx.start();
+        let server = prism::network::start(listen_addr).unwrap();
         servers.push(server);
         println!("Server {} started", i);
     }
