@@ -9,7 +9,7 @@ fn main() {
 
     for i in 0..5 {
         let listen_addr = SocketAddr::new(localhost, port + i);
-        let server = prism::network::server::Server::start(listen_addr).unwrap();
+        let server = prism::network::start(listen_addr).unwrap();
         servers.push(server);
         println!("Server {} started", i);
     }
@@ -18,7 +18,7 @@ fn main() {
     thread::sleep(time::Duration::new(1, 0));
     for i in 0..5 {
         for j in i+1..5 {
-            servers[i].connect(&SocketAddr::new(localhost, port + j as u16)).unwrap();
+            servers[i].connect(SocketAddr::new(localhost, port + j as u16)).unwrap();
             println!("Server {} connected to {}", i, j);
         }
     }
