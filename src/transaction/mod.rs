@@ -1,44 +1,47 @@
-pub mod validators;
+pub mod generator;
 
 use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::sign;
+use bincode::{serialize, deserialize};
+use std::{fmt, cmp};
 
 /// A Prism transaction. A transaction takes a set of existing coins and transforms them into a set
 /// of output coins.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Default, Clone, Debug)]
 pub struct Transaction {
-    input: Vec<Input>,
-    output: Vec<Output>,
-    signatures: Vec<Signature>
+    pub input: Vec<Input>,
+    pub output: Vec<Output>,
+    pub signatures: Vec<Signature>
 }
 
 impl Hashable for Transaction {
     fn hash(&self) -> H256 {
-        unimplemented!();
+        return ring::digest::digest(&ring::digest::SHA256, &serialize(self).unwrap()).into();
     }
 }
 
 /// An input of a transaction.
-#[derive(Serialize, Deserialize, Debug)]
-struct Input {
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Input {
     /// The hash of the transaction being referred to.
-    hash: H256,
+    pub hash: H256,
     /// The index of the output in question in that transaction.
-    index: u32
+    pub index: u32
 }
 
 /// An output of a transaction.
 // TODO: coinbase output (transaction fee). Maybe we don't need that in this case.
-#[derive(Serialize, Deserialize, Debug)]
-struct Output {
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Output {
     /// The amount of this output.
-    value: u64,
+    pub value: u64,
     /// The hash of the public key of the recipient (a.k.a. blockchain address).
-    recipient: H256,
+    pub recipient: H256,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-struct Signature {
+#[derive(Serialize, Deserialize, Debug, Clone, Hash)]
+pub struct Signature {
     pubkey: sign::PubKey,
     signature: sign::Signature,
 }
+
