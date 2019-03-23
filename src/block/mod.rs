@@ -1,5 +1,4 @@
 pub mod header;
-pub mod miner;
 pub mod validator;
 mod transaction;
 mod proposer;
