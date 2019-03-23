@@ -1,6 +1,7 @@
 /*
 Validation for blocks and transactions.
 */
+
 use crate::transaction::{Transaction, Input};
 use crate::state::StateStorage;
 use std::sync::{RwLock, Arc};
