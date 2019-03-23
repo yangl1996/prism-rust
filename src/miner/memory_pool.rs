@@ -127,7 +127,6 @@ pub mod tests {
         let mut pool = MemoryPool::new();
         pool.insert(generator::random());
         assert_eq!(pool.by_hash.len(), 1);
-        assert_eq!(pool.by_input.len(), 1);
     }
 
     // TODO: fix this
