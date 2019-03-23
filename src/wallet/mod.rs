@@ -64,7 +64,7 @@ impl Wallet {
     pub fn create_update(&mut self, recipient: H256, value: u64) -> Option<Transaction> {
         if let Some(tx) = self.create(recipient, value) {
             for input in &tx.input {
-                self.by_outpoint.remove(input);
+                self.remove(input);
             }
             for (index,output) in tx.output.iter().enumerate() {
                 let hash = tx.hash();
