@@ -1,159 +1,55 @@
 use super::message;
+use super::peer::{self, ReadResult, WriteResult};
 use byteorder::{BigEndian, ByteOrder};
 use log::{debug, error, info, trace, warn};
 use mio::{self, net};
-use std::cell::UnsafeCell;
 use std::io::{Read, Write};
-use std::sync::{Arc, RwLock};
 use std::thread;
+use mio_extras::channel;
+use std::sync::mpsc;
 
 const MAX_INCOMING_CLIENT: usize = 256;
 const MAX_EVENT: usize = 1024;
 
-// PeerReaderCell is UnsafeCell with Send and Sync forcefully marked. It is used to
-// enable interior mutability of Peer. We need it because we use RwLock to control
-// peers, and can only obtain &Peer when obtaining a read lock on peers. Thus, we
-// need to implement read() for &Peer, instead of &mut Peer. By manually ensuring
-// that only one thread has access to the fields wrapped in PeerReaderCell, we don't
-// have data race, and avoid the performance overhead of wrapping those states in
-// Mutex of RwCells.
-
-struct PeerReaderCell<T>(UnsafeCell<T>);
-
-unsafe impl<T> Send for PeerReaderCell<T> {}
-unsafe impl<T> Sync for PeerReaderCell<T> {}
-
-impl<T> PeerReaderCell<T> {
-    fn new(data: T) -> Self {
-        return Self(UnsafeCell::new(data));
-    }
-
-    fn get(&self) -> *mut T {
-        return self.0.get();
-    }
+pub fn new(addr: std::net::SocketAddr, msg_sink: mpsc::Sender<(message::Message, peer::Handle)>) -> std::io::Result<(Context, Handle)> {
+    let (connect_req_sender, connect_req_receiver) = channel::channel();
+    let ctx = Context {
+        peers: slab::Slab::new(),
+        addr: addr,
+        poll: mio::Poll::new()?,
+        connect_req_chan: connect_req_receiver,
+        new_msg_chan: msg_sink,
+    };
+    let handle = Handle {
+        connect_req_chan: connect_req_sender,
+    };
+    return Ok((ctx, handle));
 }
 
-enum DecodeState {
-    Length,
-    Payload,
-}
-
-struct Peer {
-    stream: mio::net::TcpStream,
-    token: mio::Token,
-    reader: PeerReaderCell<std::io::BufReader<mio::net::TcpStream>>,
-    writer: std::io::BufWriter<mio::net::TcpStream>,
+pub struct Context {
+    peers: slab::Slab<peer::Context>,
     addr: std::net::SocketAddr,
-    buffer: PeerReaderCell<Vec<u8>>,
-    msg_length: PeerReaderCell<usize>,
-    read_length: PeerReaderCell<usize>,
-    state: PeerReaderCell<DecodeState>,
-}
-
-impl Peer {
-    fn new(stream: mio::net::TcpStream, token: mio::Token) -> std::io::Result<Self> {
-        let reader_stream = stream.try_clone()?;
-        let writer_stream = stream.try_clone()?;
-        let addr = stream.peer_addr()?;
-        let bufreader = std::io::BufReader::new(reader_stream);
-        let bufwriter = std::io::BufWriter::new(writer_stream);
-        return Ok(Self {
-            stream: stream,
-            token: token,
-            reader: PeerReaderCell::new(bufreader),
-            writer: bufwriter,
-            addr: addr,
-            buffer: PeerReaderCell::new(vec![0; std::mem::size_of::<u32>()]),
-            msg_length: PeerReaderCell::new(std::mem::size_of::<u32>()),
-            read_length: PeerReaderCell::new(0),
-            state: PeerReaderCell::new(DecodeState::Length),
-        });
-    }
-
-    fn read(&self) -> std::io::Result<usize> {
-        let reader = self.reader.get();
-        let buffer = self.buffer.get();
-        let msg_length = self.msg_length.get();
-        let read_length = self.read_length.get();
-        let state = self.state.get();
-
-        unsafe {
-            let bytes_read = (*reader).read(&mut (*buffer)[*read_length..*msg_length]);
-            match bytes_read {
-                Ok(0) => {
-                    return Ok(0);
-                }
-                Ok(size) => {
-                    // we got some data, move the cursor
-                    *read_length += size;
-                    if *read_length == *msg_length {
-                        // buffer filled, process the buffer
-                        match *state {
-                            DecodeState::Length => {
-                                let message_length =
-                                    BigEndian::read_u32(&(*buffer)[0..std::mem::size_of::<u32>()]);
-                                *state = DecodeState::Payload;
-                                *read_length = 0;
-                                *msg_length = message_length as usize;
-                                if (*buffer).capacity() < *msg_length {
-                                    (*buffer).resize(*msg_length, 0);
-                                }
-                            }
-                            DecodeState::Payload => {
-                                let new_payload: message::Message =
-                                    bincode::deserialize(&(*buffer)[0..*msg_length]).unwrap();
-                                *state = DecodeState::Length;
-                                *read_length = 0;
-                                *msg_length = std::mem::size_of::<u32>();
-                            }
-                        }
-                    }
-                    return Ok(size);
-                }
-                Err(e) => {
-                    return Err(e);
-                }
-            }
-        }
-    }
-}
-
-pub struct Server {
-    peers: RwLock<slab::Slab<Peer>>,
-    pub addr: std::net::SocketAddr,
     poll: mio::Poll,
+    connect_req_chan: channel::Receiver<ConnectRequest>,
+    new_msg_chan: mpsc::Sender<(message::Message, peer::Handle)>,
 }
 
-impl Server {
-    pub fn start(addr: std::net::SocketAddr) -> std::io::Result<Arc<Self>> {
-        let server = Self {
-            peers: RwLock::new(slab::Slab::new()),
-            addr: addr,
-            poll: mio::Poll::new()?,
-        };
-        let server_ptr = Arc::new(server);
-        let server_listening = Arc::clone(&server_ptr);
+impl Context {
+    /// Start a new server context.
+    pub fn start(mut self) -> std::io::Result<()> {
         thread::spawn(move || {
-            server_listening.listen().unwrap_or_else(|e| {
+            self.listen().unwrap_or_else(|e| {
                 error!("Error occurred in P2P server: {}", e);
                 return;
             });
         });
-        return Ok(server_ptr);
+        return Ok(());
     }
-
-    pub fn connect(&self, addr: &std::net::SocketAddr) -> std::io::Result<()> {
-        // we need to estabilsh a stdlib tcp stream, since we need it to block
-        let stream = std::net::TcpStream::connect(addr)?;
-        let mio_stream = net::TcpStream::from_stream(stream)?;
-        self.register_new_peer(mio_stream)?;
-        Ok(())
-    }
-
-    fn register_new_peer(&self, stream: net::TcpStream) -> std::io::Result<()> {
-        // get new slot in the connection set
-        let mut peers = self.peers.write().unwrap();
-        let vacant = peers.vacant_entry();
+    
+    /// Register a TCP stream in the event loop, and initialize peer context.
+    fn register(&mut self, stream: net::TcpStream) -> std::io::Result<peer::Handle> {
+        // get a new slot in the connection set
+        let vacant = self.peers.vacant_entry();
         let key: usize = vacant.key();
         if key >= MAX_INCOMING_CLIENT {
             // too many connections
@@ -162,33 +58,70 @@ impl Server {
                 "max peer reached, cannot accept new connections",
             ));
         }
-        let new_connection = Peer::new(stream, mio::Token(key))?;
-        // register the new connection and insert
+
+        // set two tokens, one for socket and one for write queue
+        let socket_token = mio::Token(key * 2);
+        let writer_token = mio::Token(key * 2 + 1);
+
+        // register the new connection
         self.poll.register(
-            &new_connection.stream,
-            new_connection.token,
+            &stream,
+            socket_token,
             mio::Ready::readable(),
             mio::PollOpt::edge(),
         )?;
-        vacant.insert(new_connection);
-        Ok(())
+        let (ctx, handle) = peer::new(stream)?;
+
+        // register the writer queue
+        self.poll.register(
+            &ctx.writer.queue,
+            writer_token,
+            mio::Ready::readable(),
+            mio::PollOpt::edge() | mio::PollOpt::oneshot(),
+        )?;
+
+        // insert the context and return the handle
+        vacant.insert(ctx);
+        return Ok(handle);
     }
 
-    fn listen(&self) -> std::io::Result<()> {
+    /// Connect to a peer, and register this peer
+    fn connect(&mut self, addr: &std::net::SocketAddr) -> std::io::Result<peer::Handle> {
+        // we need to estabilsh a stdlib tcp stream, since we need it to block
+        let stream = std::net::TcpStream::connect(addr)?;
+        let mio_stream = net::TcpStream::from_stream(stream)?;
+        return self.register(mio_stream);
+    }
+
+    /// The main event loop of the server.
+    fn listen(&mut self) -> std::io::Result<()> {
         // bind server to passed addr and register to the poll
         let server = net::TcpListener::bind(&self.addr)?;
-        const SERVER: mio::Token = mio::Token(std::usize::MAX - 1); // token for server new connection event
+
+        // token for server new connection event
+        const INCOMING: mio::Token = mio::Token(std::usize::MAX - 1); 
         self.poll.register(
             &server,
-            SERVER,
+            INCOMING,
             mio::Ready::readable(),
             mio::PollOpt::edge(),
         )?;
+
+        // token for outgoing connection request
+        const OUTGOING: mio::Token = mio::Token(std::usize::MAX - 2);
+        self.poll.register(
+            &self.connect_req_chan,
+            OUTGOING,
+            mio::Ready::readable(),
+            mio::PollOpt::edge(),
+        )?;
+
         info!(
             "P2P server listening to incoming connections at {}",
             server.local_addr()?
         );
 
+        // initialize space for polled events
         let mut events = mio::Events::with_capacity(MAX_EVENT);
 
         loop {
@@ -196,7 +129,28 @@ impl Server {
 
             for event in events.iter() {
                 match event.token() {
-                    SERVER => {
+                    OUTGOING => {
+                        // we have a request for new outgoing connection
+                        loop {
+                            // get the connect request from the channel
+                            match self.connect_req_chan.try_recv() {
+                                Ok(req) => {
+                                    let handle = self.connect(&req.addr)?;
+                                    req.result_chan.send(Ok(handle)).unwrap();
+                                }
+                                Err(e) => {
+                                    match e {
+                                        mpsc::TryRecvError::Empty => break,
+                                        mpsc::TryRecvError::Disconnected => {
+                                            self.poll.deregister(&self.connect_req_chan)?;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    INCOMING => {
                         // we have a new connection
                         // we are using edge-triggered events, loop until block
                         loop {
@@ -204,8 +158,8 @@ impl Server {
                             match server.accept() {
                                 Ok((stream, client_addr)) => {
                                     debug!("New incoming connection from {}", client_addr);
-                                    match self.register_new_peer(stream) {
-                                        Ok(()) => {
+                                    match self.register(stream) {
+                                        Ok(_) => {
                                             info!("New incoming peer {}", client_addr);
                                         }
                                         Err(e) => {
@@ -228,40 +182,118 @@ impl Server {
                         }
                     }
                     mio::Token(token_id) => {
-                        // one of the connected sockets is ready to read
-                        let peers = self.peers.read().unwrap();
-                        let peer = &peers[token_id];
-                        // we are using edge-triggered events, loop until block
-                        loop {
-                            match peer.read() {
-                                Ok(0) => {
-                                    // EOF, remove it from the connections set
-                                    info!("Peer {} dropped connection", peer.addr);
-                                    drop(peers);
-                                    let mut peers = self.peers.write().unwrap();
-                                    peers.remove(token_id);
-                                    break;
+                        // peer id (the index in the peers list) is token_id/2
+                        let peer_id = token_id >> 1;
+                        // if the token_id is odd, it's new write request, else it's socket
+                        match token_id & 0x01 {
+                            0 => {
+                                let readiness = event.readiness();
+                                if readiness.is_readable() {
+                                    // we are using edge-triggered events, loop until block
+                                    let peer = &mut self.peers[peer_id];
+                                    loop {
+                                        match peer.reader.read() {
+                                            Ok(ReadResult::EOF) => {
+                                                // EOF, remove it from the connections set
+                                                info!("Peer {} dropped connection", peer.addr);
+                                                self.peers.remove(peer_id);
+                                                break;
+                                            }
+                                            Ok(ReadResult::Continue) => {
+                                                continue;
+                                            }
+                                            Ok(ReadResult::Message(m)) => {
+                                                self.new_msg_chan.send((m, peer.handle.clone()));
+                                                continue;
+                                            }
+                                            Err(e) => {
+                                                if e.kind() == std::io::ErrorKind::WouldBlock {
+                                                    // socket is not ready anymore, stop reading
+                                                    break;
+                                                } else {
+                                                    warn!(
+                                                        "Error reading peer {}, disconnecting: {}",
+                                                        peer.addr, e
+                                                    );
+                                                    // TODO: we did not shutdown the stream. Cool?
+                                                    self.peers.remove(peer_id);
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
-                                Ok(_) => {
-                                    continue;
-                                }
-                                Err(e) => {
-                                    if e.kind() == std::io::ErrorKind::WouldBlock {
-                                        // socket is not ready anymore, stop reading
-                                        break;
-                                    } else {
-                                        warn!(
-                                            "Error reading peer {}, disconnecting: {}",
-                                            peer.addr, e
-                                        );
-                                        drop(peers);
-                                        let mut peers = self.peers.write().unwrap();
-                                        // TODO: we did not shutdown the stream. Cool?
-                                        peers.remove(token_id);
-                                        break;
+                                if readiness.is_writable() {
+                                    let peer = &mut self.peers[peer_id];
+                                    match peer.writer.write() {
+                                        Ok(WriteResult::Complete) => {
+                                            // we wrote everything in the write queue
+                                            let socket_token = mio::Token(peer_id * 2);
+                                            let writer_token = mio::Token(peer_id * 2 + 1);
+                                            // we've done writing. no longer interested.
+                                            self.poll.reregister(
+                                                &peer.stream,
+                                                socket_token,
+                                                mio::Ready::readable(),
+                                                mio::PollOpt::edge()
+                                            )?;
+                                            // we're interested in write queue again.
+                                            self.poll.reregister(
+                                                &peer.writer.queue,
+                                                writer_token,
+                                                mio::Ready::readable(),
+                                                mio::PollOpt::edge() | mio::PollOpt::oneshot(),
+                                            )?;
+                                            continue;
+                                        }
+                                        Ok(WriteResult::EOF) => {
+                                            // EOF, remove it from the connections set
+                                            info!("Peer {} dropped connection", peer.addr);
+                                            self.peers.remove(peer_id);
+                                            continue;   // continue event loop
+                                        }
+                                        Ok(WriteResult::ChanClosed) => {
+                                            // the channel is closed. no more writes.
+                                            let socket_token = mio::Token(peer_id * 2);
+                                            self.poll.reregister(
+                                                &peer.stream,
+                                                socket_token,
+                                                mio::Ready::readable(),
+                                                mio::PollOpt::edge()
+                                            )?;
+                                            self.poll.deregister(&peer.writer.queue)?;
+                                            continue;
+                                        }
+                                        Err(e) => {
+                                            if e.kind() == std::io::ErrorKind::WouldBlock {
+                                                // socket is not ready anymore, stop reading
+                                                continue;   // continue event loop
+                                            } else {
+                                                warn!(
+                                                    "Error writing peer {}, disconnecting: {}",
+                                                    peer.addr, e
+                                                );
+                                                // TODO: we did not shutdown the stream. Cool?
+                                                self.peers.remove(peer_id);
+                                                continue;   // continue event loop
+                                            }
+                                        }
                                     }
                                 }
                             }
+                            1 => {
+                                let peer = &mut self.peers[peer_id];
+                                // we have stuff to write at the writer queue
+                                let socket_token = mio::Token(peer_id * 2);
+                                // register for writable event
+                                self.poll.reregister(
+                                    &peer.stream,
+                                    socket_token,
+                                    mio::Ready::readable() | mio::Ready::writable(),
+                                    mio::PollOpt::edge()
+                                )?;
+                            }
+                            _ => panic!()
                         }
                     }
                 }
@@ -270,4 +302,26 @@ impl Server {
 
         Ok(())
     }
+}
+
+pub struct Handle {
+    connect_req_chan: channel::Sender<ConnectRequest>
+}
+
+impl Handle {
+    pub fn connect(&self, addr: std::net::SocketAddr) -> std::io::Result<peer::Handle> {
+        let (sender, receiver) = mpsc::channel();
+        let request = ConnectRequest {
+            addr: addr,
+            result_chan: sender,
+        };
+        self.connect_req_chan.send(request).unwrap();
+        return receiver.recv().unwrap();
+    }
+}
+
+
+struct ConnectRequest {
+    addr: std::net::SocketAddr,
+    result_chan: mpsc::Sender<std::io::Result<peer::Handle>>
 }
