@@ -1,4 +1,3 @@
-pub mod transaction_builder;
 pub mod generator;
 
 use crate::crypto::hash::{Hashable, H256};
@@ -44,35 +43,5 @@ pub struct Output {
 pub struct Signature {
     pubkey: sign::PubKey,
     signature: sign::Signature,
-}
-
-#[derive(Default, Clone)]
-pub struct IndexedTransaction {
-    pub hash: H256,
-    pub raw: Transaction,
-}
-
-impl From<Transaction> for IndexedTransaction {
-    fn from(tx: Transaction) -> Self {
-        IndexedTransaction {
-            hash: tx.hash(),
-            raw: tx,
-        }
-    }
-}
-
-impl IndexedTransaction {
-    pub fn new(hash: H256, transaction: Transaction) -> Self {
-        IndexedTransaction {
-            hash: hash,
-            raw: transaction,
-        }
-    }
-}
-
-impl cmp::PartialEq for IndexedTransaction {
-    fn eq(&self, other: &Self) -> bool {
-        self.hash == other.hash
-    }
 }
 
