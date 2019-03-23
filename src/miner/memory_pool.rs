@@ -1,14 +1,3 @@
-/** Memory pool that holds unconfirmed transactions. Miner picks transactions from memory pool.
-    Methods for memory pool:
-    new()
-    is_double_spend(transaction)
-    insert_verified(transaction) //we need to check_double_spend before insert, NOTE: how to check_double_spend in concurrency?
-    remove_by_hash //if a tx is confirmed, we remove it
-    remove_by_prevout //for all inputs of this tx, we also need to call remove_by_prevout. to discuss: remove_by_prevout can replace remove_by_hash?
-    get_n_transactions(n) //get n transactions
-    get_n_transactions_hash(n) //just hash of transactions
-    */
-
 use std::collections::HashMap;
 use std::collections::BTreeMap;
 use std::collections::VecDeque;
@@ -66,14 +55,14 @@ impl MemoryPool {
 
         // associate all inputs with this transaction
         for input in &entry.transaction.input {
-            self.by_input.insert(input.clone(), entry.hash.clone());
+            self.by_input.insert(input.clone(), entry.hash);
         }
 
         // add to btree
-        self.by_storage_index.insert(entry.storage_index, entry.hash.clone());
+        self.by_storage_index.insert(entry.storage_index, entry.hash);
 
         // add to hashmap
-        self.by_hash.insert(entry.hash.clone(), entry);
+        self.by_hash.insert(entry.hash, entry);
     }
 
     pub fn get(&self, h: &H256) -> Option<&Entry> {
@@ -94,33 +83,31 @@ impl MemoryPool {
         self.by_hash.contains_key(hash)
     }
 
-    pub fn remove_by_prevout(&mut self, prevout: &Input) -> Vec<Entry> {
+    pub fn remove_by_input(&mut self, prevout: &Input) {
         //use a deque to recursively remove, in case there are multi level dependency between txs.
         let mut queue: VecDeque<Input> = VecDeque::new();
-        let mut removed: Vec<Entry> = Vec::new();
         queue.push_back(prevout.clone());
 
         while let Some(prevout) = queue.pop_front() {
             if let Some(entry_hash) = self.by_input.get(&prevout) {
-                let entry_hash = entry_hash.clone();
+                let entry_hash = *entry_hash;
                 let entry = self.remove(&entry_hash).unwrap();
                 let num_out = entry.transaction.output.len();
                 for out_idx in 0..num_out {
                     queue.push_back(Input {
-                        hash: entry_hash.clone(),
+                        hash: entry_hash,
                         index: out_idx as u32,
                     });
                 }
-                removed.push(entry);
             }
         }
-        return removed;
+        return;
     }
 
     // TODO: get random_n removed for now
 
     /// get n transaction by fifo
-    pub fn get_first_n(&self, n: usize) -> Vec<Entry> {
+    pub fn get_transactions(&self, n: usize) -> Vec<Entry> {
         self.by_storage_index.values().take(n).map(|hash|self.get(hash).unwrap().clone()).collect()
     }
 }
@@ -128,6 +115,8 @@ impl MemoryPool {
 
 #[cfg(test)]
 pub mod tests {
+    // TODO: add more tests.
+
     use super::MemoryPool;
     use crate::transaction::{Transaction, Input, Output};
     use crate::crypto::hash::{Hashable, H256};
