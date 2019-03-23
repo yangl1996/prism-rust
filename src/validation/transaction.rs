@@ -14,7 +14,7 @@ pub struct NonEmptyValidator;
 
 impl TransactionValidator for NonEmptyValidator {
     fn is_valid(&self, transaction: &Transaction) -> bool {
-        !(transaction.input.is_empty() || transaction.input.is_empty())
+        !(transaction.input.is_empty() || transaction.output.is_empty())
     }
 }
 
