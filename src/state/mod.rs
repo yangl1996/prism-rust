@@ -1,63 +1,51 @@
 use crate::crypto::hash::{H256, Hashable};
 use std::collections::{HashSet, HashMap};
-use crate::transaction::Transaction;
+use crate::transaction::{Transaction, Input, Output};
 
-#[derive(Default, Debug)]
-pub struct StateStorage {
-    /// Stores state/utxo ( transaction_hash, indices:=set(index) ) by a hashmap
-    by_transaction_hash: HashMap<H256, HashSet<u32>>,
-    // for now it does not store the value of the coin
+// TODO: learn from Parity
+
+#[derive(Debug)]
+pub struct Storage {
+    /// Transaction outpoint -> coin value and owner.
+    by_outpoint: HashMap<Input, Output>,
 }
 
-impl StateStorage {
+impl Storage {
     pub fn new() -> Self {
-        Self::default()
+        return Self {
+            by_outpoint: HashMap::new(),
+        };
     }
 
-    /// insert only one index of a transaction
-    pub fn insert(&mut self, hash: &H256, index: &u32) {
-        self.by_transaction_hash.entry(hash.clone()).or_insert_with(HashSet::new).insert(index.clone());
+    pub fn insert(&mut self, outpoint: Input, coin: Output) {
+        self.by_outpoint.insert(outpoint, coin);
+        return;
     }
 
-    /// insert every output of a transaction, this transaction should not previously be in state
-    pub fn add(&mut self, tx: &Transaction) {
-        let hash = tx.hash();
-        if self.by_transaction_hash.contains_key(&hash) {
-            panic!("adding a transaction already in state!");
-        }
-        self.by_transaction_hash.insert(hash, (0..tx.output.len() as u32).collect());
+    pub fn contains(&self, outpoint: &Input) -> bool {
+        return self.by_outpoint.contains_key(outpoint);
     }
 
-    pub fn contains(&self, hash: &H256, index: &u32) -> bool {
-        self.by_transaction_hash.get(hash).map_or(false, |indices|indices.contains(index))
-    }
-
-    pub fn remove(&mut self, hash: &H256, index: &u32) {
-        self.by_transaction_hash.get_mut(hash).map(|indices|indices.remove(index));
-        if let Some(indices) = self.by_transaction_hash.get(hash) {
-            if indices.is_empty() {
-                self.by_transaction_hash.remove(hash);
-            }
-        }
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.by_transaction_hash.is_empty()
+    pub fn remove(&mut self, outpoint: &Input) {
+        self.by_outpoint.remove(outpoint);
+        return;
     }
 }
 
+// TODO: add tests.
+/*
 #[cfg(test)]
 pub mod tests {
-    use super::StateStorage;
-    use crate::crypto::generator as crypto_generator;
+    use super::Storage;
+    use crate::crypto;
     use crate::transaction::{Transaction, generator};
     use crate::crypto::hash::Hashable;
 
     #[test]
     fn test_state_basic() {
         let mut state = StateStorage::new();
-        assert_eq!(state.by_transaction_hash.len(), 0);
-        let h = crypto_generator::h256();
+        assert_eq!(state.by_outpoint.len(), 0);
+        let h = crypto::generator::h256();
         state.insert(&h, &0);
         assert_eq!(state.by_transaction_hash.len(), 1);
         state.insert(&h, &1);
@@ -76,6 +64,7 @@ pub mod tests {
         assert_eq!(state.contains(&h,&2), false);
         assert_eq!(state.by_transaction_hash.len(), 0);
     }
+
     #[test]
     fn test_state_multiple() {
         let mut state = StateStorage::new();
@@ -89,6 +78,7 @@ pub mod tests {
         }
 
     }
+
     #[test]
     fn test_state_add() {
         let mut state = StateStorage::new();
@@ -106,3 +96,4 @@ pub mod tests {
         assert_eq!(state.by_transaction_hash.len(), 0);
     }
 }
+*/
