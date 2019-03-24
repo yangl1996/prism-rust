@@ -1,47 +1,47 @@
 use crate::crypto::hash::{H256};
 
 #[derive(Serialize, Deserialize, Clone, Copy, Ord, Eq, PartialEq, PartialOrd, Hash)]
-pub struct ProposerNodeData {
+pub struct NodeData {
     /// Level of the proposer node
     pub level: u32,
     /// Leadership Status
-    pub leadership_status: PropBlockLeaderStatus,
+    pub leadership_status: Status,
     /// Number of votes
     pub votes: u16,
 }
 
-impl Default for ProposerNodeData {
+impl Default for NodeData {
     fn default() -> Self {
         let level = 0;
-        let leadership_status = PropBlockLeaderStatus::NotALeader;
-        return ProposerNodeData {level, leadership_status, votes: 0};
+        let leadership_status = Status::NotALeader;
+        return NodeData {level, leadership_status, votes: 0};
     }
 }
 
-impl std::fmt::Display for ProposerNodeData {
+impl std::fmt::Display for NodeData {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "level: {}; #votes: {}", self.level, self.votes)?; // Ignoring status for now
         Ok(())
     }
 }
 
-impl ProposerNodeData{
+impl NodeData{
     pub fn increment_vote(&mut self){
         self.votes += 1;
     }
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Ord, Eq, PartialEq, PartialOrd, Hash)]
-pub enum PropBlockLeaderStatus{
+pub enum Status{
     ConfirmedLeader,
     PotentialLeader,
     NotALeader
 }
 
-impl ProposerNodeData {
+impl NodeData {
     pub fn genesis(number_of_voter_chains: u16) -> Self{
-        let mut genesis = ProposerNodeData::default();
-        genesis.leadership_status = PropBlockLeaderStatus::ConfirmedLeader;
+        let mut genesis = NodeData::default();
+        genesis.leadership_status = Status::ConfirmedLeader;
         genesis.votes = number_of_voter_chains;
         return genesis;
     }
@@ -50,7 +50,7 @@ impl ProposerNodeData {
 }
 
 #[derive(Serialize, Deserialize, Clone, Ord, Eq, PartialEq, PartialOrd, Hash)]
-pub struct ProposerTree{
+pub struct Tree{
     /// Best proposer node on the tree chain -- The node with max level
     pub best_block: H256,
     /// Best level
@@ -63,17 +63,17 @@ pub struct ProposerTree{
     pub leader_nodes : Vec<Option<H256>> // functionality not implemented
 }
 
-impl Default for ProposerTree {
+impl Default for Tree {
     fn default() -> Self {
         let best_block = H256::default();
         let prop_nodes :Vec< Vec<H256> > = vec![];
         let all_votes :Vec< Vec<H256> > = vec![];
         let leader_nodes :Vec<Option<H256>> = vec![];
-        return ProposerTree {best_block, best_level:0, prop_nodes, all_votes, leader_nodes};
+        return Tree {best_block, best_level:0, prop_nodes, all_votes, leader_nodes};
     }
 }
 
-impl ProposerTree{
+impl Tree{
     ///  Adding a proposer block at a level
     pub fn add_block_at_level(&mut self, block: H256, level: u32){
 //        println!("prop tree num levels {}", self.prop_nodes.len());
@@ -101,7 +101,7 @@ impl ProposerTree{
     }
 }
 
-impl std::fmt::Display for ProposerTree {
+impl std::fmt::Display for Tree {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "best_block: {}; best_level: {};",
                self.best_block, self.best_level)?; // Ignoring status for now
