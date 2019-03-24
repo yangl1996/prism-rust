@@ -26,25 +26,25 @@ use rand::{Rng, RngCore};
 /// Returns a random header (with randomly filled fields)
 pub fn header() -> Header {
     let mut rng = rand::thread_rng();
-    let parent_hash = crypto_generator::H256();
+    let parent_hash = crypto_generator::h256();
     let timestamp = rng.next_u64();
     let nonce = rng.next_u32();
-    let content_root = crypto_generator::H256();
-    let extra_content = crypto_generator::u8_32_array();
-    let difficulty = crypto_generator::u8_32_array();
+    let content_root = crypto_generator::h256();
+    let extra_content = [0; 32];
+    let difficulty = [0; 32];
     return Header::new(parent_hash, timestamp, nonce, content_root, extra_content, difficulty)
 }
 
 /// Returns a random H256 vec of size SORTITION_PROOF_SIZE.
 fn sortition_proof() -> Vec<H256> {
-    return (0..SORTITION_PROOF_SIZE).map(|_| crypto_generator::H256()).collect();
+    return (0..SORTITION_PROOF_SIZE).map(|_| crypto_generator::h256()).collect();
 }
 
 /// Returns a random tx_content filled with 1-10 transactions
 fn tx_content()  -> Tx_Content {
     let mut rng = rand::thread_rng();
     let tx_number =  rng.gen_range(TX_BLOCK_SIZE-20,TX_BLOCK_SIZE+20);
-    let transactions :Vec<Transaction> = (0..tx_number).map(|_| tx_generator::transaction()).collect();
+    let transactions :Vec<Transaction> = (0..tx_number).map(|_| tx_generator::random()).collect();
     return Tx_Content {transactions};
 }
 
@@ -93,7 +93,7 @@ pub fn prop_block2() -> Block{
 
 fn voter_content(chain_number: u16) -> Voter_Content{
     let mut rng = rand::thread_rng();
-    let voter_parent_hash = crypto_generator::H256();
+    let voter_parent_hash = crypto_generator::h256();
     let prop_block_number =  rng.gen_range(0, 3); // One average 1 prop block
     let proposer_block_votes :Vec<H256> = (0..prop_block_number).map(|_| prop_block1().hash()).collect();
     return Voter_Content {chain_number, voter_parent_hash, proposer_block_votes};

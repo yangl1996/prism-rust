@@ -3,8 +3,8 @@ pub mod miner;
 pub mod transaction;
 pub mod proposer;
 pub mod voter;
-mod test_util;
 pub mod generator;
+mod test_util;
 
 use crate::crypto::hash::{Hashable, H256};
 

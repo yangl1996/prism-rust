@@ -85,4 +85,3 @@ impl std::fmt::Debug for PubKey {
         Ok(())
     }
 }
-
