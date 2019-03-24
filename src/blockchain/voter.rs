@@ -2,39 +2,39 @@ use crate::crypto::hash::{H256};
 use serde::{Serialize, Deserialize};
 
 #[derive(Serialize, Deserialize, Clone, Copy, Ord, Eq, PartialEq, PartialOrd, Hash)]
-pub struct VoterNodeData {
+pub struct NodeData {
     /// The chain of the voter node
     pub chain_number: u16,
     /// Height from the genesis node
     pub level: u32,
     /// Status of the voter block
-    pub status: VoterBlockStatus
+    pub status: Status
 }
 
-impl VoterNodeData {
+impl NodeData {
     pub fn genesis(chain_number: u16) -> Self{
-        let mut genesis = VoterNodeData::default();
+        let mut genesis = NodeData::default();
         genesis.chain_number = chain_number;
-        genesis.status = VoterBlockStatus::OnMainChain;
+        genesis.status = Status::OnMainChain;
         return genesis;
     }
 
     pub fn is_on_longest_chain(&self) -> bool{
-        return self.status == VoterBlockStatus::OnMainChain;
+        return self.status == Status::OnMainChain;
     }
 }
 
-impl Default for VoterNodeData {
+impl Default for NodeData {
     fn default() -> Self {
         let chain_number :u16 = 0;
         let level = 0;
-        let status = VoterBlockStatus::OnMainChain;
-        return VoterNodeData {chain_number, level, status};
+        let status = Status::OnMainChain;
+        return NodeData {chain_number, level, status};
     }
 }
 
 
-impl std::fmt::Display for VoterNodeData {
+impl std::fmt::Display for NodeData {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "CN: {}; level: {}", self.chain_number, self.level)?; // Ignoring status for now
         Ok(())
@@ -42,13 +42,13 @@ impl std::fmt::Display for VoterNodeData {
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Ord, Eq, PartialEq, PartialOrd, Hash)]
-pub enum VoterBlockStatus{
+pub enum Status{
     OnMainChain,
     Orphan
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Ord, Eq, PartialEq, PartialOrd, Hash)]
-pub struct VoterChain{
+pub struct Chain{
     /// The chain number
     pub chain_number: u16, //todo: remove this?
     /// Best block on the chain
@@ -57,7 +57,7 @@ pub struct VoterChain{
     pub best_level: u32
 }
 
-impl VoterChain{
+impl Chain{
     pub fn new(chain_number: u16, best_block: H256) -> Self {
         return Self{chain_number, best_block, best_level: 0};
     }
@@ -88,7 +88,7 @@ impl VoterChain{
     }
 }
 
-impl std::fmt::Display for VoterChain {
+impl std::fmt::Display for Chain {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "CN: {}; best_block: {}; best_level: {}",
                self.chain_number, self.best_block, self.best_level)?; // Ignoring status for now
