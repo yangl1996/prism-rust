@@ -1,4 +1,6 @@
 use crate::crypto::hash::{H256};
+use std::collections::HashMap;
+use std::collections::HashSet;
 
 #[derive(Serialize, Deserialize, Clone, Copy, Ord, Eq, PartialEq, PartialOrd, Hash)]
 pub struct NodeData {
@@ -14,7 +16,7 @@ impl Default for NodeData {
     fn default() -> Self {
         let level = 0;
         let leadership_status = Status::NotALeader;
-        return NodeData {level, leadership_status, votes: 0};
+        return Self{level, leadership_status, votes: 0};
     }
 }
 
@@ -49,27 +51,32 @@ impl NodeData {
     pub fn get_lcb_vote(&self, epsilon: f32) -> u16 { unimplemented!(); }
 }
 
-#[derive(Serialize, Deserialize, Clone, Ord, Eq, PartialEq, PartialOrd, Hash)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct Tree{
     /// Best proposer node on the tree chain -- The node with max level
     pub best_block: H256,
     /// Best level
     pub best_level: u32,
     /// Proposer nodes stored level wise
-    pub prop_nodes: Vec< Vec<H256> >,
+    pub prop_nodes: Vec<Vec<H256>>,
     /// Votes at each level
-    pub all_votes: Vec< Vec<H256> >, // Can be removed
-    /// Leader nodes
-    pub leader_nodes : Vec<Option<H256>> // functionality not implemented
+    pub all_votes: Vec<Vec<H256>>, // Can be removed?
+    /// Stores Leader nodes
+    pub leader_nodes: HashMap <u32, H256>, // Using hashmap because leader nodes might not be confirmed sequentially
+    /// The level upto which all levels have a leader block.
+    pub continuous_leader_level: u32,
+    /// The max level at which a leader block exists.
+    pub max_leader_level: u32
 }
 
 impl Default for Tree {
     fn default() -> Self {
         let best_block = H256::default();
-        let prop_nodes :Vec< Vec<H256> > = vec![];
-        let all_votes :Vec< Vec<H256> > = vec![];
-        let leader_nodes :Vec<Option<H256>> = vec![];
-        return Tree {best_block, best_level:0, prop_nodes, all_votes, leader_nodes};
+        let prop_nodes: Vec<Vec<H256> > = vec![];
+        let all_votes: Vec<Vec<H256> > = vec![];
+        let leader_nodes: HashMap <u32, H256> = HashMap::new();
+        return Self{best_block, best_level:0, prop_nodes, all_votes, leader_nodes,
+            continuous_leader_level: 0, max_leader_level: 0};
     }
 }
 

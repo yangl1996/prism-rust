@@ -29,7 +29,7 @@ impl Default for NodeData {
         let chain_number :u16 = 0;
         let level = 0;
         let status = Status::OnMainChain;
-        return NodeData {chain_number, level, status};
+        return Self{chain_number, level, status};
     }
 }
 
