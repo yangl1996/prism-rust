@@ -33,7 +33,7 @@ pub fn prop_block(parent_hash: H256, transaction_block_hashes: Vec<H256>, propos
     header.parent_hash = parent_hash;
     let proposer_content = Proposer_Content {transaction_block_hashes, proposer_block_hashes};
     let content = Content::Proposer(proposer_content);
-    let sortition_proof :Vec<H256> = (0..10).map(|_| crypto_generator::H256()).collect();
+    let sortition_proof :Vec<H256> = (0..10).map(|_| crypto_generator::h256()).collect();
     return Block{header, content, sortition_proof};
 }
 
@@ -45,7 +45,7 @@ pub fn voter_block(parent_hash: H256, chain_number: u16, voter_parent_hash: H256
     header.parent_hash = parent_hash;
     let voter_content = Voter_Content {chain_number, voter_parent_hash, proposer_block_votes};
     let content = Content::Voter(voter_content);
-    let sortition_proof :Vec<H256> = (0..10).map(|_| crypto_generator::H256()).collect();
+    let sortition_proof :Vec<H256> = (0..10).map(|_| crypto_generator::h256()).collect();
     return Block{header, content, sortition_proof};
 }
 
