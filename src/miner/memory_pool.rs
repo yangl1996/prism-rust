@@ -3,7 +3,6 @@ use std::collections::BTreeMap;
 use std::collections::VecDeque;
 use crate::crypto::hash::{Hashable, H256};
 use crate::transaction::{Transaction, Input};
-use std::hash::{Hash, Hasher};
 use bincode::serialize;
 use rand::Rng;
 

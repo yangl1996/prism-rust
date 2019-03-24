@@ -1,53 +1,60 @@
 /// A proposer tree.
 
 //use std::collections::{HashSet};
-use super::voter_chain::VoterNode;
-use super::utils::*;
+use super::voter::VoterNode;
+use super::transaction::TxNode;
+use super::status::*;
 use serde::{Serialize, Deserialize};
+use crate::crypto::hash::{H256};
 
-//#[derive(Clone)]
 #[derive(Serialize, Clone, PartialEq)]
 pub struct PropNode<'a>{
     /// Block Id
-    node_id : BlockId,
+    pub block_hash : H256,
     /// Parent prop node
-    parent_prop_node: Option<&'a PropNode<'a>>,
+    pub parent_prop_node: Option<&'a PropNode<'a>>,
     /// Level of the proposer node
-    level: u32,
-    /// List of Prop nodes which refer this node
-    children_prop_node_id: Vec<&'a PropNode<'a>>,
+    pub level: u32,
+    /// List of Tx nodes which refers this node
+    pub children_tx_nodes: Vec<&'a TxNode<'a>>,
+    /// List of Tx nodes referred by this node
+    pub referred_tx_nodes: Vec<&'a TxNode<'a>>,
+    /// List of Prop nodes which refers this node
+    pub children_prop_nodes: Vec<&'a PropNode<'a>>, // Don't count on this
     /// List of Prop nodes referred by this node
-    referred_prop_node_ids: Vec<&'a PropNode<'a>>,
-    /// List of Voter nodes voted
-    votes_node: Vec<&'a VoterNode<'a>>,
+    pub referred_prop_nodes: Vec<&'a PropNode<'a>>,
+    /// List of Voter nodes voted on 'Self'
+    pub votes_node: Vec<&'a VoterNode<'a>>,
     /// Leadership Status
-    leadership_status: PropBlockLeaderStatus
+    pub leadership_status: PropBlockLeaderStatus
 }
 
 impl<'a> PropNode<'a>{
 
-    pub fn set_parent(&mut self, parent_prop_node: &'a PropNode<'a>){
-        self.parent_prop_node = Some(parent_prop_node);
+
+    /// Add a tx node which refers 'self'.
+    pub fn add_child_tx_node(&mut self, tx_node: &'a TxNode<'a>){
+        self.children_tx_nodes.push(tx_node);
     }
 
-    pub fn set_level(&mut self, level: u32){
-        self.level = level;
+    /// Add a tx node which is referred by 'self'.
+    pub fn add_tx_reference(&mut self, tx_node: &'a TxNode<'a>){
+        self.referred_tx_nodes.push(tx_node);
     }
 
     /// Add a prop node which refers 'self'.
-    pub fn add_child(&mut self, child_prop_node: &'a PropNode<'a>){
-        self.children_prop_node_id.push(child_prop_node);
+    pub fn add_child_prop_node(&mut self, child_prop_node: &'a PropNode<'a>){
+        self.children_prop_nodes.push(child_prop_node);
     }
 
     /// Add a prop node which is referred by 'self'.
-    pub fn add_referred_nodes(&mut self, referred_prop_node: &'a PropNode<'a>){
-        self.referred_prop_node_ids.push(referred_prop_node);
+    pub fn add_prop_reference(&mut self, referred_prop_node: &'a PropNode<'a>){
+        self.referred_prop_nodes.push(referred_prop_node);
     }
 
-    /// Add a vote to self
+    /// Add a vote node which votes self.
     pub fn add_vote(&mut self, vote_node: &'a VoterNode<'a>){
         self.votes_node.push(vote_node);
-
     }
 
     pub fn change_leadership_status(&mut self, new_status: PropBlockLeaderStatus){
@@ -58,43 +65,41 @@ impl<'a> PropNode<'a>{
         return PropNode::default();
     }
 
-    pub fn get_ucb_vote(&self) -> u16 {
+    /// Returns the total number of votes
+    pub fn get_total_vote(&self) -> u16 {
         return self.votes_node.len() as u16;
     }
 
-//    pub fsk
+    /// Returns effective number of permanent votes with 1 - epsilon guarantee
+    pub fn get_lcb_vote(&self, epsilon: f32) -> u16 { unimplemented!(); }
 }
 
 impl<'a> Default for PropNode<'a> {
     fn default() -> Self {
-        let node_id = BlockId::default();
+        let block_hash = H256::default();
         let parent_prop_node: Option<& PropNode> = None;
         let level = 0;
-        let children_prop_node_id: Vec<& PropNode> = vec![];
-        let votes_node_ids: Vec<& VoterNode> = vec![];
+        let children_prop_nodes: Vec<& PropNode> = vec![];
+        let children_tx_nodes: Vec<& TxNode> = vec![];
+        let votes_node: Vec<& VoterNode> = vec![];
         let leadership_status = PropBlockLeaderStatus::ConfirmedLeader;
-        let referred_prop_node_ids: Vec<& PropNode> = vec![];
-        return PropNode {node_id, parent_prop_node, level, children_prop_node_id,
-                                    referred_prop_node_ids,
-            votes_node: votes_node_ids, leadership_status};
+        let referred_prop_nodes: Vec<&PropNode> = vec![];
+        let referred_tx_nodes: Vec<&TxNode> = vec![];
+        return PropNode {block_hash, parent_prop_node, level, children_tx_nodes, referred_tx_nodes,
+                    children_prop_nodes, referred_prop_nodes, votes_node, leadership_status};
     }
-
-}
-
-impl<'a> Node for PropNode<'a>{
-    fn get_type() -> NodeType{ return NodeType::Proposer }
 }
 
 
-/// Stores all the prop nodes
+/// Stores all the proposer nodes
 #[derive(Serialize, Clone)]
 pub struct PropTree<'a>{
-    /// Best node on the main chain
-    best_node: Option<&'a PropNode<'a>>,
+    /// Best proposer node on the tree chain -- The node with max level
+    pub best_node: Option<&'a PropNode<'a>>,
     /// Proposer nodes stored level wise
-    prop_nodes: Vec< Vec<PropNode<'a>> >,
+    pub prop_nodes: Vec< Vec<PropNode<'a>> >,
     /// Leader nodes
-    leader_nodes : Vec<&'a PropNode<'a>>
+    pub leader_nodes : Vec<&'a PropNode<'a>>
 }
 
 impl<'a>  Default for PropTree<'a> {
@@ -105,11 +110,9 @@ impl<'a>  Default for PropTree<'a> {
     }
 }
 
-
 impl<'a> PropTree<'a>{
     pub fn new(genesis_node: PropNode<'a>) -> Self {
-        let mut  default_tree: PropTree = PropTree::default();
-        // todo: check if the genesis node has level 0.
+        let mut default_tree: PropTree = PropTree::default();
         default_tree.add_node(genesis_node);
         return default_tree;
     }
@@ -119,20 +122,16 @@ impl<'a> PropTree<'a>{
         return genesis_node;
     }
 
-    /// Get the best node
-    pub fn get_best_node(&self) -> Option<&PropNode>{
-        return self.best_node;
-    }
 
     /// Get the level of the best node
     pub fn get_best_level(&self) -> u32 {
         return self.best_node.unwrap().level;
     }
 
-    /// Get all the proposer nodes at a level
-    pub fn get_all_node_at_level(&self, level: u32) -> Vec<& PropNode> {
+    /// Get all the references to proposer nodes at a given level
+    pub fn get_all_node_at_level(&self, level: u32) -> Vec<&PropNode> {
         let nodes: &Vec<PropNode> = &self.prop_nodes[level as usize];
-        let mut answer: Vec<& PropNode> = vec![];
+        let mut answer: Vec<&PropNode> = vec![];
         for node in nodes{
             answer.push(&node);
         }
@@ -140,8 +139,9 @@ impl<'a> PropTree<'a>{
     }
 
     /// Get all potential leader nodes at a level. Used for List Ledger Decoding
-    pub fn get_proposer_list_at_level(&self, level: u32) -> Vec<& PropNode> {
+    pub fn get_proposer_list_at_level(&self, level: u32) -> Vec<&PropNode> {
         let all_nodes: Vec<& PropNode> = self.get_all_node_at_level(level);
+//        let potential_leaders = all_nodes.filter(|&x| x.leadership_status == PropBlockLeaderStatus::PotentialLeader);
         let mut potential_leaders: Vec<& PropNode> = Vec::new();
         for node in all_nodes{
             if node.leadership_status  == PropBlockLeaderStatus::PotentialLeader{
@@ -176,14 +176,19 @@ impl<'a> PropTree<'a>{
         return leader_sequence;
     }
 
+    /// Returns the prop node for the give node id
+    /// todo: To yet implement
+    pub fn get_prop_node_from_block_hash(&self, block_hash: &H256 ) -> &PropNode {
+        unimplemented!();
+    }
+
     /// Add proposer node
     pub fn add_node(&mut self, node: PropNode<'a>) {
-        self.prop_nodes[node.level as usize].push(node);
+        let node_level = node.level;
+        self.prop_nodes[node_level as usize].push(node);
+        if  node_level > self.best_node.unwrap().level{
+//            self.best_node = Some(&self.prop_nodes[node_level as usize].last().unwrap()) //todo: Make this work
+//            self.best_node = Some(&node); // todo: Make it work
+        }
     }
-
-    pub fn set_best_node(&mut self, node: &'a PropNode<'a>){
-        self.best_node = Some(node);
-    }
-
-
 }
