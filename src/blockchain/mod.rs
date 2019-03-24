@@ -5,8 +5,10 @@ mod test_util;
 use super::block::{Block, Content};
 use super::crypto::hash::{Hashable, H256};
 use serde::{Serialize, Deserialize};
-use proposer::{ProposerNodeData, ProposerTree};
-use voter::{VoterNodeData, VoterChain};
+use proposer::NodeData as ProposerNodeData;
+use proposer::Tree as ProposerTree;
+use voter::NodeData as VoterNodeData;
+use voter::Chain as VoterChain;
 use std::collections::HashMap;
 
 use petgraph::{Directed, Undirected, graph::NodeIndex};
