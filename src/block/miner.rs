@@ -5,6 +5,7 @@ use super::{Block, Content};
 use super::header::Header;
 use std::collections::HashSet;
 use super::{transaction, proposer, voter};
+use std::time::{SystemTime};
 
 extern crate rand; // 0.6.0
 use rand::{Rng};
@@ -42,17 +43,20 @@ impl Miner{
         let mut  content = vec![]; // m voter chains, 1 prop and 1 tx blocks
         /// Adding m different voter block contents
         for i in 0..m{
-            content.push(Content::Voter(voter::Content::new(i, self.voter_parent_hash[i as usize].clone(),
-                                                            self.unvoted_proposer_blocks[i as usize].clone())));
+            content.push(Content::Voter(voter::Content::new(i,      
+                         self.voter_parent_hash[i as usize].clone(),
+                         self.unvoted_proposer_blocks[i as usize].clone())));
         }
         /// Adding proposer block content
-        content.push(Content::Proposer(proposer::Content::new(self.unreferenced_tx_blocks.clone(), self.unreferenced_prop_blocks.clone())));
+        content.push(Content::Proposer(proposer::Content::new(
+                      self.unreferenced_tx_blocks.clone(), self.unreferenced_prop_blocks.clone())));
         /// Adding transaction block content
-        content.push(Content::Transaction(transaction::Content::new(self.unconfirmed_txs.clone())));
+        content.push(Content::Transaction(transaction::Content::new(
+                     self.unconfirmed_txs.clone())));
         let content_merkle_tree = MerkleTree::new(&content);
 
         /// 2. Creating a header
-        let timestamp: u64 = 0;
+        let timestamp: u64 = Miner::get_time();
         let nonce: u32 = 0;
         let content_root = *content_merkle_tree.root();
         let extra_content :[u8; 32] = [0; 32]; // Add miner id?
@@ -70,7 +74,6 @@ impl Miner{
                 break;
             }
             header.nonce = rng.gen(); // Choosing a random nonce
-            // todo: update the timestamp
 
         };
 
@@ -78,6 +81,17 @@ impl Miner{
         let sortition_proof: Vec<H256> = content_merkle_tree.get_proof_from_index(sortition_id).iter().map(|&x| *x).collect();
         let mined_block = Block::from_header(header, content[sortition_id as usize].clone(),  sortition_proof);
         return mined_block;
+    }
+
+    fn get_time() -> u64 {
+        let cur_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH);
+        match cur_time {
+            Ok(v) => {
+                return v.as_secs();
+            },
+            Err(e) => println!("Error parsing time: {:?}", e),
+        }
+        return 0;
     }
 
     fn get_sortition_id(hash: [u8; 32]) -> u32 {
