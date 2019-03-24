@@ -3,8 +3,6 @@ use std::collections::HashMap;
 use crate::transaction::{Transaction, Input, Output};
 use crate::crypto::sign::PubKey;
 
-// TODO: learn from Parity
-
 #[derive(Debug)]
 pub struct Wallet {
     /// Transaction outpoint -> coin value and owner. (owner must be this user)
@@ -39,11 +37,11 @@ impl Wallet {
     /// create a transaction using my coins
     pub fn create(&self, recipient: H256, value: u64) -> Option<Transaction> {
         let mut input: Vec<Input>= vec![];
-        let mut input_output = self.by_outpoint.iter();
+        let mut outpoint_iter = self.by_outpoint.iter();
         let mut value_sum = 0u64;
-        while let Some((i,o)) = input_output.next() {
-            value_sum += o.value;
-            input.push(i.clone());
+        while let Some((outpoint,coin)) = outpoint_iter.next() {
+            value_sum += coin.value;
+            input.push(outpoint.clone());
             if value_sum >= value {
                 let mut output = vec![Output {recipient, value}];
                 if value_sum > value {
