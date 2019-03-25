@@ -1,72 +1,76 @@
 /*
-Validation for blocks and transactions.
+Validation for proposer blocks
 */
 
-
-use crate::block::{Block};
+use crate::block::{Block,Content,PROPOSER_INDEX};
+use crate::blockchain::{BlockChain,NUM_VOTER_CHAINS};
 use crate::crypto::hash::{Hashable,H256};
-use std::collections::HashSet;
 
-pub struct ProposerBlockValidator {
+
+pub struct ProposerBlockValidator<'a> {
     // Database of known blocks
-    pub known_blocks: HashSet<H256>
-    // TODO: change this to the appropriate data structure
+    pub blockchain: &'a BlockChain
 }
 
-impl ProposerBlockValidator {
-    pub fn proposer_blk_valid(&self, block: Block) -> bool {
-        // Get hash of block
-        let block_hash: H256 = block.hash();
-        
-        // 1. Check if block is a duplicate
-        if self.is_duplicate(&block_hash) {
-            return false;
-        }
-        // 2. Check if block contains a nonzero number of reflinks
-        if self.empty_reflinks(&block) {
-            return false;
-        }
+impl<'a> super::Validator<'a> for ProposerBlockValidator<'a> {
 
-        // 3. Check if coinbase is invalid
-        if !self.is_coinbase_valid(&block) {
-            return false;
-        }
+    fn new(blockchain: &'a BlockChain) -> Self {
+        ProposerBlockValidator { blockchain: blockchain }
+    }
 
-        // 4. Check that pow is valid
-        if !self.pow_valid(&block) {
-            return false;
-        }
+    fn is_valid(&self, block: &'a Block) -> bool {
         
-        // 5. Check Merkle proof
-        if !self.is_merkle_proof_valid(&block) {
+        if (
+            self.is_duplicate(&block) || // 1. Check duplicate
+            self.is_empty(&block) ||  // 2. Check if empty reflinks
+            !self.is_coinbase_valid(&block) || // 3. Check coinbase validity
+            !self.is_pow_valid(&block) // 4. check pow validity, sortition
+        ) {
             return false;
         }
         return true;
     }
 
-    pub fn is_duplicate(&self, block_hash: &H256) -> bool {
+    fn is_duplicate(&self, block: &'a Block) -> bool {
         // Checks if we already have a copy of this block in storage
-        // TODO: Replace with blocktree
-        return self.known_blocks.contains(block_hash);
+        return self.blockchain.proposer_node_data_map.contains_key(&block.hash())
     }
 
-    pub fn empty_reflinks(&self, block: &Block) -> bool {
-        // Checks if the reflinks in the block are empty
-        // TODO: Fill in with real code
-        return false;
-    }
-
-    pub fn is_coinbase_valid(&self, block: &Block) -> bool {
-        // TODO: replace with coinbase transaction validity check
+    fn is_empty(&self, block: &'a Block) -> bool {
+        // Checks if (a)  this is a proposer block, and (b) the proposer 
+        // reflinks at least are nonempty 
+        match &block.content {
+            Content::Transaction(c) => return true,
+            Content::Voter(c) => return true,
+            Content::Proposer(c) => {
+                return (c.proposer_block_hashes.is_empty() &&   
+                        c.transaction_block_hashes.is_empty())
+            }
+        }
         return true;
     }
 
-    pub fn pow_valid(&self, block: &Block) -> bool {
+    fn is_coinbase_valid(&self, block: &'a Block) -> bool {
+        // TODO: replace with coinbase transaction validity check once  
+        // coinbase tx gets added
         return true;
     }
 
-    pub fn is_merkle_proof_valid(&self, block: &Block) -> bool {
+    fn is_pow_valid(&self, block: &'a Block) -> bool {
+        let header_hash: H256 = block.header.hash();
 
+        // Check that the sortition is in the correct range
+        let num_chains = NUM_VOTER_CHAINS + 2;
+        let difficulty = block.header.difficulty;
+        // let ratio = difficulty * PROPOSER_INDEX / num_chains;
+        // if (
+        //     header_hash < (difficulty * PROPOSER_INDEX / num_chains) || 
+        //     header_hash >= (difficulty * (PROPOSER_INDEX + 1) / num_chains)
+        // ) {
+        //     return false;
+        // }
         return true;
     }
+
+
 }

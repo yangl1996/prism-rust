@@ -14,7 +14,7 @@ use std::collections::HashMap;
 use petgraph::{Directed, Undirected, graph::NodeIndex};
 use petgraph::graphmap::GraphMap;
 
-const NUM_VOTER_CHAINS: u16 = 10; // DONT CHANGE THIS
+pub const NUM_VOTER_CHAINS: u16 = 10; // DONT CHANGE THIS
 
 #[derive(Serialize, Deserialize, Clone, Copy, Ord, Eq, PartialEq, PartialOrd, Hash)]
 pub enum Edge{
@@ -105,9 +105,9 @@ pub struct BlockChain{
     pub proposer_tree: ProposerTree,
     pub voter_chains: Vec<VoterChain>,
     /// Contains data about the proposer nodes.
-    proposer_node_data_map: HashMap<H256, ProposerNodeData>,
+    pub proposer_node_data_map: HashMap<H256, ProposerNodeData>,
     /// Contains data about the voter nodes.
-    voter_node_data_map: HashMap<H256, VoterNodeData>
+    pub voter_node_data_map: HashMap<H256, VoterNodeData>
 }
 
 impl BlockChain {

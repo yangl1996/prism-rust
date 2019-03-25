@@ -8,6 +8,10 @@ mod test_util;
 
 use crate::crypto::hash::{Hashable, H256};
 
+// Indices of each type of blocktree in the hash range
+pub const TRANSACTION_INDEX: u16 = 0;
+pub const PROPOSER_INDEX: u16 = 1;
+
 /// A block in the Prism blockchain.
 #[derive(Serialize, Deserialize, Debug, Hash, Clone)]
 // TODO: discuss. I removed Default trait. It seems that the only place that it will be needed is in tests, to
