@@ -15,7 +15,7 @@ pub struct NodeData {
 impl Default for NodeData {
     fn default() -> Self {
         let level = 0;
-        let leadership_status = Status::NotALeader;
+        let leadership_status = Status::PotentialLeader;
         return Self{level, leadership_status, votes: 0};
     }
 }
@@ -31,19 +31,23 @@ impl NodeData{
     pub fn increment_vote(&mut self){
         self.votes += 1;
     }
+    pub fn give_leader_status(&mut self) { self.leadership_status = Status::Leader }
+    pub fn give_not_leader_status(&mut self) { self.leadership_status = Status::NotLeaderUnconfirmed }
+    pub fn give_not_leader_confirmed_status(&mut self) { self.leadership_status = Status::NotLeaderAndConfirmed }
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, Ord, Eq, PartialEq, PartialOrd, Hash)]
+#[derive(Serialize, Deserialize, Clone, Copy, Ord, Eq, PartialEq, PartialOrd, Hash, Debug)]
 pub enum Status{
-    ConfirmedLeader,
+    Leader,
     PotentialLeader,
-    NotALeader
+    NotLeaderUnconfirmed,
+    NotLeaderAndConfirmed // When a notleader block is confirmed by a one of the child leader block
 }
 
 impl NodeData {
     pub fn genesis(number_of_voter_chains: u16) -> Self{
         let mut genesis = NodeData::default();
-        genesis.leadership_status = Status::ConfirmedLeader;
+        genesis.leadership_status = Status::Leader;
         genesis.votes = number_of_voter_chains;
         return genesis;
     }
@@ -66,7 +70,9 @@ pub struct Tree{
     /// The level upto which all levels have a leader block.
     pub continuous_leader_level: u32,
     /// The max level at which a leader block exists.
-    pub max_leader_level: u32
+    pub max_leader_level: u32,
+    /// List of unreferred proposer blocks. For mining
+    pub unreferred: HashSet<H256>
 }
 
 impl Default for Tree {
@@ -75,8 +81,9 @@ impl Default for Tree {
         let prop_nodes: Vec<Vec<H256> > = vec![];
         let all_votes: Vec<Vec<H256> > = vec![];
         let leader_nodes: HashMap <u32, H256> = HashMap::new();
+        let unreferred: HashSet<H256> = HashSet::new();
         return Self{best_block, best_level:0, prop_nodes, all_votes, leader_nodes,
-            continuous_leader_level: 0, max_leader_level: 0};
+            continuous_leader_level: 0, max_leader_level: 0, unreferred};
     }
 }
 
@@ -105,6 +112,14 @@ impl Tree{
         } else{
             panic!("Proposer block mined at level without parent block at previous level")
         }
+    }
+
+    pub fn insert_unreferred(&mut self, hash: H256) {
+        self.unreferred.insert(hash);
+    }
+
+    pub fn remove_unreferred(&mut self, hash: &H256) {
+        self.unreferred.remove(hash);
     }
 }
 

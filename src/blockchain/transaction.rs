@@ -8,13 +8,16 @@ pub struct Pool{
     pub unconfirmed: HashSet<H256>,
     /// Ordered transaction blocks
     pub ordered: Vec<H256>, // A confirmed tx block is always ordered for slow confirmation
+    /// List of unreferred tx blocks. For mining
+    pub unreferred: HashSet<H256>
 }
 
 impl Pool {
     pub fn new() -> Self {
-        let unconfirmed_transaction_blocks: HashSet<H256> = HashSet::new();
-        let ordered_transaction_blocks: Vec<H256> = vec![];
-        return Self{ unconfirmed: unconfirmed_transaction_blocks, ordered: ordered_transaction_blocks };
+        let unconfirmed: HashSet<H256> = HashSet::new();
+        let ordered: Vec<H256> = vec![];
+        let unreferred: HashSet<H256> = HashSet::new();
+        return Self{ unconfirmed, ordered, unreferred};
     }
 
     /// Adds the block as unconfirmed.
@@ -22,9 +25,20 @@ impl Pool {
         self.unconfirmed.insert(hash);
     }
 
+    pub fn is_unconfirmed(&self, hash: &H256) -> bool {
+        return self.unconfirmed.contains(hash);
+    }
     /// Confirms a tx block by ordering it and removing it from the
-    pub fn confirm(&mut self, hash: H256){
-        self.ordered.push(hash); // Order
-        self.unconfirmed.remove(&hash); // Remove
+    pub fn confirm(&mut self, hash: &H256){
+        self.ordered.push(*hash); // Order
+        self.unconfirmed.remove(hash); // Remove
+    }
+
+    pub fn insert_unreferred(&mut self, hash: H256) {
+        self.unreferred.insert(hash);
+    }
+
+    pub fn remove_unreferred(&mut self, hash: &H256) {
+        self.unreferred.remove(hash);
     }
 }
