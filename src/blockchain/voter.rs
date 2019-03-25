@@ -28,7 +28,7 @@ impl Default for NodeData {
     fn default() -> Self {
         let chain_number :u16 = 0;
         let level = 0;
-        let status = Status::OnMainChain;
+        let status = Status::Orphan;
         return Self{chain_number, level, status};
     }
 }
@@ -62,13 +62,14 @@ impl Chain{
         return Self{chain_number, best_block, best_level: 0};
     }
 
-    pub fn update_voter_chain(&mut self, block: H256, block_parent: H256, level: u32) {
+    pub fn update_voter_chain(&mut self, block: H256, block_parent: H256, level: u32) -> bool {
 //        println!("Level {}. Bets level {}", level, self.best_level);
         // New best block mined over the previous best block
         if self.best_level== level-1 && self.best_block == block_parent  {
 //            println!("New best level {} for chain {}",  self.best_level, self.chain_number);
             self.best_level += 1;
             self.best_block =  block;
+            return true;
         }
         // Rollback required
         else if self.best_level== level-1  && self.best_block != block_parent{
@@ -77,6 +78,7 @@ impl Chain{
         // A side_chain block mined.
         else if self.best_level >= level {
             // Do nothing.
+            return false;
         }
         // Rollback required
         else if self.best_level < level-1 {
