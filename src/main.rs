@@ -11,9 +11,11 @@ use std::process;
 use std::sync::Arc;
 
 use prism::network;
+use prism::blockdb;
 
 const DEFAULT_IP: &str = "127.0.0.1";
 const DEFAULT_P2P_PORT: u16 = 6000;
+const DEFAULT_BLOCKDB: &str = "/tmp/prismblocks.rocksdb";
 
 fn main() {
     // parse command line arguments
@@ -24,12 +26,20 @@ fn main() {
      (@arg peer_ip: --ip [IP] "Sets the IP address to listen to peers")
      (@arg peer_port: --port [PORT] "Sets the port to listen to peers")
      (@arg known_peer: -c --connect ... [PEER] "Sets the peers to connect to")
+     (@arg block_db: --blockdb ... [PATH] "Sets the path of the block database")
     )
     .get_matches();
 
     // init logger
     let verbosity = matches.occurrences_of("verbose") as usize;
     stderrlog::new().verbosity(verbosity).init().unwrap();
+
+    // init database
+    let blockdb_path = match matches.value_of("block_db") {
+        Some(path) => std::path::Path::new(path),
+        None => std::path::Path::new(&DEFAULT_BLOCKDB),
+    };
+    let blockdb = blockdb::BlockDatabase::new(blockdb_path);
 
     // start p2p server
     let peer_ip = match matches.value_of("peer_ip") {
