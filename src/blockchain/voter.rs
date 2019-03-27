@@ -109,9 +109,12 @@ impl Chain{
     }
 
     /// Adds a proposer to vote at level iff no proposer vote is present at that level.
-    pub fn insert_first_unvoted(&mut self, level: u32, hash: H256){
+    pub fn insert_unvoted(&mut self, level: u32, hash: H256){
         if level == self.max_level_unvoted_proposer_block + 1 {
-            self.insert_unvoted(level, hash);
+            if self.unvoted_proposer_blocks.contains_key(&level){
+                panic!("This should have happened");
+            }
+            self.unvoted_proposer_blocks.insert(level, hash);
             self.max_level_unvoted_proposer_block += 1;
         }
         else if level > self.max_level_unvoted_proposer_block + 1{
@@ -121,15 +124,6 @@ impl Chain{
             // Ignore. Another proposer mined at 'level'
         }
     }
-
-    /// Adds a vote at 'level'
-    fn insert_unvoted(&mut self, level: u32, hash: H256) {
-        if self.unvoted_proposer_blocks.contains_key(&level){
-            panic!("This should have happened");
-        }
-        self.unvoted_proposer_blocks.insert(level, hash);
-    }
-
 
     pub fn remove_unvoted(&mut self, level: u32) {
         if level != self.min_level_unvoted_proposer_block{

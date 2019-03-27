@@ -4,11 +4,11 @@ use crate::crypto::hash::{H256};
 
 
 pub struct Pool{
-    /// List of unconfirmed tx blocks
+    /// Pool of unconfirmed tx blocks
     pub unconfirmed: HashSet<H256>,
-    /// Ordered transaction blocks
+    /// The ledger: Ordered transaction blocks
     pub ordered: Vec<H256>, // A confirmed tx block is always ordered for slow confirmation
-    /// List of unreferred tx blocks. For mining
+    /// Pool of unreferred tx blocks. For mining
     pub unreferred: HashSet<H256>
 }
 
@@ -30,7 +30,7 @@ impl Pool {
     }
     /// Confirms a tx block by ordering it and removing it from the
     pub fn confirm(&mut self, hash: &H256){
-        self.ordered.push(*hash); // Order
+        self.ordered.push(*hash); // Add to ordered list
         self.unconfirmed.remove(hash); // Remove
     }
 
