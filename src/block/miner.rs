@@ -7,6 +7,7 @@ use super::header::Header;
 use std::collections::{HashSet,HashMap};
 use super::{transaction, proposer, voter};
 use std::time::{SystemTime};
+use std::sync::mpsc::{channel,Receiver,TryRecvError};
 
 extern crate rand; // 0.6.0
 use rand::{Rng};
@@ -27,7 +28,9 @@ pub struct Miner<'a>{
     // Current blockchain
     blockchain: &'a BlockChain,
     // Recent blocks
-    seen_blocks: &'a mut HashMap<H256,Block>
+    seen_blocks: &'a mut HashMap<H256,Block>,
+    // Channel for communicating blocks
+    incoming_blocks: Receiver<Block>
 }
 // todo: Implement default trait
 
@@ -40,13 +43,14 @@ impl<'a> Miner<'a>{
                unreferenced_prop_blocks: Vec<H256>,
                unvoted_proposer_blocks: Vec<Vec<H256>>,
                blockchain: &'a BlockChain,
-               seen_blocks: &'a mut HashMap<H256,Block>) -> Self {
+               seen_blocks: &'a mut HashMap<H256,Block>,
+               incoming_blocks: Receiver<Block>) -> Self {
         Self { proposer_parent_hash, voter_parent_hash, unconfirmed_txs,
                unreferenced_tx_blocks, unreferenced_prop_blocks,
-               unvoted_proposer_blocks, blockchain, seen_blocks }
+               unvoted_proposer_blocks, blockchain, seen_blocks,
+               incoming_blocks }
     }
 
-    // todo: split the function into parts
     pub fn mine(&mut self) -> Block {
 
         // Set the content
@@ -58,10 +62,12 @@ impl<'a> Miner<'a>{
         // Create header
         let mut nonce: u32 = 0;
         let mut rng = rand::thread_rng();
-        let mut sortition_id: u32 ;
+        let mut sortition_id: u32;
         // todo: Use Future feature from rust.
         let mut header = self.create_header(&content_merkle_tree,
             &nonce, &difficulty);
+
+        // Mining loop
         loop{
             let hash: [u8; 32] = (&header.hash()).into(); //todo: bad code
             if hash < difficulty{
@@ -69,12 +75,27 @@ impl<'a> Miner<'a>{
                 break;
             }
             header.nonce = rng.gen(); // Choosing a random nonce
-
+            // Check if we need to update our block by reading the channel
+            // NB: This tries to update block contents without checking if
+            // relevant parent blocks/content actually changed
+            match self.incoming_blocks.try_recv() {
+                Ok(block) => {
+                    // update contents and headers if needed
+                    self.update_block_contents();
+                    header = self.create_header(&content_merkle_tree,
+            &nonce, &difficulty);
+                },
+                Err(TryRecvError::Empty) => {
+                    continue;
+                },
+                Err(TryRecvError::Disconnected) => unreachable!(),
+            }
         };
 
-        // 4. Creating a block
-        let sortition_proof: Vec<H256> = content_merkle_tree.get_proof_from_index(sortition_id).iter().map(|&x| *x).collect();
-        let mined_block = Block::from_header(header, content[sortition_id as usize].clone(),  sortition_proof);
+        // Creating a block
+        let sortition_proof: Vec<H256> =
+            content_merkle_tree.get_proof_from_index(sortition_id).iter().map(|&x| *x).collect();
+        let mined_block = Block::from_header(header, content[sortition_id as usize].clone(), sortition_proof);
 
         // 5. Add block to the database
         self.seen_blocks.insert(mined_block.hash(), mined_block.clone());
