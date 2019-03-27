@@ -2,7 +2,8 @@
 Validation for proposer blocks
 */
 
-use crate::block::{Block,Content,PROPOSER_INDEX};
+use crate::block::{Block,Content};
+use crate::config::*;
 use crate::blockchain::{BlockChain,NUM_VOTER_CHAINS};
 use crate::crypto::hash::{Hashable,H256};
 
@@ -19,7 +20,7 @@ impl<'a> super::Validator<'a> for ProposerBlockValidator<'a> {
     }
 
     fn is_valid(&self, block: &'a Block) -> bool {
-        
+
         if (
             self.is_duplicate(&block) || // 1. Check duplicate
             self.is_empty(&block) ||  // 2. Check if empty reflinks
@@ -37,13 +38,13 @@ impl<'a> super::Validator<'a> for ProposerBlockValidator<'a> {
     }
 
     fn is_empty(&self, block: &'a Block) -> bool {
-        // Checks if (a)  this is a proposer block, and (b) the proposer 
-        // reflinks at least are nonempty 
+        // Checks if (a)  this is a proposer block, and (b) the proposer
+        // reflinks at least are nonempty
         match &block.content {
             Content::Transaction(c) => return true,
             Content::Voter(c) => return true,
             Content::Proposer(c) => {
-                return (c.proposer_block_hashes.is_empty() &&   
+                return (c.proposer_block_hashes.is_empty() &&
                         c.transaction_block_hashes.is_empty())
             }
         }
@@ -51,7 +52,7 @@ impl<'a> super::Validator<'a> for ProposerBlockValidator<'a> {
     }
 
     fn is_coinbase_valid(&self, block: &'a Block) -> bool {
-        // TODO: replace with coinbase transaction validity check once  
+        // TODO: replace with coinbase transaction validity check once
         // coinbase tx gets added
         return true;
     }
@@ -64,7 +65,7 @@ impl<'a> super::Validator<'a> for ProposerBlockValidator<'a> {
         let difficulty = block.header.difficulty;
         // let ratio = difficulty * PROPOSER_INDEX / num_chains;
         // if (
-        //     header_hash < (difficulty * PROPOSER_INDEX / num_chains) || 
+        //     header_hash < (difficulty * PROPOSER_INDEX / num_chains) ||
         //     header_hash >= (difficulty * (PROPOSER_INDEX + 1) / num_chains)
         // ) {
         //     return false;

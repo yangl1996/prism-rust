@@ -2,15 +2,21 @@ use crate::transaction::{Transaction};
 use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::merkle::{MerkleTree};
 use crate::blockchain::{BlockChain,NUM_VOTER_CHAINS};
+use crate::miner::memory_pool::{MemoryPool,Entry};
 use super::{Block, Content};
 use super::header::Header;
 use std::collections::{HashSet,HashMap};
 use super::{transaction, proposer, voter};
+use crate::config::*;
 use std::time::{SystemTime};
-use std::sync::mpsc::{channel,Receiver,TryRecvError};
+use std::sync::mpsc::{channel,Receiver,Sender,TryRecvError};
+use std::thread;
 
 extern crate rand; // 0.6.0
 use rand::{Rng};
+
+extern crate bigint;
+use bigint::uint::{U256};
 
 pub struct Miner<'a>{
     // Proposer block to mine on proposer tree
@@ -19,18 +25,20 @@ pub struct Miner<'a>{
     voter_parent_hash: [H256; NUM_VOTER_CHAINS as usize],
     // Ideally Miner `actor' should have access to these three global data.
     // Tx block content
-    unconfirmed_txs: Vec<Transaction>, // todo: Should be replaced with tx-mem-pool
+    tx_mempool: &'a MemoryPool,
     // Proposer block contents
     unreferenced_tx_blocks: Vec<H256>, // todo: Should be replaced with tx_block-mem-pool
     unreferenced_prop_blocks: Vec<H256>, // todo: Should be replaced with unreferenced prop_block-mem-pool
     // Voter block content. Each voter chain has its own list of un-voted proper blocks.
     unvoted_proposer_blocks: Vec<Vec<H256>>, // todo: Should be replaced with un_voted_block pool
     // Current blockchain
-    blockchain: &'a BlockChain,
+    blockchain: &'a mut BlockChain,
     // Recent blocks
     seen_blocks: &'a mut HashMap<H256,Block>,
-    // Channel for communicating blocks
-    incoming_blocks: Receiver<Block>
+    // Channel for receiving newly-received blocks
+    incoming_blocks: Receiver<Block>,
+    // Channel for pushing newly-created blocks
+    outgoing_blocks: Sender<Block>
 }
 // todo: Implement default trait
 
@@ -38,20 +46,21 @@ impl<'a> Miner<'a>{
     // This function will be used when the miner is restarted
     pub fn new(proposer_parent_hash: H256,
                voter_parent_hash: [H256; NUM_VOTER_CHAINS as usize],
-               unconfirmed_txs: Vec<Transaction>,
+               tx_mempool: &'a MemoryPool,
                unreferenced_tx_blocks: Vec<H256>,
                unreferenced_prop_blocks: Vec<H256>,
                unvoted_proposer_blocks: Vec<Vec<H256>>,
-               blockchain: &'a BlockChain,
+               blockchain: &'a mut BlockChain,
                seen_blocks: &'a mut HashMap<H256,Block>,
-               incoming_blocks: Receiver<Block>) -> Self {
-        Self { proposer_parent_hash, voter_parent_hash, unconfirmed_txs,
+               incoming_blocks: Receiver<Block>,
+               outgoing_blocks: Sender<Block>) -> Self {
+        Self { proposer_parent_hash, voter_parent_hash, tx_mempool,
                unreferenced_tx_blocks, unreferenced_prop_blocks,
                unvoted_proposer_blocks, blockchain, seen_blocks,
-               incoming_blocks }
+               incoming_blocks, outgoing_blocks }
     }
 
-    pub fn mine(&mut self) -> Block {
+    pub fn mine(&mut self) {
 
         // Set the content
         let content = self.update_block_contents();
@@ -71,36 +80,53 @@ impl<'a> Miner<'a>{
         loop{
             let hash: [u8; 32] = (&header.hash()).into(); //todo: bad code
             if hash < difficulty{
-                sortition_id = Miner::get_sortition_id(hash);
+                sortition_id = Miner::get_sortition_id(hash, difficulty)
+                    .unwrap();
                 break;
             }
-            header.nonce = rng.gen(); // Choosing a random nonce
             // Check if we need to update our block by reading the channel
-            // NB: This tries to update block contents without checking if
-            // relevant parent blocks/content actually changed
             match self.incoming_blocks.try_recv() {
                 Ok(block) => {
                     // update contents and headers if needed
+                    // TODO: Only update block contents if relevant parent/
+                    // content actually changed
                     self.update_block_contents();
-                    header = self.create_header(&content_merkle_tree,
-            &nonce, &difficulty);
                 },
                 Err(TryRecvError::Empty) => {
                     continue;
                 },
                 Err(TryRecvError::Disconnected) => unreachable!(),
             }
+            header.nonce = rng.gen(); // Choosing a random nonce
+            header = self.create_header(&content_merkle_tree,
+                                                &nonce, &difficulty);
         };
 
         // Creating a block
-        let sortition_proof: Vec<H256> =
-            content_merkle_tree.get_proof_from_index(sortition_id).iter().map(|&x| *x).collect();
-        let mined_block = Block::from_header(header, content[sortition_id as usize].clone(), sortition_proof);
+        let sortition_proof: Vec<H256> = content_merkle_tree
+            .get_proof_from_index(sortition_id)
+            .iter()
+            .map(|&x| *x)
+            .collect();
+        let mined_block = Block::from_header(header,
+            content[sortition_id as usize].clone(),
+            sortition_proof);
 
-        // 5. Add block to the database
+        // Add block to the database
+        self.release_block(mined_block);
+    }
+
+    fn release_block(&mut self, mined_block: Block) {
+        // update the block database
         self.seen_blocks.insert(mined_block.hash(), mined_block.clone());
 
-        return mined_block;
+        // update the blockchain
+        self.blockchain.insert_node(&mined_block);
+
+        // Send the mined block on outgoing blocks
+        // thread::spawn(move || {
+        //     self.outgoing_blocks.send(mined_block.clone()).unwrap();
+        // });
     }
 
     fn create_header(&self,
@@ -124,11 +150,15 @@ impl<'a> Miner<'a>{
         self.proposer_parent_hash =
             self.blockchain.proposer_tree.best_block.clone();
         content.push(Content::Proposer(proposer::Content::new(
-                      self.unreferenced_tx_blocks.clone(), self.unreferenced_prop_blocks.clone())));
+                     self.unreferenced_tx_blocks.clone(), self.unreferenced_prop_blocks.clone())));
 
-        // Update transaction content
+        // Update transaction content with TX_BLOCK_SIZE mempool txs
         content.push(Content::Transaction(transaction::Content::new(
-                     self.unconfirmed_txs.clone())));
+                     self.tx_mempool
+                        .get_transactions(TX_BLOCK_SIZE)
+                        .into_iter()
+                        .map(|s| s.transaction)
+                        .collect())));
 
         // Update voter content/parents
         for i in 0..NUM_VOTER_CHAINS {
@@ -153,8 +183,24 @@ impl<'a> Miner<'a>{
         return 0;
     }
 
-    fn get_sortition_id(hash: [u8; 32]) -> u32 {
-        unimplemented!();
+    fn get_sortition_id(hash: [u8; 32], difficulty: [u8; 32]) -> Option<u32> {
+        let bigint_hash = U256::from_big_endian(&hash);
+        let bigint_difficulty = U256::from_big_endian(&difficulty);
+        let increment: U256 = bigint_difficulty / (NUM_VOTER_CHAINS + 2).into();
+
+        if bigint_hash < increment {
+            // Transaction block
+            return Some(TRANSACTION_INDEX);
+        } else if bigint_hash < increment * 2.into() {
+            // Proposer block
+            return Some(PROPOSER_INDEX);
+        } else if bigint_hash < bigint_difficulty {
+            // Figure out which voter tree we are in
+            let voter_id = (bigint_hash - increment * 2.into()) / increment;
+            // TODO: This will panic if difficulty > 2^32!
+            return Some(voter_id.as_u32());
+        }
+        None
     }
 
     fn get_difficulty(&self, block_hash: H256) -> [u8; 32] {
@@ -165,5 +211,4 @@ impl<'a> Miner<'a>{
             None => return [0; 32]
         }
     }
-
 }
