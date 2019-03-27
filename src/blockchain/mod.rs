@@ -10,7 +10,8 @@ use serde::{Serialize, Deserialize};
 use edge::Edge;
 use proposer::NodeData as ProposerNodeData;
 use proposer::Status  as ProposerStatus;
-use voter::Status  as VoterStatus;
+use voter::NodeStatus  as VoterNodeStatus;
+use voter::NodeUpdateStatus  as VoterNodeUpdateStatus;
 use proposer::Tree as ProposerTree;
 use voter::NodeData as VoterNodeData;
 use voter::Chain as VoterChain;
@@ -38,6 +39,17 @@ pub struct BlockChain{
     proposer_node_data_map: HashMap<H256, ProposerNodeData>,
     /// Contains data about the voter nodes.
     voter_node_data_map: HashMap<H256, VoterNodeData>
+}
+
+/// Get proposer and node data
+impl BlockChain{
+    fn prop_node_data(&self, hash: &H256 ) -> &ProposerNodeData{
+        return self.proposer_node_data_map.get(hash).unwrap();
+    }
+
+    fn voter_node_data(&self, hash: &H256 ) -> &VoterNodeData{
+        return self.voter_node_data_map.get(hash).unwrap();
+    }
 }
 
 /// Functions to edit the blockchain
@@ -108,6 +120,7 @@ impl BlockChain {
         let content: &Content = &block.content;
         match content {
             Content::Transaction(_) => {
+//                println!("Adding tx block");
                 // Add edge from tx block to its proposer parent
                 self.insert_edge(block_hash, parent_proposer_block_hash, Edge::TransactionToProposerParent);
                 self.tx_pool.insert_unconfirmed(block_hash);
@@ -115,6 +128,8 @@ impl BlockChain {
             },
 
             Content::Proposer(content) => {
+//                println!("Adding prop block");
+
                 // 1, Add edge from prop block to its proposer parent
                 self.insert_edge(block_hash, parent_proposer_block_hash, Edge::ProposerToProposerParent);
                 self.proposer_tree.insert_unreferred(block_hash);
@@ -131,22 +146,30 @@ impl BlockChain {
                 for (position, tx_hash) in content.transaction_block_hashes.iter().enumerate() {
                     self.insert_edge(block_hash, *tx_hash, Edge::ProposerToTransactionReference(position as u32));
                     self.tx_pool.remove_unreferred(&block_hash);
-
                 }
 
                 // 4. Creating proposer node data.
                 let proposer_parent_node_data: ProposerNodeData = self.proposer_node_data_map[&parent_proposer_block_hash];
                 let mut proposer_node_data = ProposerNodeData::default();
                 proposer_node_data.level = proposer_parent_node_data.level + 1;
+//                println!("Prop block {} has level {}", block_hash, proposer_node_data.level);
 
-                // 5. Add node data in the map
+                // 5. Add the proposer block to the unvoted blocks on all the voter chains.
+                for i in 0..NUM_VOTER_CHAINS{
+//                    println!("Adding to vote at level {}", proposer_node_data.level);
+                    self.voter_chains.get_mut(i as usize).unwrap().insert_first_unvoted(
+                        proposer_node_data.level, block_hash )
+                }
+                // 6. Add node data in the map
                 self.proposer_node_data_map.insert(block_hash, proposer_node_data);
 
-                // 6. Add the block to the proposer tree.
+                // 7. Add the block to the proposer tree.
                 self.proposer_tree.add_block_at_level(block_hash, proposer_node_data.level);
             },
 
             Content::Voter(content) => {
+//                println!("Adding voter block");
+
                 // 1, Add edge from voter block to its proposer parent
                 self.insert_edge(block_hash, parent_proposer_block_hash, Edge::VoterToProposerParent);
 
@@ -168,25 +191,34 @@ impl BlockChain {
                 }
 
 
-                // 5a. Creating voter node data and updating the level of the parent.
-                let mut voter_node_data = VoterNodeData::default();
-                let parent_voter_node_data: VoterNodeData = self.voter_node_data_map[&content.voter_parent_hash];
-                voter_node_data.level = parent_voter_node_data.level + 1;
-                voter_node_data.chain_number = parent_voter_node_data.chain_number;
 
-                // 6. Updating the voter chain.
-                let is_on_main_chain = self.voter_chains[voter_node_data.chain_number as usize].update_voter_chain(
-                    block_hash, content.voter_parent_hash, voter_node_data.level
+                // 4. Updating the voter chain.
+                let parent_voter_node_data: VoterNodeData = self.voter_node_data_map[&content.voter_parent_hash];
+                let voter_node_update = self.voter_chains[parent_voter_node_data.chain_number as usize].add_voter_block(
+                    block_hash, content.voter_parent_hash, parent_voter_node_data.level+1
                 );
 
 
-                // 5b. Updating the status
-                if is_on_main_chain{
-                    // On main chain if voter block was on the main chain
-                    voter_node_data.status = VoterStatus::OnMainChain;
-                } else {
+                // 5. Creating voter node data. Updating the level of the parent.
+                //    And updating the unvoted_levels on the voter chain
+                let mut voter_node_data = VoterNodeData::default();
+                voter_node_data.level = parent_voter_node_data.level + 1;
+                voter_node_data.chain_number = parent_voter_node_data.chain_number;
+                if voter_node_update == VoterNodeUpdateStatus::ExtendedMainChain{
+                    voter_node_data.status = VoterNodeStatus::OnMainChain;
+                    for prop_block_hash in content.proposer_block_votes.iter() {
+                        let proposer_level = self.prop_node_data(&prop_block_hash).level;
+//                        println!("Removing vote using hash {} at level {}", prop_block_hash, proposer_level);
+                        self.voter_chains.get_mut(voter_node_data.chain_number as usize).unwrap().remove_unvoted(proposer_level);
+                    }
+                }
+                else if voter_node_update == VoterNodeUpdateStatus::LongerFork{
+                    panic!("Take care of this part");
+                }
+
+                else if voter_node_update == VoterNodeUpdateStatus::SideChain{
                     // Orphan block if voter block was not on the main chain
-                    voter_node_data.status = VoterStatus::Orphan;
+                    voter_node_data.status = VoterNodeStatus::Orphan;
                 }
                 self.voter_node_data_map.insert(block_hash, voter_node_data);
 
@@ -365,7 +397,7 @@ impl BlockChain {
 
         let mut all_blocks: BTreeMap<H256, PropOrderingHelper> = BTreeMap::new(); // Set S.
         let mut queue: VecDeque<(H256, PropOrderingHelper)> = VecDeque::new();
-        let node_data = self.proposer_node_data_map.get(&block_hash).unwrap();
+        let node_data = self.prop_node_data(&block_hash);
         queue.push_back((block_hash, PropOrderingHelper::new(node_data.level, vec![0]) ));
 
         while let Some(block) = queue.pop_front() {
@@ -389,7 +421,7 @@ impl BlockChain {
             let prev_level_prop_blocks = self.get_parent_and_referred_notleader_unconfirmed_prop_blocks(block_hash);
             for block in prev_level_prop_blocks {
                 let block_h = block.0;
-                let node_data = self.proposer_node_data_map.get(&block_h).unwrap();
+                let node_data = self.prop_node_data(&block_h);
                 let level = node_data.level; // level in the prop tree
                 let mut new_position_vec = new_effective_ordering.position.clone();
                 new_position_vec.push(block.1);
@@ -428,7 +460,7 @@ impl BlockChain {
         referred_prop_blocks.push((parent_block, 0));
         // Filtering only NotLeaderUnconfirmed Blocks
         let mut not_leader_prop_blocks: Vec<(H256, u32)>  = referred_prop_blocks.into_iter().filter(
-            |&x| self.proposer_node_data_map.get(&x.0).unwrap().leadership_status == ProposerStatus::NotLeaderUnconfirmed).collect();
+            |&x| self.prop_node_data(&x.0).leadership_status == ProposerStatus::NotLeaderUnconfirmed).collect();
         not_leader_prop_blocks.sort_by_key(|k| k.1);
         return not_leader_prop_blocks;
     }
@@ -482,10 +514,16 @@ impl BlockChain {
 
 /// Functions for mining.
 impl BlockChain {
-    /// Return the best blocks on each voter chain.
-    pub fn get_voter_best_blocks(&self) -> Vec<H256> {
-        let voter_parents: Vec<H256> = self.voter_chains.iter().map(|&x| x.best_block).collect();
-        return voter_parents;
+    /// Return the best blocks on all voter chain.
+    pub fn get_all_voter_best_blocks(&self) -> Vec<H256> {
+        let voter_best_blocks: Vec<H256> = self.voter_chains.iter().map(|x| x.best_block.clone()).collect();
+        return voter_best_blocks;
+    }
+
+    /// Return the best blocks on voter chain 'chain number'.
+    pub fn get_voter_best_block(&self, chain_number: u16) -> H256 {
+        let voter_best_block: H256 = self.voter_chains.get(chain_number as usize).unwrap().best_block;
+        return voter_best_block;
     }
 
     /// Return the best block on proposer tree.s
@@ -505,9 +543,13 @@ impl BlockChain {
         return Vec::from_iter(unreferred_tx_blocks);
     }
 
+    /// Voter block content
+    pub fn get_unvoted_prop_blocks(&self, chain_number: u16) -> Vec<H256> {
+        return self.voter_chains[chain_number as usize].get_unvoted_prop_blocks();
+    }
     //todo: Voter content - Unvoted proposer blocks.
 
-    //The content for transaction blocks if from the mempool
+    //The content for transaction blocks if from the tx-mempool.
 }
 
 
@@ -521,19 +563,11 @@ mod tests {
     use super::test_util;
     use std::fs;
 
-    // Debugging fn
-    fn print_edges(blockchain: BlockChain) -> BlockChain {
-        let all_edges = blockchain.graph.all_edges();
-        for edge in all_edges{
-            println!("Edge weight,{}", edge.2);
-        }
-        return blockchain;
-    }
 
     // At initialization the blockchain only consists of (m+1) genesis blocks.
     // The hash of these genesis nodes in the blockchain graph are fixed for now
     // because we have designed the genesis blocks themselves.
-//    #[test]
+    #[test]
     fn blockchain_initialization(){
         /// Initialize a blockchain with 10  voter chains.
         let blockchain = BlockChain::new();
@@ -594,13 +628,16 @@ mod tests {
         assert_eq!(prop_block1.hash(), blockchain.proposer_tree.best_block, "Proposer best block");
         assert_eq!(17, blockchain.graph.node_count(), "Expecting 17 nodes");
         assert_eq!(22, blockchain.graph.edge_count(), "Expecting 22 edges");
+//        println!("Prop-1 {}", prop_block1.hash());
 //        println!("Result 3: Node count:{}, Edge count {}",blockchain.graph.node_count(), blockchain.graph.edge_count());
 
 
         println!("Step 4:   Add 10 voter blocks voting on proposer block at level 1");
         for i in 0..NUM_VOTER_CHAINS{
+            assert_eq!(1, blockchain.voter_chains[i as usize].get_unvoted_prop_blocks().len());
+            assert_eq!(prop_block1.hash(), blockchain.voter_chains[i as usize].get_unvoted_prop_blocks()[0]);
             let voter_block = test_util::voter_block(blockchain.proposer_tree.best_block,
-        i as u16, blockchain.voter_chains[i as usize].best_block, vec![prop_block1.hash()] );
+        i as u16, blockchain.voter_chains[i as usize].best_block,blockchain.voter_chains[i as usize].get_unvoted_prop_blocks() );
             blockchain.insert_node(&voter_block);
         }
         assert_eq!(27, blockchain.graph.node_count());
@@ -634,11 +671,18 @@ mod tests {
 
         println!("Step 6:   Add 7+3 votes on proposer blocks at level 2");
         for i in 0..7{
+
+            assert_eq!(1, blockchain.voter_chains[i as usize].get_unvoted_prop_blocks().len());
+            assert_eq!(prop_block2a.hash(), blockchain.voter_chains[i as usize].get_unvoted_prop_blocks()[0]);
             let voter_block = test_util::voter_block(prop_block2a.hash(),
-            i as u16, blockchain.voter_chains[i as usize].best_block, vec![prop_block2a.hash()] );
+            i as u16, blockchain.voter_chains[i as usize].best_block,blockchain.voter_chains[i as usize].get_unvoted_prop_blocks() );
             blockchain.insert_node(&voter_block);
         }
         for i in 7..10{
+
+            assert_eq!(1, blockchain.voter_chains[i as usize].get_unvoted_prop_blocks().len());
+            assert_eq!(prop_block2a.hash(), blockchain.voter_chains[i as usize].get_unvoted_prop_blocks()[0]);
+            // We are instead voting on prop block 2b
             let voter_block = test_util::voter_block(prop_block2b.hash(),
             i as u16, blockchain.voter_chains[i as usize].best_block, vec![prop_block2b.hash()] );
             blockchain.insert_node(&voter_block);
@@ -669,11 +713,15 @@ mod tests {
 
         println!("Step 8:   Mining only 3+3 voter blocks voting on none + prob_block3");
         for i in 0..3{
-            let voter_block = test_util::voter_block(prop_block2a.hash(), // Mining on 2a (because 3 hasnt showed up yet)
+            assert_eq!(1, blockchain.voter_chains[i as usize].get_unvoted_prop_blocks().len());
+            assert_eq!(prop_block3.hash(), blockchain.voter_chains[i as usize].get_unvoted_prop_blocks()[0]);
+            let voter_block = test_util::voter_block(prop_block2a.hash(), // Mining on 2a (because 3 hasnt showed up yet (fake))
             i as u16, blockchain.voter_chains[i as usize].best_block, vec![] );
             blockchain.insert_node(&voter_block);
         }
         for i in 3..6{
+            assert_eq!(1, blockchain.voter_chains[i as usize].get_unvoted_prop_blocks().len());
+            assert_eq!(prop_block3.hash(), blockchain.voter_chains[i as usize].get_unvoted_prop_blocks()[0]);
             let voter_block = test_util::voter_block(prop_block3.hash(), // Mining on 3 after it showed up
             i as u16, blockchain.voter_chains[i as usize].best_block, vec![prop_block3.hash()] );
             blockchain.insert_node(&voter_block);
@@ -702,17 +750,25 @@ mod tests {
             voter_best_blocks[i] = blockchain.voter_chains[i as usize].best_block.clone();
         }
         for i in 0..3{
-            let voter_block = test_util::voter_block(prop_block4.hash(), // Mining on 2a (because 3 hasnt showed up yet)
+            assert_eq!(2, blockchain.voter_chains[i as usize].get_unvoted_prop_blocks().len());
+            assert_eq!(prop_block3.hash(), blockchain.voter_chains[i as usize].get_unvoted_prop_blocks()[0]);
+            assert_eq!(prop_block4.hash(), blockchain.voter_chains[i as usize].get_unvoted_prop_blocks()[1]);
+            let voter_block = test_util::voter_block(prop_block4.hash(), // Mining on 4
              i as u16, blockchain.voter_chains[i as usize].best_block, vec![prop_block3.hash(), prop_block4.hash()] );
             blockchain.insert_node(&voter_block);
         }
 
         for i in 3..6{
-            let voter_block = test_util::voter_block(prop_block4.hash(), // Mining on 2a (because 3 hasnt showed up yet)
+            assert_eq!(1, blockchain.voter_chains[i as usize].get_unvoted_prop_blocks().len());
+            assert_eq!(prop_block4.hash(), blockchain.voter_chains[i as usize].get_unvoted_prop_blocks()[0]);
+            let voter_block = test_util::voter_block(prop_block4.hash(), // Mining on 4
             i as u16, blockchain.voter_chains[i as usize].best_block, vec![prop_block4.hash()] );
             blockchain.insert_node(&voter_block);
         }
         for i in 6..10{
+            assert_eq!(2, blockchain.voter_chains[i as usize].get_unvoted_prop_blocks().len());
+            assert_eq!(prop_block3.hash(), blockchain.voter_chains[i as usize].get_unvoted_prop_blocks()[0]);
+            assert_eq!(prop_block4.hash(), blockchain.voter_chains[i as usize].get_unvoted_prop_blocks()[1]);
             let voter_block = test_util::voter_block(prop_block4.hash(), // Mining on 3 after it showed up
             i as u16, blockchain.voter_chains[i as usize].best_block, vec![prop_block3.hash(), prop_block4.hash()] );
             blockchain.insert_node(&voter_block);
@@ -846,7 +902,7 @@ mod tests {
     }
 
 
-    #[test]
+//    #[test]
     fn proposer_block_ordering(){
         let mut rng = rand::thread_rng();
         // Initialize a blockchain with 10 voter chains.
