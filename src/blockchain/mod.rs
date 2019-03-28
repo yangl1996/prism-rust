@@ -26,7 +26,7 @@ use petgraph::graphmap::GraphMap;
 use std::iter::FromIterator;
 use std::process;
 
-const NUM_VOTER_CHAINS: u16 = 10; // DONT CHANGE THIS
+const NUM_VOTER_CHAINS: u16 = 10; // DONT CHANGE THIS. The tests will break.
 
 pub struct BlockChain{
     /// Store the graph structures of Prism
@@ -542,7 +542,6 @@ impl BlockChain{
         return self.voter_node_data.get(hash).unwrap();
     }
 }
-
 
 #[cfg(test)]
 mod tests {

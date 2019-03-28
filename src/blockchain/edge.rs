@@ -1,5 +1,5 @@
 /*
-This containts the different type of edges in Prism graph structure.
+This contains the different type of edges in Prism graph structure.
 */
 
 // todo: Document the edge types.
