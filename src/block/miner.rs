@@ -5,7 +5,7 @@ use crate::blockchain::{BlockChain,NUM_VOTER_CHAINS};
 use crate::miner::memory_pool::{MemoryPool,Entry};
 use super::{Block, Content};
 use super::header::Header;
-use std::collections::{HashSet,HashMap};
+use std::collections::{HashMap};
 use super::{transaction, proposer, voter};
 use crate::config::*;
 use std::time::{SystemTime};
@@ -19,18 +19,8 @@ extern crate bigint;
 use bigint::uint::{U256};
 
 pub struct Miner<'a>{
-    // Proposer block to mine on proposer tree
-    proposer_parent_hash: H256,
-    // Voter blocks to mine on m different voter trees
-    voter_parent_hash: [H256; NUM_VOTER_CHAINS as usize],
-    // Ideally Miner `actor' should have access to these three global data.
     // Tx block content
     tx_mempool: &'a MemoryPool,
-    // Proposer block contents
-    unreferenced_tx_blocks: Vec<H256>, // todo: Should be replaced with tx_block-mem-pool
-    unreferenced_prop_blocks: Vec<H256>, // todo: Should be replaced with unreferenced prop_block-mem-pool
-    // Voter block content. Each voter chain has its own list of un-voted proper blocks.
-    unvoted_proposer_blocks: Vec<Vec<H256>>, // todo: Should be replaced with un_voted_block pool
     // Current blockchain
     blockchain: &'a mut BlockChain,
     // Recent blocks
@@ -44,28 +34,23 @@ pub struct Miner<'a>{
 
 impl<'a> Miner<'a>{
     // This function will be used when the miner is restarted
-    pub fn new(proposer_parent_hash: H256,
-               voter_parent_hash: [H256; NUM_VOTER_CHAINS as usize],
-               tx_mempool: &'a MemoryPool,
-               unreferenced_tx_blocks: Vec<H256>,
-               unreferenced_prop_blocks: Vec<H256>,
-               unvoted_proposer_blocks: Vec<Vec<H256>>,
+    pub fn new(tx_mempool: &'a MemoryPool,
                blockchain: &'a mut BlockChain,
                seen_blocks: &'a mut HashMap<H256,Block>,
-               incoming_blocks: Receiver<Block>,
-               outgoing_blocks: Sender<Block>) -> Self {
-        Self { proposer_parent_hash, voter_parent_hash, tx_mempool,
-               unreferenced_tx_blocks, unreferenced_prop_blocks,
-               unvoted_proposer_blocks, blockchain, seen_blocks,
-               incoming_blocks, outgoing_blocks }
+               outgoing_blocks: Sender<Block>,
+               incoming_blocks: Receiver<Block>,) -> Self {
+        Self { tx_mempool, blockchain, seen_blocks,
+               outgoing_blocks, incoming_blocks }
     }
 
     pub fn mine(&mut self) {
 
         // Set the content
+        let mut proposer_parent_hash =
+            self.blockchain.get_proposer_best_block();
         let content = self.update_block_contents();
         let content_merkle_tree = MerkleTree::new(&content);
-        let difficulty = self.get_difficulty(self.proposer_parent_hash);
+        let mut difficulty = self.get_difficulty(&proposer_parent_hash);
 
 
         // Create header
@@ -73,12 +58,14 @@ impl<'a> Miner<'a>{
         let mut rng = rand::thread_rng();
         let mut sortition_id: u32;
         // todo: Use Future feature from rust.
-        let mut header = self.create_header(&content_merkle_tree,
-            &nonce, &difficulty);
+        let mut header = self.create_header(&proposer_parent_hash,
+                                            &content_merkle_tree,
+                                            &nonce, &difficulty);
 
         // Mining loop
         loop{
             let hash: [u8; 32] = (&header.hash()).into(); //todo: bad code
+            println!("Hash {}", String::from_utf8_lossy(&hash));
             if hash < difficulty{
                 sortition_id = Miner::get_sortition_id(hash, difficulty)
                     .unwrap();
@@ -90,7 +77,11 @@ impl<'a> Miner<'a>{
                     // update contents and headers if needed
                     // TODO: Only update block contents if relevant parent/
                     // content actually changed
-                    self.update_block_contents();
+                    proposer_parent_hash =
+                        self.blockchain.get_proposer_best_block();
+                    let content = self.update_block_contents();
+                    let content_merkle_tree = MerkleTree::new(&content);
+                    difficulty = self.get_difficulty(&proposer_parent_hash);
                 },
                 Err(TryRecvError::Empty) => {
                     continue;
@@ -98,8 +89,9 @@ impl<'a> Miner<'a>{
                 Err(TryRecvError::Disconnected) => unreachable!(),
             }
             header.nonce = rng.gen(); // Choosing a random nonce
-            header = self.create_header(&content_merkle_tree,
-                                                &nonce, &difficulty);
+            header = self.create_header(&proposer_parent_hash,
+                                        &content_merkle_tree,
+                                        &nonce, &difficulty);
         };
 
         // Creating a block
@@ -123,20 +115,23 @@ impl<'a> Miner<'a>{
         // update the blockchain
         self.blockchain.insert_node(&mined_block);
 
-        // Send the mined block on outgoing blocks
+        println!("Block mined!");
+
+        // Send the mined block on outgoing blocks channel (update memory)
         // thread::spawn(move || {
         //     self.outgoing_blocks.send(mined_block.clone()).unwrap();
         // });
     }
 
     fn create_header(&self,
+                     proposer_parent_hash: &H256,
                      content_merkle_tree: &MerkleTree<Content>,
                      nonce: &u32,
                      difficulty: &[u8;32]) -> Header {
         let timestamp: u64 = Miner::get_time();
         let content_root = *content_merkle_tree.root();
-        let extra_content :[u8; 32] = [0; 32]; // Add miner id?
-        return Header::new(self.proposer_parent_hash,
+        let extra_content: [u8; 32] = [0; 32]; // Add miner id?
+        return Header::new(proposer_parent_hash.clone(),
                            timestamp, nonce.clone(),
                            content_root, extra_content,
                            difficulty.clone());
@@ -146,11 +141,10 @@ impl<'a> Miner<'a>{
         // update the contents and the parents based on current view
         let mut content = vec![];
 
-        // Update proposer content/parents
-        self.proposer_parent_hash =
-            self.blockchain.proposer_tree.best_block.clone();
+        // Update proposer content
         content.push(Content::Proposer(proposer::Content::new(
-                     self.unreferenced_tx_blocks.clone(), self.unreferenced_prop_blocks.clone())));
+                     self.blockchain.get_unreferred_prop_blocks().clone(),
+                     self.blockchain.get_unreferred_tx_blocks().clone())));
 
         // Update transaction content with TX_BLOCK_SIZE mempool txs
         content.push(Content::Transaction(transaction::Content::new(
@@ -158,17 +152,15 @@ impl<'a> Miner<'a>{
                         .get_transactions(TX_BLOCK_SIZE)
                         .into_iter()
                         .map(|s| s.transaction)
-                        .collect())));
+                        .collect(),)));
 
         // Update voter content/parents
         for i in 0..NUM_VOTER_CHAINS {
-            self.voter_parent_hash[i as usize] =
-                self.blockchain.voter_chains[i as usize].best_block.clone();
             content.push(Content::Voter(voter::Content::new(i,
-                         self.voter_parent_hash[i as usize].clone(),
-                         self.unvoted_proposer_blocks[i as usize].clone())));
+                         self.blockchain.get_voter_best_block(i as u16).clone(),
+                         self.blockchain.get_unvoted_prop_blocks(i as u16)
+                        .clone())));
         }
-
         return content;
     }
 
@@ -203,12 +195,57 @@ impl<'a> Miner<'a>{
         None
     }
 
-    fn get_difficulty(&self, block_hash: H256) -> [u8; 32] {
+    fn get_difficulty(&self, block_hash: &H256) -> [u8; 32] {
         // Get the header of the block corresponding to block_hash
-        match self.seen_blocks.get(&block_hash) {
+        match self.seen_blocks.get(block_hash) {
             // extract difficulty
             Some(block) => return block.header.difficulty.clone(),
             None => return [0; 32]
         }
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use crate::crypto::hash::{H256};
+    use super::*;
+    use crate::blockchain::BlockChain;
+    use crate::miner::memory_pool::MemoryPool;
+    use std::collections::{HashMap};
+    use crate::block::{Block};
+    use std::sync::mpsc::channel;
+    use std::thread;
+    use rand::{Rng, RngCore};
+
+
+    // At initialization the blockchain only consists of (m+1) genesis blocks.
+    // The hash of these genesis nodes in the blockchain graph are fixed for now
+    // because we have designed the genesis blocks themselves.
+    #[test]
+    fn miner_initialization() {
+        /// Initialize a blockchain with 10  voter chains.
+        let mut blockchain = BlockChain::new();
+        /// Store the parent blocks to mine on voter trees.
+        let mut voter_best_blocks: Vec<H256> = (0..NUM_VOTER_CHAINS).map( |i| blockchain.voter_chains[i as usize].best_block).collect();// Currently the voter genesis blocks.
+
+        /// Maintains the list of tx blocks.
+        let mut tx_block_vec: Vec<Block> = vec![];
+        let mut unreferred_tx_block_index = 0;
+
+        println!("Step 1:   Initialized blockchain");
+        assert_eq!(11, blockchain.graph.node_count(), "Expecting 11 nodes corresponding to 11 genesis blocks");
+        assert_eq!(0, blockchain.graph.edge_count(), "Expecting 0 edges");
+
+        let mut tx_mempool = MemoryPool::new();
+
+        let mut seen_blocks: HashMap<H256,Block> = HashMap::new();
+        let (sender, receiver) = channel();
+
+        let mut miner = Miner::new(&tx_mempool, &mut blockchain,
+                                   &mut seen_blocks,
+                                   sender, receiver);
+        miner.mine();
+        println!("I am here")
     }
 }
