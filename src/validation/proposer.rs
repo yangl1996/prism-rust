@@ -34,7 +34,7 @@ impl<'a> super::Validator<'a> for ProposerBlockValidator<'a> {
 
     fn is_duplicate(&self, block: &'a Block) -> bool {
         // Checks if we already have a copy of this block in storage
-        return self.blockchain.proposer_node_data_map.contains_key(&block.hash())
+        return self.blockchain.proposer_node_data.contains_key(&block.hash())
     }
 
     fn is_empty(&self, block: &'a Block) -> bool {
