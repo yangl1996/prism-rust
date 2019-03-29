@@ -50,7 +50,10 @@ impl<'a> Miner<'a>{
             self.blockchain.get_proposer_best_block();
         let content = self.update_block_contents();
         let content_merkle_tree = MerkleTree::new(&content);
-        let mut difficulty = self.get_difficulty(&proposer_parent_hash).unwrap();
+        let mut difficulty = match self.get_difficulty(&proposer_parent_hash) {
+            Some(d) => d,
+            None => DEFAULT_DIFFICULTY,
+        };
 
 
         // Initialize header variables
@@ -98,10 +101,7 @@ impl<'a> Miner<'a>{
 
         // Creating a block
         let sortition_proof: Vec<H256> = content_merkle_tree
-            .get_proof_from_index(sortition_id)
-            .iter()
-            .map(|&x| *x)
-            .collect();
+            .get_proof_from_index(sortition_id);
         let mined_block = Block::from_header(header,
             content[sortition_id as usize].clone(),
             sortition_proof);
@@ -128,7 +128,7 @@ impl<'a> Miner<'a>{
                      nonce: &u32,
                      difficulty: &[u8;32]) -> Header {
         let timestamp: u64 = Miner::get_time();
-        let content_root = *content_merkle_tree.root();
+        let content_root = content_merkle_tree.root();
         let extra_content: [u8; 32] = [0; 32]; // Add miner id?
         return Header::new(proposer_parent_hash.clone(),
                            timestamp, nonce.clone(),
