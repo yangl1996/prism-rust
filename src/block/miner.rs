@@ -50,24 +50,30 @@ impl<'a> Miner<'a>{
             self.blockchain.get_proposer_best_block();
         let content = self.update_block_contents();
         let content_merkle_tree = MerkleTree::new(&content);
-        let mut difficulty = self.get_difficulty(&proposer_parent_hash);
+        let mut difficulty = self.get_difficulty(&proposer_parent_hash).unwrap();
 
 
-        // Create header
-        let mut nonce: u32 = 0;
+        // Initialize header variables
+        let mut nonce: u32;
         let mut rng = rand::thread_rng();
         let mut sortition_id: u32;
         // todo: Use Future feature from rust.
-        let mut header = self.create_header(&proposer_parent_hash,
-                                            &content_merkle_tree,
-                                            &nonce, &difficulty);
+        let mut header: Header;
 
         // Mining loop
         loop{
+            // Choose a random nonce
+            nonce = rng.gen();
+            // Create the header
+            header = Miner::create_header(&proposer_parent_hash,
+                                            &content_merkle_tree,
+                                            &nonce, &difficulty);
+            // Compute the hash
             let hash: [u8; 32] = (&header.hash()).into(); //todo: bad code
-            println!("Hash {}", String::from_utf8_lossy(&hash));
+
+            // Check hash difficulty
             if hash < difficulty{
-                sortition_id = Miner::get_sortition_id(hash, difficulty)
+                sortition_id = Miner::get_sortition_id(&hash, &difficulty)
                     .unwrap();
                 break;
             }
@@ -81,17 +87,13 @@ impl<'a> Miner<'a>{
                         self.blockchain.get_proposer_best_block();
                     let content = self.update_block_contents();
                     let content_merkle_tree = MerkleTree::new(&content);
-                    difficulty = self.get_difficulty(&proposer_parent_hash);
+                    difficulty = self.get_difficulty(&proposer_parent_hash).unwrap();
                 },
                 Err(TryRecvError::Empty) => {
                     continue;
                 },
                 Err(TryRecvError::Disconnected) => unreachable!(),
             }
-            header.nonce = rng.gen(); // Choosing a random nonce
-            header = self.create_header(&proposer_parent_hash,
-                                        &content_merkle_tree,
-                                        &nonce, &difficulty);
         };
 
         // Creating a block
@@ -115,16 +117,13 @@ impl<'a> Miner<'a>{
         // update the blockchain
         self.blockchain.insert_node(&mined_block);
 
-        println!("Block mined!");
-
         // Send the mined block on outgoing blocks channel (update memory)
         // thread::spawn(move || {
         //     self.outgoing_blocks.send(mined_block.clone()).unwrap();
         // });
     }
 
-    fn create_header(&self,
-                     proposer_parent_hash: &H256,
+    fn create_header(proposer_parent_hash: &H256,
                      content_merkle_tree: &MerkleTree<Content>,
                      nonce: &u32,
                      difficulty: &[u8;32]) -> Header {
@@ -137,7 +136,7 @@ impl<'a> Miner<'a>{
                            difficulty.clone());
     }
 
-    fn update_block_contents(&mut self) -> Vec<Content> {
+    fn update_block_contents(&self) -> Vec<Content> {
         // update the contents and the parents based on current view
         let mut content = vec![];
 
@@ -175,32 +174,39 @@ impl<'a> Miner<'a>{
         return 0;
     }
 
-    fn get_sortition_id(hash: [u8; 32], difficulty: [u8; 32]) -> Option<u32> {
-        let bigint_hash = U256::from_big_endian(&hash);
-        let bigint_difficulty = U256::from_big_endian(&difficulty);
-        let increment: U256 = bigint_difficulty / (NUM_VOTER_CHAINS + 2).into();
+    fn get_sortition_id(hash: &[u8; 32], difficulty: &[u8; 32]
+                       ) -> Option<u32> {
+        let big_hash = U256::from_big_endian(hash);
+        let big_difficulty = U256::from_big_endian(difficulty);
+        let big_proposer_rate: U256 = PROPOSER_MINING_RATE.into();
+        let big_transaction_rate: U256 = TRANSACTION_MINING_RATE.into();
 
-        if bigint_hash < increment {
+        if big_hash < big_difficulty / 100.into() *
+            big_transaction_rate {
             // Transaction block
             return Some(TRANSACTION_INDEX);
-        } else if bigint_hash < increment * 2.into() {
+        } else if big_hash < big_difficulty / 100.into() *
+            (big_transaction_rate + big_proposer_rate) {
             // Proposer block
             return Some(PROPOSER_INDEX);
-        } else if bigint_hash < bigint_difficulty {
+        } else if big_hash < big_difficulty {
             // Figure out which voter tree we are in
-            let voter_id = (bigint_hash - increment * 2.into()) / increment;
+            let voter_id = (big_hash -
+                            big_transaction_rate -
+                            big_proposer_rate)
+                            / NUM_VOTER_CHAINS.into();
             // TODO: This will panic if difficulty > 2^32!
             return Some(voter_id.as_u32());
         }
         None
     }
 
-    fn get_difficulty(&self, block_hash: &H256) -> [u8; 32] {
+    fn get_difficulty(&self, block_hash: &H256) -> Option<[u8; 32]> {
         // Get the header of the block corresponding to block_hash
         match self.seen_blocks.get(block_hash) {
             // extract difficulty
-            Some(block) => return block.header.difficulty.clone(),
-            None => return [0; 32]
+            Some(block) => return Some(block.header.difficulty.clone()),
+            None => return None
         }
     }
 }
