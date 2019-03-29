@@ -74,12 +74,16 @@ impl<'a, T: Hashable> MerkleTree<'a, T> {
         };
     }
 
-    pub fn root(&self) -> &H256 {
-        return &self.nodes[0];
+    pub fn root(&self) -> H256 {
+        if self.nodes.len() == 0 {
+            return (&[0; 32]).into();
+        }
+        else {
+            return self.nodes[0];
+        }
     }
 
-    //  todo: Lei: This should  return Vec<H256>
-    fn proof(&self, data: &T) -> Vec<&H256> {
+    fn proof(&self, data: &T) -> Vec<H256> {
         let mut results = vec![];
         let data_index = self
             .data
@@ -99,7 +103,7 @@ impl<'a, T: Hashable> MerkleTree<'a, T> {
                 1 => known_index + 1,
                 _ => known_index - 1,
             };
-            results.push(&self.nodes[sibling_index]);
+            results.push(self.nodes[sibling_index]);
             known_index = (known_index - 1) >> 1;
         }
         return results;
@@ -107,7 +111,8 @@ impl<'a, T: Hashable> MerkleTree<'a, T> {
 
     /// Returns the Merkle Proof of data at index i
     /// todo: Lei check this
-    pub fn get_proof_from_index(&self, index: u32)  -> Vec<&H256> {
+    pub fn get_proof_from_index(&self, index: u32)  -> Vec<H256> {
+        // TODO: inefficient
         return self.proof(&self.data[index as usize]);
     }
 
@@ -172,7 +177,7 @@ mod tests {
         let root = merkle_tree.root();
         assert_eq!(
             root,
-            &(&hex!(
+            (&hex!(
                 "9d8f0638fa3d46f618dea970df55b53a02f4aa924e8d598af6b5f296fdaabce5"
             )).into()
         );
@@ -183,9 +188,9 @@ mod tests {
         let input_data: Vec<hash::H256> = gen_merkle_tree_data!();
         let merkle_tree = MerkleTree::new(&input_data);
         let proof = merkle_tree.proof(&input_data[2]);
-        assert_eq!(proof[0], &merkle_tree.nodes[10]);
-        assert_eq!(proof[1], &merkle_tree.nodes[3]);
-        assert_eq!(proof[2], &merkle_tree.nodes[2]);
+        assert_eq!(proof[0], merkle_tree.nodes[10]);
+        assert_eq!(proof[1], merkle_tree.nodes[3]);
+        assert_eq!(proof[2], merkle_tree.nodes[2]);
         assert_eq!(proof.len(), 3);
     }
 }

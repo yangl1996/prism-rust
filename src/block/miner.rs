@@ -9,8 +9,8 @@ use super::{transaction, proposer, voter};
 extern crate rand; // 0.6.0
 use rand::{Rng};
 
-/// todo:   The miner should have access to the blockgraph?
-///         This class will be changed a lot once other parts are added
+// TODO: The miner should have access to the blockgraph?
+// This class will be changed a lot once other parts are added
 pub struct Miner{
     /// Proposer block to mine on proposer tree
     proposer_parent_hash: H256,
@@ -37,29 +37,29 @@ impl Miner{
     // todo: split the function into parts
     pub fn mine(&self) -> Block {
 
-        /// 1. Creating a merkle tree with m+2 contents ///
+        // 1. Creating a merkle tree with m+2 contents
         let m =1000; // todo: Number of chains is fixed for now
         let mut  content = vec![]; // m voter chains, 1 prop and 1 tx blocks
-        /// Adding m different voter block contents
+        // Adding m different voter block contents
         for i in 0..m{
             content.push(Content::Voter(voter::Content::new(i, self.voter_parent_hash[i as usize].clone(),
                                                             self.unvoted_proposer_blocks[i as usize].clone())));
         }
-        /// Adding proposer block content
+        // Adding proposer block content
         content.push(Content::Proposer(proposer::Content::new(self.unreferenced_tx_blocks.clone(), self.unreferenced_prop_blocks.clone())));
-        /// Adding transaction block content
+        // Adding transaction block content
         content.push(Content::Transaction(transaction::Content::new(self.unconfirmed_txs.clone())));
         let content_merkle_tree = MerkleTree::new(&content);
 
-        /// 2. Creating a header
+        // 2. Creating a header
         let timestamp: u64 = 0;
         let nonce: u32 = 0;
-        let content_root = *content_merkle_tree.root();
+        let content_root = content_merkle_tree.root();
         let extra_content :[u8; 32] = [0; 32]; // Add miner id?
         let difficulty :[u8; 32] = [0; 32] ; // todo:This should be proposer_parent's difficulty
         let mut header = Header::new(self.proposer_parent_hash, timestamp , nonce, content_root, extra_content, difficulty);
 
-        /// 3. Mining over nonce
+        // 3. Mining over nonce
         let mut rng = rand::thread_rng();
         let mut sortition_id: u32 ;
         // todo: Use Future feature from rust.
@@ -74,8 +74,8 @@ impl Miner{
 
         };
 
-        /// 4. Creating a block
-        let sortition_proof: Vec<H256> = content_merkle_tree.get_proof_from_index(sortition_id).iter().map(|&x| *x).collect();
+        // 4. Creating a block
+        let sortition_proof: Vec<H256> = content_merkle_tree.get_proof_from_index(sortition_id);
         let mined_block = Block::from_header(header, content[sortition_id as usize].clone(),  sortition_proof);
         return mined_block;
     }
