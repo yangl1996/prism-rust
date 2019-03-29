@@ -21,7 +21,7 @@ impl Content{
 impl Hashable for Content{
     fn hash(&self) -> H256 {
         let merkle_tree = MerkleTree::new(&self.proposer_block_votes);
-        //todo: Add chain number and voter_parent_hash in the hash
-        return *merkle_tree.root();
+        // TODO: Add chain number and voter_parent_hash in the hash
+        return merkle_tree.root();
     }
 }

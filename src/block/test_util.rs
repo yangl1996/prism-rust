@@ -168,27 +168,27 @@ pub fn sample_mined_block(index: u32) -> Block {
     let m : u32 = 100; // number of  voter trees
     let mut content_hash_vec : Vec<H256> = vec![];
 
-    /// Adding voter content
+    // Adding voter content
     for i in 0..m {
         let mut voter_content = sample_voter_content();
         voter_content.chain_number = i as u16;
         content_hash_vec.push(voter_content.hash());
     }
 
-    /// Adding transaction content
+    // Adding transaction content
     let transaction_content = sample_transaction_content();
     content_hash_vec.push(transaction_content.hash());
 
 
-    /// Adding proposer content
+    // Adding proposer content
     let proposer_content = sample_proposer_content2();
     content_hash_vec.push(proposer_content.hash());
 
     let merkle_tree = MerkleTree::new(&content_hash_vec);
     let mut header = sample_header();
-    header.content_root = *merkle_tree.root();
+    header.content_root = merkle_tree.root();
 
-    /// Fake mining: The content corresponding to 'index' is chosen
+    // Fake mining: The content corresponding to 'index' is chosen
     let content: Content;
     if index < m {
         let mut voter_content = sample_voter_content();
@@ -203,7 +203,6 @@ pub fn sample_mined_block(index: u32) -> Block {
     }
 
     let sortition_proof = merkle_tree.get_proof_from_index(index);
-    let sortition_proof = sortition_proof.iter().map(|&x| *x).collect();
 
     return Block::from_header(header, content, sortition_proof);
 }
