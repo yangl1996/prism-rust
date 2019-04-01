@@ -7,6 +7,7 @@ pub const VOTER_BLOCK_SIZE: usize = 10;
 
 pub const TRANSACTION_INDEX: u32 = 0;
 pub const PROPOSER_INDEX: u32 = 1;
+pub const FIRST_VOTER_INDEX: u32 = 2;
 
 // Mining rates in percentages of the total mining rate
 // Total for the voter chains
