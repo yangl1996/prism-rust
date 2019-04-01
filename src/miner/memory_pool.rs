@@ -43,7 +43,7 @@ impl MemoryPool {
     }
 
     pub fn insert(&mut self, txn: Transaction) {
-        // TODO: handle duplicate and double spend
+        // assume duplicate and double spend already checked/validated
         let hash = txn.hash();
         let entry = Entry {
             transaction: txn,
@@ -78,8 +78,15 @@ impl MemoryPool {
         return Some(entry);
     }
 
-    pub fn contains(&self, hash: &H256) -> bool {
-        self.by_hash.contains_key(hash)
+    pub fn contains(&self, h: &H256) -> bool {
+        self.by_hash.contains_key(h)
+    }
+
+    pub fn is_double_spend(&self, inputs: &Vec<Input>) -> bool {
+        for input in inputs {
+            if self.by_input.contains_key(input) { return true; }
+        }
+        return false;
     }
 
     pub fn remove_by_input(&mut self, prevout: &Input) {
@@ -100,7 +107,6 @@ impl MemoryPool {
                 }
             }
         }
-        return;
     }
 
     // TODO: get random_n removed for now
@@ -122,33 +128,57 @@ pub mod tests {
     use crate::transaction::generator;
 
     #[test]
-    fn insert_one_transaction() {
+    fn insert_remove_one_transaction() {
         let mut pool = MemoryPool::new();
-        pool.insert(generator::random());
+        let txn = generator::random();
+        let h = txn.hash();
+        pool.insert(txn.clone());
         assert_eq!(pool.by_hash.len(), 1);
+        assert_eq!(pool.by_input.len(), txn.input.len());
+        pool.remove(&h);
+        assert_eq!(pool.by_hash.len(), 0);
+        assert_eq!(pool.by_input.len(), 0);
     }
 
-    // TODO: fix this
-    /*
+    #[test]
+    fn check_duplicate_doublespend() {
+        let mut pool = MemoryPool::new();
+        let txn = generator::random();
+        let h = txn.hash();
+        pool.insert(txn.clone());
+        assert_eq!(pool.by_hash.len(), 1);
+        assert_eq!(pool.by_input.len(), txn.input.len());
+        assert!(pool.contains(&h));
+        assert!(pool.is_double_spend(&txn.input));
+
+    }
+
+    #[test]
+    fn remove_by_input() {
+        let mut pool = MemoryPool::new();
+        let txn = generator::random();
+        let h = txn.hash();
+        pool.insert(txn.clone());
+        pool.remove_by_input(&txn.input[0]);
+        assert_eq!(pool.by_hash.len(), 0);
+        assert_eq!(pool.by_input.len(), 0);
+    }
+
     #[test]
     fn fifo() {
         let mut pool = MemoryPool::new();
         let mut v = vec![];
         for i in 0..20 {
-            let tx: Transaction = generator::random();
-            v.push(tx.hash());
-            pool.insert(tx);
+            let txn: Transaction = generator::random();
+            v.push(txn.hash());
+            pool.insert(txn);
         }
         assert_eq!(pool.by_hash.len(), 20);
-        assert_eq!(pool.by_input.len(), 20);
         assert_eq!(pool.by_storage_index.len(), 20);
-
-        assert_eq!(pool.get_n_transactions_hash(15).len(), 15);
-        assert_eq!(pool.get_n_transactions_hash(15)[..], v[..15]);//test the fifoproperty: we get the first 15 txs.
-        assert_eq!(pool.get_n_transactions_hash(25).len(), 20);
-        assert_eq!(pool.get_n_transactions(15).len(), 15);
-        assert_eq!(pool.get_n_transactions(25).len(), 20);
+        assert_eq!(pool.get_transactions(15).len(), 15);
+        //test the fifo property: we get the first 15 txs.
+        assert_eq!(pool.get_transactions(15).iter().map(|entry|entry.hash).collect::<Vec<H256>>()[..], v[..15]);
+        assert_eq!(pool.get_transactions(25).len(), 20);
     }
-    */
 
 }
