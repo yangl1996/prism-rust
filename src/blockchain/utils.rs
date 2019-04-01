@@ -12,10 +12,56 @@ use crate::transaction::generator as tx_generator;
 use crate::block::generator as block_generator;
 
 use rand::{Rng, RngCore};
+use std::cmp::Ordering;
+use std::cmp;
+
+pub fn lcb_and_ucb_from_vote_depths(votes: Vec<u32>) -> (f32, f32) {
+    let answer: f32 = votes.len() as f32;
+    return (answer, answer); //todo: Apply the confirmation logic from the paper
+}
+
+#[derive(Eq, PartialEq, Clone)]
+pub struct PropOrderingHelper{
+    pub level: u32, 
+    pub position: Vec<u32>
+}
+
+impl Ord for PropOrderingHelper {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        if self.level < other.level{ return Ordering::Less }
+        else if self.level > other.level{ return Ordering::Greater }
+
+        // If they have same levels then use the position
+        let len = cmp::min( self.position.len(), other.position.len() );
+        for i in 0..len{
+            if self.position[i] < other.position[i] { return Ordering::Less }
+            else if self.position[i] > other.position[i] { return Ordering::Greater }
+        }
+        if self.position.len() == other.position.len() { return Ordering::Equal}
+        panic!("This is not supposed to happen");
+    }
+}
+
+impl PartialOrd for PropOrderingHelper {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl PropOrderingHelper {
+    pub fn new(level: u32, position: Vec<u32>) -> Self{
+        return PropOrderingHelper{level, position}
+    }
+}
+
+
+/*
+ Test utils
+*/
 
 
 /// Generates a random tx_block with the given parent_hash. Only used by 'tx_blocks_with_parent_hash' fn.
-fn tx_block_with_parent_hash(parent_hash: H256) -> Block{
+fn test_tx_block_with_parent_hash(parent_hash: H256) -> Block{
     let mut tx_block = block_generator::tx_block();
     tx_block.header.parent_hash = parent_hash;
     return tx_block;
@@ -23,12 +69,12 @@ fn tx_block_with_parent_hash(parent_hash: H256) -> Block{
 
 
 /// Returns 'num' random tx blocks with the same parent hash.
-pub fn tx_blocks_with_parent_hash(num: u32, parent_hash: H256) -> Vec<Block> {
-    return (0..num).map( |_| tx_block_with_parent_hash(parent_hash)).collect();
+pub fn test_tx_blocks_with_parent_hash(num: u32, parent_hash: H256) -> Vec<Block> {
+    return (0..num).map( |_| test_tx_block_with_parent_hash(parent_hash)).collect();
 }
 
 /// Returns proposer block which has parent_hash, tx_blocks_hashes and pro_block_hashes. Everything other field is random.
-pub fn prop_block(parent_hash: H256, transaction_block_hashes: Vec<H256>, proposer_block_hashes :Vec<H256>) -> Block{
+pub fn test_prop_block(parent_hash: H256, transaction_block_hashes: Vec<H256>, proposer_block_hashes :Vec<H256>) -> Block{
     let mut header = block_generator::header(); // Random header
     header.parent_hash = parent_hash;
     let proposer_content = Proposer_Content {transaction_block_hashes, proposer_block_hashes};
@@ -39,7 +85,7 @@ pub fn prop_block(parent_hash: H256, transaction_block_hashes: Vec<H256>, propos
 
 /// Returns voter block which has parent_hash, chain_number, voter_parent_hash and proposer_block_votes
 /// Everything other field is random.
-pub fn voter_block(parent_hash: H256, chain_number: u16, voter_parent_hash: H256,
+pub fn test_voter_block(parent_hash: H256, chain_number: u16, voter_parent_hash: H256,
                    proposer_block_votes : Vec<H256>) -> Block {
     let mut header = block_generator::header(); // Random header
     header.parent_hash = parent_hash;
@@ -48,16 +94,3 @@ pub fn voter_block(parent_hash: H256, chain_number: u16, voter_parent_hash: H256
     let sortition_proof :Vec<H256> = (0..10).map(|_| crypto_generator::h256()).collect();
     return Block{header, content, sortition_proof};
 }
-
-///// has references to prop blocks.
-//pub fn proposer_content2() -> Proposer_Content{
-//    let transaction_block_hashes :Vec<H256> = (0..5).map(|_| block_generator::tx_block().hash()).collect();
-//    let proposer_block_hashes :Vec<H256> = vec![];
-//    return Proposer_Content {transaction_block_hashes, proposer_block_hashes};
-//}
-//pub fn prop_block2() -> Block{
-//    let header = block_generator::header();
-//    let content = Content::Proposer(proposer_content2());
-//    let sortition_proof :Vec<H256> = (0..10).map(|_| crypto_generator::H256()).collect();
-//    return Block{header, content, sortition_proof};
-//}
