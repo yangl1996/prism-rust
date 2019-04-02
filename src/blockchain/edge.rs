@@ -3,7 +3,7 @@ This containts the different type of edges in Prism graph structure.
 */
 
 // todo: Document the edge types.
-#[derive(Serialize, Deserialize, Clone, Copy, Ord, Eq, PartialEq, PartialOrd, Hash)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, Ord, Eq, PartialEq, PartialOrd, Hash)]
 pub enum Edge{
     /// Tx edge types
     TransactionToProposerParent,
