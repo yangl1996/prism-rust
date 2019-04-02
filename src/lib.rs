@@ -13,4 +13,6 @@ pub mod block;
 pub mod state;
 pub mod blockchain;
 pub mod miner;
-//pub mod validation;
+pub mod validation;
+pub mod config;
+pub mod blockdb;
