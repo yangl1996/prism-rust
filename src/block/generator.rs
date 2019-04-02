@@ -17,7 +17,7 @@ use crate::transaction::generator as tx_generator;
 
 /// To shift the constants to separate file
 const SORTITION_PROOF_SIZE: u16 = 10;
-const TX_BLOCK_SIZE: u32 = 750; //  750 txs correspond to 200 KB.
+const TX_BLOCK_SIZE: u32 = 2; //  750 txs correspond to 200 KB.
 const PROP_BLOCK_SIZE: u32 = 500; //  500 tx block refs correspond to 20KB.
 const NUM_VOTER_CHAINS: u16 = 1_000;
 
@@ -41,9 +41,9 @@ fn sortition_proof() -> Vec<H256> {
 }
 
 /// Returns a random tx_content filled with 1-10 transactions
-fn tx_content()  -> Tx_Content {
+fn tx_content() -> Tx_Content {
     let mut rng = rand::thread_rng();
-    let tx_number =  rng.gen_range(TX_BLOCK_SIZE-20,TX_BLOCK_SIZE+20);
+    let tx_number =  rng.gen_range(TX_BLOCK_SIZE,TX_BLOCK_SIZE+2);
     let transactions :Vec<Transaction> = (0..tx_number).map(|_| tx_generator::random()).collect();
     return Tx_Content {transactions};
 }

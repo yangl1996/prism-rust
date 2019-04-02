@@ -9,7 +9,7 @@ use rand::Rng;
 
 /// transactions storage
 #[derive(Debug)]
-struct MemoryPool {
+pub struct MemoryPool {
     /// Number of transactions
     counter: u64,
     /// By-hash storage

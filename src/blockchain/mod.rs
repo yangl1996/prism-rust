@@ -1,7 +1,7 @@
 mod transaction;
 mod proposer;
 mod voter;
-mod utils;
+pub mod utils;
 mod edge;
 use super::block::{Block, Content};
 use super::crypto::hash::{Hashable, H256};
@@ -26,8 +26,6 @@ use petgraph::graphmap::GraphMap;
 use std::iter::FromIterator;
 use std::process;
 
-const NUM_VOTER_CHAINS: u16 = 10; // DONT CHANGE THIS. The tests will break.
-
 pub struct BlockChain{
     /// Store the graph structures of Prism
     pub graph: GraphMap<H256, Edge, Directed>,
@@ -35,15 +33,15 @@ pub struct BlockChain{
     pub voter_chains: Vec<VoterChain>,
     pub tx_pool: TxPool,
     /// Contains data about the proposer nodes.
-    proposer_node_data: HashMap<H256, ProposerNodeData>,
+    pub proposer_node_data: HashMap<H256, ProposerNodeData>,
     /// Contains data about the voter nodes.
-    voter_node_data: HashMap<H256, VoterNodeData>
+    pub voter_node_data: HashMap<H256, VoterNodeData>
 }
 
 /// Functions to edit the blockchain
 impl BlockChain {
     /// Initializing blockchain graph with genesis blocks.
-    pub fn new() -> Self {
+    pub fn new(no_voting_chains: u16) -> Self {
         /// Initializing an empty objects
         let mut graph = GraphMap::<H256, Edge, Directed>::new();
         let mut proposer_tree = ProposerTree::default();
@@ -54,7 +52,7 @@ impl BlockChain {
 
         /// 1. Proposer genesis block
         /// 1a. Add proposer genesis block in the graph
-        let proposer_genesis_node = ProposerNodeData::genesis(NUM_VOTER_CHAINS);
+        let proposer_genesis_node = ProposerNodeData::genesis(no_voting_chains);
         let proposer_hash_vec: [u8; 32] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]; /// Hash vector of proposer genesis block. todo: Shift to a global config  file
         graph.add_node((&proposer_hash_vec).into());
         /// Add node data of proposer genesis block in the hashmap
@@ -65,7 +63,7 @@ impl BlockChain {
         proposer_tree.leader_nodes.insert(0, (&proposer_hash_vec).into()); // The leader block at level 0
 
         /// 2. Voter geneses blocks
-        for chain_number in 0..(NUM_VOTER_CHAINS) {
+        for chain_number in 0..(no_voting_chains) {
             /// 2a. Add voter chain i genesis block in the graph
             let voter_genesis_node = VoterNodeData::genesis(chain_number as u16);
             let b1 = ((chain_number + 1) >> 8) as u8;
@@ -138,7 +136,7 @@ impl BlockChain {
 
                 // 4. Add the proposer block to the list of unvoted blocks on all the voter chains.
                 let proposer_parent_node_data: ProposerNodeData = self.proposer_node_data[&parent_proposer_block_hash];
-                for i in 0..NUM_VOTER_CHAINS{
+                for i in 0..self.voter_chains.len() {
                     self.voter_chains.get_mut(i as usize).unwrap().insert_unvoted(
                         proposer_parent_node_data.level + 1, block_hash);
                 }
@@ -557,8 +555,9 @@ mod tests {
     // because we have designed the genesis blocks themselves.
     #[test]
     fn blockchain_initialization(){
+        pub const NUM_VOTER_CHAINS: u16 = 10;
         /// Initialize a blockchain with 10  voter chains.
-        let blockchain = BlockChain::new();
+        let mut blockchain = BlockChain::new(NUM_VOTER_CHAINS);
 
         /// Checking proposer tree's genesis block hash
         let proposer_genesis_hash_shouldbe: [u8; 32] = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]; /// Hash vector of proposer genesis block. todo: Shift to a global config  file
@@ -577,9 +576,10 @@ mod tests {
 
     #[test]
     fn blockchain_growing(){
+        pub const NUM_VOTER_CHAINS: u16 = 10;
         let mut rng = rand::thread_rng();
         /// Initialize a blockchain with 10 voter chains.
-        let mut blockchain = BlockChain::new();
+        let mut blockchain = BlockChain::new(NUM_VOTER_CHAINS);
 
         /// Store the parent blocks to mine on voter trees.
         let mut voter_best_blocks: Vec<H256> = (0..NUM_VOTER_CHAINS).map( |i| blockchain.voter_chains[i as usize].best_block).collect();// Currently the voter genesis blocks.
@@ -876,9 +876,10 @@ mod tests {
 
     #[test]
     fn proposer_block_ordering(){
+        pub const NUM_VOTER_CHAINS: u16 = 10;
         let mut rng = rand::thread_rng();
         // Initialize a blockchain with 10 voter chains.
-        let mut blockchain = BlockChain::new();
+        let mut blockchain = BlockChain::new(NUM_VOTER_CHAINS);
 
         // Store the parent blocks to mine on voter trees.
         let mut voter_best_blocks: Vec<H256> = (0..NUM_VOTER_CHAINS).map( |i| blockchain.voter_chains[i as usize].best_block).collect();// Currently the voter genesis blocks.

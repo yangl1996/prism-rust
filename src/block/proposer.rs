@@ -21,10 +21,11 @@ impl Content{
 /// Hashing the contents in a Merkle tree
 impl Hashable for Content{
     fn hash(&self) -> H256 {
-        /// todo(V): Add the proposer_block_refs too.
+        // TODO(V): Add the proposer_block_refs too.
         let tx_merkle_tree = MerkleTree::new(&self.transaction_block_hashes);
         let prop_merkle_tree = MerkleTree::new(&self.proposer_block_hashes);
-        return (*tx_merkle_tree.root()).clone();
+        // TODO: why do we calculate prop_merkle_tree when we don't use it?
+        return tx_merkle_tree.root();
     }
 }
 
