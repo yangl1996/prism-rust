@@ -13,6 +13,7 @@ use std::sync::Arc;
 use prism::network;
 use prism::blockdb;
 use prism::blockchain;
+use prism::miner::memory_pool;
 
 const DEFAULT_IP: &str = "127.0.0.1";
 const DEFAULT_P2P_PORT: u16 = 6000;
@@ -47,6 +48,10 @@ fn main() {
     let blockchain = blockchain::BlockChain::new();
     let blockchain = std::sync::Arc::new(std::sync::Mutex::new(blockchain));
 
+    // init mempool
+    let mempool = memory_pool::MemoryPool::new();
+    let mempool = std::sync::Arc::new(std::sync::Mutex::new(mempool));
+
     // start p2p server
     let peer_ip = match matches.value_of("peer_ip") {
         Some(ip) => ip.parse::<net::IpAddr>().unwrap_or_else(|e| {
@@ -65,7 +70,7 @@ fn main() {
     let peer_socket_addr = net::SocketAddr::new(peer_ip, peer_port);
 
     debug!("Starting P2P server at {}", peer_socket_addr);
-    let server = network::start(peer_socket_addr, &blockdb, &blockchain).unwrap();
+    let server = network::start(peer_socket_addr, &blockdb, &blockchain, &mempool).unwrap();
 
     // connect to known peers
     if let Some(known_peers) = matches.values_of("known_peer") {

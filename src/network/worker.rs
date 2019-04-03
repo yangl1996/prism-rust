@@ -5,21 +5,25 @@ use super::peer;
 use std::thread;
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
+use crate::miner::memory_pool::MemoryPool;
 
 pub struct Context {
     msg_chan: Arc<Mutex<mpsc::Receiver<(message::Message, peer::Handle)>>>,
     num_worker: usize,
     chain: Arc<Mutex<BlockChain>>,
     blockdb: Arc<BlockDatabase>,
+    mempool: Arc<Mutex<MemoryPool>>,
 }
 
 pub fn new(num_worker: usize, msg_src: mpsc::Receiver<(message::Message, peer::Handle)>,
-           blockchain: &Arc<Mutex<BlockChain>>, blockdb: &Arc<BlockDatabase>) -> Context {
+           blockchain: &Arc<Mutex<BlockChain>>, blockdb: &Arc<BlockDatabase>,
+           mempool: &Arc<Mutex<MemoryPool>>) -> Context {
     let ctx = Context {
         msg_chan: Arc::new(Mutex::new(msg_src)),
         num_worker: num_worker,
         chain: Arc::clone(blockchain),
         blockdb: Arc::clone(blockdb),
+        mempool: Arc::clone(mempool),
     };
     return ctx;
 }
