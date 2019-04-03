@@ -62,7 +62,7 @@ pub struct Tree{
     /// Proposer nodes stored level wise
     pub prop_nodes: Vec<Vec<H256>>,
     /// Votes at each level
-    pub all_votes: Vec<Vec<H256>>, // todo: Inefficient
+    pub all_votes: HashMap<u32, u32>, // todo: Inefficient
     /// Stores Leader nodes
     pub leader_nodes: HashMap <u32, H256>, // Using hashmap because leader nodes might not be confirmed sequentially
     /// The level upto which all levels have a leader block.
@@ -77,7 +77,7 @@ impl Default for Tree {
     fn default() -> Self {
         let best_block = H256::default();
         let prop_nodes: Vec<Vec<H256> > = vec![];
-        let all_votes: Vec<Vec<H256> > = vec![];
+        let all_votes: HashMap<u32, u32> = HashMap::<u32, u32>::new();
         let leader_nodes: HashMap <u32, H256> = HashMap::new();
         let unreferred: HashSet<H256> = HashSet::new();
         return Self{best_block, best_level:0, prop_nodes, all_votes, leader_nodes,
@@ -101,13 +101,7 @@ impl Tree{
 
     /// Adding a vote at a level
     pub fn add_vote_at_level(&mut self, vote: H256, level: u32){
-        if self.all_votes.len() >= (level + 1) as usize {
-            self.all_votes[level as usize].push(vote);
-        } else if self.all_votes.len() == level as usize {
-            self.all_votes.push(vec![vote]);
-        } else{
-            panic!("Proposer block mined at level without parent block at previous level")
-        }
+        *self.all_votes.entry(level).or_insert(0) += 1;
     }
 
     pub fn insert_unreferred(&mut self, hash: H256) {
