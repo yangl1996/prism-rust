@@ -14,8 +14,6 @@ pub fn start(addr: std::net::SocketAddr, blockdb: &Arc<BlockDatabase>,
     let (ctx, server) = server::new(addr, msg_sink)?;
     ctx.start();
 
-    let blockchain = Arc::clone(blockchain);
-    let blockdb = Arc::clone(blockdb);
     let ctx = worker::new(4, msg_source, blockchain, blockdb);
     ctx.start();
 
