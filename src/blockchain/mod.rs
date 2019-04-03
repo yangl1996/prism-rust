@@ -8,9 +8,9 @@ use super::crypto::hash::{Hashable, H256};
 use serde::{Serialize, Deserialize};
 use edge::Edge;
 use proposer::NodeData as ProposerNodeData;
-use proposer::Status  as ProposerStatus;
-use voter::NodeStatus  as VoterNodeStatus;
-use voter::NodeUpdateStatus  as VoterNodeUpdateStatus;
+use proposer::Status as ProposerStatus;
+use voter::NodeStatus as VoterNodeStatus;
+use voter::NodeUpdateStatus as VoterNodeUpdateStatus;
 use proposer::Tree as ProposerTree;
 use voter::NodeData as VoterNodeData;
 use voter::Chain as VoterChain;
@@ -26,25 +26,28 @@ use petgraph::graphmap::GraphMap;
 use std::iter::FromIterator;
 use std::process;
 
-pub const NUM_VOTER_CHAINS: u16 = 10; // DONT CHANGE THIS
+pub const NUM_VOTER_CHAINS: u16 = 10; // DONT CHANGE THIS TODO: put it into global config
 
 pub struct BlockChain{
-    /// Store the graph structures of Prism
+    /// Graph structure of the blockchain/graph
     pub graph: GraphMap<H256, Edge, Directed>,
+    /// Information of the proposer tree
     pub proposer_tree: ProposerTree,
+    /// Information of the voter chains
     pub voter_chains: Vec<VoterChain>,
+    /// Information of the transaction pool
     pub tx_pool: TxPool,
-    /// Contains data about the proposer nodes.
+    /// Metadata of individual proposer blocks
     pub proposer_node_data: HashMap<H256, ProposerNodeData>,
-    /// Contains data about the voter nodes.
+    /// Metadata of individual voter blocks
     pub voter_node_data: HashMap<H256, VoterNodeData>
 }
 
-/// Functions to edit the blockchain
+// Functions to edit the blockchain
 impl BlockChain {
-    /// Initializing blockchain graph with genesis blocks.
+    /// Initialize the blockchain graph with genesis blocks.
     pub fn new() -> Self {
-        /// Initializing an empty objects
+        // Initialize an empty objects
         let mut graph = GraphMap::<H256, Edge, Directed>::new();
         let mut proposer_tree = ProposerTree::default();
         let mut voter_chains: Vec<VoterChain> = vec![];
@@ -52,30 +55,37 @@ impl BlockChain {
         let mut proposer_node_data = HashMap::<H256, ProposerNodeData>::new();
         let mut voter_node_data = HashMap::<H256, VoterNodeData>::new();
 
-        /// 1. Proposer genesis block
-        /// 1a. Add proposer genesis block in the graph
+        // 1. Proposer genesis block
+
+        // 1a. Add proposer genesis block to the graph
         let proposer_genesis_node = ProposerNodeData::genesis(NUM_VOTER_CHAINS);
-        let proposer_hash_vec: [u8; 32] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]; /// Hash vector of proposer genesis block. todo: Shift to a global config  file
+        let proposer_hash_vec: [u8; 32] = [0; 32]; // TODO: Shift to a global config file
         graph.add_node((&proposer_hash_vec).into());
-        /// Add node data of proposer genesis block in the hashmap
+        // Add metadata of the proposer genesis block to the hashmap
         proposer_node_data.insert((&proposer_hash_vec).into(), proposer_genesis_node);
+
         // 1b. Initializing proposer tree
         proposer_tree.best_block = (&proposer_hash_vec).into();
         proposer_tree.prop_nodes.push(vec![(&proposer_hash_vec).into()]);
-        proposer_tree.leader_nodes.insert(0, (&proposer_hash_vec).into()); // The leader block at level 0
+        // Genesis proposer block is the leader block at level 0
+        proposer_tree.leader_nodes.insert(0, (&proposer_hash_vec).into());
 
-        /// 2. Voter geneses blocks
+        // 2. Voter geneses blocks
         for chain_number in 0..(NUM_VOTER_CHAINS) {
-            /// 2a. Add voter chain i genesis block in the graph
+            // 2a. Add voter chain i genesis block to the graph
             let voter_genesis_node = VoterNodeData::genesis(chain_number as u16);
             let b1 = ((chain_number + 1) >> 8) as u8;
             let b2 = (chain_number + 1) as u8;
-            let voter_hash_vec: [u8; 32] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, b1, b2]; /// Hash vector of voter genesis block. todo: Shift to a global config  file
+            // create the hash of the genesis block i. TODO: move this to a global config
+            let mut voter_hash_vec: [u8; 32] = [0; 32];
+            voter_hash_vec[30] = b1;
+            voter_hash_vec[31] = b2;
             let voter_hash: H256 = (&voter_hash_vec).into();
             graph.add_node(voter_hash);
-            /// Add node data in the hashmap
+            // Add voter genesis node data to the hashmap
             voter_node_data.insert(voter_hash, voter_genesis_node);
-            /// 2b. Initializing a Voter chain
+
+            // 2b. Initializing a Voter chain
             let voter_chain = VoterChain::new(chain_number, voter_hash);
             voter_chains.push(voter_chain);
             proposer_tree.add_vote_at_level(voter_hash, 0);
@@ -90,68 +100,72 @@ impl BlockChain {
         };
     }
 
-    //todo: Add a restoration function. This requires DB.
+    // TODO: add a function to restore BlockChain from BlockDatabase
 
-    /// Adds directed edges: from->to and to->from with different types.
+    /// Add edges from `from` to `to` with type `edge_type`, and edge from `to` to `from` with the
+    /// corresponding reversed type.
     fn insert_edge(&mut self, from: H256, to: H256, edge_type: Edge) {
         self.graph.add_edge(to, from, edge_type.reverse_edge());
         self.graph.add_edge(from, to, edge_type);
     }
-
-    /// Add a new block to the graph. This function is called when a new block is received. We assume that all the referred block are available.
+    
+    /// Add a new block to the blockgraph. Note that all blocks referred by the new block must
+    /// already exist in the blockgraph.
     pub fn insert_node(&mut self, block: &Block) {
         let block_hash = block.hash();
         let parent_proposer_block_hash = block.header.parent_hash;
-        /// Add the node to the graph
+        // Add the node to the graph
         self.graph.add_node(block_hash);
-        /// Parse the block content and add the edges according to Prism logic.
+
+        // Parse the block content and add the edges according to Prism logic.
         let content: &Content = &block.content;
         match content {
             Content::Transaction(_) => {
-                // 1. Add edge from tx block to its proposer parent
+                // add edge from tx block to its proposer parent
                 self.insert_edge(block_hash, parent_proposer_block_hash, Edge::TransactionToProposerParent);
-                // Add tx block to pool of unreferred and unconfirmed tx blocks.
+
+                // mark this new tx block as unconfirmed and unreferred
                 self.tx_pool.insert_unconfirmed(block_hash);
                 self.tx_pool.insert_unreferred(block_hash);
             },
 
             Content::Proposer(content) => {
-                // 1, Add edge from prop block to its proposer parent
+                // 1. Add edge from prop block to its proposer parent
                 self.insert_edge(block_hash, parent_proposer_block_hash, Edge::ProposerToProposerParent);
-                // Since the parent is referred remove it from unreferred pool and add the block
-                // to the unreferred pool.
+                // Since the parent is now referred, remove it from the unreferred pool
                 self.proposer_tree.remove_unreferred(&parent_proposer_block_hash);
+                // Mark the new block we just got as unreferred
                 self.proposer_tree.insert_unreferred(block_hash);
 
-                // 2. Iterate through the list of proposer blocks referred in the proposer block content
+                // 2. Iterate through the list of proposer blocks referred by this new block
                 for (position, prop_hash) in content.proposer_block_hashes.iter().enumerate() {
                     self.insert_edge(block_hash, *prop_hash, Edge::ProposerToProposerReference((1+position) as u32)); // The parent prop block has the first position
                     self.proposer_tree.remove_unreferred(prop_hash);
-
                 }
 
-                // 3. Iterate through the list of transaction block referred in the proposer block content
+                // 3. Iterate through the list of transaction blocks referred by this new block
                 for (position, tx_hash) in content.transaction_block_hashes.iter().enumerate() {
                     self.insert_edge(block_hash, *tx_hash, Edge::ProposerToTransactionReference(position as u32));
                     self.tx_pool.remove_unreferred(&block_hash);
                 }
 
-                // 4. Add the proposer block to the list of unvoted blocks on all the voter chains.
-                let proposer_parent_node_data: ProposerNodeData = self.proposer_node_data[&parent_proposer_block_hash];
+                // 4. Add the proposer block to the list of unvoted blocks on all voter chains.
+                let self_level = self.proposer_node_data[&parent_proposer_block_hash].level + 1;
                 for i in 0..NUM_VOTER_CHAINS{
                     self.voter_chains.get_mut(i as usize).unwrap().insert_unvoted(
-                        proposer_parent_node_data.level + 1, block_hash);
+                        self_level, block_hash);
                 }
 
                 // 5. Creating proposer node data.
+                // TODO: replace default with new
                 let mut proposer_node_data = ProposerNodeData::default();
-                proposer_node_data.level = proposer_parent_node_data.level + 1;
+                proposer_node_data.level = self_level;
 
                 // 6. Add node data in the map
                 self.proposer_node_data.insert(block_hash, proposer_node_data);
 
                 // 7. Add the block to the proposer tree at a level.
-                self.proposer_tree.add_block_at_level(block_hash, proposer_node_data.level);
+                self.proposer_tree.add_block_at_level(block_hash, self_level);
             },
 
             Content::Voter(content) => {
@@ -163,19 +177,19 @@ impl BlockChain {
 
                 // 3. Add edge from voter block to proposer votees
                 for prop_block_hash in content.proposer_block_votes.iter() {
-                    if self.graph.contains_edge(block_hash, *prop_block_hash) { // if prop_block_hash is also parent_proposer_hash
-                        self.insert_edge(block_hash, (*prop_block_hash).clone(), Edge::VoterToProposerParentAndVote);
+                    if self.graph.contains_edge(block_hash, *prop_block_hash) {
+                        // if the votee is the same as the parent
+                        // TODO: could we compare *prop_block_hash and parent_proposer_block_hash
+                        self.insert_edge(block_hash, *prop_block_hash, Edge::VoterToProposerParentAndVote);
                     } else {
-                        self.insert_edge(block_hash, (*prop_block_hash).clone(), Edge::VoterToProposerVote);
+                        self.insert_edge(block_hash, *prop_block_hash, Edge::VoterToProposerVote);
                     }
 
-                    /// 4 Incrementing the votes of the proposer block
+                    // Incrementing the votes of the votee
                     let ref mut proposer_node_data = self.proposer_node_data.get_mut(&prop_block_hash).unwrap();
                     proposer_node_data.votes += 1;
                     self.proposer_tree.add_vote_at_level(block_hash, proposer_node_data.level);
                 }
-
-
 
                 // 4. Updating the voter chain.
                 let parent_voter_node_data: VoterNodeData = self.voter_node_data[&content.voter_parent_hash];
@@ -184,25 +198,29 @@ impl BlockChain {
                 );
 
 
-                // 5. Creating voter node data. Updating the level of the parent.
-                //    And updating the unvoted_levels on the voter chain
+                // 5. Creating voter node data. Updating the level of the parent. And updating
+                // the unvoted_levels on the voter chain
+                // TODO: replace default with new
                 let mut voter_node_data = VoterNodeData::default();
                 voter_node_data.level = parent_voter_node_data.level + 1;
                 voter_node_data.chain_number = parent_voter_node_data.chain_number;
 
-                if voter_node_update == VoterNodeUpdateStatus::ExtendedMainChain{
-                    voter_node_data.status = VoterNodeStatus::OnMainChain;
-                    for prop_block_hash in content.proposer_block_votes.iter() {
-                        let proposer_level = self.prop_node_data(&prop_block_hash).level;
-                        self.voter_chains.get_mut(voter_node_data.chain_number as usize).unwrap().remove_unvoted(proposer_level);
+                match voter_node_update {
+                    // this new block lies on the main chain
+                    VoterNodeUpdateStatus::ExtendedMainChain => {
+                        voter_node_data.status = VoterNodeStatus::OnMainChain;
+                        for prop_block_hash in content.proposer_block_votes.iter() {
+                            let proposer_level = self.prop_node_data(&prop_block_hash).level;
+                            self.voter_chains.get_mut(voter_node_data.chain_number as usize).unwrap().remove_unvoted(proposer_level);
+                        }
+                    },
+                    VoterNodeUpdateStatus::LongerFork => {
+                        unimplemented!();
+                    },
+                    VoterNodeUpdateStatus::SideChain => {
+                        // Orphan block if voter block was not on the main chain
+                        voter_node_data.status = VoterNodeStatus::Orphan;
                     }
-                }
-                else if voter_node_update == VoterNodeUpdateStatus::LongerFork{
-                    panic!("Unimplemented");
-                }
-                else if voter_node_update == VoterNodeUpdateStatus::SideChain{
-                    // Orphan block if voter block was not on the main chain
-                    voter_node_data.status = VoterNodeStatus::Orphan;
                 }
                 self.voter_node_data.insert(block_hash, voter_node_data);
             },
@@ -210,15 +228,17 @@ impl BlockChain {
     }
 }
 
-/// Functions to infer the voter chains.
+// Functions to infer the voter chains.
 impl BlockChain {
-    /// Return the voter blocks on longest voter chain chain_number
+    /// Return the voter blocks on the longest voter chain `chain_number`
     pub fn get_longest_chain(&self, chain_number: u16) -> Vec<H256> {
-        let best_level = self.voter_chains[chain_number as usize].best_level;
+        let chain = &self.voter_chains[chain_number as usize];
+        let best_level = chain.best_level;
         let mut longest_chain: Vec<H256> = vec![];
-        let mut top_block: H256 = self.voter_chains[chain_number as usize].best_block;
+        let mut top_block: H256 = chain.best_block;
 
-        /// Recursively push the top block
+        // Recursively push the top block
+        // TODO: I have a sense that this can be realized using Option and collect
         for _ in 0..best_level {
             longest_chain.push(top_block);
             top_block = self.get_voter_parent(top_block);
@@ -228,20 +248,19 @@ impl BlockChain {
         return longest_chain;
     }
 
-    /// Returns votes (prop block hashes) from a chain.
+    /// Return the hashes of the proposer blocks voted by a voter chain.
     pub fn get_votes_from_chain(&self, chain_number: u16) -> Vec<H256> {
         let longest_chain: Vec<H256> = self.get_longest_chain(chain_number);
         let mut votes: Vec<H256> = vec![];
         for voter in longest_chain {
             let mut voter_votes = self.get_votes_by_voter(&voter);
-            voter_votes.reverse(); //todo: Why? Ordering?
+            voter_votes.reverse(); // TODO: Why? Ordering?
             votes.extend(voter_votes);
         }
-
         return votes;
     }
 
-    /// Returns the (proposer) votes of a voter block
+    /// Return the hashes of the proposer blocks voted by a single voter block.
     pub fn get_votes_by_voter(&self, block_hash: &H256) -> Vec<H256> {
         if !self.voter_node_data.contains_key(&block_hash) { panic!("The voter block with hash {} doesn't exist", block_hash); }
         let voter_ref_edges = self.graph.edges(*block_hash).filter(|&x| *x.2 == Edge::VoterToProposerVote || *x.2 == Edge::VoterToProposerParentAndVote);
@@ -259,10 +278,10 @@ impl BlockChain {
     }
 }
 
-/// Functions to generate the ledger. This uses the confirmation logic of Prism.
+// Functions to generate the ledger. This uses the confirmation logic of Prism.
 impl BlockChain {
-    /// This is a important fn: Checks if there are sufficient votes to confirm leader block at the level.
-    /// todo: This function should be called when the voter chain has collected sufficient votes on level.
+    /// Checks if there are sufficient votes to confirm leader block at the level.
+    // TODO: This function should be called when the voter chain has collected sufficient votes on level.
     pub fn confirm_leader_block_at_level(&mut self, level: u32) {
         if self.proposer_tree.leader_nodes.contains_key(&level) {
             return; // Return if the level already has leader block.
