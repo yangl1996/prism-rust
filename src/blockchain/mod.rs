@@ -267,6 +267,10 @@ impl BlockChain {
         if  voter_parent_nodes.len() == 1 { return voter_parent_nodes[0];}
         else {panic!("{} proposer parents for {}", voter_parent_nodes.len(), block_hash)}
     }
+
+    pub fn number_of_voting_chains(&self) -> u32 {
+        return self.voter_chains.len() as u32;
+    }
 }
 
 /// Functions to generate the ledger. This uses the confirmation logic of Prism.
@@ -280,6 +284,13 @@ impl BlockChain {
 
         if self.proposer_tree.leader_nodes.contains_key(&level) {
             return; // Return if the level already has leader block.
+        }
+        println!("Trying to confirm on level {}", level);
+        if !self.proposer_tree.all_votes.contains_key(&level) {
+            return
+        }
+        if self.proposer_tree.all_votes[&level] < self.number_of_voting_chains()/2 {
+            return ; // At least half the votes should come in
         }
         let proposers_blocks: &Vec<H256> = &self.proposer_tree.prop_nodes[level as usize];
         let mut lcb_proposer_votes: HashMap<H256, f32> = HashMap::<H256, f32>::new();
@@ -315,7 +326,7 @@ impl BlockChain {
             }
         }
 
-        println!("Confirmed block at level {} with {} votes cast", level, self.proposer_tree.all_votes[level as usize].len());
+//        println!("Confirmed block at level {} with {} votes cast", level, self.proposer_tree.all_votes[&level]);
 
         // If the function enters here, it has confirmed the block at 'level'
 
@@ -697,7 +708,7 @@ mod tests {
         let prop_block2b_votes = blockchain.proposer_node_data[&prop_block2b.hash()].votes;
         assert_eq!(7, prop_block2a_votes, "prop block 2a should have 7 votes" );
         assert_eq!(3, prop_block2b_votes, "prop block 2b should have 3 votes" );
-        assert_eq!(10, blockchain.proposer_tree.all_votes[1].len(), "Level 2 total votes should have 10",);
+        assert_eq!(10, blockchain.proposer_tree.all_votes[&1], "Level 2 total votes should have 10",);
         assert_eq!(44, blockchain.graph.node_count(), "Expecting 44 nodes");
         assert_eq!(132, blockchain.graph.edge_count(), "Expecting 132 edges");
 
