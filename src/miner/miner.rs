@@ -6,13 +6,14 @@ use crate::config::*;
 use crate::block::{Block, Content};
 use crate::block::header::Header;
 use crate::block::{transaction, proposer, voter};
+use crate::blockdb::{BlockDatabase};
 
 use super::memory_pool::{MemoryPool,Entry};
-
 use std::time::{SystemTime};
 use std::sync::mpsc::{channel,Receiver,Sender,TryRecvError};
 use std::thread;
 use std::collections::{HashMap};
+
 
 extern crate rand; // 0.6.0
 use rand::{Rng};
@@ -22,12 +23,12 @@ extern crate bigint;
 use bigint::uint::{U256};
 
 pub struct Miner<'a>{
-    // Tx block content
+    // Tx mempool
     tx_mempool: &'a MemoryPool,
     // Current blockchain
     blockchain: &'a mut BlockChain,
-    // Recent blocks
-    seen_blocks: &'a mut HashMap<H256,Block>,
+    // Block database
+    db: &'a mut BlockDatabase,
     // Channel for receiving newly-received blocks
     incoming_blocks: Receiver<Block>,
     // Channel for pushing newly-created blocks
@@ -40,10 +41,10 @@ impl<'a> Miner<'a>{
     // This function will be used when the miner is restarted
     pub fn new(tx_mempool: &'a MemoryPool,
                blockchain: &'a mut BlockChain,
-               seen_blocks: &'a mut HashMap<H256,Block>,
+               db: &'a mut BlockDatabase,
                outgoing_blocks: Sender<Block>,
                incoming_blocks: Receiver<Block>) -> Self {
-        Self { tx_mempool, blockchain, seen_blocks,
+        Self { tx_mempool, blockchain, db,
                outgoing_blocks, incoming_blocks,
                rng: rand::thread_rng() }
     }
@@ -73,7 +74,7 @@ impl<'a> Miner<'a>{
             let hash: [u8; 32] = (&header.hash()).into(); //todo: bad code
 
             // Check hash difficulty
-            if hash < difficulty{
+            if hash < difficulty {
                 // Create a block
                 let mined_block = self.create_block(&hash, &difficulty,
                                                     content_merkle_tree,
@@ -122,16 +123,15 @@ impl<'a> Miner<'a>{
     }
 
     fn release_block(&mut self, mined_block: &Block) {
+
         // update the block database
-        self.seen_blocks.insert(mined_block.hash().clone(), mined_block.clone());
+        self.db.insert(&mined_block.hash(), mined_block);
 
         // update the blockchain
         self.blockchain.insert_node(mined_block);
 
-        // Send the mined block on outgoing blocks channel (update memory)
-        // thread::spawn(move || {
-        //     self.outgoing_blocks.send(mined_block.clone()).unwrap();
-        // });
+        // Send on the outgoing blocks channel
+        self.outgoing_blocks.send(mined_block.clone()).unwrap();
     }
 
     fn create_header(&mut self, proposer_parent_hash: &H256,
@@ -196,30 +196,35 @@ impl<'a> Miner<'a>{
         let big_transaction_rate: U256 = TRANSACTION_MINING_RATE.into();
 
         if big_hash < big_difficulty / 100.into() *
-            big_transaction_rate {
+            big_proposer_rate {
             // Transaction block
-            return Some(TRANSACTION_INDEX);
+            return Some(PROPOSER_INDEX);
         } else if big_hash < big_difficulty / 100.into() *
             (big_transaction_rate + big_proposer_rate) {
             // Proposer block
-            return Some(PROPOSER_INDEX);
+            return Some(TRANSACTION_INDEX);
         } else if big_hash < big_difficulty {
             // Figure out which voter tree we are in
             let voter_id = (big_hash -
                             big_transaction_rate -
                             big_proposer_rate)
                             % NUM_VOTER_CHAINS.into();
-            return Some((voter_id).as_u32()+2);
+            return Some((voter_id).as_u32()+FIRST_VOTER_INDEX);
         }
         None
     }
 
     fn get_difficulty(&self, block_hash: &H256) -> Option<[u8; 32]> {
         // Get the header of the block corresponding to block_hash
-        match self.seen_blocks.get(block_hash) {
+        match self.db.get(block_hash).unwrap() {
             // extract difficulty
-            Some(block) => return Some(block.header.difficulty.clone()),
-            None => return None
+            Some(b) => {
+                return Some(b.header.difficulty.clone());
+            },
+            None => {
+                // TODO: Add genesis blocks to db so we don't need to do this
+                return Some(DEFAULT_DIFFICULTY.clone())
+            }
         }
     }
 }
@@ -231,27 +236,34 @@ mod tests {
     use super::*;
     use crate::blockchain::BlockChain;
     use crate::miner::memory_pool::MemoryPool;
-    use std::collections::{HashMap};
     use crate::block::{Block};
+    use crate::blockdb::{BlockDatabase};
     use std::sync::mpsc::channel;
     use std::thread;
     use rand::{Rng, RngCore};
 
 
-    // #[test]
-    // fn check_create_header() {
+    #[test]
+    fn check_get_difficulty() {
 
-    //     create_header(proposer_parent_hash: &H256,
-    //                  content_merkle_tree: &MerkleTree<Content>,
-    //                  nonce: &u32,
-    //                  difficulty: &[u8;32]) -> Header
+        /// Initialize a blockchain with 10  voter chains.
+        let mut blockchain = BlockChain::new();
+        /// Store the parent blocks to mine on voter trees.
+        let mut voter_best_blocks: Vec<H256> =
+            (0..NUM_VOTER_CHAINS).map( |i| blockchain.voter_chains[i as usize].best_block).collect();
 
-    //     let proposer_parent_hash: H256 = 10.into();
-    //     let nonce: u32 = 25;
-    //     let difficulty: [u8; 32] = 200.into();
-    //     let content_merkle_tree: MerkleTree<Content>;
+        let mut tx_mempool = MemoryPool::new();
+        let mut db = BlockDatabase::new(
+            &std::path::Path::new("/tmp/prismdb.rocksdb")).unwrap();
+        let (sender, receiver) = channel();
+        let mut miner = Miner::new(&mut tx_mempool, &mut blockchain,
+                                &mut db,
+                                sender, receiver);
+        let block1 = miner.mine();
 
-    // }
+        assert_eq!(miner.get_difficulty(&block1.hash()).unwrap(), DEFAULT_DIFFICULTY);
+
+    }
 
     #[test]
     fn check_mine() {
@@ -265,11 +277,12 @@ mod tests {
         assert_eq!(11, blockchain.graph.node_count(), "Expecting 11 nodes corresponding to 11 genesis blocks");
 
         let mut tx_mempool = MemoryPool::new();
-        let mut seen_blocks: HashMap<H256,Block> = HashMap::new();
+        let mut db = BlockDatabase::new(
+            &std::path::Path::new("/tmp/prismdb.rocksdb")).unwrap();
         let (sender, receiver) = channel();
         {
             let mut miner = Miner::new(&mut tx_mempool, &mut blockchain,
-                                    &mut seen_blocks,
+                                    &mut db,
                                     sender, receiver);
             println!("Step 2:   Initialized miner");
             let block1 = miner.mine();
@@ -278,11 +291,26 @@ mod tests {
             println!("Step 3:   Mined 2 blocks");
             // Check that two blocks are different
             assert!(block1.hash() != block2.hash());
+
+            // If the last block was a proposer or voter block, check
+            // that it's the best proposer block
+            let t = block2.get_block_type().unwrap();
+            let block2_hash = block2.hash();
+            if t == PROPOSER_INDEX {
+                assert_eq!(block2_hash,blockchain.get_proposer_best_block(),
+                           "Expected the last-mined proposer block to be the best proposer block");
+            } else if t == TRANSACTION_INDEX {
+                assert!(blockchain.tx_pool.is_unconfirmed(&block2_hash),
+                           "Expected the last-mined tx block to be unconfirmed");
+            } else  if t >= FIRST_VOTER_INDEX {
+                assert_eq!(blockchain.voter_chains[(t-FIRST_VOTER_INDEX) as usize].best_block,                  block2_hash,
+                           "Expected the last-mined voter block to be the best voter block");
+            }
         }
 
-        // Assert that the new block appears in the db
-        // TODO: make this check the db for block
-        assert_eq!(seen_blocks.len(),2);
+        // Assert that the new blocks appear in the db
+        assert_eq!(db.num_blocks(),2,
+            "Expecting 2 nodes since 2 blocks were added");
 
         // Check that 2 new blocks appear in the blockchain
         assert_eq!(blockchain.graph.node_count(), 13,
@@ -308,26 +336,26 @@ mod tests {
             Some(u) => u,
             None => 100,
         };
-        assert_eq!(sortition_id,TRANSACTION_INDEX);
+        assert_eq!(sortition_id,PROPOSER_INDEX);
 
         // Set the hash to just below the boundary between tx and proposer blocks
-        big_hash = big_difficulty / 100.into() * big_transaction_rate - 1.into();
-        hash = big_hash.into();
-        sortition_id = match Miner::get_sortition_id(&hash, &difficulty) {
-            Some(u) => u,
-            None => 100,
-        };
-        assert_eq!(sortition_id,TRANSACTION_INDEX);
-
-        // Proposer blocks
-        // Set the hash to just above the boundary between tx and proposer blocks
-        big_hash = big_difficulty / 100.into() * big_transaction_rate;
+        big_hash = big_difficulty / 100.into() * big_proposer_rate - 1.into();
         hash = big_hash.into();
         sortition_id = match Miner::get_sortition_id(&hash, &difficulty) {
             Some(u) => u,
             None => 100,
         };
         assert_eq!(sortition_id,PROPOSER_INDEX);
+
+        // Proposer blocks
+        // Set the hash to just above the boundary between tx and proposer blocks
+        big_hash = big_difficulty / 100.into() * big_proposer_rate;
+        hash = big_hash.into();
+        sortition_id = match Miner::get_sortition_id(&hash, &difficulty) {
+            Some(u) => u,
+            None => 100,
+        };
+        assert_eq!(sortition_id,TRANSACTION_INDEX);
 
         // Set the hash to just below the boundary between tx and voter blocks
         big_hash = big_difficulty / 100.into() *
@@ -337,7 +365,7 @@ mod tests {
             Some(u) => u,
             None => 100,
         };
-        assert_eq!(sortition_id,PROPOSER_INDEX);
+        assert_eq!(sortition_id,TRANSACTION_INDEX);
 
         // Voter blocks
         // Set the hash to just above the boundary between tx and voter blocks
