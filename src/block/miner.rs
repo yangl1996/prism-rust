@@ -277,7 +277,7 @@ mod tests {
 
         let mut tx_mempool = MemoryPool::new();
         let mut db = BlockDatabase::new(
-            &std::path::Path::new("/tmp/prismdb.rocksdb")).unwrap();
+            &std::path::Path::new("/tmp/block_miner_tests_check_mine.rocksdb")).unwrap();
         let (sender, receiver) = channel();
         {
             let mut miner = Miner::new(&mut tx_mempool, &mut blockchain,

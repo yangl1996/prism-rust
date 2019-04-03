@@ -57,7 +57,7 @@ mod tests {
     
     #[test]
     fn insert_get_and_delete() {
-        let db = BlockDatabase::new(&std::path::Path::new("/tmp/prismdb.rocksdb")).unwrap();
+        let db = BlockDatabase::new(&std::path::Path::new("/tmp/blockdb_tests_insert_get_and_delete.rocksdb")).unwrap();
         let test_block = generator::tx_block();
         db.insert(&test_block.hash(), &test_block);
         let got = db.get(&test_block.hash()).unwrap().unwrap();
