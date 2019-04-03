@@ -1,2 +1,0 @@
-fn new_block() {
-}
