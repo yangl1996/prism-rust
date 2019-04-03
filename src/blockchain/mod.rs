@@ -203,6 +203,18 @@ impl BlockChain {
                     voter_node_data.status = VoterNodeStatus::Orphan;
                 }
                 self.voter_node_data.insert(block_hash, voter_node_data);
+
+                // If the voter node was added on the main chain try confirming the latest unconfirmed level.
+                if voter_node_update == VoterNodeUpdateStatus::ExtendedMainChain{
+                    loop {
+                        let level = self.proposer_tree.continuous_leader_level + 1;
+                        self.confirm_leader_block_at_level(level);
+                        // Exit the loop if previous step did not increase "self.proposer_tree.continuous_leader_level"
+                        if level == self.proposer_tree.continuous_leader_level + 1 {
+                            break;
+                        }
+                    }
+                }
             },
         };
     }
@@ -255,42 +267,68 @@ impl BlockChain {
         if  voter_parent_nodes.len() == 1 { return voter_parent_nodes[0];}
         else {panic!("{} proposer parents for {}", voter_parent_nodes.len(), block_hash)}
     }
+
+    pub fn number_of_voting_chains(&self) -> u32 {
+        return self.voter_chains.len() as u32;
+    }
 }
 
 /// Functions to generate the ledger. This uses the confirmation logic of Prism.
 impl BlockChain {
-    /// This is a important fn: Checks if there are sufficient votes to confirm leader block at the level.
-    /// todo: This function should be called when the voter chain has collected sufficient votes on level.
+    // This is a important fn: Checks if there are sufficient votes to confirm leader block at the level.
+    // todo: This function should be called when the voter chain has collected sufficient votes on level.
     pub fn confirm_leader_block_at_level(&mut self, level: u32) {
+        if self.proposer_tree.prop_nodes.len() <= level as usize {
+            return; // Return if the level has no proposer blocks.
+        }
+
         if self.proposer_tree.leader_nodes.contains_key(&level) {
             return; // Return if the level already has leader block.
         }
+        println!("Trying to confirm on level {}", level);
+        if !self.proposer_tree.all_votes.contains_key(&level) {
+            return
+        }
+        if self.proposer_tree.all_votes[&level] < self.number_of_voting_chains()/2 {
+            return ; // At least half the votes should come in
+        }
         let proposers_blocks: &Vec<H256> = &self.proposer_tree.prop_nodes[level as usize];
-        let mut lcb_proposer_votes: Vec<f32> = vec![];
-        let mut ucb_proposer_votes: Vec<f32> = vec![];
+        let mut lcb_proposer_votes: HashMap<H256, f32> = HashMap::<H256, f32>::new();
         let mut max_lcb_vote: f32 = -1.0;
         let mut max_lcb_vote_index: usize = 0;
+        // Stores the votes which can go to any block.
+        let mut left_over_votes: f32 = self.voter_chains.len() as f32;
 
-        // 1. Getting the range of votes on each proposer block
-        // todo: This seems inefficient. Also equal vote situation is not considered.
+        // 1. Getting the lcb of votes on each proposer block
+        // todo: This seems inefficient. Also equal votes situation is not considered.
         for (index, proposer) in proposers_blocks.iter().enumerate() {
-            let proposer_votes: Vec<u32> = self.get_vote_depths_on_proposer(*proposer);
-            let (lcb, ucb) = utils::lcb_and_ucb_from_vote_depths(proposer_votes);
-            lcb_proposer_votes.push(lcb);
-            ucb_proposer_votes.push(ucb);
+            let proposer_votes: Vec<u32> = self.get_vote_depths_on_proposer(proposer);
+            let lcb = utils::lcb_from_vote_depths(proposer_votes);
+            lcb_proposer_votes.insert(*proposer, lcb);
+            left_over_votes -= lcb;
             if max_lcb_vote < lcb {
-                max_lcb_vote = ucb;
+                max_lcb_vote = lcb;
                 max_lcb_vote_index = index;
             }
         }
 
-        // 1b. Checking if a proposer block has maximum votes
-        for index in 0..proposers_blocks.len() {
+        // Dont confirm if a private proposer block has a higher ucb.
+        if left_over_votes >= max_lcb_vote {
+            return;
+        }
+        // The fast confirmation can be done here
+        // Dont confirm  if another proposer block has a higher ucb.
+        for (index, proposer) in proposers_blocks.iter().enumerate() {
+            let ucb = lcb_proposer_votes.get(proposer).unwrap() + left_over_votes;
             if index == max_lcb_vote_index { continue }
-            if ucb_proposer_votes[index] > max_lcb_vote {
+            if ucb >= max_lcb_vote {
                 return;
             }
         }
+
+//        println!("Confirmed block at level {} with {} votes cast", level, self.proposer_tree.all_votes[&level]);
+
+        // If the function enters here, it has confirmed the block at 'level'
 
         // 2a. Adding the leader block for the level
         let leader_block = proposers_blocks[max_lcb_vote_index];
@@ -313,9 +351,9 @@ impl BlockChain {
     }
 
     /// Return depths of voters of the given proposer block
-    pub fn get_vote_depths_on_proposer(&self, block_hash: H256) -> Vec<u32> {
-        if !self.proposer_node_data.contains_key(&block_hash) { panic!("The proposer block with hash {} doesn't exist", block_hash); }
-        let voter_ref_edges = self.graph.edges(block_hash).filter(|&x| *x.2 == Edge::VoterFromProposerVote || *x.2 == Edge::VoterFromProposerParentAndVote);
+    pub fn get_vote_depths_on_proposer(&self, block_hash: &H256) -> Vec<u32> {
+        if !self.proposer_node_data.contains_key(block_hash) { panic!("The proposer block with hash {} doesn't exist", block_hash); }
+        let voter_ref_edges = self.graph.edges(*block_hash).filter(|&x| *x.2 == Edge::VoterFromProposerVote || *x.2 == Edge::VoterFromProposerParentAndVote);
         let mut voter_ref_nodes: Vec<u32> = vec![];
         for edge in voter_ref_edges {
             let voter_block_hash = edge.1;
@@ -670,7 +708,7 @@ mod tests {
         let prop_block2b_votes = blockchain.proposer_node_data[&prop_block2b.hash()].votes;
         assert_eq!(7, prop_block2a_votes, "prop block 2a should have 7 votes" );
         assert_eq!(3, prop_block2b_votes, "prop block 2b should have 3 votes" );
-        assert_eq!(10, blockchain.proposer_tree.all_votes[1].len(), "Level 2 total votes should have 10",);
+        assert_eq!(10, blockchain.proposer_tree.all_votes[&1], "Level 2 total votes should have 10",);
         assert_eq!(44, blockchain.graph.node_count(), "Expecting 44 nodes");
         assert_eq!(132, blockchain.graph.edge_count(), "Expecting 132 edges");
 
@@ -720,6 +758,8 @@ mod tests {
         assert_eq!(prop_block4.hash(), blockchain.proposer_tree.best_block, "Proposer best block");
         assert_eq!(58, blockchain.graph.node_count(), "Expecting 58 nodes");
         assert_eq!(186, blockchain.graph.edge_count(), "Expecting 186 edges");
+        // Checking the number of unconfirmed tx blocks 2 of prop2a, 4 from prop3, and 2 from prop4.
+        assert_eq!(8, blockchain.tx_pool.unconfirmed.len());
 
 
         println!("Step 10:  1-6 voter chains vote on prop4 and 6-10 voter blocks vote on prop3 and prop4" );
@@ -736,6 +776,10 @@ mod tests {
             blockchain.insert_node(&voter_block);
         }
 
+        // prop3 is confirmed. Unconfirmed tx blocks 2 from prop4.
+        assert_eq!(2, blockchain.tx_pool.unconfirmed.len());
+
+
         for i in 3..6{
             assert_eq!(1, blockchain.voter_chains[i as usize].get_unvoted_prop_blocks().len());
             assert_eq!(prop_block4.hash(), blockchain.voter_chains[i as usize].get_unvoted_prop_blocks()[0]);
@@ -743,6 +787,9 @@ mod tests {
             i as u16, blockchain.voter_chains[i as usize].best_block, vec![prop_block4.hash()] );
             blockchain.insert_node(&voter_block);
         }
+        // prop4 is also confirmed.
+        assert_eq!(0, blockchain.tx_pool.unconfirmed.len());
+
         for i in 6..10{
             assert_eq!(2, blockchain.voter_chains[i as usize].get_unvoted_prop_blocks().len());
             assert_eq!(prop_block3.hash(), blockchain.voter_chains[i as usize].get_unvoted_prop_blocks()[0]);
@@ -833,8 +880,7 @@ mod tests {
 
 
         println!("Step 17:  Checking leader blocks for first four levels");
-        assert_eq!(16, blockchain.tx_pool.unconfirmed.len());
-        assert_eq!(0, blockchain.tx_pool.ordered.len());
+        assert_eq!(16, blockchain.tx_pool.ordered.len());
         let leader_block_sequence = blockchain.get_leader_block_sequence();
         assert_eq!(prop_block1.hash(), leader_block_sequence[0].unwrap());
         assert_eq!(prop_block2a.hash(),leader_block_sequence[1].unwrap());
@@ -870,7 +916,6 @@ mod tests {
         blockchain.insert_node(&prop_block5);
 
         assert_eq!(2, blockchain.tx_pool.unconfirmed.len());
-        assert_eq!(16, blockchain.tx_pool.ordered.len());
     }
 
 
