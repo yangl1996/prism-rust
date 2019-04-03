@@ -2,15 +2,17 @@ use crate::transaction::{Transaction};
 use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::merkle::{MerkleTree};
 use crate::blockchain::{BlockChain,NUM_VOTER_CHAINS};
-use crate::miner::memory_pool::{MemoryPool,Entry};
-use super::{Block, Content};
-use super::header::Header;
-use std::collections::{HashMap};
-use super::{transaction, proposer, voter};
 use crate::config::*;
+use crate::block::{Block, Content};
+use crate::block::header::Header;
+use crate::block::{transaction, proposer, voter};
+
+use super::memory_pool::{MemoryPool,Entry};
+
 use std::time::{SystemTime};
 use std::sync::mpsc::{channel,Receiver,Sender,TryRecvError};
 use std::thread;
+use std::collections::{HashMap};
 
 extern crate rand; // 0.6.0
 use rand::{Rng};

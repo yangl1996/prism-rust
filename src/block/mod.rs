@@ -1,5 +1,4 @@
 pub mod header;
-pub mod miner;
 pub mod transaction;
 pub mod proposer;
 pub mod voter;
