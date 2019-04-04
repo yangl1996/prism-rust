@@ -324,7 +324,7 @@ impl BlockChain {
         // The fast confirmation can be done here
         // Dont confirm  if another proposer block has a higher ucb.
         for (index, proposer) in proposers_blocks.iter().enumerate() {
-            let ucb = lcb_proposer_votes.get(proposer).unwrap() + left_over_votes;
+            let ucb = lcb_proposer_votes[proposer] + left_over_votes;
             if index == max_lcb_vote_index { continue }
             if ucb >= max_lcb_vote {
                 return;
@@ -384,10 +384,10 @@ impl BlockChain {
             if self.proposer_tree.leader_nodes.contains_key(&l) {
                 self.proposer_tree.continuous_leader_level = l;
                 // The leader blocks upto level l - 1  is confirmed.
-                let leader_block_at_l = self.proposer_tree.leader_nodes.get(&l).unwrap();
+                let leader_block_at_l = self.proposer_tree.leader_nodes[&l];
 
                 // Step 1. Recursively order the referred notleader proposer blocks.
-                let to_confirm_proposer_blocks_ordered = self.get_all_parent_and_referred_notleader_unconfirmed_prop_blocks_ordered(*leader_block_at_l);
+                let to_confirm_proposer_blocks_ordered = self.get_all_parent_and_referred_notleader_unconfirmed_prop_blocks_ordered(leader_block_at_l);
                 // Step 2. Add the transactions blocks referred by these
                 for proposer_block in to_confirm_proposer_blocks_ordered.iter(){
                     // Confirming all the tx blocks referred.
@@ -397,7 +397,7 @@ impl BlockChain {
                         }
                     }
                     // Changing the status of these prop blocks.
-                    if *proposer_block != *leader_block_at_l {
+                    if *proposer_block != leader_block_at_l {
                         self.proposer_node_data.get_mut(proposer_block).unwrap().give_not_leader_confirmed_status();
                     }
                 }
@@ -430,7 +430,7 @@ impl BlockChain {
             //In case a block is already present in all_blocks, replace the previous
             //if the new position is better than the previous.
             if all_blocks.contains_key(&block.0) {
-                let old_effective_ordering = all_blocks.get(&block.0).unwrap();
+                let old_effective_ordering = &all_blocks[&block.0];
                 if new_effective_ordering < *old_effective_ordering{
                     all_blocks.remove(&block.0);
                 }
@@ -543,7 +543,7 @@ impl BlockChain {
 
     /// Return the best blocks on voter chain 'chain number'.
     pub fn get_voter_best_block(&self, chain_number: u16) -> H256 {
-        let voter_best_block: H256 = self.voter_chains.get(chain_number as usize).unwrap().best_block;
+        let voter_best_block: H256 = self.voter_chains[chain_number as usize].best_block;
         return voter_best_block;
     }
 
@@ -576,11 +576,11 @@ impl BlockChain {
 /// Helper functions : Get proposer and node data
 impl BlockChain{
     fn prop_node_data(&self, hash: &H256 ) -> &ProposerNodeData{
-        return self.proposer_node_data.get(hash).unwrap();
+        return &self.proposer_node_data[hash];
     }
 
     fn voter_node_data(&self, hash: &H256 ) -> &VoterNodeData{
-        return self.voter_node_data.get(hash).unwrap();
+        return &self.voter_node_data[hash];
     }
 }
 
