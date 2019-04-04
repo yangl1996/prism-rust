@@ -14,17 +14,16 @@ pub struct Coin  {
     signature: Signature
 }
 
-
 pub struct Wallet {
     /// List of coins which can be spent
     coins: HashSet<Coin>,
-    /// List of key-pairs. H256 is the recipient field in 'Output'. //TODO: Create a type for this
-    key_pairs: HashMap<H256, KeyPair>
+    /// List of user keys.
+    keys: HashMap<H256, KeyPair>
 }
 
 impl Wallet {
     pub fn new() -> Self {
-        return Self {coins: HashSet::new(), key_pairs: HashMap::new()};
+        return Self {coins: HashSet::new(), keys: HashMap::new()};
     }
 
     pub fn generate_new_key(&mut self) {
@@ -32,7 +31,7 @@ impl Wallet {
     }
 
     /// Add coins from a transaction
-    pub fn add_coins_from_transaction(&mut self, transaction: &Transaction){
+    pub fn add_coins(&mut self, transaction: &Transaction){
         for index in 0..transaction.output.len(){
             self.add_coin(transaction, index); // TODO: Can be parallelized
         }
@@ -41,13 +40,13 @@ impl Wallet {
     /// Add the coin to wallet if the user is a recipient.
     pub fn add_coin(&mut self, transaction: &Transaction, index: usize) {
         let output: Output = transaction.output[index].clone();
-        // check coin recipient is in my pubkey_pairs
-        if self.key_pairs.contains_key(&output.recipient){
+        // check coin recipient is in my pubkeys
+        if self.keys.contains_key(&output.recipient){
             // Construct coin
             let input = Input{hash: transaction.hash(), index: index as u32};
             let value = output.value;
-            let keypair = self.key_pairs.get(&output.recipient);
-            // TODO: Generate signature from keypair field
+            let keypair = self.keys.get(&output.recipient);
+            // TODO: Generate Signature from keypair field
             let signature = Signature::default();
             let coin = Coin{input, value, signature};
             self.coins.insert(coin);
@@ -64,9 +63,8 @@ impl Wallet {
         self.coins.iter().map(|coin| coin.value).sum::<u64>()
     }
 
-
     /// create a transaction using the wallet coins
-    pub fn pay(&mut self, recipient: H256, value: u64) -> Option<Transaction> {
+    pub fn create_transaction(&mut self, recipient: H256, value: u64) -> Option<Transaction> {
         let mut coins: Vec<Coin>= vec![];
         let mut value_sum = 0u64;
 
@@ -90,7 +88,7 @@ impl Wallet {
                 let mut output = vec![Output {recipient, value}];
                 if value_sum > value {
                     // the output that transfer remaining value to himself
-                    let recipient: H256 = match self.key_pairs.keys().next() {
+                    let recipient: H256 = match self.keys.keys().next() {
                         Some(&x) => x ,
                         None => panic!("The wallet has no keys"),
                     };
