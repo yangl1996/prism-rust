@@ -11,10 +11,10 @@ use crate::blockdb::{BlockDatabase};
 use super::memory_pool::{MemoryPool, Entry};
 use std::time::{SystemTime, Duration};
 use std::sync::mpsc::{channel,Receiver,Sender,TryRecvError};
-use std::thread;
 use std::collections::{HashMap};
 
 use std::sync::{Arc, Mutex};
+use std::thread;
 
 extern crate rand; // 0.6.0
 use rand::{Rng};
@@ -84,6 +84,12 @@ pub fn new(tx_mempool: &Arc<Mutex<MemoryPool>>,
 }
 
 impl Context {
+    pub fn start(mut self) {
+        thread::spawn(move || {
+            self.miner_loop();
+        });
+    }
+
     fn miner_loop (&mut self) {
         // Initialize the context and the header to mine
         self.update_context();
@@ -252,7 +258,6 @@ fn get_time() -> u64 {
     return 0;
 }
 
-
 /*
 #[cfg(test)]
 mod tests {
@@ -265,25 +270,19 @@ mod tests {
     use std::sync::mpsc::channel;
     use std::thread;
     use rand::{Rng, RngCore};
+    use std::sync::{Arc, Mutex};
 
 
     #[test]
-    fn check_get_difficulty() {
-
-        /// Initialize a blockchain with 10  voter chains.
-        let mut blockchain = BlockChain::new();
-        /// Store the parent blocks to mine on voter trees.
-        let mut voter_best_blocks: Vec<H256> =
-            (0..NUM_VOTER_CHAINS).map( |i| blockchain.voter_chains[i as usize].best_block).collect();
-
-        let mut tx_mempool = MemoryPool::new();
-        let mut db = BlockDatabase::new(
-            &std::path::Path::new("/tmp/prismdb.rocksdb")).unwrap();
+    fn get_difficulty() {
+        // Initialize a blockchain with 10 voter chains.
+        let tx_mempool = Arc::new(Mutex::new(MemoryPool::new()));
+        let blockchain = Arc::new(Mutex::new(BlockChain::new()));
+        let db = Arc::new(BlockDatabase::new(
+            &std::path::Path::new("/tmp/prism_miner_check_get_difficulty.rocksdb")).unwrap());
         let (sender, receiver) = channel();
-        let mut miner = Miner::new(&mut tx_mempool, &mut blockchain,
-                                &mut db,
-                                sender, receiver);
-        let block1 = miner.mine();
+        let (ctx, handle) = Miner::new(&tx_mempool, &blockchain, &db, sender);
+        let block1 = ctx.mine();
 
         assert_eq!(miner.get_difficulty(&block1.hash()).unwrap(), DEFAULT_DIFFICULTY);
 
