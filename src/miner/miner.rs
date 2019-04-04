@@ -48,8 +48,8 @@ pub struct Context {
     proposer_parent_hash: H256,
     // Block contents
     content: Vec<Content>,
-    // Merkle Tree
-    content_merkle_tree: MerkleTree<Content>,
+    // Content merkle Tree root
+    content_merkle_tree_root: H256,
     // Difficulty
     difficulty: [u8; 32]
 }
@@ -72,7 +72,7 @@ pub fn new(tx_mempool: &Arc<Mutex<MemoryPool>>,
         new_block_chan: block_sink,
         proposer_parent_hash: H256::default(),
         content: vec![], 
-        content_merkle_tree: MerkleTree::default(),
+        content_merkle_tree_root: H256::default(),
         difficulty: DEFAULT_DIFFICULTY,
     };
 
@@ -134,7 +134,9 @@ impl Context {
         let sortition_id = self.get_sortition_id(&hash);
 
         // Create a block
-        let mut sortition_proof: Vec<H256> = self.content_merkle_tree.get_proof_from_index(sortition_id);
+        // assemble the merkle tree and get the proof
+        let merkle_tree = MerkleTree::new(&self.content);
+        let sortition_proof: Vec<H256> = merkle_tree.get_proof_from_index(sortition_id);
         let mined_block = Block::from_header(header, self.content[sortition_id as usize].clone(), sortition_proof);
 
         return mined_block;
@@ -144,7 +146,7 @@ impl Context {
     fn create_header(&self) -> Header {
         let nonce: u32 = 0; // we will update this value in-place when mining
         let timestamp: u64 = get_time();
-        let content_root = self.content_merkle_tree.root().clone();
+        let content_root = self.content_merkle_tree_root;
         let extra_content: [u8; 32] = [0; 32]; // TODO: Add miner id?
         return Header::new(self.proposer_parent_hash.clone(),
                            timestamp,
@@ -193,7 +195,8 @@ impl Context {
         }
         drop(blockchain);
         self.content = content;
-        self.content_merkle_tree = MerkleTree::new(&self.content);
+        let merkle_tree = MerkleTree::new(&self.content);
+        self.content_merkle_tree_root = merkle_tree.root();
     }
 
     /// Calculate which chain should we attach the new block to
