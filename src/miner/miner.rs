@@ -23,13 +23,16 @@ use rand::prelude::ThreadRng;
 extern crate bigint;
 use bigint::uint::{U256};
 
-/// Signal to the miner
 #[derive(PartialEq)]
-enum Signal {
-    NewContent,
+enum ControlSignal {
     Start,
     Step,
     Exit,
+}
+
+#[derive(PartialEq)]
+pub enum ContextUpdateSignal {
+    NewContent,
     // TODO: To be added later for efficiency:
     // NewTx,
     // NewTxBlockContent,
@@ -50,7 +53,9 @@ pub struct Context {
     blockchain: Arc<Mutex<BlockChain>>,
     db: Arc<BlockDatabase>,
     // Channel for receiving control signal
-    control_chan: Receiver<Signal>,
+    control_chan: Receiver<ControlSignal>,
+    // Channel for notifing miner of new content
+    context_update_chan: Receiver<ContextUpdateSignal>,
     // Channel for returning newly-mined blocks
     new_block_chan: Sender<Block>,
     // Proposer parent
@@ -64,13 +69,14 @@ pub struct Context {
 
 pub struct Handle {
     // Channel for sending signal to the miner thread
-    control_chan: Sender<Signal>,
+    control_chan: Sender<ControlSignal>,
 }
 
 pub fn new(tx_mempool: &Arc<Mutex<MemoryPool>>,
            blockchain: &Arc<Mutex<BlockChain>>,
            db: &Arc<BlockDatabase>,
-           block_sink: Sender<Block>) -> (Context, Handle) {
+           block_sink: Sender<Block>,
+           ctx_update_source: Receiver<ContextUpdateSignal>) -> (Context, Handle) {
     let (signal_chan_sender, signal_chan_receiver) = channel();
     let ctx = Context {
         tx_mempool: Arc::clone(tx_mempool),
@@ -78,6 +84,7 @@ pub fn new(tx_mempool: &Arc<Mutex<MemoryPool>>,
         db: Arc::clone(db),
         control_chan: signal_chan_receiver,
         new_block_chan: block_sink,
+        context_update_chan: ctx_update_source,
         proposer_parent_hash: H256::default(),
         content: vec![], 
         content_merkle_tree_root: H256::default(),
@@ -94,15 +101,15 @@ pub fn new(tx_mempool: &Arc<Mutex<MemoryPool>>,
 
 impl Handle {
     pub fn exit(&self) {
-        self.control_chan.send(Signal::Exit).unwrap();
+        self.control_chan.send(ControlSignal::Exit).unwrap();
     }
 
     pub fn start(&self) {
-        self.control_chan.send(Signal::Start).unwrap();
+        self.control_chan.send(ControlSignal::Start).unwrap();
     }
 
     pub fn step(&self) {
-        self.control_chan.send(Signal::Step).unwrap();
+        self.control_chan.send(ControlSignal::Step).unwrap();
     }
 }
 
@@ -111,6 +118,21 @@ impl Context {
         thread::spawn(move || {
             self.miner_loop();
         });
+    }
+
+    fn handle_control_signal(&mut self, signal: ControlSignal) {
+        match signal {
+            ControlSignal::Exit => {
+                self.operating_state = OperatingState::ShutDown;
+            }
+            ControlSignal::Start => {
+                self.operating_state = OperatingState::Run;
+            }
+            ControlSignal::Step => {
+                self.operating_state = OperatingState::Step;
+            }
+        }
+
     }
 
     fn miner_loop (&mut self) {
@@ -122,26 +144,11 @@ impl Context {
 
         // Mining loop
         loop {
-            // Check state and incoming singal
+            // Check state and incoming control signal
             match self.operating_state {
                 OperatingState::Paused => {
                     let signal = self.control_chan.recv().unwrap();
-                    match signal {
-                        Signal::NewContent => {
-                            // TODO: Only update block contents if relevant parent
-                            self.update_context();
-                            header = self.create_header();
-                        },
-                        Signal::Exit => {
-                            self.operating_state = OperatingState::ShutDown;
-                        }
-                        Signal::Start => {
-                            self.operating_state = OperatingState::Run;
-                        }
-                        Signal::Step => {
-                            self.operating_state = OperatingState::Step;
-                        }
-                    }
+                    self.handle_control_signal(signal);
                     continue;
                 },
                 OperatingState::ShutDown => {
@@ -150,23 +157,7 @@ impl Context {
                 _ => {
                     match self.control_chan.try_recv() {
                         Ok(signal) => {
-                            // TODO use a closue to reuse code
-                            match signal {
-                                Signal::NewContent => {
-                                    // TODO: Only update block contents if relevant parent
-                                    self.update_context();
-                                    header = self.create_header();
-                                },
-                                Signal::Exit => {
-                                    self.operating_state = OperatingState::ShutDown;
-                                }
-                                Signal::Start => {
-                                    self.operating_state = OperatingState::Run;
-                                }
-                                Signal::Step => {
-                                    self.operating_state = OperatingState::Step;
-                                }
-                            }
+                            self.handle_control_signal(signal);
                         },
                         Err(TryRecvError::Empty) => {},
                         Err(TryRecvError::Disconnected) => panic!("Miner control channel detached"),
@@ -175,6 +166,17 @@ impl Context {
             }
             if self.operating_state == OperatingState::ShutDown {
                 return;
+            }
+
+            // check whether there is new content
+            match self.context_update_chan.try_recv() {
+                Ok(_) => {
+                    // TODO: Only update block contents if relevant parent
+                    self.update_context();
+                    header = self.create_header();
+                },
+                Err(TryRecvError::Empty) => {},
+                Err(TryRecvError::Disconnected) => panic!("Miner context update channel detached"),
             }
 
             // try a new nonce, and update the timestamp
@@ -344,8 +346,9 @@ mod tests {
         let blockchain = Arc::new(Mutex::new(BlockChain::new()));
         let db = Arc::new(BlockDatabase::new(
             &std::path::Path::new("/tmp/prism_miner_check_get_difficulty.rocksdb")).unwrap());
+        let (ctx_update_s, ctx_update_r) = channel();
         let (sender, receiver) = channel();
-        let (ctx, handle) = new(&tx_mempool, &blockchain, &db, sender);
+        let (ctx, handle) = new(&tx_mempool, &blockchain, &db, sender, ctx_update_r);
         ctx.start();
         handle.step();
         let block1 = receiver.recv().unwrap();
@@ -412,8 +415,9 @@ mod tests {
         let blockchain = Arc::new(Mutex::new(BlockChain::new()));
         let db = Arc::new(BlockDatabase::new(
             &std::path::Path::new("/tmp/prism_miner_test_sortition.rocksdb")).unwrap());
+        let (ctx_update_s, ctx_update_r) = channel();
         let (sender, receiver) = channel();
-        let (ctx, handle) = new(&tx_mempool, &blockchain, &db, sender);
+        let (ctx, handle) = new(&tx_mempool, &blockchain, &db, sender, ctx_update_r);
 
         let big_difficulty = U256::from_big_endian(&DEFAULT_DIFFICULTY);
 
