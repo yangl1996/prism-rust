@@ -24,8 +24,12 @@ extern crate bigint;
 use bigint::uint::{U256};
 
 /// Signal to the miner
-enum Instruction {
+#[derive(PartialEq)]
+enum Signal {
     NewContent,
+    Start,
+    Step,
+    Exit,
     // TODO: To be added later for efficiency:
     // NewTx,
     // NewTxBlockContent,
@@ -33,30 +37,34 @@ enum Instruction {
     // NewVoterBlockContent(u16)
 }
 
+#[derive(PartialEq)]
+enum OperatingState {
+    Paused,
+    Run,
+    Step,
+    ShutDown,
+}
+
 pub struct Context {
-    // Tx mempool
     tx_mempool: Arc<Mutex<MemoryPool>>,
-    // Current blockchain
     blockchain: Arc<Mutex<BlockChain>>,
-    // Block database
     db: Arc<BlockDatabase>,
     // Channel for receiving control signal
-    control_chan: Receiver<Instruction>,
+    control_chan: Receiver<Signal>,
     // Channel for returning newly-mined blocks
     new_block_chan: Sender<Block>,
     // Proposer parent
     proposer_parent_hash: H256,
     // Block contents
     content: Vec<Content>,
-    // Content merkle Tree root
     content_merkle_tree_root: H256,
-    // Difficulty
-    difficulty: [u8; 32]
+    difficulty: [u8; 32],
+    operating_state: OperatingState,
 }
 
 pub struct Handle {
     // Channel for sending signal to the miner thread
-    control_chan: Sender<Instruction>,
+    control_chan: Sender<Signal>,
 }
 
 pub fn new(tx_mempool: &Arc<Mutex<MemoryPool>>,
@@ -74,6 +82,7 @@ pub fn new(tx_mempool: &Arc<Mutex<MemoryPool>>,
         content: vec![], 
         content_merkle_tree_root: H256::default(),
         difficulty: DEFAULT_DIFFICULTY,
+        operating_state: OperatingState::Paused,
     };
 
     let handle = Handle {
@@ -81,6 +90,20 @@ pub fn new(tx_mempool: &Arc<Mutex<MemoryPool>>,
     };
 
     return (ctx, handle);
+}
+
+impl Handle {
+    pub fn exit(&self) {
+        self.control_chan.send(Signal::Exit).unwrap();
+    }
+
+    pub fn start(&self) {
+        self.control_chan.send(Signal::Start).unwrap();
+    }
+
+    pub fn step(&self) {
+        self.control_chan.send(Signal::Step).unwrap();
+    }
 }
 
 impl Context {
@@ -99,7 +122,62 @@ impl Context {
 
         // Mining loop
         loop {
-            // update the header to mine
+            // Check state and incoming singal
+            match self.operating_state {
+                OperatingState::Paused => {
+                    let signal = self.control_chan.recv().unwrap();
+                    match signal {
+                        Signal::NewContent => {
+                            // TODO: Only update block contents if relevant parent
+                            self.update_context();
+                            header = self.create_header();
+                        },
+                        Signal::Exit => {
+                            self.operating_state = OperatingState::ShutDown;
+                        }
+                        Signal::Start => {
+                            self.operating_state = OperatingState::Run;
+                        }
+                        Signal::Step => {
+                            self.operating_state = OperatingState::Step;
+                        }
+                    }
+                    continue;
+                },
+                OperatingState::ShutDown => {
+                    return;
+                },
+                _ => {
+                    match self.control_chan.try_recv() {
+                        Ok(signal) => {
+                            // TODO use a closue to reuse code
+                            match signal {
+                                Signal::NewContent => {
+                                    // TODO: Only update block contents if relevant parent
+                                    self.update_context();
+                                    header = self.create_header();
+                                },
+                                Signal::Exit => {
+                                    self.operating_state = OperatingState::ShutDown;
+                                }
+                                Signal::Start => {
+                                    self.operating_state = OperatingState::Run;
+                                }
+                                Signal::Step => {
+                                    self.operating_state = OperatingState::Step;
+                                }
+                            }
+                        },
+                        Err(TryRecvError::Empty) => {},
+                        Err(TryRecvError::Disconnected) => panic!("Miner control channel detached"),
+                    }
+                }
+            }
+            if self.operating_state == OperatingState::ShutDown {
+                return;
+            }
+
+            // try a new nonce, and update the timestamp
             header.nonce = rng.gen(); // random nonce TODO: rng can be slow
             header.timestamp = get_time();
 
@@ -112,23 +190,10 @@ impl Context {
                 let mined_block: Block = self.assemble_block(header);
                 // Release block to the network
                 self.new_block_chan.send(mined_block).unwrap();
-            }
-
-            // Check for incoming singal
-            match self.control_chan.try_recv() {
-                Ok(instruction) => {
-                    match instruction {
-                        Instruction::NewContent => {
-                            // TODO: Only update block contents if relevant parent
-                            self.update_context();
-                            header = self.create_header();
-                        },
-                    }
-                },
-                Err(TryRecvError::Empty) => {
-                    continue;
-                },
-                Err(TryRecvError::Disconnected) => panic!("Miner control channel detached"),
+                // if we are stepping, pause the miner loop
+                if self.operating_state == OperatingState::Step {
+                    self.operating_state = OperatingState::Paused;
+                }
             }
         };
     }
@@ -258,7 +323,6 @@ fn get_time() -> u64 {
     return 0;
 }
 
-/*
 #[cfg(test)]
 mod tests {
     use crate::crypto::hash::{H256};
@@ -274,59 +338,61 @@ mod tests {
 
 
     #[test]
-    fn get_difficulty() {
+    fn difficulty() {
         // Initialize a blockchain with 10 voter chains.
         let tx_mempool = Arc::new(Mutex::new(MemoryPool::new()));
         let blockchain = Arc::new(Mutex::new(BlockChain::new()));
         let db = Arc::new(BlockDatabase::new(
             &std::path::Path::new("/tmp/prism_miner_check_get_difficulty.rocksdb")).unwrap());
         let (sender, receiver) = channel();
-        let (ctx, handle) = Miner::new(&tx_mempool, &blockchain, &db, sender);
-        let block1 = ctx.mine();
-
-        assert_eq!(miner.get_difficulty(&block1.hash()).unwrap(), DEFAULT_DIFFICULTY);
-
+        let (ctx, handle) = new(&tx_mempool, &blockchain, &db, sender);
+        ctx.start();
+        handle.step();
+        let block1 = receiver.recv().unwrap();
+        handle.exit();
+        assert_eq!(block1.header.difficulty, DEFAULT_DIFFICULTY);
     }
 
+    // this test is commented out for now, since it requires that we add the newly mined blocks to
+    // the db and the blockchain. if we add those, the test becomes an integration test, and no
+    // longer fits here.
+    /*
     #[test]
-    fn check_mine() {
-        /// Initialize a blockchain with 10  voter chains.
-        let mut blockchain = BlockChain::new();
-        /// Store the parent blocks to mine on voter trees.
-        let mut voter_best_blocks: Vec<H256> =
-            (0..NUM_VOTER_CHAINS).map( |i| blockchain.voter_chains[i as usize].best_block).collect(); // Currently the voter genesis blocks.
-
-        println!("Step 1:   Initialized blockchain");
-        assert_eq!(11, blockchain.graph.node_count(), "Expecting 11 nodes corresponding to 11 genesis blocks");
-
-        let mut tx_mempool = MemoryPool::new();
-        let mut db = BlockDatabase::new(
-            &std::path::Path::new("/tmp/prismdb.rocksdb")).unwrap();
+    fn mine() {
+        // Initialize a blockchain with 10 voter chains.
+        let tx_mempool = Arc::new(Mutex::new(MemoryPool::new()));
+        let blockchain = Arc::new(Mutex::new(BlockChain::new()));
+        let db = Arc::new(BlockDatabase::new(
+            &std::path::Path::new("/tmp/prism_miner_mine.rocksdb")).unwrap());
         let (sender, receiver) = channel();
-        {
-            let mut miner = Miner::new(&mut tx_mempool, &mut blockchain,  &mut db,  sender, receiver);
-            println!("Step 2:   Initialized miner");
-            let block1 = miner.mine();
-            let block2 = miner.mine();
+        let (ctx, handle) = new(&tx_mempool, &blockchain, &db, sender);
+        ctx.start();
 
-            println!("Step 3:   Mined 2 blocks");
-            // Check that two blocks are different
-            assert!(block1.hash() != block2.hash());
+        // check whether blockchain is correctly initialized
+        assert_eq!(11, blockchain.lock().unwrap().graph.node_count(), "Expecting 11 nodes corresponding to 11 genesis blocks");
 
-            // If the last block was a proposer or voter block, check
-            // that it's the best proposer block
-            let t = block2.get_block_type().unwrap();
-            let block2_hash = block2.hash();
-            if t == PROPOSER_INDEX {
-                assert_eq!(block2_hash,blockchain.get_proposer_best_block(),
-                           "Expected the last-mined proposer block to be the best proposer block");
-            } else if t == TRANSACTION_INDEX {
-                assert!(blockchain.tx_pool.is_unconfirmed(&block2_hash),
-                           "Expected the last-mined tx block to be unconfirmed");
-            } else  if t >= FIRST_VOTER_INDEX {
-                assert_eq!(blockchain.voter_chains[(t-FIRST_VOTER_INDEX) as usize].best_block, block2_hash,
-                           "Expected the last-mined voter block to be the best voter block");
-            }
+        // mine two blocks
+        handle.step();
+        let block1 = receiver.recv().unwrap();
+        handle.step();
+        let block2 = receiver.recv().unwrap();
+        handle.exit();
+
+        // check those two blocks are different
+        assert!(block1.hash() != block2.hash());
+
+        // If the last block was a proposer or voter block, check that it's the best proposer block
+        let t = block2.get_block_type().unwrap();
+        let block2_hash = block2.hash();
+        if t == PROPOSER_INDEX {
+            assert_eq!(block2_hash, blockchain.lock().unwrap().get_proposer_best_block(),
+                       "Expected the last-mined proposer block to be the best proposer block");
+        } else if t == TRANSACTION_INDEX {
+            assert!(blockchain.lock().unwrap().tx_pool.is_unconfirmed(&block2_hash),
+                       "Expected the last-mined tx block to be unconfirmed");
+        } else  if t >= FIRST_VOTER_INDEX {
+            assert_eq!(blockchain.lock().unwrap().voter_chains[(t-FIRST_VOTER_INDEX) as usize].best_block, block2_hash,
+                       "Expected the last-mined voter block to be the best voter block");
         }
 
         // Assert that the new blocks appear in the db
@@ -334,15 +400,22 @@ mod tests {
             "Expecting 2 nodes since 2 blocks were added");
 
         // Check that 2 new blocks appear in the blockchain
-        assert_eq!(blockchain.graph.node_count(), 13,
+        assert_eq!(blockchain.lock().unwrap().graph.node_count(), 13,
             "Expecting 13 nodes since 2 blocks were added");
 
     }
+    */
 
     #[test]
-    fn check_get_sortition_id() {
-        let difficulty: [u8; 32] = DEFAULT_DIFFICULTY;
-        let big_difficulty = U256::from_big_endian(&difficulty);
+    fn sortition_id() {
+        let tx_mempool = Arc::new(Mutex::new(MemoryPool::new()));
+        let blockchain = Arc::new(Mutex::new(BlockChain::new()));
+        let db = Arc::new(BlockDatabase::new(
+            &std::path::Path::new("/tmp/prism_miner_test_sortition.rocksdb")).unwrap());
+        let (sender, receiver) = channel();
+        let (ctx, handle) = new(&tx_mempool, &blockchain, &db, sender);
+
+        let big_difficulty = U256::from_big_endian(&DEFAULT_DIFFICULTY);
 
         let mut big_hash: U256;
         let big_proposer_rate: U256 = PROPOSER_MINING_RATE.into();
@@ -353,39 +426,27 @@ mod tests {
 
         // Transaction blocks
         hash = [0; 32]; // hash = 0
-        sortition_id = match Miner::get_sortition_id(&hash, &difficulty) {
-            Some(u) => u,
-            None => 100,
-        };
+        sortition_id = ctx.get_sortition_id(&hash);
         assert_eq!(sortition_id,PROPOSER_INDEX);
 
         // Set the hash to just below the boundary between tx and proposer blocks
         big_hash = big_difficulty / 100.into() * big_proposer_rate - 1.into();
         hash = big_hash.into();
-        sortition_id = match Miner::get_sortition_id(&hash, &difficulty) {
-            Some(u) => u,
-            None => 100,
-        };
+        sortition_id = ctx.get_sortition_id(&hash);
         assert_eq!(sortition_id,PROPOSER_INDEX);
 
         // Proposer blocks
         // Set the hash to just above the boundary between tx and proposer blocks
         big_hash = big_difficulty / 100.into() * big_proposer_rate;
         hash = big_hash.into();
-        sortition_id = match Miner::get_sortition_id(&hash, &difficulty) {
-            Some(u) => u,
-            None => 100,
-        };
+        sortition_id = ctx.get_sortition_id(&hash);
         assert_eq!(sortition_id,TRANSACTION_INDEX);
 
         // Set the hash to just below the boundary between tx and voter blocks
         big_hash = big_difficulty / 100.into() *
             (big_transaction_rate + big_proposer_rate) - 1.into();
         hash = big_hash.into();
-        sortition_id = match Miner::get_sortition_id(&hash, &difficulty) {
-            Some(u) => u,
-            None => 100,
-        };
+        sortition_id = ctx.get_sortition_id(&hash);
         assert_eq!(sortition_id,TRANSACTION_INDEX);
 
         // Voter blocks
@@ -393,33 +454,21 @@ mod tests {
         big_hash = big_difficulty / 100.into() *
             (big_transaction_rate + big_proposer_rate);
         hash = big_hash.into();
-        sortition_id = match Miner::get_sortition_id(&hash, &difficulty) {
-            Some(u) => u,
-            None => 100,
-        };
+        sortition_id = ctx.get_sortition_id(&hash);
         assert_eq!(sortition_id,FIRST_VOTER_INDEX);
 
         // Adding NUM_VOTER_CHAINS to the previous hash should
         // give the same result
         big_hash = big_hash + NUM_VOTER_CHAINS.into();
         hash = big_hash.into();
-        sortition_id = match Miner::get_sortition_id(&hash, &difficulty) {
-            Some(u) => u,
-            None => 100,
-        };
+        sortition_id = ctx.get_sortition_id(&hash);
         assert_eq!(sortition_id,FIRST_VOTER_INDEX);
 
         // Adding one to the previous hash should
         // increment the voter chain  ID by one
         big_hash = big_hash + 1.into();
         hash = big_hash.into();
-        sortition_id = match Miner::get_sortition_id(&hash, &difficulty) {
-            Some(u) => u,
-            None => 100,
-        };
+        sortition_id = ctx.get_sortition_id(&hash);
         assert_eq!(sortition_id,FIRST_VOTER_INDEX+1);
-
     }
-
 }
-*/
