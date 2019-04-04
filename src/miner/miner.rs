@@ -9,11 +9,12 @@ use crate::block::{transaction, proposer, voter};
 use crate::blockdb::{BlockDatabase};
 
 use super::memory_pool::{MemoryPool, Entry};
-use super::Instruction;
 use std::time::{SystemTime, Duration};
 use std::sync::mpsc::{channel,Receiver,Sender,TryRecvError};
 use std::thread;
 use std::collections::{HashMap};
+
+use std::sync::{Arc, Mutex};
 
 extern crate rand; // 0.6.0
 use rand::{Rng};
@@ -22,96 +23,116 @@ use rand::prelude::ThreadRng;
 extern crate bigint;
 use bigint::uint::{U256};
 
-pub struct Miner<'a, 'b>{
-    // Tx mempool
-    tx_mempool: &'a MemoryPool,
-    // Current blockchain
-    blockchain: &'a mut BlockChain,
-    // Block database
-    db: &'a mut BlockDatabase,
-    // Channel for receiving newly-received blocks
-    incoming_instructions: Receiver<Instruction>,
-    // Channel for pushing newly-created blocks
-    outgoing_blocks: Sender<Block>,
+/// Signal to the miner
+enum Instruction {
+    NewContent,
+    // TODO: To be added later for efficiency:
+    // NewTx,
+    // NewTxBlockContent,
+    // NewPropBlockContent,
+    // NewVoterBlockContent(u16)
+}
 
-    // Miners personal state
+pub struct Context {
+    // Tx mempool
+    tx_mempool: Arc<Mutex<MemoryPool>>,
+    // Current blockchain
+    blockchain: Arc<Mutex<BlockChain>>,
+    // Block database
+    db: Arc<BlockDatabase>,
+    // Channel for receiving control signal
+    control_chan: Receiver<Instruction>,
+    // Channel for returning newly-mined blocks
+    new_block_chan: Sender<Block>,
     // Proposer parent
     proposer_parent_hash: H256,
     // Block contents
     content: Vec<Content>,
     // Merkle Tree
-    content_merkle_tree: MerkleTree<'b, Content>,
+    content_merkle_tree: MerkleTree<Content>,
     // Difficulty
     difficulty: [u8; 32]
 }
 
-impl<'a, 'b> Miner<'a, 'b>{
-    // This function will be used when the miner is started
-    pub fn new(tx_mempool: &'a MemoryPool,  blockchain: &'a mut BlockChain, db: &'a mut BlockDatabase,
-               outgoing_blocks: Sender<Block>, incoming_instructions: Receiver<Instruction>) -> Self {
-        Self {tx_mempool, blockchain, db, outgoing_blocks, incoming_instructions, proposer_parent_hash: H256::default(),
-            content: vec![], content_merkle_tree: MerkleTree::default(), difficulty: DEFAULT_DIFFICULTY}
-    }
+pub struct Handle {
+    // Channel for sending signal to the miner thread
+    control_chan: Sender<Instruction>,
+}
 
-    // This is the main function of Miner. It mines blocks and sends it to the outgoing_block channel 
-    pub fn mine(&mut self) {
+pub fn new(tx_mempool: &Arc<Mutex<MemoryPool>>,
+           blockchain: &Arc<Mutex<BlockChain>>,
+           db: &Arc<BlockDatabase>,
+           block_sink: Sender<Block>) -> (Context, Handle) {
+    let (signal_chan_sender, signal_chan_receiver) = channel();
+    let ctx = Context {
+        tx_mempool: Arc::clone(tx_mempool),
+        blockchain: Arc::clone(blockchain),
+        db: Arc::clone(db),
+        control_chan: signal_chan_receiver,
+        new_block_chan: block_sink,
+        proposer_parent_hash: H256::default(),
+        content: vec![], 
+        content_merkle_tree: MerkleTree::default(),
+        difficulty: DEFAULT_DIFFICULTY,
+    };
 
-        // Initialize the content and other parameters
-        self.update_parameters<'b>();
-        // Initialize header
+    let handle = Handle {
+        control_chan: signal_chan_sender,
+    };
+
+    return (ctx, handle);
+}
+
+impl Context {
+    fn miner_loop (&mut self) {
+        // Initialize the context and the header to mine
+        self.update_context();
         let mut header: Header = self.create_header();
 
         let mut rng = rand::thread_rng();
-        let mut to_mine = true;
-        // Mining loop
-        loop{
-            if to_mine {
-                header.nonce = rng.gen(); // random nonce
-                header.timestamp = Miner::get_time(); //Update timestamp
-                // Compute the hash
-                let hash: [u8; 32] = (&header.hash()).into(); //todo: bad code
 
-                // Check if you successfully mined a block
-                if hash < self.difficulty {
-                    // Create a block
-                    let mined_block: Block = self.create_valid_block(header);
-                    // Release block to the network
-                    self.outgoing_blocks.send(mined_block.clone()).unwrap();
-                }
-            } else{
-                thread::sleep(Duration::from_millis(10)); // For efficiency
+        // Mining loop
+        loop {
+            // update the header to mine
+            header.nonce = rng.gen(); // random nonce TODO: rng can be slow
+            header.timestamp = get_time();
+
+            // compute the hash
+            let hash: [u8; 32] = (&header.hash()).into(); // TODO: bad code
+
+            // Check if we successfully mined a block
+            if hash < self.difficulty {
+                // Create a block
+                let mined_block: Block = self.assemble_block(header);
+                // Release block to the network
+                self.new_block_chan.send(mined_block).unwrap();
             }
 
-            // Check for incoming instruction from the channe;
-            match self.incoming_instructions.try_recv() {
+            // Check for incoming singal
+            match self.control_chan.try_recv() {
                 Ok(instruction) => {
                     match instruction {
                         Instruction::NewContent => {
-                            // TODO: Only update block contents if relevant parent/
-                            self.update_parameters();
+                            // TODO: Only update block contents if relevant parent
+                            self.update_context();
                             header = self.create_header();
                         },
-                        Instruction::StopMining => {
-                            to_mine = false;
-                        }
-                        Instruction::StartMining =>{
-                            to_mine = true;
-                        }
                     }
                 },
                 Err(TryRecvError::Empty) => {
                     continue;
                 },
-                Err(TryRecvError::Disconnected) => unreachable!(),
+                Err(TryRecvError::Disconnected) => panic!("Miner control channel detached"),
             }
         };
     }
 
-    // Given header, sortition its hash and create the block
-    fn create_valid_block(&self, header: Header) -> Block {
+    /// Given a valid header, sortition its hash and create the block
+    fn assemble_block(&self, header: Header) -> Block {
         // Get sortition ID
         let hash: [u8; 32] = (&header.hash()).into();
-        let sortition_id = self.get_sortition_id(&hash); //
+        let sortition_id = self.get_sortition_id(&hash);
+
         // Create a block
         let mut sortition_proof: Vec<H256> = self.content_merkle_tree.get_proof_from_index(sortition_id);
         let mined_block = Block::from_header(header, self.content[sortition_id as usize].clone(), sortition_proof);
@@ -119,81 +140,88 @@ impl<'a, 'b> Miner<'a, 'b>{
         return mined_block;
     }
 
+    /// Create a header object from the current miner view
     fn create_header(&self) -> Header {
-        // Choose a random nonce
-        let nonce: u32 = 0;
-        let timestamp: u64 = Miner::get_time();
-        let content_root = (self.content_merkle_tree).root().clone();
-        let extra_content: [u8; 32] = [0; 32]; // Add miner id?
-        return Header::new(self.proposer_parent_hash.clone(), timestamp, nonce,
-                           content_root, extra_content, self.difficulty.clone());
+        let nonce: u32 = 0; // we will update this value in-place when mining
+        let timestamp: u64 = get_time();
+        let content_root = self.content_merkle_tree.root().clone();
+        let extra_content: [u8; 32] = [0; 32]; // TODO: Add miner id?
+        return Header::new(self.proposer_parent_hash.clone(),
+                           timestamp,
+                           nonce,
+                           content_root,
+                           extra_content,
+                           self.difficulty.clone());
     }
 
-    // Updates the header content and 
-    fn update_parameters<'b>(&mut self) {
-
-        self.proposer_parent_hash = self.blockchain.get_proposer_best_block();
+    /// Update the block to be mined 
+    fn update_context(&mut self) {
+        let blockchain = self.blockchain.lock().unwrap();
+        self.proposer_parent_hash = blockchain.get_proposer_best_block();
         self.difficulty = self.get_difficulty(&self.proposer_parent_hash);
 
         // update the contents and the parents based on current view
         let mut content = vec![];
 
+        // TODO: since the content field will always contain three elements, could we switch it to
+        // a tuple?
+        
         // Update proposer content
         content.push(Content::Proposer(proposer::Content::new(
-                     self.blockchain.get_unreferred_prop_blocks().clone(),
-                     self.blockchain.get_unreferred_tx_blocks().clone())
+                        blockchain.get_unreferred_prop_blocks().clone(),
+                        blockchain.get_unreferred_tx_blocks().clone())
                     ));
 
         // Update transaction content with TX_BLOCK_SIZE mempool txs
+        let mempool = self.tx_mempool.lock().unwrap();
         content.push(Content::Transaction(transaction::Content::new(
-                     self.tx_mempool
-                        .get_transactions(TX_BLOCK_SIZE)
-                        .into_iter()
-                        .map(|s| s.transaction)
-                        .collect(),)));
+                        mempool
+                            .get_transactions(TX_BLOCK_SIZE)
+                            .into_iter()
+                            .map(|s| s.transaction)
+                            .collect())
+                    ));
+        drop(mempool);
 
         // Update voter content/parents
         for i in 0..NUM_VOTER_CHAINS {
-            content.push(Content::Voter(voter::Content::new(i,
-                         self.blockchain.get_voter_best_block(i as u16).clone(),
-                         self.blockchain.get_unvoted_prop_blocks(i as u16).clone()))
-                        );
+            content.push(Content::Voter(voter::Content::new(
+                            i,
+                            blockchain.get_voter_best_block(i as u16).clone(),
+                            blockchain.get_unvoted_prop_blocks(i as u16).clone())
+                        ));
         }
+        drop(blockchain);
         self.content = content;
         self.content_merkle_tree = MerkleTree::new(&self.content);
-}
-
-    fn get_time() -> u64 {
-        let cur_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH);
-        match cur_time {
-            Ok(v) => {
-                return v.as_secs();
-            },
-            Err(e) => println!("Error parsing time: {:?}", e),
-        }
-        return 0;
     }
 
+    /// Calculate which chain should we attach the new block to
     fn get_sortition_id(&self, hash: &[u8; 32]) -> u32 {
         let big_hash = U256::from_big_endian(hash);
         let big_difficulty = U256::from_big_endian(&self.difficulty);
         let big_proposer_rate: U256 = PROPOSER_MINING_RATE.into();
         let big_transaction_rate: U256 = TRANSACTION_MINING_RATE.into();
 
-        if big_hash < big_difficulty / 100.into() * big_proposer_rate { // Transaction block
+        if big_hash < big_difficulty / 100.into() * big_proposer_rate {
+            // transaction block
             return PROPOSER_INDEX;
-        } else if big_hash < big_difficulty / 100.into() * (big_transaction_rate + big_proposer_rate) { // Proposer block
+        } else if big_hash < big_difficulty / 100.into() * (big_transaction_rate + big_proposer_rate) {
+            // proposer block
             return TRANSACTION_INDEX;
-        } else if big_hash < big_difficulty { // Voter block
-            // Figure out which voter tree we are in
+        } else if big_hash < big_difficulty {
+            // voter index, figure out which voter tree we are in
             let voter_id = (big_hash - big_transaction_rate - big_proposer_rate) % NUM_VOTER_CHAINS.into();
-            return (voter_id).as_u32()+FIRST_VOTER_INDEX;
-        } else{
-            panic!("Difficulty {}, The function should not be called for such high value of hash {}", big_difficulty, big_hash);
+            return voter_id.as_u32() + FIRST_VOTER_INDEX;
+        } else {
+            panic!("Difficulty {}, The function should not be called for such high value of hash {}",
+                   big_difficulty,
+                   big_hash);
         }
-
     }
 
+    /// Calculate the difficulty for the block to be mined
+    // TODO: shall we make a dedicated type for difficulty?
     fn get_difficulty(&self, block_hash: &H256) -> [u8; 32] {
         // Get the header of the block corresponding to block_hash
         match self.db.get(block_hash).unwrap() {
@@ -208,7 +236,21 @@ impl<'a, 'b> Miner<'a, 'b>{
     }
 }
 
+/// Get the current UNIX timestamp
+fn get_time() -> u64 {
+    let cur_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH);
+    match cur_time {
+        Ok(v) => {
+            return v.as_secs();
+        },
+        Err(e) => println!("Error parsing time: {:?}", e),
+    }
+    // TODO: there should be a better way of handling this, or just unwrap and panic
+    return 0;
+}
 
+
+/*
 #[cfg(test)]
 mod tests {
     use crate::crypto::hash::{H256};
@@ -378,3 +420,4 @@ mod tests {
     }
 
 }
+*/
