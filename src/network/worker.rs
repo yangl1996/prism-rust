@@ -6,24 +6,31 @@ use std::thread;
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
 use crate::miner::memory_pool::MemoryPool;
+use crate::miner::miner::ContextUpdateSignal;
 
+#[derive(Clone)]
 pub struct Context {
     msg_chan: Arc<Mutex<mpsc::Receiver<(message::Message, peer::Handle)>>>,
     num_worker: usize,
     chain: Arc<Mutex<BlockChain>>,
     blockdb: Arc<BlockDatabase>,
     mempool: Arc<Mutex<MemoryPool>>,
+    context_update_chan: mpsc::Sender<ContextUpdateSignal>,
 }
 
-pub fn new(num_worker: usize, msg_src: mpsc::Receiver<(message::Message, peer::Handle)>,
-           blockchain: &Arc<Mutex<BlockChain>>, blockdb: &Arc<BlockDatabase>,
-           mempool: &Arc<Mutex<MemoryPool>>) -> Context {
+pub fn new(num_worker: usize,
+           msg_src: mpsc::Receiver<(message::Message, peer::Handle)>,
+           blockchain: &Arc<Mutex<BlockChain>>,
+           blockdb: &Arc<BlockDatabase>,
+           mempool: &Arc<Mutex<MemoryPool>>,
+           ctx_update_sink: mpsc::Sender<ContextUpdateSignal>) -> Context {
     let ctx = Context {
         msg_chan: Arc::new(Mutex::new(msg_src)),
         num_worker: num_worker,
         chain: Arc::clone(blockchain),
         blockdb: Arc::clone(blockdb),
         mempool: Arc::clone(mempool),
+        context_update_chan: ctx_update_sink,
     };
     return ctx;
 }
@@ -31,9 +38,8 @@ pub fn new(num_worker: usize, msg_src: mpsc::Receiver<(message::Message, peer::H
 impl Context {
     pub fn start(self) {
         let num_worker = self.num_worker;
-        let arc = Arc::new(self);
         for _ in 0..num_worker {
-            let cloned = Arc::clone(&arc);
+            let cloned = self.clone();
             thread::spawn(move || {
                 cloned.worker_loop();
             });
