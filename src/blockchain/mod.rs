@@ -275,6 +275,11 @@ impl BlockChain {
 
 /// Functions to generate the ledger. This uses the confirmation logic of Prism.
 impl BlockChain {
+    /// Returns the list of ordered tx blocks. This is the initial step of creating the full ledger.
+    pub fn get_ordered_tx_blocks(&self) -> Vec<H256> {
+        return self.tx_pool.ordered;
+    }
+
     // This is a important fn: Checks if there are sufficient votes to confirm leader block at the level.
     // todo: This function should be called when the voter chain has collected sufficient votes on level.
     pub fn confirm_leader_block_at_level(&mut self, level: u32) {
