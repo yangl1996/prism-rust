@@ -893,7 +893,6 @@ mod tests {
         assert_eq!(16, blockchain.tx_pool.ordered.len());
     }
 
-
     #[test]
     fn proposer_block_ordering(){
         let mut rng = rand::thread_rng();

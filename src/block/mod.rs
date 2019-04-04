@@ -1,5 +1,4 @@
 pub mod header;
-pub mod miner;
 pub mod transaction;
 pub mod proposer;
 pub mod voter;
@@ -86,7 +85,9 @@ impl Hashable for Content {
     }
 }
 
-
+impl Default for Content {
+    fn default() -> Self { Content::Transaction(transaction::Content::default()) }
+}
 
 #[cfg(test)]
 mod tests {
