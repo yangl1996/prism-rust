@@ -27,7 +27,7 @@ impl Wallet {
     }
 
     pub fn generate_new_key(&mut self) {
-        unimplimented!();
+//        unimplimented!();
     }
 
     /// Add coins from a transaction
@@ -54,8 +54,8 @@ impl Wallet {
     }
 
     /// Removes coin from the wallet. Will be used after spending the coin.
-    pub fn remove_coin(&mut self, coin: Coin) {
-        self.coins.remove(&coin);
+    pub fn remove_coin(&mut self, coin: &Coin) {
+        self.coins.remove(coin);
     }
 
     ///  Returns the sum of values of all the coin in the wallet
@@ -82,7 +82,7 @@ impl Wallet {
                 for coin in coins.iter() { // add inputs to used_outpoint to avoid potential double spend
                     input.push(coin.input.clone());
                     signatures.push(coin.signature.clone());
-                    self.remove_coin(coin);
+                    self.remove_coin(&coin);
                 }
                 // 2. Create transaction outputs
                 let mut output = vec![Output {recipient, value}];
