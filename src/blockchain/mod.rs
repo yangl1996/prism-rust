@@ -92,8 +92,8 @@ impl BlockChain {
 
     /// Adds directed edges: from->to and to->from with different types.
     fn insert_edge(&mut self, from: H256, to: H256, edge_type: Edge) {
-        self.graph.add_edge(to, from, edge_type.reverse_edge());
         self.graph.add_edge(from, to, edge_type);
+        self.graph.add_edge(to, from, edge_type.reverse_edge());
     }
 
     /// Add a new block to the graph. This function is called when a new block is received. We assume that all the referred block are available.
@@ -276,8 +276,8 @@ impl BlockChain {
 /// Functions to generate the ledger. This uses the confirmation logic of Prism.
 impl BlockChain {
     /// Returns the list of ordered tx blocks. This is the initial step of creating the full ledger.
-    pub fn get_ordered_tx_blocks(&self) -> Vec<H256> {
-        return self.tx_pool.ordered;
+    pub fn get_ordered_tx_blocks(&self) -> &Vec<H256> {
+        return &self.tx_pool.ordered;
     }
 
     // This is a important fn: Checks if there are sufficient votes to confirm leader block at the level.
@@ -290,7 +290,7 @@ impl BlockChain {
         if self.proposer_tree.leader_nodes.contains_key(&level) {
             return; // Return if the level already has leader block.
         }
-        println!("Trying to confirm on level {}", level);
+//        println!("Trying to confirm on level {}", level);
         if !self.proposer_tree.all_votes.contains_key(&level) {
             return
         }
@@ -885,7 +885,6 @@ mod tests {
 
 
         println!("Step 17:  Checking leader blocks for first four levels");
-        assert_eq!(16, blockchain.tx_pool.ordered.len());
         let leader_block_sequence = blockchain.get_leader_block_sequence();
         assert_eq!(prop_block1.hash(), leader_block_sequence[0].unwrap());
         assert_eq!(prop_block2a.hash(),leader_block_sequence[1].unwrap());
@@ -909,6 +908,11 @@ mod tests {
         assert_eq!(0, blockchain.get_parent_and_referred_notleader_unconfirmed_prop_blocks(prop_block4.hash()).len());
 
         println!("Step 19:  The ledger tx blocks");
+        assert_eq!(16, blockchain.tx_pool.ordered.len());
+        let ordered_tx_blocks = blockchain.get_ordered_tx_blocks();
+        for i in 0..16{
+            assert_eq!(ordered_tx_blocks[i], tx_block_vec[i].hash());
+        }
 
         println!("Step 20: Mining 2 tx block and 1 prop block referring the 2 tx blocks");
         unreferred_tx_block_index += 2;

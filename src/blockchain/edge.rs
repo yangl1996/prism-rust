@@ -5,29 +5,29 @@ This contains the different type of edges in Prism graph structure.
 // todo: Document the edge types.
 #[derive(Serialize, Deserialize, Clone, Copy, Ord, Eq, PartialEq, PartialOrd, Hash)]
 pub enum Edge{
-    /// Tx edge types
-    TransactionToProposerParent,
-    /// Prop edge types
-    ProposerToProposerParent,
-    ProposerToProposerReference(u32), // u32 used for ordering the refs.
-    ProposerToTransactionReference(u32), // u32 used for ordering the refs.
-    ProposerToTransactionLeaderReference(u32),
-    ProposerToTransactionReferenceAndLeaderReference(u32),
-    /// Voter edge types
-    VoterToProposerParent,
-    VoterToProposerVote,
-    VoterToProposerParentAndVote, // When a proposer block is both voted and proposer parent
-    VoterToVoterParent,
+    // Tx edge types
+    TransactionToProposerParent, // For tx block(from) mined on a proposer parent(to)
+    // Prop edge types
+    ProposerToProposerParent, // prop block(from) mined on a proposer parent(to)
+    ProposerToProposerReference(u32), // prop block(to) referred by a prop block(from). u32 used for ordering the refs everywhere.
+    ProposerToTransactionReference(u32), // tx blocks(to) referred by a prop block(from)
+    ProposerToTransactionLeaderReference(u32), // leader prop block(from) which includes the tx block(from) in the ledger.
+    ProposerToTransactionReferenceAndLeaderReference(u32), // Both the above two.
+    // Voter edge types
+    VoterToProposerParent, // voter block(from) mined on a proposer parent(to)
+    VoterToProposerVote,   // voter block(from) voting on a proposer block(to)
+    VoterToProposerParentAndVote, // Both the above two
+    VoterToVoterParent, // voter block(from) mined on a voter parent(to)
 
-    /// Reverse Edges (Not all have to be used)
+    // Reverse Edges (Not all have to be used)
     TransactionFromProposerParent,
-    /// Prop edge types
+    // Prop edge types
     ProposerFromProposerParent,
     ProposerFromProposerReference(u32),
     ProposerFromTransactionReference(u32),
     ProposerFromTransactionLeaderReference(u32),
     ProposerFromTransactionReferenceAndLeaderReference(u32),
-    /// Voter edge types
+    // Voter edge types
     VoterFromProposerParent,
     VoterFromProposerVote,
     VoterFromProposerParentAndVote, // When a proposer block is both voted and proposer parent
