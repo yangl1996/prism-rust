@@ -30,6 +30,12 @@ impl Wallet {
 //        unimplimented!();
     }
 
+    //only for test
+    pub fn set_key(&mut self, hash: H256) {
+        self.keys.clear();
+        self.keys.insert(hash, KeyPair::default());
+    }
+
     /// Add coins from a transaction
     pub fn add_coins(&mut self, transaction: &Transaction){
         for index in 0..transaction.output.len(){
@@ -40,7 +46,7 @@ impl Wallet {
     /// Add the coin to wallet if the user is a recipient.
     pub fn add_coin(&mut self, transaction: &Transaction, index: usize) {
         let output: Output = transaction.output[index].clone();
-        // check coin recipient is in my pubkeys
+        // check coin recipient is in key pair
         if self.keys.contains_key(&output.recipient){
             // Construct coin
             let input = Input{hash: transaction.hash(), index: index as u32};
@@ -110,23 +116,24 @@ impl Wallet {
 
 }
 
-//#[cfg(test)]
-//pub mod tests {
-//    use super::Wallet;
-//    use crate::transaction::{Input,Output};
-//    use crate::crypto::generator as crypto_generator;
-//
-//    #[test]
-//    pub fn test_wallet_balance() {
-//        let hash = crypto_generator::h256();
-//        let mut w = Wallet::new(hash.clone());
-//        w.insert(Input{hash: crypto_generator::h256(), index: 0}, Output{value: 10, recipient: crypto_generator::h256()});
-//        assert_eq!(w.total_balance(), 0);
+#[cfg(test)]
+pub mod tests {
+    use super::Wallet;
+    use crate::transaction::{Input,Output};
+    use crate::crypto::generator as crypto_generator;
+
+    #[test]
+    pub fn test_wallet_balance() {
+        let hash = crypto_generator::h256();
+        let mut w = Wallet::new();
+        w.set_key(hash.clone());
+//        w.(Input{hash: crypto_generator::h256(), index: 0}, Output{value: 10, recipient: crypto_generator::h256()});
+        assert_eq!(w.total_balance(), 0);
 //        w.insert(Input{hash: crypto_generator::h256(), index: 0}, Output{value: 10, recipient: hash.clone()});
 //        assert_eq!(w.total_balance(), 10);
 //        assert_eq!(w.safe_balance(), 10);
-//    }
-//
+    }
+
 //    #[test]
 //    pub fn test_wallet_create() {
 //        let hash = crypto_generator::h256();
@@ -230,5 +237,5 @@ impl Wallet {
 //        assert!(w.create(crypto_generator::h256(), 1).is_none());
 //
 //    }
-//}
+}
 

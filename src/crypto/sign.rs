@@ -90,7 +90,7 @@ impl std::fmt::Debug for PubKey {
 pub struct SecKey([u128; 2]); // big endian u256.  TODO: Use Crypto
 
 
-
+#[derive(Default)]
 pub struct KeyPair {
     secret: SecKey,
     public: PubKey,
