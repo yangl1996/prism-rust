@@ -17,16 +17,3 @@ pub fn new_block(block: Block, db: &BlockDatabase, chain: &Mutex<BlockChain>) {
     db.insert(&hash, &block);
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn add_one_block() {
-        // initialize 
-        let blockchain = BlockChain::new();
-        let database = BlockDatabase::new(std::path::Path::new("/tmp/prism_rule_new_block_tests_add_block"));
-        let database = Mutex::new(database);
-
-    }
-}
