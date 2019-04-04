@@ -1,7 +1,7 @@
 use super::hash::{Hashable, H256};
 
 /// A Merkle tree.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct MerkleTree<'a, T: Hashable> {
     data: &'a [T],
     nodes: Vec<H256>,
