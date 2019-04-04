@@ -85,7 +85,9 @@ impl Hashable for Content {
     }
 }
 
-
+impl Default for Content {
+    fn default() -> Self { Content::Transaction(transaction::Content::default()) }
+}
 
 #[cfg(test)]
 mod tests {

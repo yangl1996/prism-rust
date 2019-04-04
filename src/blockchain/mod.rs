@@ -151,7 +151,7 @@ impl BlockChain {
                 self.proposer_node_data.insert(block_hash, proposer_node_data);
 
                 // 7. Add the block to the proposer tree at a level.
-                self.proposer_tree.add_block_at_levelq(block_hash, proposer_node_data.level);
+                self.proposer_tree.add_block_at_level(block_hash, proposer_node_data.level);
             },
 
             Content::Voter(content) => {
@@ -873,7 +873,6 @@ mod tests {
         assert_eq!(2, blockchain.tx_pool.unconfirmed.len());
         assert_eq!(16, blockchain.tx_pool.ordered.len());
     }
-
 
     #[test]
     fn proposer_block_ordering(){

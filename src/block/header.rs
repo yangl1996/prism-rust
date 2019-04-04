@@ -1,7 +1,7 @@
 use crate::crypto::hash::{Hashable, H256};
 // TODO: Add the address of the miner
 
-#[derive(Serialize, Deserialize, Clone, Debug, Hash)]
+#[derive(Serialize, Deserialize, Clone, Debug, Hash, Copy)]
 pub struct Header{
     /// Hash of the parent proposer block. Every block has a parent proposer block.
     pub parent_hash: H256,
