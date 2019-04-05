@@ -193,6 +193,7 @@ impl Context {
                 let mined_block: Block = self.assemble_block(header);
                 // Release block to the network
                 new_block(mined_block, &self.db, &self.blockchain);
+                // TODO: update mempool
                 info!("Mined one block");
                 // if we are stepping, pause the miner loop
                 if self.operating_state == OperatingState::Step {
