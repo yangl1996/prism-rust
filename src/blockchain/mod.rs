@@ -660,7 +660,7 @@ mod tests {
     use crate::block::{Block};
     use rand::{Rng, RngCore};
     use super::utils;
-    use crate::config::NUM_VOTER_CHAINS;
+    const NUM_VOTER_CHAINS: u16 = 10;
 
     // At initialization the blockchain only consists of (m+1) genesis blocks.
     // The hash of these genesis nodes in the blockchain graph are fixed for now
