@@ -12,7 +12,7 @@ use log::{debug, error, info, trace, warn};
 
 use super::memory_pool::{MemoryPool, Entry};
 use std::time::{SystemTime, Duration};
-use std::sync::mpsc::{channel,Receiver,Sender,TryRecvError};
+use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
 use std::collections::{HashMap};
 
 use std::sync::{Arc, Mutex};
@@ -113,6 +113,7 @@ impl Handle {
 
 impl Context {
     pub fn start(mut self) {
+        println!("Miner started");
         thread::spawn(move || {
             self.miner_loop();
         });
@@ -136,7 +137,7 @@ impl Context {
 
     }
 
-    fn miner_loop (&mut self) {
+    fn miner_loop(&mut self) {
         // Initialize the context and the header to mine
         self.update_context();
         let mut header: Header = self.create_header();
@@ -246,8 +247,8 @@ impl Context {
         
         // Update proposer content
         content.push(Content::Proposer(proposer::Content::new(
-                        blockchain.get_unreferred_prop_blocks().clone(),
-                        blockchain.get_unreferred_tx_blocks().clone())
+                        blockchain.get_unreferred_tx_blocks().clone(),
+                        blockchain.get_unreferred_prop_blocks().clone())
                     ));
 
         // Update transaction content with TX_BLOCK_SIZE mempool txs
@@ -347,7 +348,7 @@ mod tests {
     fn difficulty() {
         // Initialize a blockchain with 10 voter chains.
         let tx_mempool = Arc::new(Mutex::new(MemoryPool::new()));
-        let blockchain = Arc::new(Mutex::new(BlockChain::new()));
+        let blockchain = Arc::new(Mutex::new(BlockChain::new(10)));
         let db = Arc::new(BlockDatabase::new(
             &std::path::Path::new("/tmp/prism_miner_check_get_difficulty.rocksdb")).unwrap());
         let (ctx_update_s, ctx_update_r) = channel();
