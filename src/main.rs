@@ -90,6 +90,8 @@ fn main() {
         }
     }
 
+    miner.start();
+
     loop {
         std::thread::park();
     }
