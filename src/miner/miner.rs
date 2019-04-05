@@ -8,6 +8,7 @@ use crate::block::header::Header;
 use crate::block::{transaction, proposer, voter};
 use crate::blockdb::{BlockDatabase};
 use crate::handler::new_block;
+use log::{debug, error, info, trace, warn};
 
 use super::memory_pool::{MemoryPool, Entry};
 use std::time::{SystemTime, Duration};
@@ -120,12 +121,15 @@ impl Context {
     fn handle_control_signal(&mut self, signal: ControlSignal) {
         match signal {
             ControlSignal::Exit => {
+                info!("Miner shutting down");
                 self.operating_state = OperatingState::ShutDown;
             }
             ControlSignal::Start => {
+                info!("Miner starting");
                 self.operating_state = OperatingState::Run;
             }
             ControlSignal::Step => {
+                info!("Miner starting in stepping mode");
                 self.operating_state = OperatingState::Step;
             }
         }
@@ -189,6 +193,7 @@ impl Context {
                 let mined_block: Block = self.assemble_block(header);
                 // Release block to the network
                 new_block(mined_block, &self.db, &self.blockchain);
+                info!("Mined one block");
                 // if we are stepping, pause the miner loop
                 if self.operating_state == OperatingState::Step {
                     self.operating_state = OperatingState::Paused;
