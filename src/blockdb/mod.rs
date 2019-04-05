@@ -1,7 +1,7 @@
 use crate::block::Block;
 use crate::crypto::hash::H256;
-use bincode::{serialize, deserialize};
-use std::sync::{Mutex, Arc};
+use bincode::{deserialize, serialize};
+use std::sync::{Arc, Mutex};
 
 pub type Result<T> = std::result::Result<T, rocksdb::Error>;
 
@@ -20,7 +20,7 @@ impl BlockDatabase {
     }
 
     pub fn insert(&self, hash: &H256, block: &Block) -> Result<()> {
-        let hash_u8: [u8; 32] = hash.into();    // TODO: implement H256 asref<[u8]>
+        let hash_u8: [u8; 32] = hash.into(); // TODO: implement H256 asref<[u8]>
         let serialized = serialize(block).unwrap();
         let mut count = self.count.lock().unwrap();
         *count += 1;
@@ -32,7 +32,7 @@ impl BlockDatabase {
         let serialized = self.handle.get(&hash_u8)?;
         match serialized {
             None => return Ok(None),
-            Some(s) => return Ok(Some(deserialize(&s).unwrap()))
+            Some(s) => return Ok(Some(deserialize(&s).unwrap())),
         }
     }
 
@@ -54,10 +54,13 @@ mod tests {
     use super::*;
     use crate::block::generator;
     use crate::crypto::hash::Hashable;
-    
+
     #[test]
     fn insert_get_and_delete() {
-        let db = BlockDatabase::new(&std::path::Path::new("/tmp/blockdb_tests_insert_get_and_delete.rocksdb")).unwrap();
+        let db = BlockDatabase::new(&std::path::Path::new(
+            "/tmp/blockdb_tests_insert_get_and_delete.rocksdb",
+        ))
+        .unwrap();
         let test_block = generator::tx_block();
         db.insert(&test_block.hash(), &test_block);
         let got = db.get(&test_block.hash()).unwrap().unwrap();

@@ -14,7 +14,7 @@ pub fn merkle_tree<'a>(size: u32) -> MerkleTree<'a, H256> {
 /// Generates a random H256 hash.
 pub fn h256() -> H256 {
     let u8_array: [u8; 32] = u8_32_array();
-    let hash : H256 = (&u8_array).into();
+    let hash: H256 = (&u8_array).into();
     return hash;
 }
 

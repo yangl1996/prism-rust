@@ -2,30 +2,30 @@
 Validation for proposer blocks
 */
 
-use crate::block::{Block,Content};
+use crate::block::{Block, Content};
+use crate::blockchain::BlockChain;
 use crate::config::*;
-use crate::blockchain::{BlockChain};
-use crate::crypto::hash::{Hashable,H256};
-
+use crate::crypto::hash::{Hashable, H256};
 
 pub struct ProposerBlockValidator<'a> {
     // Database of known blocks
-    pub blockchain: &'a BlockChain
+    pub blockchain: &'a BlockChain,
 }
 
 impl<'a> super::Validator<'a> for ProposerBlockValidator<'a> {
-
     fn new(blockchain: &'a BlockChain) -> Self {
-        ProposerBlockValidator { blockchain: blockchain }
+        ProposerBlockValidator {
+            blockchain: blockchain,
+        }
     }
 
     fn is_valid(&self, block: &'a Block) -> bool {
-
         if (
             self.is_duplicate(&block) || // 1. Check duplicate
             self.is_empty(&block) ||  // 2. Check if empty reflinks
             !self.is_coinbase_valid(&block) || // 3. Check coinbase validity
-            !self.is_pow_valid(&block) // 4. check pow validity, sortition
+            !self.is_pow_valid(&block)
+            // 4. check pow validity, sortition
         ) {
             return false;
         }
@@ -34,7 +34,10 @@ impl<'a> super::Validator<'a> for ProposerBlockValidator<'a> {
 
     fn is_duplicate(&self, block: &'a Block) -> bool {
         // Checks if we already have a copy of this block in storage
-        return self.blockchain.proposer_node_data.contains_key(&block.hash())
+        return self
+            .blockchain
+            .proposer_node_data
+            .contains_key(&block.hash());
     }
 
     fn is_empty(&self, block: &'a Block) -> bool {
@@ -44,8 +47,8 @@ impl<'a> super::Validator<'a> for ProposerBlockValidator<'a> {
             Content::Transaction(c) => return true,
             Content::Voter(c) => return true,
             Content::Proposer(c) => {
-                return (c.proposer_block_hashes.is_empty() &&
-                        c.transaction_block_hashes.is_empty())
+                return (c.proposer_block_hashes.is_empty()
+                    && c.transaction_block_hashes.is_empty());
             }
         }
         return true;
@@ -72,6 +75,4 @@ impl<'a> super::Validator<'a> for ProposerBlockValidator<'a> {
         // }
         return true;
     }
-
-
 }

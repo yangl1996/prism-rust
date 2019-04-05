@@ -10,11 +10,11 @@ use std::net;
 use std::process;
 use std::sync::Arc;
 
-use prism::network;
-use prism::blockdb;
 use prism::blockchain;
-use prism::miner::memory_pool;
+use prism::blockdb;
 use prism::config;
+use prism::miner::memory_pool;
+use prism::network;
 
 const DEFAULT_IP: &str = "127.0.0.1";
 const DEFAULT_P2P_PORT: u16 = 6000;
@@ -72,7 +72,8 @@ fn main() {
 
     // init server and miner
     debug!("Starting P2P server at {}", peer_socket_addr);
-    let (server, miner, wallet) = prism::start(peer_socket_addr, &blockdb, &blockchain, &mempool).unwrap();
+    let (server, miner, wallet) =
+        prism::start(peer_socket_addr, &blockdb, &blockchain, &mempool).unwrap();
 
     // connect to known peers
     if let Some(known_peers) = matches.values_of("known_peer") {
@@ -82,7 +83,7 @@ fn main() {
                 Err(e) => {
                     error!("Error parsing peer address {}: {}", &peer, e);
                     continue;
-                },
+                }
             };
             match server.connect(addr) {
                 Ok(_) => info!("Connected to outgoing peer {}", &addr),

@@ -1,6 +1,6 @@
-use prism::{network, blockdb, blockchain, miner::memory_pool, self};
 use prism::crypto::hash::H256;
-use prism::transaction::{Transaction, Input, Output};
+use prism::transaction::{Input, Output, Transaction};
+use prism::{self, blockchain, blockdb, miner::memory_pool, network};
 use std::sync::{Arc, Mutex};
 
 const NUM_VOTER_CHAINS: u16 = 3;
@@ -22,7 +22,8 @@ fn self_mining() {
     let peer_port = 12345;
     let peer_addr = std::net::SocketAddr::new(peer_ip, peer_port);
 
-    let (server, miner, mut wallet) = prism::start(peer_addr, &blockdb, &blockchain, &mempool).unwrap();
+    let (server, miner, mut wallet) =
+        prism::start(peer_addr, &blockdb, &blockchain, &mempool).unwrap();
 
     // insert a fake key into the wallet
     let our_addr: H256 = (&[0; 32]).into();
@@ -35,7 +36,7 @@ fn self_mining() {
             value: 1000000,
             recipient: our_addr,
         }],
-        signatures: vec![]
+        signatures: vec![],
     };
     wallet.add_transaction(&funding);
     assert_eq!(wallet.balance(), 1000000);

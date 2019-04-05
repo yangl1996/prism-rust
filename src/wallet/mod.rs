@@ -1,16 +1,15 @@
-use crate::crypto::hash::{H256, Hashable};
-use std::collections::{HashMap, HashSet};
-use crate::transaction::{Transaction, Input, Output};
-use crate::crypto::sign::{PubKey, SecKey, KeyPair, Signature};
+use crate::crypto::hash::{Hashable, H256};
+use crate::crypto::sign::{KeyPair, PubKey, SecKey, Signature};
+use crate::miner::memory_pool::MemoryPool;
 use crate::miner::miner::ContextUpdateSignal;
+use crate::transaction::{Input, Output, Transaction};
+use log::{error, info};
+use std::collections::{HashMap, HashSet};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
-use crate::miner::memory_pool::MemoryPool;
-use log::{error, info};
-
 
 #[derive(Clone, Hash, PartialEq, Eq)]
-pub struct Coin  {
+pub struct Coin {
     /// The "outpoint" of a transaction, identified by a transaction hash and an index
     input: Input,
     output: Output,
@@ -28,8 +27,10 @@ pub struct Wallet {
 }
 
 impl Wallet {
-    pub fn new(mempool: &Arc<Mutex<MemoryPool>>,
-               ctx_update_sink: mpsc::Sender<ContextUpdateSignal>) -> Self {
+    pub fn new(
+        mempool: &Arc<Mutex<MemoryPool>>,
+        ctx_update_sink: mpsc::Sender<ContextUpdateSignal>,
+    ) -> Self {
         return Self {
             coins: HashSet::new(),
             keys: HashMap::new(),
@@ -77,19 +78,20 @@ impl Wallet {
 
     /// create a transaction using the wallet coins
     fn create_transaction(&mut self, recipient: H256, value: u64) -> Option<Transaction> {
-        let mut coins: Vec<Coin>= vec![];
+        let mut coins: Vec<Coin> = vec![];
         let mut value_sum = 0u64;
 
         // iterate thru our wallet
-        for coin in self.coins.iter().cloned() {    // TODO: can we remove cloned here?
+        for coin in self.coins.iter().cloned() {
+            // TODO: can we remove cloned here?
             value_sum += coin.output.value;
-            coins.push(coin.clone());   // coins that will be used for this transaction
+            coins.push(coin.clone()); // coins that will be used for this transaction
 
             if value_sum >= value {
                 // if we have enough money in our wallet, create tx
                 // first, create transaction inputs
-                let mut input: Vec<Input>  = vec![];
-                let mut signatures: Vec<Signature>  = vec![];
+                let mut input: Vec<Input> = vec![];
+                let mut signatures: Vec<Signature> = vec![];
 
                 for used_coin in coins {
                     input.push(coin.input.clone());
@@ -97,14 +99,17 @@ impl Wallet {
                 }
 
                 // create the output
-                let mut output = vec![Output {recipient, value}];
+                let mut output = vec![Output { recipient, value }];
                 if value_sum > value {
                     // transfer the remaining value back to ourself
                     let recipient: H256 = match self.keys.keys().next() {
-                        Some(&x) => x ,
+                        Some(&x) => x,
                         None => panic!("The wallet has no keys"),
                     };
-                    output.push(Output{recipient, value: value_sum - value})
+                    output.push(Output {
+                        recipient,
+                        value: value_sum - value,
+                    })
                 }
 
                 // TODO: sign the transaction
@@ -131,7 +136,8 @@ impl Wallet {
         let mut mempool = self.mempool.lock().unwrap();
         mempool.insert(txn);
         drop(mempool);
-        self.context_update_chan.send(ContextUpdateSignal::NewContent);
+        self.context_update_chan
+            .send(ContextUpdateSignal::NewContent);
         return;
     }
 }

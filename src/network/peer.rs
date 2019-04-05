@@ -2,8 +2,8 @@ use super::message;
 use byteorder::{BigEndian, ByteOrder};
 use log::{debug, error, info, trace, warn};
 use mio::{self, net};
-use std::io::{Read, Write};
 use mio_extras::channel;
+use std::io::{Read, Write};
 use std::sync::mpsc;
 
 enum DecodeState {
@@ -27,7 +27,9 @@ pub struct ReadContext {
 
 impl ReadContext {
     pub fn read(&mut self) -> std::io::Result<ReadResult> {
-        let bytes_read = self.reader.read(&mut self.buffer[self.read_length..self.msg_length]);
+        let bytes_read = self
+            .reader
+            .read(&mut self.buffer[self.read_length..self.msg_length]);
         match bytes_read {
             Ok(0) => {
                 return Ok(ReadResult::EOF);
@@ -100,10 +102,11 @@ impl WriteContext {
                         self.written_length = 0;
                         self.state = WriteState::Payload;
                         continue;
-                    }
-                    else {
+                    } else {
                         // we are still sending the length part
-                        let written = self.writer.write(&self.len_buffer[self.written_length..std::mem::size_of::<u32>()])?;
+                        let written = self.writer.write(
+                            &self.len_buffer[self.written_length..std::mem::size_of::<u32>()],
+                        )?;
                         if written == 0 {
                             return Ok(WriteResult::EOF);
                         }
@@ -118,12 +121,12 @@ impl WriteContext {
                         self.writer.flush();
                         let msg = match self.queue.try_recv() {
                             Ok(msg) => msg,
-                            Err(e) => {
-                                match e {
-                                    mpsc::TryRecvError::Empty => return Ok(WriteResult::Complete),
-                                    mpsc::TryRecvError::Disconnected => return Ok(WriteResult::ChanClosed),
+                            Err(e) => match e {
+                                mpsc::TryRecvError::Empty => return Ok(WriteResult::Complete),
+                                mpsc::TryRecvError::Disconnected => {
+                                    return Ok(WriteResult::ChanClosed);
                                 }
-                            }
+                            },
                         };
 
                         // encode the message and the length
@@ -133,10 +136,11 @@ impl WriteContext {
                         self.written_length = 0;
                         self.state = WriteState::Length;
                         continue;
-                    }
-                    else {
+                    } else {
                         // we are still sending the payload
-                        let written = self.writer.write(&self.msg_buffer[self.written_length..self.msg_length])?;
+                        let written = self
+                            .writer
+                            .write(&self.msg_buffer[self.written_length..self.msg_length])?;
                         if written == 0 {
                             return Ok(WriteResult::EOF);
                         }
@@ -195,7 +199,7 @@ pub struct Context {
 
 #[derive(Clone)]
 pub struct Handle {
-    write_queue: channel::Sender<message::Message>
+    write_queue: channel::Sender<message::Message>,
 }
 
 impl Handle {
