@@ -1,6 +1,6 @@
-use crate::transaction::Transaction;
-use crate::miner::memory_pool::MemoryPool;
 use crate::crypto::hash::Hashable;
+use crate::miner::memory_pool::MemoryPool;
+use crate::transaction::Transaction;
 use std::sync::Mutex;
 
 pub fn new_transaction(transaction: Transaction, mempool: &Mutex<MemoryPool>) {
@@ -9,4 +9,3 @@ pub fn new_transaction(transaction: Transaction, mempool: &Mutex<MemoryPool>) {
     mempool.insert(transaction);
     drop(mempool);
 }
-

@@ -1,12 +1,12 @@
-use std::sync::{mpsc, Mutex, Arc};
-use log::{debug, error, info, trace, warn};
 use super::message::{self, Message};
 use super::peer;
-use std::thread;
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
 use crate::miner::memory_pool::MemoryPool;
 use crate::miner::miner::ContextUpdateSignal;
+use log::{debug, error, info, trace, warn};
+use std::sync::{mpsc, Arc, Mutex};
+use std::thread;
 
 #[derive(Clone)]
 pub struct Context {
@@ -18,12 +18,14 @@ pub struct Context {
     context_update_chan: mpsc::Sender<ContextUpdateSignal>,
 }
 
-pub fn new(num_worker: usize,
-           msg_src: mpsc::Receiver<(message::Message, peer::Handle)>,
-           blockchain: &Arc<Mutex<BlockChain>>,
-           blockdb: &Arc<BlockDatabase>,
-           mempool: &Arc<Mutex<MemoryPool>>,
-           ctx_update_sink: mpsc::Sender<ContextUpdateSignal>) -> Context {
+pub fn new(
+    num_worker: usize,
+    msg_src: mpsc::Receiver<(message::Message, peer::Handle)>,
+    blockchain: &Arc<Mutex<BlockChain>>,
+    blockdb: &Arc<BlockDatabase>,
+    mempool: &Arc<Mutex<MemoryPool>>,
+    ctx_update_sink: mpsc::Sender<ContextUpdateSignal>,
+) -> Context {
     let ctx = Context {
         msg_chan: Arc::new(Mutex::new(msg_src)),
         num_worker: num_worker,
@@ -56,7 +58,7 @@ impl Context {
                 Message::Ping(nonce) => {
                     info!("Ping: {}", nonce);
                     peer.write(Message::Pong(nonce.to_string()));
-                },
+                }
                 Message::Pong(nonce) => {
                     info!("Pong: {}", nonce);
                 }

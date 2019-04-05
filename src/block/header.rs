@@ -2,7 +2,7 @@ use crate::crypto::hash::{Hashable, H256};
 // TODO: Add the address of the miner
 
 #[derive(Serialize, Deserialize, Clone, Debug, Hash, Copy)]
-pub struct Header{
+pub struct Header {
     /// Hash of the parent proposer block. Every block has a parent proposer block.
     pub parent_hash: H256,
     /// Block creation time.
@@ -17,14 +17,26 @@ pub struct Header{
     pub difficulty: [u8; 32],
 }
 
-impl Header{
+impl Header {
     /// Create a new block header
-    pub fn new(parent_hash: H256, timestamp: u64, nonce: u32, content_root: H256,
-               extra_content: [u8; 32], difficulty: [u8; 32] ) -> Self{
-        Self {parent_hash, timestamp, nonce, content_root, extra_content, difficulty}
+    pub fn new(
+        parent_hash: H256,
+        timestamp: u64,
+        nonce: u32,
+        content_root: H256,
+        extra_content: [u8; 32],
+        difficulty: [u8; 32],
+    ) -> Self {
+        Self {
+            parent_hash,
+            timestamp,
+            nonce,
+            content_root,
+            extra_content,
+            difficulty,
+        }
     }
 }
-
 
 impl Hashable for Header {
     fn hash(&self) -> H256 {
@@ -36,17 +48,21 @@ impl Hashable for Header {
 
 impl std::fmt::Display for Header {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "parent_hash: {}; timestamp: {}; self_hash: {}",
-               self.parent_hash, self.timestamp, self.hash())?; // Ignoring status for now
+        write!(
+            f,
+            "parent_hash: {}; timestamp: {}; self_hash: {}",
+            self.parent_hash,
+            self.timestamp,
+            self.hash()
+        )?; // Ignoring status for now
         Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::crypto::hash::{Hashable, H256};
     use super::super::test_util;
-
+    use crate::crypto::hash::{Hashable, H256};
 
     ///The hash should match
     #[test]
@@ -58,17 +74,17 @@ mod tests {
 
     /// Any changes to the header should change the hash value.
     #[test]
-    fn fake_parent(){
+    fn fake_parent() {
         let mut header = test_util::sample_header();
         let header_hash_should_be = test_util::sample_header_hash_should_be();
-        let fake_parent_hash: H256 = (&hex!(
-            "0102010201020102010201020102010291790343908920102010201020102454" )).into();
+        let fake_parent_hash: H256 =
+            (&hex!("0102010201020102010201020102010291790343908920102010201020102454")).into();
         header.parent_hash = fake_parent_hash;
         assert_ne!(header.hash(), header_hash_should_be);
     }
 
     #[test]
-    fn fake_timestamp(){
+    fn fake_timestamp() {
         let mut header = test_util::sample_header();
         let header_hash_should_be = test_util::sample_header_hash_should_be();
         let fake_timestamp: u64 = 73948732;
@@ -77,7 +93,7 @@ mod tests {
     }
 
     #[test]
-    fn fake_nonce(){
+    fn fake_nonce() {
         let mut header = test_util::sample_header();
         let header_hash_should_be = test_util::sample_header_hash_should_be();
         let fake_nonce: u32 = 209830934;
@@ -86,29 +102,35 @@ mod tests {
     }
 
     #[test]
-    fn fake_content_root(){
+    fn fake_content_root() {
         let mut header = test_util::sample_header();
         let header_hash_should_be = test_util::sample_header_hash_should_be();
-        let fake_content_root: H256 = (&hex!(
-            "beefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeef" )).into();
+        let fake_content_root: H256 =
+            (&hex!("beefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeef")).into();
         header.content_root = fake_content_root;
         assert_ne!(header.hash(), header_hash_should_be);
     }
 
     #[test]
-    fn fake_extra_content(){
+    fn fake_extra_content() {
         let mut header = test_util::sample_header();
         let header_hash_should_be = test_util::sample_header_hash_should_be();
-        let fake_extra_content: [u8; 32] = [1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, ];
+        let fake_extra_content: [u8; 32] = [
+            1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 1,
+        ];
         header.extra_content = fake_extra_content;
         assert_ne!(header.hash(), header_hash_should_be);
     }
 
     #[test]
-    fn fake_difficulty(){
+    fn fake_difficulty() {
         let mut header = test_util::sample_header();
         let header_hash_should_be = test_util::sample_header_hash_should_be();
-        let fake_difficulty: [u8; 32] = [1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, ];
+        let fake_difficulty: [u8; 32] = [
+            1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 1,
+        ];
         header.difficulty = fake_difficulty;
         assert_ne!(header.hash(), header_hash_should_be);
     }

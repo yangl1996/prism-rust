@@ -5,27 +5,34 @@ extern crate hex_literal;
 #[macro_use]
 extern crate clap;
 
-pub mod crypto;
-pub mod transaction;
-pub mod network;
 pub mod block;
-pub mod state;
 pub mod blockchain;
-pub mod miner;
-pub mod validation;
-pub mod config;
 pub mod blockdb;
-pub mod wallet;
+pub mod config;
+pub mod crypto;
 pub mod handler;
+pub mod miner;
+pub mod network;
+pub mod state;
+pub mod transaction;
+pub mod validation;
+pub mod wallet;
 
-use blockdb::BlockDatabase;
 use blockchain::BlockChain;
+use blockdb::BlockDatabase;
 use miner::memory_pool::MemoryPool;
-use std::sync::{Mutex, mpsc, Arc};
+use std::sync::{mpsc, Arc, Mutex};
 
-pub fn start(addr: std::net::SocketAddr, blockdb: &Arc<BlockDatabase>, 
-             blockchain: &Arc<Mutex<BlockChain>>,
-             mempool: &Arc<Mutex<MemoryPool>>) -> std::io::Result<(network::server::Handle, miner::miner::Handle, wallet::Wallet)> {
+pub fn start(
+    addr: std::net::SocketAddr,
+    blockdb: &Arc<BlockDatabase>,
+    blockchain: &Arc<Mutex<BlockChain>>,
+    mempool: &Arc<Mutex<MemoryPool>>,
+) -> std::io::Result<(
+    network::server::Handle,
+    miner::miner::Handle,
+    wallet::Wallet,
+)> {
     // create channels between server and worker, worker and miner, miner and worker
     let (msg_sink, msg_source) = mpsc::channel();
     let (ctx_update_sink, ctx_update_source) = mpsc::channel();

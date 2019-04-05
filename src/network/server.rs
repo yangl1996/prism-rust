@@ -3,15 +3,18 @@ use super::peer::{self, ReadResult, WriteResult};
 use byteorder::{BigEndian, ByteOrder};
 use log::{debug, error, info, trace, warn};
 use mio::{self, net};
-use std::io::{Read, Write};
-use std::thread;
 use mio_extras::channel;
+use std::io::{Read, Write};
 use std::sync::mpsc;
+use std::thread;
 
 const MAX_INCOMING_CLIENT: usize = 256;
 const MAX_EVENT: usize = 1024;
 
-pub fn new(addr: std::net::SocketAddr, msg_sink: mpsc::Sender<(message::Message, peer::Handle)>) -> std::io::Result<(Context, Handle)> {
+pub fn new(
+    addr: std::net::SocketAddr,
+    msg_sink: mpsc::Sender<(message::Message, peer::Handle)>,
+) -> std::io::Result<(Context, Handle)> {
     let (connect_req_sender, connect_req_receiver) = channel::channel();
     let ctx = Context {
         peers: slab::Slab::new(),
@@ -45,7 +48,7 @@ impl Context {
         });
         return Ok(());
     }
-    
+
     /// Register a TCP stream in the event loop, and initialize peer context.
     fn register(&mut self, stream: net::TcpStream) -> std::io::Result<peer::Handle> {
         // get a new slot in the connection set
@@ -99,7 +102,7 @@ impl Context {
         let server = net::TcpListener::bind(&self.addr)?;
 
         // token for server new connection event
-        const INCOMING: mio::Token = mio::Token(std::usize::MAX - 1); 
+        const INCOMING: mio::Token = mio::Token(std::usize::MAX - 1);
         self.poll.register(
             &server,
             INCOMING,
@@ -138,15 +141,13 @@ impl Context {
                                     let handle = self.connect(&req.addr)?;
                                     req.result_chan.send(Ok(handle)).unwrap();
                                 }
-                                Err(e) => {
-                                    match e {
-                                        mpsc::TryRecvError::Empty => break,
-                                        mpsc::TryRecvError::Disconnected => {
-                                            self.poll.deregister(&self.connect_req_chan)?;
-                                            break;
-                                        }
+                                Err(e) => match e {
+                                    mpsc::TryRecvError::Empty => break,
+                                    mpsc::TryRecvError::Disconnected => {
+                                        self.poll.deregister(&self.connect_req_chan)?;
+                                        break;
                                     }
-                                }
+                                },
                             }
                         }
                     }
@@ -235,7 +236,7 @@ impl Context {
                                                 &peer.stream,
                                                 socket_token,
                                                 mio::Ready::readable(),
-                                                mio::PollOpt::edge()
+                                                mio::PollOpt::edge(),
                                             )?;
                                             // we're interested in write queue again.
                                             self.poll.reregister(
@@ -250,7 +251,7 @@ impl Context {
                                             // EOF, remove it from the connections set
                                             info!("Peer {} dropped connection", peer.addr);
                                             self.peers.remove(peer_id);
-                                            continue;   // continue event loop
+                                            continue; // continue event loop
                                         }
                                         Ok(WriteResult::ChanClosed) => {
                                             // the channel is closed. no more writes.
@@ -259,7 +260,7 @@ impl Context {
                                                 &peer.stream,
                                                 socket_token,
                                                 mio::Ready::readable(),
-                                                mio::PollOpt::edge()
+                                                mio::PollOpt::edge(),
                                             )?;
                                             self.poll.deregister(&peer.writer.queue)?;
                                             continue;
@@ -267,7 +268,7 @@ impl Context {
                                         Err(e) => {
                                             if e.kind() == std::io::ErrorKind::WouldBlock {
                                                 // socket is not ready anymore, stop reading
-                                                continue;   // continue event loop
+                                                continue; // continue event loop
                                             } else {
                                                 warn!(
                                                     "Error writing peer {}, disconnecting: {}",
@@ -275,7 +276,7 @@ impl Context {
                                                 );
                                                 // TODO: we did not shutdown the stream. Cool?
                                                 self.peers.remove(peer_id);
-                                                continue;   // continue event loop
+                                                continue; // continue event loop
                                             }
                                         }
                                     }
@@ -290,10 +291,10 @@ impl Context {
                                     &peer.stream,
                                     socket_token,
                                     mio::Ready::readable() | mio::Ready::writable(),
-                                    mio::PollOpt::edge()
+                                    mio::PollOpt::edge(),
                                 )?;
                             }
-                            _ => panic!()
+                            _ => panic!(),
                         }
                     }
                 }
@@ -305,7 +306,7 @@ impl Context {
 }
 
 pub struct Handle {
-    connect_req_chan: channel::Sender<ConnectRequest>
+    connect_req_chan: channel::Sender<ConnectRequest>,
 }
 
 impl Handle {
@@ -320,8 +321,7 @@ impl Handle {
     }
 }
 
-
 struct ConnectRequest {
     addr: std::net::SocketAddr,
-    result_chan: mpsc::Sender<std::io::Result<peer::Handle>>
+    result_chan: mpsc::Sender<std::io::Result<peer::Handle>>,
 }

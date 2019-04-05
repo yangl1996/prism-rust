@@ -16,7 +16,10 @@ impl<'a, T: Hashable> MerkleTree<'a, T> {
         // todo: Added by Vivek. Lei check this
         // What default behaviour do we want?
         if this_layer_size == 0 {
-            return Self {data: data, nodes: vec![]};
+            return Self {
+                data: data,
+                nodes: vec![],
+            };
         }
         let mut layer_size = vec![]; // size after dup
         let mut data_size = vec![]; // size before dup
@@ -77,8 +80,7 @@ impl<'a, T: Hashable> MerkleTree<'a, T> {
     pub fn root(&self) -> H256 {
         if self.nodes.len() == 0 {
             return (&[0; 32]).into();
-        }
-        else {
+        } else {
             return self.nodes[0];
         }
     }
@@ -111,42 +113,27 @@ impl<'a, T: Hashable> MerkleTree<'a, T> {
 
     /// Returns the Merkle Proof of data at index i
     /// todo: Lei check this
-    pub fn get_proof_from_index(&self, index: u32)  -> Vec<H256> {
+    pub fn get_proof_from_index(&self, index: u32) -> Vec<H256> {
         // TODO: inefficient
         return self.proof(&self.data[index as usize]);
     }
-
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::hash;
+    use super::*;
 
     macro_rules! gen_merkle_tree_data {
         () => {{
             vec![
-                (&hex!(
-                    "0a0b0c0d0e0f0e0d0a0b0c0d0e0f0e0d0a0b0c0d0e0f0e0d0a0b0c0d0e0f0e0d"
-                )).into(),
-                (&hex!(
-                    "0102010201020102010201020102010201020102010201020102010201020102"
-                )).into(),
-                (&hex!(
-                    "0a0a0a0a0b0b0b0b0a0a0a0a0b0b0b0b0a0a0a0a0b0b0b0b0a0a0a0a0b0b0b0b"
-                )).into(),
-                (&hex!(
-                    "0403020108070605040302010807060504030201080706050403020108070605"
-                )).into(),
-                (&hex!(
-                    "1a2a3a4a1a2a3a4a1a2a3a4a1a2a3a4a1a2a3a4a1a2a3a4a1a2a3a4a1a2a3a4a"
-                )).into(),
-                (&hex!(
-                    "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
-                )).into(),
-                (&hex!(
-                    "0000000100000001000000010000000100000001000000010000000100000001"
-                )).into(),
+                (&hex!("0a0b0c0d0e0f0e0d0a0b0c0d0e0f0e0d0a0b0c0d0e0f0e0d0a0b0c0d0e0f0e0d")).into(),
+                (&hex!("0102010201020102010201020102010201020102010201020102010201020102")).into(),
+                (&hex!("0a0a0a0a0b0b0b0b0a0a0a0a0b0b0b0b0a0a0a0a0b0b0b0b0a0a0a0a0b0b0b0b")).into(),
+                (&hex!("0403020108070605040302010807060504030201080706050403020108070605")).into(),
+                (&hex!("1a2a3a4a1a2a3a4a1a2a3a4a1a2a3a4a1a2a3a4a1a2a3a4a1a2a3a4a1a2a3a4a")).into(),
+                (&hex!("deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")).into(),
+                (&hex!("0000000100000001000000010000000100000001000000010000000100000001")).into(),
             ]
         }};
     }
@@ -158,15 +145,11 @@ mod tests {
         assert_eq!(merkle_tree.nodes.len(), 15);
         assert_eq!(
             merkle_tree.nodes[0],
-            (&hex!(
-                "9d8f0638fa3d46f618dea970df55b53a02f4aa924e8d598af6b5f296fdaabce5"
-            )).into()
+            (&hex!("9d8f0638fa3d46f618dea970df55b53a02f4aa924e8d598af6b5f296fdaabce5")).into()
         );
         assert_eq!(
             merkle_tree.nodes[13],
-            (&hex!(
-                "b8027a4fc86778e60f636c12e67d03b7356f1d6d8a8ff486bcdaa3dcf81b714b"
-            )).into()
+            (&hex!("b8027a4fc86778e60f636c12e67d03b7356f1d6d8a8ff486bcdaa3dcf81b714b")).into()
         );
     }
 
@@ -177,9 +160,7 @@ mod tests {
         let root = merkle_tree.root();
         assert_eq!(
             root,
-            (&hex!(
-                "9d8f0638fa3d46f618dea970df55b53a02f4aa924e8d598af6b5f296fdaabce5"
-            )).into()
+            (&hex!("9d8f0638fa3d46f618dea970df55b53a02f4aa924e8d598af6b5f296fdaabce5")).into()
         );
     }
 
