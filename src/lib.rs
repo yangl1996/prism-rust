@@ -16,7 +16,7 @@ pub mod validation;
 pub mod config;
 pub mod blockdb;
 pub mod wallet;
-pub mod rule;
+pub mod handler;
 
 use blockdb::BlockDatabase;
 use blockchain::BlockChain;
