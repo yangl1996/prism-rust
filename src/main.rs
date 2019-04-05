@@ -72,7 +72,7 @@ fn main() {
 
     // init server and miner
     debug!("Starting P2P server at {}", peer_socket_addr);
-    let (server, miner) = prism::start(peer_socket_addr, &blockdb, &blockchain, &mempool).unwrap();
+    let (server, miner, wallet) = prism::start(peer_socket_addr, &blockdb, &blockchain, &mempool).unwrap();
 
     // connect to known peers
     if let Some(known_peers) = matches.values_of("known_peer") {
