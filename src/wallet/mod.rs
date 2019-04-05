@@ -2,6 +2,11 @@ use crate::crypto::hash::{H256, Hashable};
 use std::collections::{HashMap, HashSet};
 use crate::transaction::{Transaction, Input, Output};
 use crate::crypto::sign::{PubKey, SecKey, KeyPair, Signature};
+use crate::miner::miner::ContextUpdateSignal;
+use std::sync::mpsc;
+use std::sync::{Arc, Mutex};
+use crate::miner::memory_pool::MemoryPool;
+use log::{error, info};
 
 
 #[derive(Clone, Hash, PartialEq, Eq)]
@@ -15,14 +20,21 @@ pub struct Wallet {
     /// List of coins which can be spent
     coins: HashSet<Coin>,
     /// List of user keys
-    keys: HashMap<H256, KeyPair>
+    keys: HashMap<H256, KeyPair>,
+    /// Channel to notify the miner about context update
+    context_update_chan: mpsc::Sender<ContextUpdateSignal>,
+    /// Pool of unmined transactions
+    mempool: Arc<Mutex<MemoryPool>>,
 }
 
 impl Wallet {
-    pub fn new() -> Self {
+    pub fn new(mempool: &Arc<Mutex<MemoryPool>>,
+               ctx_update_sink: mpsc::Sender<ContextUpdateSignal>) -> Self {
         return Self {
             coins: HashSet::new(),
-            keys: HashMap::new()
+            keys: HashMap::new(),
+            context_update_chan: ctx_update_sink,
+            mempool: Arc::clone(mempool),
         };
     }
 
@@ -65,7 +77,7 @@ impl Wallet {
     }
 
     /// create a transaction using the wallet coins
-    pub fn create_transaction(&mut self, recipient: H256, value: u64) -> Option<Transaction> {
+    fn create_transaction(&mut self, recipient: H256, value: u64) -> Option<Transaction> {
         let mut coins: Vec<Coin>= vec![];
         let mut value_sum = 0u64;
 
@@ -105,6 +117,23 @@ impl Wallet {
             }
         }
         return None;
+    }
+
+    pub fn send_coin(&mut self, recipient: H256, value: u64) {
+        let txn = self.create_transaction(recipient, value);
+        let txn = match txn {
+            Some(t) => t,
+            None => {
+                // TODO: error handling
+                error!("Insufficient wallet balance.");
+                return;
+            }
+        };
+        let mut mempool = self.mempool.lock().unwrap();
+        mempool.insert(txn);
+        drop(mempool);
+        self.context_update_chan.send(ContextUpdateSignal::NewContent);
+        return;
     }
 }
 
