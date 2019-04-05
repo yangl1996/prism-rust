@@ -7,7 +7,7 @@ use std::{fmt, cmp};
 
 /// A Prism transaction. A transaction takes a set of existing coins and transforms them into a set
 /// of output coins.
-#[derive(Serialize, Deserialize, Debug, Hash, Clone)]
+#[derive(Serialize, Deserialize, Debug, Hash, Clone, PartialEq, Eq)]
 pub struct Transaction {
     pub input: Vec<Input>,
     pub output: Vec<Output>,
@@ -39,7 +39,7 @@ pub struct Output {
     pub recipient: H256,
 }
 
-#[derive(Serialize, Deserialize, Debug, Hash, Clone)]
+#[derive(Serialize, Deserialize, Debug, Hash, Clone, PartialEq, Eq)]
 pub struct Signature {
     pub pubkey: sign::PubKey,
     pub signature: sign::Signature,

@@ -591,7 +591,7 @@ impl BlockChain {
     //The content for transaction blocks is maintained in the tx-mempool, not here.
 }
 
-/// Helper functions : Get proposer and node data
+/// Helper functions: Get proposer and node data
 impl BlockChain{
     fn prop_node_data(&self, hash: &H256 ) -> &ProposerNodeData{
         return &self.proposer_node_data[hash];
@@ -599,6 +599,40 @@ impl BlockChain{
 
     fn voter_node_data(&self, hash: &H256 ) -> &VoterNodeData{
         return &self.voter_node_data[hash];
+    }
+}
+
+/// Struct to hold blockchain data to be dumped
+#[derive(Serialize, Deserialize)]
+struct Dump {
+    edges: Vec<(H256, H256, Edge)>,
+    prop_nodes: Vec<Vec<H256>>,
+    leader_nodes: HashMap<u32, H256>,
+    voter_chain_best_blocks: Vec<H256>,
+    pool_unconfirmed: HashSet<H256>,
+    pool_ordered: Vec<H256>,
+    pool_unreferred: HashSet<H256>,
+    //proposer_node_data is a vec of (hash, level, status, votes)
+    proposer_node_data: Vec<(H256, u32, ProposerStatus, u16)>,
+    //voter_node_data is a vec of (hash, chain_num, level, status)
+    voter_node_data: Vec<(H256, u16, u32, VoterNodeStatus)>,
+}
+
+// for dump the blockchain
+impl BlockChain {
+    pub fn dump(&self) -> serde_json::Result<String> {
+        let edges: Vec<(H256, H256, Edge)> = self.graph.all_edges().map(|x| ( x.0 , x.1, x.2.to_owned()) ).collect();
+        let prop_nodes: Vec<Vec<H256>> = self.proposer_tree.prop_nodes.to_owned();
+        let leader_nodes: HashMap<u32, H256> = self.proposer_tree.leader_nodes.to_owned();
+        let voter_chain_best_blocks: Vec<H256> = self.voter_chains.iter().map(|chain|chain.best_block.to_owned()).collect();
+        let pool_unconfirmed: HashSet<H256> = self.tx_pool.unconfirmed.to_owned();
+        let pool_ordered: Vec<H256> = self.tx_pool.ordered.to_owned();
+        let pool_unreferred: HashSet<H256> = self.tx_pool.unreferred.to_owned();
+        let proposer_node_data: Vec<(H256, u32, ProposerStatus, u16)> = self.proposer_node_data.iter().map(|(k,v)|(k.to_owned(), v.level, v.leadership_status.to_owned(), v.votes)).collect();
+        let voter_node_data: Vec<(H256, u16, u32, VoterNodeStatus)> = self.voter_node_data.iter().map(|(k,v)|(k.to_owned(), v.chain_number, v.level, v.status.to_owned())).collect();
+        let dump = Dump {edges, prop_nodes, leader_nodes, voter_chain_best_blocks, pool_unconfirmed, pool_ordered, pool_unreferred, proposer_node_data, voter_node_data};
+        let ret = serde_json::to_string(&dump)?;
+        Ok(ret)
     }
 }
 
@@ -610,13 +644,13 @@ mod tests {
     use crate::block::{Block};
     use rand::{Rng, RngCore};
     use super::utils;
+    use crate::config::NUM_VOTER_CHAINS;
 
     // At initialization the blockchain only consists of (m+1) genesis blocks.
     // The hash of these genesis nodes in the blockchain graph are fixed for now
     // because we have designed the genesis blocks themselves.
     #[test]
     fn blockchain_initialization(){
-        pub const NUM_VOTER_CHAINS: u16 = 10;
         /// Initialize a blockchain with 10  voter chains.
         let mut blockchain = BlockChain::new(NUM_VOTER_CHAINS);
 
@@ -637,7 +671,6 @@ mod tests {
 
     #[test]
     fn blockchain_growing(){
-        pub const NUM_VOTER_CHAINS: u16 = 10;
         let mut rng = rand::thread_rng();
         /// Initialize a blockchain with 10 voter chains.
         let mut blockchain = BlockChain::new(NUM_VOTER_CHAINS);
@@ -1105,5 +1138,34 @@ mod tests {
         assert_eq!(prop_block4b.hash(), prop_block_5a_ref[4], "6");
         assert_eq!(prop_block4a.hash(), prop_block_5a_ref[5], "7");
         assert_eq!(prop_block5a.hash(), prop_block_5a_ref[6], "8");
+    }
+
+    #[test]
+    fn test_json() {
+        let mut rng = rand::thread_rng();
+        /// Initialize a blockchain with 10 voter chains.
+        let mut blockchain = BlockChain::new(NUM_VOTER_CHAINS);
+
+        /// Store the parent blocks to mine on voter trees.
+        let mut voter_best_blocks: Vec<H256> = blockchain.voter_chains.iter().map(|c| c.best_block).collect();
+        // Currently the voter genesis blocks.
+
+        /// Maintains the list of tx blocks.
+        let mut tx_block_vec: Vec<Block> = vec![];
+        let mut unreferred_tx_block_index = 0;
+
+        /// Mine 5 tx block's with prop_best_block as the parent
+        let tx_block_5: Vec<Block> = utils::test_tx_blocks_with_parent_hash(5, blockchain.proposer_tree.best_block);
+        tx_block_vec.extend(tx_block_5.iter().cloned());
+        /// Add the tx blocks to blockchain
+        for i in 0..5{ blockchain.insert_node(&tx_block_vec[i]); }
+        /// Generate a proposer block with prop_parent_block as the parent which referencing the above 5 tx blocks
+        let prop_block1 = utils::test_prop_block(blockchain.proposer_tree.best_block,
+                                                 tx_block_vec[0..5].iter().map( |x| x.hash()).collect(), vec![]);
+        /// Add the prop_block
+        blockchain.insert_node(&prop_block1);
+
+        let s = blockchain.dump().unwrap();
+        println!("{}", s);
     }
 }
