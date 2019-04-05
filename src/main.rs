@@ -12,6 +12,9 @@ use std::sync::Arc;
 
 use prism::network;
 use prism::blockdb;
+use prism::blockchain;
+use prism::miner::memory_pool;
+use prism::config::NUM_VOTER_CHAINS;
 
 const DEFAULT_IP: &str = "127.0.0.1";
 const DEFAULT_P2P_PORT: u16 = 6000;
@@ -34,14 +37,23 @@ fn main() {
     let verbosity = matches.occurrences_of("verbose") as usize;
     stderrlog::new().verbosity(verbosity).init().unwrap();
 
-    // init database
+    // init block database
     let blockdb_path = match matches.value_of("block_db") {
         Some(path) => std::path::Path::new(path),
         None => std::path::Path::new(&DEFAULT_BLOCKDB),
     };
-    let blockdb = blockdb::BlockDatabase::new(blockdb_path);
+    let blockdb = blockdb::BlockDatabase::new(blockdb_path).unwrap();
+    let blockdb = std::sync::Arc::new(blockdb);
 
-    // start p2p server
+    // init blockchain
+    let blockchain = blockchain::BlockChain::new(NUM_VOTER_CHAINS);
+    let blockchain = std::sync::Arc::new(std::sync::Mutex::new(blockchain));
+
+    // init mempool
+    let mempool = memory_pool::MemoryPool::new();
+    let mempool = std::sync::Arc::new(std::sync::Mutex::new(mempool));
+
+    // parse server ip and port
     let peer_ip = match matches.value_of("peer_ip") {
         Some(ip) => ip.parse::<net::IpAddr>().unwrap_or_else(|e| {
             error!("Error parsing P2P IP address: {}", e);
@@ -58,8 +70,9 @@ fn main() {
     };
     let peer_socket_addr = net::SocketAddr::new(peer_ip, peer_port);
 
+    // init server and miner
     debug!("Starting P2P server at {}", peer_socket_addr);
-    let server = network::start(peer_socket_addr).unwrap();
+    let (server, miner) = prism::start(peer_socket_addr, &blockdb, &blockchain, &mempool).unwrap();
 
     // connect to known peers
     if let Some(known_peers) = matches.values_of("known_peer") {

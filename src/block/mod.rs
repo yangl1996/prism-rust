@@ -1,5 +1,4 @@
 pub mod header;
-pub mod miner;
 pub mod transaction;
 pub mod proposer;
 pub mod voter;
@@ -7,6 +6,7 @@ pub mod generator;
 mod test_util;
 
 use crate::crypto::hash::{Hashable, H256};
+use crate::config::*;
 
 /// A block in the Prism blockchain.
 #[derive(Serialize, Deserialize, Debug, Hash, Clone)]
@@ -37,6 +37,18 @@ impl Block {
     /// Create a new block from header.
     pub fn from_header(header: header::Header, content: Content,  sortition_proof: Vec<H256>) -> Self {
         Self{header,content,sortition_proof}
+    }
+
+    pub fn get_block_type(&self) -> Option<u32> {
+        match &self.content {
+            Content::Transaction(c) => return Some(TRANSACTION_INDEX),
+            Content::Proposer(c) => return Some(PROPOSER_INDEX),
+            Content::Voter(c) => {
+                let chain_num: u32 = FIRST_VOTER_INDEX + (c.chain_number as u32);
+                return Some(chain_num);
+            }
+        }
+        return None;
     }
 }
 
@@ -73,7 +85,9 @@ impl Hashable for Content {
     }
 }
 
-
+impl Default for Content {
+    fn default() -> Self { Content::Transaction(transaction::Content::default()) }
+}
 
 #[cfg(test)]
 mod tests {
