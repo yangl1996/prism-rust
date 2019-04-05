@@ -14,9 +14,9 @@ pub const NUM_VOTER_CHAINS: u16 = 10;
 
 // Mining rates in percentages of the total mining rate
 // Total for the voter chains
-pub const VOTER_MINING_RATE: u32 = 10;
+pub const VOTER_MINING_RATE: u32 = 60;
 // Proposer tree
-pub const PROPOSER_MINING_RATE: u32 = 40;
+pub const PROPOSER_MINING_RATE: u32 = 20;
 // Transaction blocks
 pub const TRANSACTION_MINING_RATE: u32 =
     100 - PROPOSER_MINING_RATE - VOTER_MINING_RATE;

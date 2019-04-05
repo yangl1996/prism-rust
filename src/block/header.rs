@@ -36,7 +36,9 @@ impl Hashable for Header {
 
 impl std::fmt::Display for Header {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        unimplemented!();
+        write!(f, "parent_hash: {}; timestamp: {}; self_hash: {}",
+               self.parent_hash, self.timestamp, self.hash())?; // Ignoring status for now
+        Ok(())
     }
 }
 

@@ -61,7 +61,9 @@ impl Hashable for Block {
 
 impl std::fmt::Display for Block {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        unimplemented!();
+        write!(f, "hash: {}; type: {}",
+               self.header.hash(), self.content)?; // Ignoring status for now
+        Ok(())
     }
 }
 
@@ -85,6 +87,24 @@ impl Hashable for Content {
     }
 }
 
+impl std::fmt::Display for Content {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Content::Transaction(c) => {
+                write!(f, "Transaction block")?;
+                Ok(())
+            },
+            Content::Proposer(c) => {
+                write!(f, "Proposer block")?;
+                Ok(())
+            },
+            Content::Voter(c) => {
+                write!(f, "Voter block ({})", c.chain_number)?;
+                Ok(())
+            },
+        }
+    }
+}
 impl Default for Content {
     fn default() -> Self { Content::Transaction(transaction::Content::default()) }
 }
