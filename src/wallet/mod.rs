@@ -42,9 +42,8 @@ impl Wallet {
         unimplemented!();
     }
 
-    // only for test
-    pub fn set_key(&mut self, hash: H256) {
-        self.keys.clear();
+    pub fn add_key(&mut self, hash: H256) {
+        // TODO: this function does not take a real key for now
         self.keys.insert(hash, KeyPair::default());
     }
 
@@ -72,7 +71,7 @@ impl Wallet {
     }
 
     ///  Returns the sum of values of all the coin in the wallet
-    pub fn total_balance(&self) -> u64 {
+    pub fn balance(&self) -> u64 {
         self.coins.iter().map(|coin| coin.output.value).sum::<u64>()
     }
 

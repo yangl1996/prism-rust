@@ -647,7 +647,7 @@ impl BlockChain {
         let proposer_node_data: Vec<(H256, u32, ProposerStatus, u16)> = self.proposer_node_data.iter().map(|(k,v)|(k.to_owned(), v.level, v.leadership_status.to_owned(), v.votes)).collect();
         let voter_node_data: Vec<(H256, u16, u32, VoterNodeStatus)> = self.voter_node_data.iter().map(|(k,v)|(k.to_owned(), v.chain_number, v.level, v.status.to_owned())).collect();
         let dump = Dump {edges, prop_nodes, leader_nodes, voter_chain_best_blocks, pool_unconfirmed, pool_ordered, pool_unreferred, proposer_node_data, voter_node_data};
-        let ret = serde_json::to_string(&dump)?;
+        let ret = serde_json::to_string_pretty(&dump)?;
         Ok(ret)
     }
 }
