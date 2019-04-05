@@ -108,6 +108,7 @@ impl Wallet {
     }
 }
 
+/*
 #[cfg(test)]
 pub mod tests {
     use super::Wallet;
@@ -119,115 +120,115 @@ pub mod tests {
         let hash = crypto_generator::h256();
         let mut w = Wallet::new();
         w.set_key(hash.clone());
-//        w.(Input{hash: crypto_generator::h256(), index: 0}, Output{value: 10, recipient: crypto_generator::h256()});
+        w.(Input{hash: crypto_generator::h256(), index: 0}, Output{value: 10, recipient: crypto_generator::h256()});
         assert_eq!(w.total_balance(), 0);
-//        w.insert(Input{hash: crypto_generator::h256(), index: 0}, Output{value: 10, recipient: hash.clone()});
-//        assert_eq!(w.total_balance(), 10);
-//        assert_eq!(w.safe_balance(), 10);
+        w.insert(Input{hash: crypto_generator::h256(), index: 0}, Output{value: 10, recipient: hash.clone()});
+        assert_eq!(w.total_balance(), 10);
+        assert_eq!(w.safe_balance(), 10);
     }
 
-//    #[test]
-//    pub fn test_wallet_create() {
-//        let hash = crypto_generator::h256();
-//        let mut w = Wallet::new(hash.clone());
-//        // add 10*10 coins
-//        for i in 0..10 {
-//            w.insert(Input{hash: crypto_generator::h256(), index: 0}, Output{value: 10, recipient: hash.clone()});
-//        }
-//        assert_eq!(w.total_balance(), 100);
-//        let tx = w.create(crypto_generator::h256(), 29);
-//        //println!("{:?}", tx);
-//        if let Some(tx) = tx {
-//            // This transaction should be input(10,10,10) output(29,1)
-//            assert_eq!(tx.input.len(),3);
-//            assert_eq!(tx.output.len(),2);
-//        } else {
-//            panic!("transaction creation failed")
-//        }
-//
-//        assert!(w.create(crypto_generator::h256(), 10000).is_none());
-//    }
-//
-//    #[test]
-//    pub fn test_wallet_create_2() {
-//        let hash = crypto_generator::h256();
-//        let mut w = Wallet::new(hash.clone());
-//        // add 10*10 coins
-//        for i in 0..10 {
-//            w.insert(Input{hash: crypto_generator::h256(), index: 0}, Output{value: 10, recipient: hash.clone()});
-//        }
-//        assert_eq!(w.total_balance(), 100);
-//        // spend 5*20 coins
-//        for i in 0..5 {
-//            assert!(w.create(crypto_generator::h256(), 20).is_some());
-//        }
-//        // balance is still 100, but safe balance is 0
-//        assert_eq!(w.total_balance(), 100);
-//        assert_eq!(w.safe_balance(), 0);
-//        // but all coins are marked as used
-//        assert_eq!(w.by_used_outpoint.len(), 10);
-//        // but we can still create tx using unsafe coins
-//        assert!(w.create(crypto_generator::h256(), 1).is_some());
-//    }
-//
-//    #[test]
-//    pub fn test_wallet_create_3() {
-//        let hash = crypto_generator::h256();
-//        let mut w = Wallet::new(hash.clone());
-//        // add 10*10 coins
-//        for i in 0..10 {
-//            w.insert(Input{hash: crypto_generator::h256(), index: 0}, Output{value: 10, recipient: hash.clone()});
-//        }
-//        assert_eq!(w.total_balance(), 100);
-//        // spend 10*10 (although only 5 of 10) coins
-//        for i in 0..10 {
-//            assert!(w.create(crypto_generator::h256(), 5).is_some());
-//        }
-//        // balance is still 100, but safe balance is 0
-//        assert_eq!(w.total_balance(), 100);
-//        assert_eq!(w.safe_balance(), 0);
-//        // but all coins are marked as used
-//        assert_eq!(w.by_used_outpoint.len(), 10);
-//        // but we can still create tx using unsafe coins
-//        assert!(w.create(crypto_generator::h256(), 1).is_some());
-//    }
-//
-//    #[test]
-//    pub fn test_wallet_update_1() {
-//        let hash = crypto_generator::h256();
-//        let mut w = Wallet::new(hash.clone());
-//        // add 10*10 coins
-//        for i in 0..10 {
-//            w.insert(Input{hash: crypto_generator::h256(), index: 0}, Output{value: 10, recipient: hash.clone()});
-//        }
-//        assert_eq!(w.total_balance(), 100);
-//        // spend 5*20 coins
-//        for i in 0..5 {
-//            assert!(w.create_update(crypto_generator::h256(), 20).is_some());
-//        }
-//        // now no coin can be spent
-//        assert_eq!(w.total_balance(), 0);
-//        assert!(w.create(crypto_generator::h256(), 1).is_none());
-//
-//    }
-//
-//    #[test]
-//    pub fn test_wallet_update_2() {
-//        let hash = crypto_generator::h256();
-//        let mut w = Wallet::new(hash.clone());
-//        // add 10*10 coins
-//        for i in 0..10 {
-//            w.insert(Input{hash: crypto_generator::h256(), index: 0}, Output{value: 10, recipient: hash.clone()});
-//        }
-//        assert_eq!(w.total_balance(), 100);
-//        // spend 20*5 coins
-//        for i in 0..20 {
-//            assert!(w.create_update(crypto_generator::h256(), 5).is_some());
-//        }
-//        // now no coin can be spent
-//        assert_eq!(w.total_balance(), 0);
-//        assert!(w.create(crypto_generator::h256(), 1).is_none());
-//
-//    }
-}
+    #[test]
+    pub fn test_wallet_create() {
+        let hash = crypto_generator::h256();
+        let mut w = Wallet::new(hash.clone());
+        // add 10*10 coins
+        for i in 0..10 {
+            w.insert(Input{hash: crypto_generator::h256(), index: 0}, Output{value: 10, recipient: hash.clone()});
+        }
+        assert_eq!(w.total_balance(), 100);
+        let tx = w.create(crypto_generator::h256(), 29);
+        //println!("{:?}", tx);
+        if let Some(tx) = tx {
+            // This transaction should be input(10,10,10) output(29,1)
+            assert_eq!(tx.input.len(),3);
+            assert_eq!(tx.output.len(),2);
+        } else {
+            panic!("transaction creation failed")
+        }
 
+        assert!(w.create(crypto_generator::h256(), 10000).is_none());
+    }
+
+    #[test]
+    pub fn test_wallet_create_2() {
+        let hash = crypto_generator::h256();
+        let mut w = Wallet::new(hash.clone());
+        // add 10*10 coins
+        for i in 0..10 {
+            w.insert(Input{hash: crypto_generator::h256(), index: 0}, Output{value: 10, recipient: hash.clone()});
+        }
+        assert_eq!(w.total_balance(), 100);
+        // spend 5*20 coins
+        for i in 0..5 {
+            assert!(w.create(crypto_generator::h256(), 20).is_some());
+        }
+        // balance is still 100, but safe balance is 0
+        assert_eq!(w.total_balance(), 100);
+        assert_eq!(w.safe_balance(), 0);
+        // but all coins are marked as used
+        assert_eq!(w.by_used_outpoint.len(), 10);
+        // but we can still create tx using unsafe coins
+        assert!(w.create(crypto_generator::h256(), 1).is_some());
+    }
+
+    #[test]
+    pub fn test_wallet_create_3() {
+        let hash = crypto_generator::h256();
+        let mut w = Wallet::new(hash.clone());
+        // add 10*10 coins
+        for i in 0..10 {
+            w.insert(Input{hash: crypto_generator::h256(), index: 0}, Output{value: 10, recipient: hash.clone()});
+        }
+        assert_eq!(w.total_balance(), 100);
+        // spend 10*10 (although only 5 of 10) coins
+        for i in 0..10 {
+            assert!(w.create(crypto_generator::h256(), 5).is_some());
+        }
+        // balance is still 100, but safe balance is 0
+        assert_eq!(w.total_balance(), 100);
+        assert_eq!(w.safe_balance(), 0);
+        // but all coins are marked as used
+        assert_eq!(w.by_used_outpoint.len(), 10);
+        // but we can still create tx using unsafe coins
+        assert!(w.create(crypto_generator::h256(), 1).is_some());
+    }
+
+    #[test]
+    pub fn test_wallet_update_1() {
+        let hash = crypto_generator::h256();
+        let mut w = Wallet::new(hash.clone());
+        // add 10*10 coins
+        for i in 0..10 {
+            w.insert(Input{hash: crypto_generator::h256(), index: 0}, Output{value: 10, recipient: hash.clone()});
+        }
+        assert_eq!(w.total_balance(), 100);
+        // spend 5*20 coins
+        for i in 0..5 {
+            assert!(w.create_update(crypto_generator::h256(), 20).is_some());
+        }
+        // now no coin can be spent
+        assert_eq!(w.total_balance(), 0);
+        assert!(w.create(crypto_generator::h256(), 1).is_none());
+
+    }
+
+    #[test]
+    pub fn test_wallet_update_2() {
+        let hash = crypto_generator::h256();
+        let mut w = Wallet::new(hash.clone());
+        // add 10*10 coins
+        for i in 0..10 {
+            w.insert(Input{hash: crypto_generator::h256(), index: 0}, Output{value: 10, recipient: hash.clone()});
+        }
+        assert_eq!(w.total_balance(), 100);
+        // spend 20*5 coins
+        for i in 0..20 {
+            assert!(w.create_update(crypto_generator::h256(), 5).is_some());
+        }
+        // now no coin can be spent
+        assert_eq!(w.total_balance(), 0);
+        assert!(w.create(crypto_generator::h256(), 1).is_none());
+
+    }
+}
+*/
