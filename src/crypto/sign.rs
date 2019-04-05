@@ -1,7 +1,7 @@
 use byteorder::{BigEndian, ByteOrder};
 
 /// An Ed25519 signature.
-#[derive(Serialize, Deserialize, Hash, Clone)]
+#[derive(Serialize, Deserialize, Hash, Clone, Default, PartialEq, Eq)]
 pub struct Signature([u128; 4]); // big endian u512
 
 impl std::convert::From<&[u8; 64]> for Signature {
@@ -46,8 +46,8 @@ impl std::fmt::Debug for Signature {
 }
 
 /// An Ed25519 public key.
-#[derive(Serialize, Deserialize, Hash, Clone)]
-pub struct PubKey([u128; 2]); // big endian u256
+#[derive(Serialize, Deserialize, Hash, Clone, Default, PartialEq, Eq)]
+pub struct PubKey([u128; 2]); // big endian u256. TODO: Use Crypto
 
 impl std::convert::From<&[u8; 32]> for PubKey {
     fn from(input: &[u8; 32]) -> PubKey {
@@ -84,4 +84,14 @@ impl std::fmt::Debug for PubKey {
         }
         Ok(())
     }
+}
+
+#[derive(Serialize, Deserialize, Hash, Clone, Default, PartialEq, Eq)]
+pub struct SecKey([u128; 2]); // big endian u256.  TODO: Use Crypto
+
+
+#[derive(Default)]
+pub struct KeyPair {
+    secret: SecKey,
+    public: PubKey,
 }
