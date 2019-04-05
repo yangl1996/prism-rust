@@ -137,7 +137,7 @@ impl Chain{
     /// Returns a ordered list of proposer blocks to vote.
     pub fn get_unvoted_prop_blocks(&self) -> Vec<H256>{
         return (self.min_level_unvoted_proposer_block..=self.max_level_unvoted_proposer_block).
-                                map( |level| self.unvoted_proposer_blocks.get(&level).unwrap().clone()).collect();
+                                map( |level| self.unvoted_proposer_blocks[&level].clone()).collect();
     }
 }
 

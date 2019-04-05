@@ -4,7 +4,7 @@ Validation for proposer blocks
 
 use crate::block::{Block,Content};
 use crate::config::*;
-use crate::blockchain::{BlockChain,NUM_VOTER_CHAINS};
+use crate::blockchain::{BlockChain};
 use crate::crypto::hash::{Hashable,H256};
 
 

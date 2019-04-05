@@ -417,7 +417,7 @@ mod tests {
     #[test]
     fn sortition_id() {
         let tx_mempool = Arc::new(Mutex::new(MemoryPool::new()));
-        let blockchain = Arc::new(Mutex::new(BlockChain::new()));
+        let blockchain = Arc::new(Mutex::new(BlockChain::new(NUM_VOTER_CHAINS)));
         let db = Arc::new(BlockDatabase::new(
             &std::path::Path::new("/tmp/prism_miner_test_sortition.rocksdb")).unwrap());
         let (ctx_update_s, ctx_update_r) = channel();
