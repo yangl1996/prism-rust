@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<svg baseProfile="full" height="100%" version="1.1" width="100%" xmlns="http://www.w3.org/2000/svg" xmlns:ev="http://www.w3.org/2001/xml-events" xmlns:xlink="http://www.w3.org/1999/xlink"><defs><style type="text/css"><![CDATA[rect.Proposer {
+        fill:   #8FBAE1;
+        stroke: #000000;
+        stroke-width:0;
+    }]]></style><style type="text/css"><![CDATA[rect.ProposerLeader {
+        fill:   #8FBAE1;
+        stroke: #000000;
+        stroke-width:2;
+    }]]></style><marker id="ToProposerParent" markerHeight="10" markerUnits="strokeWidth" markerWidth="10" orient="auto" refX="0" refY="3"><path d="M0,0 L0,6 L10,3 z" fill="#000000" /></marker></defs><g class="Proposer"><title>Proposer Block: 0000000000000000000000000000000000000000000000000000000000000000,
+Leader: True,
+Votes: 10</title><rect class="ProposerLeader" height="30" rx="3" ry="3" width="70" x="20" y="0" /><text x="25" y="20">000000</text></g><g class="Proposer"><title>Proposer Block: 9FC6D3404996EC8E63DB2C0C8AEFB48400F0CC5792AF71BF0FD97E51DC3EC27F,
+Leader: True,
+Votes: 10,
+Proposer Parent: 0000000000000000000000000000000000000000000000000000000000000000</title><rect class="ProposerLeader" height="30" rx="3" ry="3" width="70" x="20" y="60" /><text x="25" y="80">9FC6D3</text></g><g class="Proposer"><title>Proposer Block: 8B9E32FA4DD9CCCFAC6F16BCAD6D203D38CFE63C6E8167DB43979F1A0ED1B6F2,
+Leader: True,
+Votes: 7,
+Proposer Parent: 9FC6D3404996EC8E63DB2C0C8AEFB48400F0CC5792AF71BF0FD97E51DC3EC27F</title><rect class="ProposerLeader" height="30" rx="3" ry="3" width="70" x="20" y="120" /><text x="25" y="140">8B9E32</text></g><g class="Proposer"><title>Proposer Block: FB4D0CCDB3006EE2B91704ECD281387B59ACD1F27D4B878D1DAF6F966E835F36,
+Leader: False,
+Votes: 3,
+Proposer Parent: 9FC6D3404996EC8E63DB2C0C8AEFB48400F0CC5792AF71BF0FD97E51DC3EC27F</title><rect class="Proposer" height="30" rx="3" ry="3" width="70" x="110" y="120" /><text x="115" y="140">FB4D0C</text></g><g class="Proposer"><title>Proposer Block: B44956E9E6C6159A5B817EED05B732B0D67BE51137FC2F2311B67628EF76FFD4,
+Leader: True,
+Votes: 10,
+Proposer Parent: 8B9E32FA4DD9CCCFAC6F16BCAD6D203D38CFE63C6E8167DB43979F1A0ED1B6F2</title><rect class="ProposerLeader" height="30" rx="3" ry="3" width="70" x="20" y="180" /><text x="25" y="200">B44956</text></g><g class="Proposer"><title>Proposer Block: 5D43636E1915E1A86FB22F4B05B96833995D430FD7AE08CD69BE52D0413AC33D,
+Leader: True,
+Votes: 10,
+Proposer Parent: B44956E9E6C6159A5B817EED05B732B0D67BE51137FC2F2311B67628EF76FFD4</title><rect class="ProposerLeader" height="30" rx="3" ry="3" width="70" x="20" y="240" /><text x="25" y="260">5D4363</text></g><g class="Proposer"><title>Proposer Block: 370810C638B385AA5F566DEE5B2A2163431C3D39D211CFF11C0BEDA0BDDD67F6,
+Leader: False,
+Votes: 0,
+Proposer Parent: 5D43636E1915E1A86FB22F4B05B96833995D430FD7AE08CD69BE52D0413AC33D</title><rect class="Proposer" height="30" rx="3" ry="3" width="70" x="20" y="300" /><text x="25" y="320">370810</text></g></svg>
