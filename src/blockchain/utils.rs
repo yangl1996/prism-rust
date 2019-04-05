@@ -15,9 +15,9 @@ use rand::{Rng, RngCore};
 use std::cmp::Ordering;
 use std::cmp;
 
-pub fn lcb_and_ucb_from_vote_depths(votes: Vec<u32>) -> (f32, f32) {
+pub fn lcb_from_vote_depths(votes: Vec<u32>) -> f32 {
     let answer: f32 = votes.len() as f32;
-    return (answer, answer); //todo: Apply the confirmation logic from the paper
+    return answer; //todo: Apply the confirmation logic from the paper
 }
 
 #[derive(Eq, PartialEq, Clone)]

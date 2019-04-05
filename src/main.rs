@@ -14,6 +14,7 @@ use prism::network;
 use prism::blockdb;
 use prism::blockchain;
 use prism::miner::memory_pool;
+use prism::config;
 
 const DEFAULT_IP: &str = "127.0.0.1";
 const DEFAULT_P2P_PORT: u16 = 6000;
@@ -45,7 +46,7 @@ fn main() {
     let blockdb = std::sync::Arc::new(blockdb);
 
     // init blockchain
-    let blockchain = blockchain::BlockChain::new();
+    let blockchain = blockchain::BlockChain::new(config::NUM_VOTER_CHAINS);
     let blockchain = std::sync::Arc::new(std::sync::Mutex::new(blockchain));
 
     // init mempool

@@ -1,7 +1,7 @@
 mod transaction;
 mod proposer;
 mod voter;
-mod utils;
+pub mod utils;
 mod edge;
 use super::block::{Block, Content};
 use super::crypto::hash::{Hashable, H256};
@@ -26,8 +26,6 @@ use petgraph::graphmap::GraphMap;
 use std::iter::FromIterator;
 use std::process;
 
-pub const NUM_VOTER_CHAINS: u16 = 10; // DONT CHANGE THIS TODO: put it into global config
-
 pub struct BlockChain{
     /// Graph structure of the blockchain/graph
     pub graph: GraphMap<H256, Edge, Directed>,
@@ -45,9 +43,9 @@ pub struct BlockChain{
 
 // Functions to edit the blockchain
 impl BlockChain {
-    /// Initialize the blockchain graph with genesis blocks.
-    pub fn new() -> Self {
-        // Initialize an empty objects
+    /// Initializing blockchain graph with genesis blocks.
+    pub fn new(num_voting_chains: u16) -> Self {
+        // Initializing an empty object
         let mut graph = GraphMap::<H256, Edge, Directed>::new();
         let mut proposer_tree = ProposerTree::default();
         let mut voter_chains: Vec<VoterChain> = vec![];
@@ -56,10 +54,9 @@ impl BlockChain {
         let mut voter_node_data = HashMap::<H256, VoterNodeData>::new();
 
         // 1. Proposer genesis block
-
-        // 1a. Add proposer genesis block to the graph
-        let proposer_genesis_node = ProposerNodeData::genesis(NUM_VOTER_CHAINS);
-        let proposer_hash_vec: [u8; 32] = [0; 32]; // TODO: Shift to a global config file
+        // 1a. Add proposer genesis block in the graph
+        let proposer_genesis_node = ProposerNodeData::genesis(num_voting_chains);
+        let proposer_hash_vec: [u8; 32] = [0; 32]; // TODO: Shift to a global config  file
         graph.add_node((&proposer_hash_vec).into());
         // Add metadata of the proposer genesis block to the hashmap
         proposer_node_data.insert((&proposer_hash_vec).into(), proposer_genesis_node);
@@ -71,8 +68,8 @@ impl BlockChain {
         proposer_tree.leader_nodes.insert(0, (&proposer_hash_vec).into());
 
         // 2. Voter geneses blocks
-        for chain_number in 0..(NUM_VOTER_CHAINS) {
-            // 2a. Add voter chain i genesis block to the graph
+        for chain_number in 0..(num_voting_chains) {
+            // 2a. Add voter chain i genesis block in the graph
             let voter_genesis_node = VoterNodeData::genesis(chain_number as u16);
             let b1 = ((chain_number + 1) >> 8) as u8;
             let b2 = (chain_number + 1) as u8;
@@ -102,15 +99,15 @@ impl BlockChain {
 
     // TODO: add a function to restore BlockChain from BlockDatabase
 
-    /// Add edges from `from` to `to` with type `edge_type`, and edge from `to` to `from` with the
-    /// corresponding reversed type.
+    // Add edges from `from` to `to` with type `edge_type`, and edge from `to` to `from` with the
+    // corresponding reversed type.
     fn insert_edge(&mut self, from: H256, to: H256, edge_type: Edge) {
-        self.graph.add_edge(to, from, edge_type.reverse_edge());
         self.graph.add_edge(from, to, edge_type);
+        self.graph.add_edge(to, from, edge_type.reverse_edge());
     }
     
-    /// Add a new block to the blockgraph. Note that all blocks referred by the new block must
-    /// already exist in the blockgraph.
+    // Add a new block to the blockgraph. Note that all blocks referred by the new block must
+    // already exist in the blockgraph.
     pub fn insert_node(&mut self, block: &Block) {
         let block_hash = block.hash();
         let parent_proposer_block_hash = block.header.parent_hash;
@@ -151,7 +148,7 @@ impl BlockChain {
 
                 // 4. Add the proposer block to the list of unvoted blocks on all voter chains.
                 let self_level = self.proposer_node_data[&parent_proposer_block_hash].level + 1;
-                for i in 0..NUM_VOTER_CHAINS{
+                for i in 0..self.voter_chains.len() {
                     self.voter_chains.get_mut(i as usize).unwrap().insert_unvoted(
                         self_level, block_hash);
                 }
@@ -223,6 +220,18 @@ impl BlockChain {
                     }
                 }
                 self.voter_node_data.insert(block_hash, voter_node_data);
+
+                // If the voter node was added on the main chain try confirming the latest unconfirmed level.
+                if voter_node_update == VoterNodeUpdateStatus::ExtendedMainChain{
+                    loop {
+                        let level = self.proposer_tree.continuous_leader_level + 1;
+                        self.confirm_leader_block_at_level(level);
+                        // Exit the loop if previous step did not increase "self.proposer_tree.continuous_leader_level"
+                        if level == self.proposer_tree.continuous_leader_level + 1 {
+                            break;
+                        }
+                    }
+                }
             },
         };
     }
@@ -276,42 +285,73 @@ impl BlockChain {
         if  voter_parent_nodes.len() == 1 { return voter_parent_nodes[0];}
         else {panic!("{} proposer parents for {}", voter_parent_nodes.len(), block_hash)}
     }
+
+    pub fn number_of_voting_chains(&self) -> u32 {
+        return self.voter_chains.len() as u32;
+    }
 }
 
 // Functions to generate the ledger. This uses the confirmation logic of Prism.
 impl BlockChain {
+    /// Returns the list of ordered tx blocks. This is the initial step of creating the full ledger.
+    pub fn get_ordered_tx_blocks(&self) -> &Vec<H256> {
+        return &self.tx_pool.ordered;
+    }
+
     /// Checks if there are sufficient votes to confirm leader block at the level.
     // TODO: This function should be called when the voter chain has collected sufficient votes on level.
     pub fn confirm_leader_block_at_level(&mut self, level: u32) {
+        if self.proposer_tree.prop_nodes.len() <= level as usize {
+            return; // Return if the level has no proposer blocks.
+        }
+
         if self.proposer_tree.leader_nodes.contains_key(&level) {
             return; // Return if the level already has leader block.
         }
+//        println!("Trying to confirm on level {}", level);
+        if !self.proposer_tree.all_votes.contains_key(&level) {
+            return
+        }
+        if self.proposer_tree.all_votes[&level] < self.number_of_voting_chains()/2 {
+            return ; // At least half the votes should come in
+        }
         let proposers_blocks: &Vec<H256> = &self.proposer_tree.prop_nodes[level as usize];
-        let mut lcb_proposer_votes: Vec<f32> = vec![];
-        let mut ucb_proposer_votes: Vec<f32> = vec![];
+        let mut lcb_proposer_votes: HashMap<H256, f32> = HashMap::<H256, f32>::new();
         let mut max_lcb_vote: f32 = -1.0;
         let mut max_lcb_vote_index: usize = 0;
+        // Stores the votes which can go to any block.
+        let mut left_over_votes: f32 = self.voter_chains.len() as f32;
 
-        // 1. Getting the range of votes on each proposer block
-        // todo: This seems inefficient. Also equal vote situation is not considered.
+        // 1. Getting the lcb of votes on each proposer block
+        // todo: This seems inefficient. Also equal votes situation is not considered.
         for (index, proposer) in proposers_blocks.iter().enumerate() {
-            let proposer_votes: Vec<u32> = self.get_vote_depths_on_proposer(*proposer);
-            let (lcb, ucb) = utils::lcb_and_ucb_from_vote_depths(proposer_votes);
-            lcb_proposer_votes.push(lcb);
-            ucb_proposer_votes.push(ucb);
+            let proposer_votes: Vec<u32> = self.get_vote_depths_on_proposer(proposer);
+            let lcb = utils::lcb_from_vote_depths(proposer_votes);
+            lcb_proposer_votes.insert(*proposer, lcb);
+            left_over_votes -= lcb;
             if max_lcb_vote < lcb {
-                max_lcb_vote = ucb;
+                max_lcb_vote = lcb;
                 max_lcb_vote_index = index;
             }
         }
 
-        // 1b. Checking if a proposer block has maximum votes
-        for index in 0..proposers_blocks.len() {
+        // Dont confirm if a private proposer block has a higher ucb.
+        if left_over_votes >= max_lcb_vote {
+            return;
+        }
+        // The fast confirmation can be done here
+        // Dont confirm  if another proposer block has a higher ucb.
+        for (index, proposer) in proposers_blocks.iter().enumerate() {
+            let ucb = lcb_proposer_votes[proposer] + left_over_votes;
             if index == max_lcb_vote_index { continue }
-            if ucb_proposer_votes[index] > max_lcb_vote {
+            if ucb >= max_lcb_vote {
                 return;
             }
         }
+
+//        println!("Confirmed block at level {} with {} votes cast", level, self.proposer_tree.all_votes[&level]);
+
+        // If the function enters here, it has confirmed the block at 'level'
 
         // 2a. Adding the leader block for the level
         let leader_block = proposers_blocks[max_lcb_vote_index];
@@ -334,9 +374,9 @@ impl BlockChain {
     }
 
     /// Return depths of voters of the given proposer block
-    pub fn get_vote_depths_on_proposer(&self, block_hash: H256) -> Vec<u32> {
-        if !self.proposer_node_data.contains_key(&block_hash) { panic!("The proposer block with hash {} doesn't exist", block_hash); }
-        let voter_ref_edges = self.graph.edges(block_hash).filter(|&x| *x.2 == Edge::VoterFromProposerVote || *x.2 == Edge::VoterFromProposerParentAndVote);
+    pub fn get_vote_depths_on_proposer(&self, block_hash: &H256) -> Vec<u32> {
+        if !self.proposer_node_data.contains_key(block_hash) { panic!("The proposer block with hash {} doesn't exist", block_hash); }
+        let voter_ref_edges = self.graph.edges(*block_hash).filter(|&x| *x.2 == Edge::VoterFromProposerVote || *x.2 == Edge::VoterFromProposerParentAndVote);
         let mut voter_ref_nodes: Vec<u32> = vec![];
         for edge in voter_ref_edges {
             let voter_block_hash = edge.1;
@@ -362,10 +402,10 @@ impl BlockChain {
             if self.proposer_tree.leader_nodes.contains_key(&l) {
                 self.proposer_tree.continuous_leader_level = l;
                 // The leader blocks upto level l - 1  is confirmed.
-                let leader_block_at_l = self.proposer_tree.leader_nodes.get(&l).unwrap();
+                let leader_block_at_l = self.proposer_tree.leader_nodes[&l];
 
                 // Step 1. Recursively order the referred notleader proposer blocks.
-                let to_confirm_proposer_blocks_ordered = self.get_all_parent_and_referred_notleader_unconfirmed_prop_blocks_ordered(*leader_block_at_l);
+                let to_confirm_proposer_blocks_ordered = self.get_all_parent_and_referred_notleader_unconfirmed_prop_blocks_ordered(leader_block_at_l);
                 // Step 2. Add the transactions blocks referred by these
                 for proposer_block in to_confirm_proposer_blocks_ordered.iter(){
                     // Confirming all the tx blocks referred.
@@ -375,7 +415,7 @@ impl BlockChain {
                         }
                     }
                     // Changing the status of these prop blocks.
-                    if *proposer_block != *leader_block_at_l {
+                    if *proposer_block != leader_block_at_l {
                         self.proposer_node_data.get_mut(proposer_block).unwrap().give_not_leader_confirmed_status();
                     }
                 }
@@ -408,7 +448,7 @@ impl BlockChain {
             //In case a block is already present in all_blocks, replace the previous
             //if the new position is better than the previous.
             if all_blocks.contains_key(&block.0) {
-                let old_effective_ordering = all_blocks.get(&block.0).unwrap();
+                let old_effective_ordering = &all_blocks[&block.0];
                 if new_effective_ordering < *old_effective_ordering{
                     all_blocks.remove(&block.0);
                 }
@@ -521,7 +561,7 @@ impl BlockChain {
 
     /// Return the best blocks on voter chain 'chain number'.
     pub fn get_voter_best_block(&self, chain_number: u16) -> H256 {
-        let voter_best_block: H256 = self.voter_chains.get(chain_number as usize).unwrap().best_block;
+        let voter_best_block: H256 = self.voter_chains[chain_number as usize].best_block;
         return voter_best_block;
     }
 
@@ -554,14 +594,13 @@ impl BlockChain {
 /// Helper functions : Get proposer and node data
 impl BlockChain{
     fn prop_node_data(&self, hash: &H256 ) -> &ProposerNodeData{
-        return self.proposer_node_data.get(hash).unwrap();
+        return &self.proposer_node_data[hash];
     }
 
     fn voter_node_data(&self, hash: &H256 ) -> &VoterNodeData{
-        return self.voter_node_data.get(hash).unwrap();
+        return &self.voter_node_data[hash];
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -577,8 +616,9 @@ mod tests {
     // because we have designed the genesis blocks themselves.
     #[test]
     fn blockchain_initialization(){
+        pub const NUM_VOTER_CHAINS: u16 = 10;
         /// Initialize a blockchain with 10  voter chains.
-        let blockchain = BlockChain::new();
+        let mut blockchain = BlockChain::new(NUM_VOTER_CHAINS);
 
         /// Checking proposer tree's genesis block hash
         let proposer_genesis_hash_shouldbe: [u8; 32] = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]; /// Hash vector of proposer genesis block. todo: Shift to a global config  file
@@ -597,9 +637,10 @@ mod tests {
 
     #[test]
     fn blockchain_growing(){
+        pub const NUM_VOTER_CHAINS: u16 = 10;
         let mut rng = rand::thread_rng();
         /// Initialize a blockchain with 10 voter chains.
-        let mut blockchain = BlockChain::new();
+        let mut blockchain = BlockChain::new(NUM_VOTER_CHAINS);
 
         /// Store the parent blocks to mine on voter trees.
         let mut voter_best_blocks: Vec<H256> = (0..NUM_VOTER_CHAINS).map( |i| blockchain.voter_chains[i as usize].best_block).collect();// Currently the voter genesis blocks.
@@ -690,7 +731,7 @@ mod tests {
         let prop_block2b_votes = blockchain.proposer_node_data[&prop_block2b.hash()].votes;
         assert_eq!(7, prop_block2a_votes, "prop block 2a should have 7 votes" );
         assert_eq!(3, prop_block2b_votes, "prop block 2b should have 3 votes" );
-        assert_eq!(10, blockchain.proposer_tree.all_votes[1].len(), "Level 2 total votes should have 10",);
+        assert_eq!(10, blockchain.proposer_tree.all_votes[&1], "Level 2 total votes should have 10",);
         assert_eq!(44, blockchain.graph.node_count(), "Expecting 44 nodes");
         assert_eq!(132, blockchain.graph.edge_count(), "Expecting 132 edges");
 
@@ -740,6 +781,8 @@ mod tests {
         assert_eq!(prop_block4.hash(), blockchain.proposer_tree.best_block, "Proposer best block");
         assert_eq!(58, blockchain.graph.node_count(), "Expecting 58 nodes");
         assert_eq!(186, blockchain.graph.edge_count(), "Expecting 186 edges");
+        // Checking the number of unconfirmed tx blocks 2 of prop2a, 4 from prop3, and 2 from prop4.
+        assert_eq!(8, blockchain.tx_pool.unconfirmed.len());
 
 
         println!("Step 10:  1-6 voter chains vote on prop4 and 6-10 voter blocks vote on prop3 and prop4" );
@@ -756,6 +799,10 @@ mod tests {
             blockchain.insert_node(&voter_block);
         }
 
+        // prop3 is confirmed. Unconfirmed tx blocks 2 from prop4.
+        assert_eq!(2, blockchain.tx_pool.unconfirmed.len());
+
+
         for i in 3..6{
             assert_eq!(1, blockchain.voter_chains[i as usize].get_unvoted_prop_blocks().len());
             assert_eq!(prop_block4.hash(), blockchain.voter_chains[i as usize].get_unvoted_prop_blocks()[0]);
@@ -763,6 +810,9 @@ mod tests {
             i as u16, blockchain.voter_chains[i as usize].best_block, vec![prop_block4.hash()] );
             blockchain.insert_node(&voter_block);
         }
+        // prop4 is also confirmed.
+        assert_eq!(0, blockchain.tx_pool.unconfirmed.len());
+
         for i in 6..10{
             assert_eq!(2, blockchain.voter_chains[i as usize].get_unvoted_prop_blocks().len());
             assert_eq!(prop_block3.hash(), blockchain.voter_chains[i as usize].get_unvoted_prop_blocks()[0]);
@@ -853,8 +903,6 @@ mod tests {
 
 
         println!("Step 17:  Checking leader blocks for first four levels");
-        assert_eq!(16, blockchain.tx_pool.unconfirmed.len());
-        assert_eq!(0, blockchain.tx_pool.ordered.len());
         let leader_block_sequence = blockchain.get_leader_block_sequence();
         assert_eq!(prop_block1.hash(), leader_block_sequence[0].unwrap());
         assert_eq!(prop_block2a.hash(),leader_block_sequence[1].unwrap());
@@ -878,6 +926,11 @@ mod tests {
         assert_eq!(0, blockchain.get_parent_and_referred_notleader_unconfirmed_prop_blocks(prop_block4.hash()).len());
 
         println!("Step 19:  The ledger tx blocks");
+        assert_eq!(16, blockchain.tx_pool.ordered.len());
+        let ordered_tx_blocks = blockchain.get_ordered_tx_blocks();
+        for i in 0..16{
+            assert_eq!(ordered_tx_blocks[i], tx_block_vec[i].hash());
+        }
 
         println!("Step 20: Mining 2 tx block and 1 prop block referring the 2 tx blocks");
         unreferred_tx_block_index += 2;
@@ -890,14 +943,14 @@ mod tests {
         blockchain.insert_node(&prop_block5);
 
         assert_eq!(2, blockchain.tx_pool.unconfirmed.len());
-        assert_eq!(16, blockchain.tx_pool.ordered.len());
     }
 
     #[test]
     fn proposer_block_ordering(){
+        pub const NUM_VOTER_CHAINS: u16 = 10;
         let mut rng = rand::thread_rng();
         // Initialize a blockchain with 10 voter chains.
-        let mut blockchain = BlockChain::new();
+        let mut blockchain = BlockChain::new(NUM_VOTER_CHAINS);
 
         // Store the parent blocks to mine on voter trees.
         let mut voter_best_blocks: Vec<H256> = (0..NUM_VOTER_CHAINS).map( |i| blockchain.voter_chains[i as usize].best_block).collect();// Currently the voter genesis blocks.
