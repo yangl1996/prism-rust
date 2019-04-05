@@ -77,9 +77,10 @@ impl PartialEq for H256 {
 impl std::fmt::Display for H256 {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let buffer: [u8; 32] = self.into();
-        for byte_idx in 0..32 {
-            write!(f, "{:>02x}", &buffer[byte_idx])?;
-        }
+        write!(f, "{:>02x}{:>02x}..{:>02x}{:>02x}", &buffer[0], &buffer[1], &buffer[30], &buffer[31])?;
+//        for byte_idx in 0..32 {
+//            write!(f, "{:>02x}", &buffer[byte_idx])?;
+//        }
         Ok(())
     }
 }

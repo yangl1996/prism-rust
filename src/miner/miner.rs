@@ -10,7 +10,7 @@ use crate::blockdb::{BlockDatabase};
 
 use super::memory_pool::{MemoryPool, Entry};
 use std::time::{SystemTime, Duration};
-use std::sync::mpsc::{channel,Receiver,Sender,TryRecvError};
+use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
 use std::collections::{HashMap};
 
 use std::sync::{Arc, Mutex};
@@ -115,6 +115,7 @@ impl Handle {
 
 impl Context {
     pub fn start(mut self) {
+        println!("Miner started");
         thread::spawn(move || {
             self.miner_loop();
         });
@@ -135,7 +136,7 @@ impl Context {
 
     }
 
-    fn miner_loop (&mut self) {
+    fn miner_loop(&mut self) {
         // Initialize the context and the header to mine
         self.update_context();
         let mut header: Header = self.create_header();
@@ -243,8 +244,8 @@ impl Context {
         
         // Update proposer content
         content.push(Content::Proposer(proposer::Content::new(
-                        blockchain.get_unreferred_prop_blocks().clone(),
-                        blockchain.get_unreferred_tx_blocks().clone())
+                        blockchain.get_unreferred_tx_blocks().clone(),
+                        blockchain.get_unreferred_prop_blocks().clone())
                     ));
 
         // Update transaction content with TX_BLOCK_SIZE mempool txs
