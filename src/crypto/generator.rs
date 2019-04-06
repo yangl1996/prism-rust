@@ -2,12 +2,12 @@
 Generates random instances of the given class
 */
 
-use super::hash::{Hashable, H256};
+use super::hash::H256;
 use super::merkle::MerkleTree;
-use rand::{Rng, RngCore};
+use rand::Rng;
 
 /// Generates a merkle tree of random H256.
-pub fn merkle_tree<'a>(size: u32) -> MerkleTree<'a, H256> {
+pub fn merkle_tree<'a>(_size: u32) -> MerkleTree<'a, H256> {
     unimplemented!();
 }
 

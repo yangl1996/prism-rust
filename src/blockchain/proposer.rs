@@ -118,7 +118,7 @@ impl Tree {
     }
 
     /// Adding a vote at a level
-    pub fn add_vote_at_level(&mut self, vote: H256, level: u32) {
+    pub fn add_vote_at_level(&mut self, _vote: H256, level: u32) {
         *self.all_votes.entry(level).or_insert(0) += 1;
     }
 

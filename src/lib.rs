@@ -2,8 +2,6 @@
 extern crate serde_derive;
 #[macro_use]
 extern crate hex_literal;
-#[macro_use]
-extern crate clap;
 
 pub mod block;
 pub mod blockchain;
@@ -39,7 +37,7 @@ pub fn start(
     let ctx_update_sink_wallet = ctx_update_sink.clone();
 
     let (ctx, server) = network::server::new(addr, msg_sink)?;
-    ctx.start();
+    ctx.start().unwrap();
 
     let ctx = network::worker::new(4, msg_source, blockchain, blockdb, mempool, ctx_update_sink);
     ctx.start();

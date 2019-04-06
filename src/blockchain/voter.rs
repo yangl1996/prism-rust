@@ -1,5 +1,4 @@
 use crate::crypto::hash::H256;
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize, Clone, Copy, Ord, Eq, PartialEq, PartialOrd, Hash)]
@@ -111,7 +110,6 @@ impl Chain {
         // Rollback required
         else if self.best_level < level - 1 {
             panic!("A new super longer fork has emerged");
-            return NodeUpdateStatus::LongerFork;
         } else {
             panic!("This should not happen");
         }

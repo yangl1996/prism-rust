@@ -1,17 +1,12 @@
-use crate::block::header::Header;
 use crate::block::proposer::Content as Proposer_Content;
-use crate::block::transaction::Content as Tx_Content;
 use crate::block::voter::Content as Voter_Content;
 use crate::block::{Block, Content};
 
-use crate::crypto::hash::{Hashable, H256};
-use crate::crypto::merkle::MerkleTree;
+use crate::crypto::hash::H256;
 
 use crate::block::generator as block_generator;
 use crate::crypto::generator as crypto_generator;
-use crate::transaction::generator as tx_generator;
 
-use rand::{Rng, RngCore};
 use std::cmp;
 use std::cmp::Ordering;
 

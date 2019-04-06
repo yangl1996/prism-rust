@@ -4,7 +4,7 @@ use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
 use crate::miner::memory_pool::MemoryPool;
 use crate::miner::miner::ContextUpdateSignal;
-use log::{debug, error, info, trace, warn};
+use log::info;
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 

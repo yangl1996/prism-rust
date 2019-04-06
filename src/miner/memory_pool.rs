@@ -1,7 +1,5 @@
 use crate::crypto::hash::{Hashable, H256};
 use crate::transaction::{Input, Transaction};
-use bincode::serialize;
-use rand::Rng;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::VecDeque;
@@ -130,7 +128,7 @@ pub mod tests {
     use super::MemoryPool;
     use crate::crypto::hash::{Hashable, H256};
     use crate::transaction::generator;
-    use crate::transaction::{Input, Output, Transaction};
+    use crate::transaction::Transaction;
 
     #[test]
     fn insert_remove_one_transaction() {
@@ -161,7 +159,7 @@ pub mod tests {
     fn remove_by_input() {
         let mut pool = MemoryPool::new();
         let txn = generator::random();
-        let h = txn.hash();
+        let _h = txn.hash();
         pool.insert(txn.clone());
         pool.remove_by_input(&txn.input[0]);
         assert_eq!(pool.by_hash.len(), 0);
@@ -172,7 +170,7 @@ pub mod tests {
     fn fifo() {
         let mut pool = MemoryPool::new();
         let mut v = vec![];
-        for i in 0..20 {
+        for _i in 0..20 {
             let txn: Transaction = generator::random();
             v.push(txn.hash());
             pool.insert(txn);

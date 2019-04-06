@@ -67,7 +67,7 @@ mod tests {
     ///The hash should match
     #[test]
     fn test_hash() {
-        let mut header = test_util::sample_header();
+        let header = test_util::sample_header();
         let header_hash_should_be = test_util::sample_header_hash_should_be();
         assert_eq!(header.hash(), header_hash_should_be);
     }

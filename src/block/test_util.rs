@@ -126,8 +126,8 @@ pub fn sample_proposer_content1() -> proposer_Content {
         transaction_block_hashes,
         proposer_block_hashes: vec![],
     };
-    let header = sample_header();
-    let sortition_proof: Vec<H256> = vec![]; // The sortition proof is bogus
+    let _header = sample_header();
+    let _sortition_proof: Vec<H256> = vec![]; // The sortition proof is bogus
     return proposer_block_content;
 }
 pub fn sample_proposer_content1_hash_shouldbe() -> H256 {

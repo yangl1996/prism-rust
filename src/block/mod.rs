@@ -64,20 +64,19 @@ impl Block {
 
     pub fn get_block_type(&self) -> Option<u32> {
         match &self.content {
-            Content::Transaction(c) => return Some(TRANSACTION_INDEX),
-            Content::Proposer(c) => return Some(PROPOSER_INDEX),
+            Content::Transaction(_c) => return Some(TRANSACTION_INDEX),
+            Content::Proposer(_c) => return Some(PROPOSER_INDEX),
             Content::Voter(c) => {
                 let chain_num: u32 = FIRST_VOTER_INDEX + (c.chain_number as u32);
                 return Some(chain_num);
             }
         }
-        return None;
     }
 }
 
 impl Hashable for Block {
     fn hash(&self) -> H256 {
-        /// Hash of the header seals the block content and the sortition proof
+        // hash of the header seals the block content and the sortition proof
         return self.header.hash();
     }
 }
@@ -112,11 +111,11 @@ impl Hashable for Content {
 impl std::fmt::Display for Content {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Content::Transaction(c) => {
+            Content::Transaction(_c) => {
                 write!(f, "Transaction block")?;
                 Ok(())
             }
-            Content::Proposer(c) => {
+            Content::Proposer(_c) => {
                 write!(f, "Proposer block")?;
                 Ok(())
             }
@@ -137,7 +136,7 @@ impl Default for Content {
 mod tests {
     use super::test_util;
     use crate::crypto::hash::Hashable;
-    use rand::{Rng, RngCore};
+    use rand::Rng;
     #[test]
     fn check_transaction_content_hash() {
         let transaction_content = test_util::sample_transaction_content();
@@ -173,8 +172,8 @@ mod tests {
     #[test]
     fn block_sortition_proof() {
         let mut rng = rand::thread_rng();
-        let index = rng.gen_range(0, 101);
-        let block = test_util::sample_mined_block(5);
+        let _index = rng.gen_range(0, 101);
+        let _block = test_util::sample_mined_block(5);
         // todo: Verify the sortition proof.
     }
 

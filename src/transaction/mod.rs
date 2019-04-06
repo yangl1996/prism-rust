@@ -2,8 +2,7 @@ pub mod generator;
 
 use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::sign;
-use bincode::{deserialize, serialize};
-use std::{cmp, fmt};
+use bincode::serialize;
 
 /// A Prism transaction. A transaction takes a set of existing coins and transforms them into a set
 /// of output coins.

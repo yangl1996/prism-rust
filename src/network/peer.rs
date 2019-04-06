@@ -1,7 +1,6 @@
 use super::message;
 use byteorder::{BigEndian, ByteOrder};
-use log::{debug, error, info, trace, warn};
-use mio::{self, net};
+use mio;
 use mio_extras::channel;
 use std::io::{Read, Write};
 use std::sync::mpsc;
@@ -118,7 +117,7 @@ impl WriteContext {
                     if self.written_length == self.msg_length {
                         // if the previous message has been fully written, try to get the next message
                         // first flush the writer
-                        self.writer.flush();
+                        self.writer.flush().unwrap();
                         let msg = match self.queue.try_recv() {
                             Ok(msg) => msg,
                             Err(e) => match e {

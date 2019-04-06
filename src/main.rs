@@ -1,20 +1,14 @@
 #[macro_use]
-extern crate serde_derive;
-#[macro_use]
-extern crate hex_literal;
-#[macro_use]
 extern crate clap;
 
-use log::{debug, error, info, warn};
+use log::{debug, error, info};
 use std::net;
 use std::process;
-use std::sync::Arc;
 
 use prism::blockchain;
 use prism::blockdb;
 use prism::config;
 use prism::miner::memory_pool;
-use prism::network;
 
 const DEFAULT_IP: &str = "127.0.0.1";
 const DEFAULT_P2P_PORT: u16 = 6000;
@@ -72,7 +66,7 @@ fn main() {
 
     // init server and miner
     debug!("Starting P2P server at {}", peer_socket_addr);
-    let (server, miner, wallet) =
+    let (server, miner, _wallet) =
         prism::start(peer_socket_addr, &blockdb, &blockchain, &mempool).unwrap();
 
     // connect to known peers

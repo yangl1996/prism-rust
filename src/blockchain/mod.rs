@@ -7,18 +7,16 @@ use super::block::{Block, Content};
 use super::crypto::hash::{Hashable, H256};
 use edge::Edge;
 use petgraph::graphmap::GraphMap;
-use petgraph::{graph::NodeIndex, Directed, Undirected};
+use petgraph::Directed;
 use proposer::NodeData as ProposerNodeData;
 use proposer::Status as ProposerStatus;
 use proposer::Tree as ProposerTree;
-use serde::{Deserialize, Serialize};
 use std::cmp;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::iter::FromIterator;
-use std::process;
 use transaction::Pool as TxPool;
 use utils::PropOrderingHelper;
 use voter::Chain as VoterChain;
@@ -800,10 +798,8 @@ impl BlockChain {
 mod tests {
     use super::utils;
     use super::*;
-    use crate::block::generator as block_generator;
     use crate::block::Block;
     use crate::crypto::hash::H256;
-    use rand::{Rng, RngCore};
     const NUM_VOTER_CHAINS: u16 = 10;
 
     // At initialization the blockchain only consists of (m+1) genesis blocks.
@@ -811,22 +807,22 @@ mod tests {
     // because we have designed the genesis blocks themselves.
     #[test]
     fn blockchain_initialization() {
-        /// Initialize a blockchain with 10  voter chains.
-        let mut blockchain = BlockChain::new(NUM_VOTER_CHAINS);
+        // Initialize a blockchain with 10  voter chains.
+        let blockchain = BlockChain::new(NUM_VOTER_CHAINS);
 
-        /// Checking proposer tree's genesis block hash
+        // Checking proposer tree's genesis block hash
         let proposer_genesis_hash_shouldbe: [u8; 32] = [
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0,
         ];
-        /// Hash vector of proposer genesis block. todo: Shift to a global config  file
+        // Hash vector of proposer genesis block. todo: Shift to a global config  file
         let proposer_genesis_hash_shouldbe: H256 = (&proposer_genesis_hash_shouldbe).into();
         assert_eq!(
             proposer_genesis_hash_shouldbe,
             blockchain.proposer_tree.best_block
         );
 
-        /// Checking all voter tree's genesis block hashes
+        // Checking all voter tree's genesis block hashes
         for chain_number in 0..NUM_VOTER_CHAINS {
             let b1 = ((chain_number + 1) >> 8) as u8;
             let b2 = (chain_number + 1) as u8;
@@ -834,7 +830,7 @@ mod tests {
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 0, 0, b1, b2,
             ];
-            /// Hash vector of voter genesis block. todo: Shift to a global config  file
+            // Hash vector of voter genesis block. todo: Shift to a global config  file
             let voter_genesis_hash_shouldbe: H256 = (&voter_genesis_hash_shouldbe).into();
             assert_eq!(
                 voter_genesis_hash_shouldbe,
@@ -845,16 +841,16 @@ mod tests {
 
     #[test]
     fn blockchain_growing() {
-        let mut rng = rand::thread_rng();
-        /// Initialize a blockchain with 10 voter chains.
+        let _rng = rand::thread_rng();
+        // Initialize a blockchain with 10 voter chains.
         let mut blockchain = BlockChain::new(NUM_VOTER_CHAINS);
 
-        /// Store the parent blocks to mine on voter trees.
+        // Store the parent blocks to mine on voter trees.
         let mut voter_best_blocks: Vec<H256> = (0..NUM_VOTER_CHAINS)
             .map(|i| blockchain.voter_chains[i as usize].best_block)
             .collect(); // Currently the voter genesis blocks.
 
-        /// Maintains the list of tx blocks.
+        // Maintains the list of tx blocks.
         let mut tx_block_vec: Vec<Block> = vec![];
         let mut unreferred_tx_block_index = 0;
 
@@ -867,11 +863,11 @@ mod tests {
         assert_eq!(0, blockchain.graph.edge_count(), "Expecting 0 edges");
 
         println!("Step 2:   Added 5 tx blocks on prop genesis");
-        /// Mine 5 tx block's with prop_best_block as the parent
+        // Mine 5 tx block's with prop_best_block as the parent
         let tx_block_5: Vec<Block> =
             utils::test_tx_blocks_with_parent_hash(5, blockchain.proposer_tree.best_block);
         tx_block_vec.extend(tx_block_5.iter().cloned());
-        /// Add the tx blocks to blockchain
+        // Add the tx blocks to blockchain
         for i in 0..5 {
             blockchain.insert_node(&tx_block_vec[i]);
         }
@@ -883,13 +879,13 @@ mod tests {
         assert_eq!(10, blockchain.graph.edge_count(), "Expecting 10 edges");
 
         println!("Step 3:   Added prop block referring these 5 tx blocks");
-        /// Generate a proposer block with prop_parent_block as the parent which referencing the above 5 tx blocks
+        // Generate a proposer block with prop_parent_block as the parent which referencing the above 5 tx blocks
         let prop_block1 = utils::test_prop_block(
             blockchain.proposer_tree.best_block,
             tx_block_vec[0..5].iter().map(|x| x.hash()).collect(),
             vec![],
         );
-        /// Add the prop_block
+        // Add the prop_block
         blockchain.insert_node(&prop_block1);
         assert_eq!(
             prop_block1.hash(),
@@ -929,7 +925,7 @@ mod tests {
         let tx_block_5: Vec<Block> =
             utils::test_tx_blocks_with_parent_hash(5, blockchain.proposer_tree.best_block);
         tx_block_vec.extend(tx_block_5.iter().cloned());
-        /// Add the tx blocks to blockchain
+        // Add the tx blocks to blockchain
         for i in 0..5 {
             blockchain.insert_node(&tx_block_vec[unreferred_tx_block_index + i]);
         }
@@ -1019,7 +1015,7 @@ mod tests {
         let tx_block_4: Vec<Block> =
             utils::test_tx_blocks_with_parent_hash(4, blockchain.proposer_tree.best_block);
         tx_block_vec.extend(tx_block_4.iter().cloned());
-        /// Add the tx blocks to blockchain
+        // Add the tx blocks to blockchain
         for i in 0..4 {
             blockchain.insert_node(&tx_block_vec[unreferred_tx_block_index + i]);
         }
@@ -1084,7 +1080,7 @@ mod tests {
         let tx_block_2: Vec<Block> =
             utils::test_tx_blocks_with_parent_hash(2, blockchain.proposer_tree.best_block);
         tx_block_vec.extend(tx_block_2.iter().cloned());
-        /// Add the tx blocks to blockchain
+        // Add the tx blocks to blockchain
         for i in 0..2 {
             blockchain.insert_node(&tx_block_vec[unreferred_tx_block_index + i]);
         }
@@ -1105,7 +1101,7 @@ mod tests {
         assert_eq!(8, blockchain.tx_pool.unconfirmed.len());
 
         println!("Step 10:  1-6 voter chains vote on prop4 and 6-10 voter blocks vote on prop3 and prop4" );
-        ///Storing voter_parents used in step 12 test
+        //Storing voter_parents used in step 12 test
         for i in 0..10 {
             voter_best_blocks[i] = blockchain.voter_chains[i as usize].best_block.clone();
         }
@@ -1183,7 +1179,7 @@ mod tests {
         }
         assert_eq!(68, blockchain.graph.node_count(), "Expecting 68 nodes");
         assert_eq!(240, blockchain.graph.edge_count(), "Expecting 240 edges");
-        /// Checking the voter chain growth
+        // Checking the voter chain growth
         for i in 0..6 {
             assert_eq!(4, blockchain.voter_chains[i as usize].best_level);
         }
@@ -1373,7 +1369,7 @@ mod tests {
         let tx_block_2: Vec<Block> =
             utils::test_tx_blocks_with_parent_hash(2, blockchain.proposer_tree.best_block);
         tx_block_vec.extend(tx_block_2.iter().cloned());
-        /// Add the tx blocks to blockchain
+        // Add the tx blocks to blockchain
         for i in 0..2 {
             blockchain.insert_node(&tx_block_vec[unreferred_tx_block_index + i]);
         }
@@ -1390,18 +1386,18 @@ mod tests {
     #[test]
     fn proposer_block_ordering() {
         pub const NUM_VOTER_CHAINS: u16 = 10;
-        let mut rng = rand::thread_rng();
+        let _rng = rand::thread_rng();
         // Initialize a blockchain with 10 voter chains.
         let mut blockchain = BlockChain::new(NUM_VOTER_CHAINS);
 
         // Store the parent blocks to mine on voter trees.
-        let mut voter_best_blocks: Vec<H256> = (0..NUM_VOTER_CHAINS)
+        let _voter_best_blocks: Vec<H256> = (0..NUM_VOTER_CHAINS)
             .map(|i| blockchain.voter_chains[i as usize].best_block)
             .collect(); // Currently the voter genesis blocks.
 
         // Maintains the list of tx blocks.
-        let mut tx_block_vec: Vec<Block> = vec![];
-        let mut unreferred_tx_block_index = 0;
+        let _tx_block_vec: Vec<Block> = vec![];
+        let _unreferred_tx_block_index = 0;
 
         assert_eq!(
             11,
@@ -1630,37 +1626,37 @@ mod tests {
 
     #[test]
     fn test_json() {
-        let mut rng = rand::thread_rng();
-        /// Initialize a blockchain with 10 voter chains.
+        let _rng = rand::thread_rng();
+        // Initialize a blockchain with 10 voter chains.
         let mut blockchain = BlockChain::new(NUM_VOTER_CHAINS);
 
-        /// Store the parent blocks to mine on voter trees.
-        let mut voter_best_blocks: Vec<H256> = blockchain
+        // Store the parent blocks to mine on voter trees.
+        let _voter_best_blocks: Vec<H256> = blockchain
             .voter_chains
             .iter()
             .map(|c| c.best_block)
             .collect();
         // Currently the voter genesis blocks.
 
-        /// Maintains the list of tx blocks.
+        // Maintains the list of tx blocks.
         let mut tx_block_vec: Vec<Block> = vec![];
-        let mut unreferred_tx_block_index = 0;
+        let _unreferred_tx_block_index = 0;
 
-        /// Mine 5 tx block's with prop_best_block as the parent
+        // Mine 5 tx block's with prop_best_block as the parent
         let tx_block_5: Vec<Block> =
             utils::test_tx_blocks_with_parent_hash(5, blockchain.proposer_tree.best_block);
         tx_block_vec.extend(tx_block_5.iter().cloned());
-        /// Add the tx blocks to blockchain
+        // Add the tx blocks to blockchain
         for i in 0..5 {
             blockchain.insert_node(&tx_block_vec[i]);
         }
-        /// Generate a proposer block with prop_parent_block as the parent which referencing the above 5 tx blocks
+        // Generate a proposer block with prop_parent_block as the parent which referencing the above 5 tx blocks
         let prop_block1 = utils::test_prop_block(
             blockchain.proposer_tree.best_block,
             tx_block_vec[0..5].iter().map(|x| x.hash()).collect(),
             vec![],
         );
-        /// Add the prop_block
+        // Add the prop_block
         blockchain.insert_node(&prop_block1);
 
         let s = blockchain.dump().unwrap();
