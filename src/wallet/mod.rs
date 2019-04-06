@@ -137,7 +137,8 @@ impl Wallet {
         mempool.insert(txn);
         drop(mempool);
         self.context_update_chan
-            .send(ContextUpdateSignal::NewContent).unwrap();
+            .send(ContextUpdateSignal::NewContent)
+            .unwrap();
         return;
     }
 }

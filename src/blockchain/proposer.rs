@@ -8,7 +8,7 @@ pub struct NodeData {
     pub level: u32,
     /// Leadership Status
     pub leadership_status: Status,
-    /// Number of votes
+    /// Number of votes from main-chain voter blocks
     pub votes: u16,
 }
 
@@ -35,6 +35,9 @@ impl NodeData {
     pub fn increment_vote(&mut self) {
         self.votes += 1;
     }
+    pub fn decrement_vote(&mut self) {
+        self.votes -= 1;
+    }
     pub fn give_leader_status(&mut self) {
         self.leadership_status = Status::Leader
     }
@@ -49,8 +52,8 @@ impl NodeData {
 #[derive(Serialize, Deserialize, Clone, Copy, Ord, Eq, PartialEq, PartialOrd, Hash, Debug)]
 pub enum Status {
     Leader,
-    PotentialLeader,       // Will be used for fast active confirmation
-    NotLeaderUnconfirmed, // When a leader block at that level is confirmed, rest become NotLeaderUnconfirmed
+    PotentialLeader,       // Will be later used for fast active confirmation.
+    NotLeaderUnconfirmed, // When a leader block at a level is confirmed, rest of the proposer block at that level become NotLeaderUnconfirmed
     NotLeaderAndConfirmed, // When a notleader block is confirmed by a one of the child leader block
 }
 
@@ -72,7 +75,7 @@ pub struct Tree {
     /// Proposer nodes stored level wise
     pub prop_nodes: Vec<Vec<H256>>,
     /// Votes at each level
-    pub all_votes: HashMap<u32, u32>, // todo: Inefficient
+    pub number_of_votes: HashMap<u32, u32>,
     /// Stores Leader nodes
     pub leader_nodes: HashMap<u32, H256>, // Using hashmap because leader nodes might not be confirmed sequentially
     /// The level upto which all levels have a leader block.
@@ -94,7 +97,7 @@ impl Default for Tree {
             best_block,
             best_level: 0,
             prop_nodes,
-            all_votes,
+            number_of_votes: all_votes,
             leader_nodes,
             continuous_leader_level: 0,
             max_leader_level: 0,
@@ -118,8 +121,8 @@ impl Tree {
     }
 
     /// Adding a vote at a level
-    pub fn add_vote_at_level(&mut self, _vote: H256, level: u32) {
-        *self.all_votes.entry(level).or_insert(0) += 1;
+    pub fn increment_vote_at_level(&mut self, level: u32) {
+        *self.number_of_votes.entry(level).or_insert(0) += 1;
     }
 
     pub fn insert_unreferred(&mut self, hash: H256) {

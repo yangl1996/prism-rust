@@ -20,13 +20,12 @@ impl<'a> super::Validator<'a> for ProposerBlockValidator<'a> {
     }
 
     fn is_valid(&self, block: &'a Block) -> bool {
-        if 
-            self.is_duplicate(&block) || // 1. Check duplicate
+        if self.is_duplicate(&block) || // 1. Check duplicate
             self.is_empty(&block) ||  // 2. Check if empty reflinks
             !self.is_coinbase_valid(&block) || // 3. Check coinbase validity
             !self.is_pow_valid(&block)
-            // 4. check pow validity, sortition
-         {
+        // 4. check pow validity, sortition
+        {
             return false;
         }
         return true;
@@ -47,8 +46,7 @@ impl<'a> super::Validator<'a> for ProposerBlockValidator<'a> {
             Content::Transaction(_c) => return true,
             Content::Voter(_c) => return true,
             Content::Proposer(c) => {
-                return c.proposer_block_hashes.is_empty()
-                    && c.transaction_block_hashes.is_empty();
+                return c.proposer_block_hashes.is_empty() && c.transaction_block_hashes.is_empty();
             }
         }
     }

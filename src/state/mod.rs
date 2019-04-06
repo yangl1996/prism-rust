@@ -1,5 +1,5 @@
 use crate::transaction::{Input, Output};
-use std::collections::{HashMap};
+use std::collections::HashMap;
 
 // TODO: learn from Parity
 
