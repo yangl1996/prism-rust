@@ -24,7 +24,7 @@ impl Hashable for Content {
     fn hash(&self) -> H256 {
         // TODO(V): Add the proposer_block_refs too.
         let tx_merkle_tree = MerkleTree::new(&self.transaction_block_hashes);
-        let prop_merkle_tree = MerkleTree::new(&self.proposer_block_hashes);
+        let _prop_merkle_tree = MerkleTree::new(&self.proposer_block_hashes);
         // TODO: why do we calculate prop_merkle_tree when we don't use it?
         return tx_merkle_tree.root();
     }

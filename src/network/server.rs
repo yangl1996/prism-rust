@@ -1,10 +1,8 @@
 use super::message;
 use super::peer::{self, ReadResult, WriteResult};
-use byteorder::{BigEndian, ByteOrder};
-use log::{debug, error, info, trace, warn};
+use log::{debug, error, info, warn};
 use mio::{self, net};
 use mio_extras::channel;
-use std::io::{Read, Write};
 use std::sync::mpsc;
 use std::thread;
 
@@ -204,7 +202,7 @@ impl Context {
                                                 continue;
                                             }
                                             Ok(ReadResult::Message(m)) => {
-                                                self.new_msg_chan.send((m, peer.handle.clone()));
+                                                self.new_msg_chan.send((m, peer.handle.clone())).unwrap();
                                                 continue;
                                             }
                                             Err(e) => {
@@ -300,8 +298,6 @@ impl Context {
                 }
             }
         }
-
-        Ok(())
     }
 }
 

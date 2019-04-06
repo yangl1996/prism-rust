@@ -9,8 +9,7 @@ use super::voter::Content as Voter_Content;
 use super::{Block, Content};
 
 use crate::crypto::hash::{Hashable, H256};
-use crate::crypto::merkle::MerkleTree;
-use crate::transaction::{Input, Output, Signature, Transaction};
+use crate::transaction::Transaction;
 
 use crate::crypto::generator as crypto_generator;
 use crate::transaction::generator as tx_generator;

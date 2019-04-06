@@ -1,9 +1,9 @@
 use crate::crypto::hash::{Hashable, H256};
-use crate::crypto::sign::{KeyPair, PubKey, SecKey, Signature};
+use crate::crypto::sign::{KeyPair, Signature};
 use crate::miner::memory_pool::MemoryPool;
 use crate::miner::miner::ContextUpdateSignal;
 use crate::transaction::{Input, Output, Transaction};
-use log::{error, info};
+use log::error;
 use std::collections::{HashMap, HashSet};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
@@ -91,9 +91,9 @@ impl Wallet {
                 // if we have enough money in our wallet, create tx
                 // first, create transaction inputs
                 let mut input: Vec<Input> = vec![];
-                let mut signatures: Vec<Signature> = vec![];
+                let _signatures: Vec<Signature> = vec![];
 
-                for used_coin in coins {
+                for _used_coin in coins {
                     input.push(coin.input.clone());
                     self.remove_coin(&coin);
                 }
@@ -137,7 +137,7 @@ impl Wallet {
         mempool.insert(txn);
         drop(mempool);
         self.context_update_chan
-            .send(ContextUpdateSignal::NewContent);
+            .send(ContextUpdateSignal::NewContent).unwrap();
         return;
     }
 }

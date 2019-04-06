@@ -1,4 +1,3 @@
-use crate::crypto::hash::Hashable;
 use crate::miner::memory_pool::MemoryPool;
 use crate::transaction::Transaction;
 use std::sync::Mutex;

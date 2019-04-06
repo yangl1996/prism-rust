@@ -1,7 +1,7 @@
 use crate::block::Block;
 use crate::crypto::hash::H256;
 use bincode::{deserialize, serialize};
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 
 pub type Result<T> = std::result::Result<T, rocksdb::Error>;
 
@@ -62,12 +62,12 @@ mod tests {
         ))
         .unwrap();
         let test_block = generator::tx_block();
-        db.insert(&test_block.hash(), &test_block);
+        db.insert(&test_block.hash(), &test_block).unwrap();
         let got = db.get(&test_block.hash()).unwrap().unwrap();
         let num_block = db.num_blocks();
         assert_eq!(got.hash(), test_block.hash());
         assert_eq!(num_block, 1);
-        db.delete(&test_block.hash());
+        db.delete(&test_block.hash()).unwrap();
         let num_block = db.num_blocks();
         assert_eq!(db.get(&test_block.hash()).unwrap().is_none(), true);
         assert_eq!(num_block, 0);

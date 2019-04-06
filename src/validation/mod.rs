@@ -3,8 +3,6 @@ pub mod proposer;
 
 use crate::block::Block;
 use crate::blockchain::BlockChain;
-use crate::crypto::hash::{Hashable, H256};
-use std::collections::HashSet;
 
 pub trait Validator<'a> {
     fn new(blockchain: &'a BlockChain) -> Self;

@@ -39,85 +39,65 @@ impl std::fmt::Display for Edge {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Edge::TransactionToProposerParent => {
-                write!(f, "Tx2PropParent");
-                Ok(())
+                write!(f, "Tx2PropParent")
             }
             Edge::ProposerToProposerParent => {
-                write!(f, "Prop2PropParent");
-                Ok(())
+                write!(f, "Prop2PropParent")
             }
-            Edge::ProposerToProposerReference(position) => {
-                write!(f, "Prop2PropRef");
-                Ok(())
+            Edge::ProposerToProposerReference(_position) => {
+                write!(f, "Prop2PropRef")
             }
-            Edge::ProposerToTransactionReference(position) => {
-                write!(f, "Prop2TxRef");
-                Ok(())
+            Edge::ProposerToTransactionReference(_position) => {
+                write!(f, "Prop2TxRef")
             }
-            Edge::ProposerToTransactionLeaderReference(position) => {
-                write!(f, "Prop2TxLeaderRef");
-                Ok(())
+            Edge::ProposerToTransactionLeaderReference(_position) => {
+                write!(f, "Prop2TxLeaderRef")
             }
-            Edge::ProposerToTransactionReferenceAndLeaderReference(position) => {
-                write!(f, "Prop2TxRefAndLeaderRef");
-                Ok(())
+            Edge::ProposerToTransactionReferenceAndLeaderReference(_position) => {
+                write!(f, "Prop2TxRefAndLeaderRef")
             }
             Edge::VoterToProposerParent => {
-                write!(f, "V2PropParent");
-                Ok(())
+                write!(f, "V2PropParent")
             }
             Edge::VoterToVoterParent => {
-                write!(f, "V2VParent");
-                Ok(())
+                write!(f, "V2VParent")
             }
             Edge::VoterToProposerVote => {
-                write!(f, "V2PropVote");
-                Ok(())
+                write!(f, "V2PropVote")
             }
             Edge::VoterToProposerParentAndVote => {
-                write!(f, "V2PropParent_and_Vote");
-                Ok(())
+                write!(f, "V2PropParent_and_Vote")
             }
-            /// Reverse Edges
+            // Reverse Edges
             Edge::TransactionFromProposerParent => {
-                write!(f, "TxFromPropParent");
-                Ok(())
+                write!(f, "TxFromPropParent")
             }
             Edge::ProposerFromProposerParent => {
-                write!(f, "PropFromPropParent");
-                Ok(())
+                write!(f, "PropFromPropParent")
             }
-            Edge::ProposerFromProposerReference(position) => {
-                write!(f, "PropFromPropRef");
-                Ok(())
+            Edge::ProposerFromProposerReference(_position) => {
+                write!(f, "PropFromPropRef")
             }
-            Edge::ProposerFromTransactionReference(position) => {
-                write!(f, "PropFromTxRef");
-                Ok(())
+            Edge::ProposerFromTransactionReference(_position) => {
+                write!(f, "PropFromTxRef")
             }
-            Edge::ProposerFromTransactionLeaderReference(position) => {
-                write!(f, "PropFromTxLeaderRef");
-                Ok(())
+            Edge::ProposerFromTransactionLeaderReference(_position) => {
+                write!(f, "PropFromTxLeaderRef")
             }
-            Edge::ProposerFromTransactionReferenceAndLeaderReference(position) => {
-                write!(f, "Prop2TxRefAndLeaderRef");
-                Ok(())
+            Edge::ProposerFromTransactionReferenceAndLeaderReference(_position) => {
+                write!(f, "Prop2TxRefAndLeaderRef")
             }
             Edge::VoterFromProposerParent => {
-                write!(f, "VFromPropParent");
-                Ok(())
+                write!(f, "VFromPropParent")
             }
             Edge::VoterFromVoterParent => {
-                write!(f, "VFromVParent");
-                Ok(())
+                write!(f, "VFromVParent")
             }
             Edge::VoterFromProposerVote => {
-                write!(f, "VFromPropVote");
-                Ok(())
+                write!(f, "VFromPropVote")
             }
             Edge::VoterFromProposerParentAndVote => {
-                write!(f, "VFromPropParent_and_Vote");
-                Ok(())
+                write!(f, "VFromPropParent_and_Vote")
             }
         }
     }
@@ -145,7 +125,7 @@ impl Edge {
             Edge::VoterToVoterParent => Edge::VoterFromVoterParent,
             Edge::VoterToProposerVote => Edge::VoterFromProposerVote,
             Edge::VoterToProposerParentAndVote => Edge::VoterFromProposerParentAndVote,
-            /// Reverse Edges
+            // Reverse Edges
             Edge::TransactionFromProposerParent => Edge::TransactionToProposerParent,
             Edge::ProposerFromProposerParent => Edge::ProposerToProposerParent,
             Edge::ProposerFromProposerReference(position) => {

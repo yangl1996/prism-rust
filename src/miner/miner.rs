@@ -7,19 +7,16 @@ use crate::config::*;
 use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::merkle::MerkleTree;
 use crate::handler::new_block;
-use crate::transaction::Transaction;
-use log::{debug, error, info, trace, warn};
+use log::info;
 
-use super::memory_pool::{Entry, MemoryPool};
-use std::collections::HashMap;
+use super::memory_pool::MemoryPool;
 use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
-use std::time::{Duration, SystemTime};
+use std::time::SystemTime;
 
 use std::sync::{Arc, Mutex};
 use std::thread;
 
 extern crate rand; // 0.6.0
-use rand::prelude::ThreadRng;
 use rand::Rng;
 
 extern crate bigint;
@@ -341,15 +338,11 @@ fn get_time() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::block::Block;
     use crate::blockchain::BlockChain;
     use crate::blockdb::BlockDatabase;
-    use crate::crypto::hash::H256;
     use crate::miner::memory_pool::MemoryPool;
-    use rand::{Rng, RngCore};
     use std::sync::mpsc::channel;
     use std::sync::{Arc, Mutex};
-    use std::thread;
 
     /*
     #[test]
@@ -433,8 +426,8 @@ mod tests {
             ))
             .unwrap(),
         );
-        let (ctx_update_s, ctx_update_r) = channel();
-        let (ctx, handle) = new(&tx_mempool, &blockchain, &db, ctx_update_r);
+        let (_ctx_update_s, ctx_update_r) = channel();
+        let (ctx, _handle) = new(&tx_mempool, &blockchain, &db, ctx_update_r);
 
         let big_difficulty = U256::from_big_endian(&DEFAULT_DIFFICULTY);
 
