@@ -88,7 +88,7 @@ impl BlockChain {
             // 2b. Initializing a Voter chain
             let voter_chain = VoterChain::new(chain_number, voter_hash);
             voter_chains.push(voter_chain);
-            proposer_tree.add_vote_at_level(voter_hash, 0);
+            proposer_tree.increment_vote_at_level(0);
         }
         return Self {
             graph,
@@ -114,7 +114,7 @@ impl BlockChain {
     pub fn insert_node(&mut self, block: &Block) {
         let block_hash = block.hash();
         let parent_proposer_block_hash = block.header.parent_hash;
-        // Add the node to the graph
+        // Add the node corresponding to the block in the graph field
         self.graph.add_node(block_hash);
 
         // Parse the block content and add the edges according to Prism logic.
@@ -128,8 +128,8 @@ impl BlockChain {
                     Edge::TransactionToProposerParent,
                 );
 
-                // mark this new tx block as unconfirmed and unreferred
-                self.tx_pool.insert_unconfirmed(block_hash);
+                // mark this new tx block as not in ledger and as unreferred
+                self.tx_pool.insert_not_in_ledger(block_hash);
                 self.tx_pool.insert_unreferred(block_hash);
             }
 
@@ -140,7 +140,7 @@ impl BlockChain {
                     parent_proposer_block_hash,
                     Edge::ProposerToProposerParent,
                 );
-                // Since the parent is now referred, remove it from the unreferred pool
+                // Since the parent proposer block is now referred, remove it from the unreferred proposer pool
                 self.proposer_tree
                     .remove_unreferred(&parent_proposer_block_hash);
                 // Mark the new block we just got as unreferred
@@ -156,13 +156,14 @@ impl BlockChain {
                     self.proposer_tree.remove_unreferred(prop_hash);
                 }
 
-                // 3. Iterate through the list of transaction blocks referred by this new block
+                // 3. Iterate through the list of transaction blocks referred by this new block and add an edge
                 for (position, tx_hash) in content.transaction_block_hashes.iter().enumerate() {
                     self.insert_edge(
                         block_hash,
                         *tx_hash,
                         Edge::ProposerToTransactionReference(position as u32),
                     );
+                    // Since the tx proposer block is now referred, remove it from the unreferred tx pool
                     self.tx_pool.remove_unreferred(&block_hash);
                 }
 
@@ -184,7 +185,7 @@ impl BlockChain {
                 self.proposer_node_data
                     .insert(block_hash, proposer_node_data);
 
-                // 7. Add the block to the proposer tree at a level.
+                // 7. Add the block in the proposer_tree field at self_level.
                 self.proposer_tree
                     .add_block_at_level(block_hash, self_level);
             }
@@ -204,11 +205,10 @@ impl BlockChain {
                     Edge::VoterToVoterParent,
                 );
 
-                // 3. Add edge from voter block to proposer votees
+                // 3. Add edge from voter block to proposer block it voted.
                 for prop_block_hash in content.proposer_block_votes.iter() {
-                    if self.graph.contains_edge(block_hash, *prop_block_hash) {
-                        // if the votee is the same as the parent
-                        // TODO: could we compare *prop_block_hash and parent_proposer_block_hash
+                    // if the votee is the same as the parent
+                    if *prop_block_hash == parent_proposer_block_hash {
                         self.insert_edge(
                             block_hash,
                             *prop_block_hash,
@@ -218,17 +218,18 @@ impl BlockChain {
                         self.insert_edge(block_hash, *prop_block_hash, Edge::VoterToProposerVote);
                     }
 
-                    // Incrementing the votes of the votee
+                    // Incrementing the votes of the proposer block being voted
                     let ref mut proposer_node_data =
                         self.proposer_node_data.get_mut(&prop_block_hash).unwrap();
                     proposer_node_data.votes += 1;
                     self.proposer_tree
-                        .add_vote_at_level(block_hash, proposer_node_data.level);
+                        .increment_vote_at_level(proposer_node_data.level);
                 }
 
                 // 4. Updating the voter chain.
                 let parent_voter_node_data: VoterNodeData =
                     self.voter_node_data[&content.voter_parent_hash];
+                // The update status is used to create the voter node data
                 let voter_node_update = self.voter_chains
                     [parent_voter_node_data.chain_number as usize]
                     .add_voter_block(
@@ -237,7 +238,7 @@ impl BlockChain {
                         parent_voter_node_data.level + 1,
                     );
 
-                // 5. Creating voter node data. Updating the level of the parent. And updating
+                // 5. Creating voter node data using the level of the parent. And updating
                 // the unvoted_levels on the voter chain
                 // TODO: replace default with new
                 let mut voter_node_data = VoterNodeData::default();
@@ -245,9 +246,10 @@ impl BlockChain {
                 voter_node_data.chain_number = parent_voter_node_data.chain_number;
 
                 match voter_node_update {
-                    // this new block lies on the main chain
+                    // this new block extends the main chain
                     VoterNodeUpdateStatus::ExtendedMainChain => {
                         voter_node_data.status = VoterNodeStatus::OnMainChain;
+                        // Remove the prop block levels voted by this block from list of unvoted levels of this chain.
                         for prop_block_hash in content.proposer_block_votes.iter() {
                             let proposer_level = self.prop_node_data(&prop_block_hash).level;
                             self.voter_chains
@@ -260,13 +262,13 @@ impl BlockChain {
                         unimplemented!();
                     }
                     VoterNodeUpdateStatus::SideChain => {
-                        // Orphan block if voter block was not on the main chain
+                        // Orphan block if voter block was did not extend the main chain
                         voter_node_data.status = VoterNodeStatus::Orphan;
                     }
                 }
                 self.voter_node_data.insert(block_hash, voter_node_data);
 
-                // If the voter node was added on the main chain try confirming the latest unconfirmed level.
+                //6. If the voter node was added on the main chain try confirming the latest unconfirmed level .
                 if voter_node_update == VoterNodeUpdateStatus::ExtendedMainChain {
                     loop {
                         let level = self.proposer_tree.continuous_leader_level + 1;
@@ -282,7 +284,7 @@ impl BlockChain {
     }
 }
 
-// Functions to infer the voter chains.
+// Functions to infer the voter chains. These functions are not currently used in logic but are tested
 impl BlockChain {
     /// Return the voter blocks on the longest voter chain `chain_number`
     pub fn get_longest_chain(&self, chain_number: u16) -> Vec<H256> {
@@ -356,7 +358,7 @@ impl BlockChain {
 impl BlockChain {
     /// Returns the list of ordered tx blocks. This is the initial step of creating the full ledger.
     pub fn get_ordered_tx_blocks(&self) -> &Vec<H256> {
-        return &self.tx_pool.ordered;
+        return &self.tx_pool.ledger;
     }
 
     /// Checks if there are sufficient votes to confirm leader block at the level.
@@ -367,41 +369,44 @@ impl BlockChain {
         }
 
         if self.proposer_tree.leader_nodes.contains_key(&level) {
-            return; // Return if the level already has leader block.
+            return; // Return if the level already has a confirmed leader block.
         }
-        //        println!("Trying to confirm on level {}", level);
-        if !self.proposer_tree.all_votes.contains_key(&level) {
+        if !self.proposer_tree.number_of_votes.contains_key(&level) {
             return;
         }
-        if self.proposer_tree.all_votes[&level] < self.number_of_voting_chains() / 2 {
-            return; // At least half the votes should come in
+        if self.proposer_tree.number_of_votes[&level] < self.number_of_voting_chains() / 2 {
+            return; // At least half the votes should be caste. This is only for efficiency
         }
+        //0. Get the list of proposer blocks at the level.
         let proposers_blocks: &Vec<H256> = &self.proposer_tree.prop_nodes[level as usize];
+
+        // 1. Getting the lcb of votes on each proposer block and  the block with max_lcb votes.
         let mut lcb_proposer_votes: HashMap<H256, f32> = HashMap::<H256, f32>::new();
         let mut max_lcb_vote: f32 = -1.0;
         let mut max_lcb_vote_index: usize = 0;
-        // Stores the votes which can go to any block.
+        // Stores the number votes which have not been caste (or are still not permanent).
         let mut left_over_votes: f32 = self.voter_chains.len() as f32;
 
-        // 1. Getting the lcb of votes on each proposer block
         // todo: This seems inefficient. Also equal votes situation is not considered.
         for (index, proposer) in proposers_blocks.iter().enumerate() {
             let proposer_votes: Vec<u32> = self.get_vote_depths_on_proposer(proposer);
             let lcb = utils::lcb_from_vote_depths(proposer_votes);
             lcb_proposer_votes.insert(*proposer, lcb);
-            left_over_votes -= lcb;
+            left_over_votes -= lcb; // removing the cast (or permanent) votes
             if max_lcb_vote < lcb {
                 max_lcb_vote = lcb;
                 max_lcb_vote_index = index;
             }
         }
 
-        // Dont confirm if a private proposer block has a higher ucb.
+        // It the left over votes is more than the votes received by the max_lcb_vote_index block, then
+        // dont confirm because a private proposer block could potentially get all these left over votes.
+        // and become the leader block of that level.
         if left_over_votes >= max_lcb_vote {
             return;
         }
-        // The fast confirmation can be done here
-        // Dont confirm  if another proposer block has a higher ucb.
+        // TODO: The fast confirmation can be done here
+        // Dont confirm if another proposer block could potentially get all these left over votes.
         for (index, proposer) in proposers_blocks.iter().enumerate() {
             let ucb = lcb_proposer_votes[proposer] + left_over_votes;
             if index == max_lcb_vote_index {
@@ -412,19 +417,20 @@ impl BlockChain {
             }
         }
 
-        //        println!("Confirmed block {} at level {} with {} votes cast", proposers_blocks[max_lcb_vote_index], level, self.proposer_tree.all_votes[&level]);
+        //        println!("Confirmed block {} at level {} with {} votes cast", proposers_blocks[max_lcb_vote_index], level, self.proposer_tree.number_of_votes[&level]);
 
-        // If the function enters here, it has confirmed the block at 'level'
+        // If the function reaches here, the 'level' has a proposer block with maximum votes. Yay.
 
         // 2a. Adding the leader block for the level
         let leader_block = proposers_blocks[max_lcb_vote_index];
         self.proposer_tree.leader_nodes.insert(level, leader_block);
         self.proposer_tree.max_leader_level = cmp::max(self.proposer_tree.max_leader_level, level);
 
-        // 2b. Giving NotLeaderUnconfirmed status to all blocks at 'level' except the leader_block
+        // 2b. Giving leader status to leader_block
         let ref mut leader_node_data = self.proposer_node_data.get_mut(&leader_block).unwrap();
         leader_node_data.give_leader_status();
-        // Changing the status of other nodes at the same level to 'NotLeaderUnconfirmed'
+
+        // 2c. Giving NotLeaderUnconfirmed status to all blocks at 'level' except the leader_block
         for proposer_block in self.proposer_tree.prop_nodes[level as usize].iter() {
             if *proposer_block != leader_block {
                 let ref mut proposer_node_data =
@@ -437,58 +443,65 @@ impl BlockChain {
         self.update_ledger();
     }
 
-    /// Return depths of voters of the given proposer block
+    /// For all the votes (on the voter chain) for a given proposer block, return the depth of
+    /// those votes, where depth is the number of children voter blocks on the vote.
     pub fn get_vote_depths_on_proposer(&self, block_hash: &H256) -> Vec<u32> {
         if !self.proposer_node_data.contains_key(block_hash) {
             panic!("The proposer block with hash {} doesn't exist", block_hash);
         }
-        let voter_ref_edges = self.graph.edges(*block_hash).filter(|&x| {
+        //1. Extracting the voter blocks which have voted on this proposer block
+        let voter_edges = self.graph.edges(*block_hash).filter(|&x| {
             *x.2 == Edge::VoterFromProposerVote || *x.2 == Edge::VoterFromProposerParentAndVote
         });
-        let mut voter_ref_nodes: Vec<u32> = vec![];
-        for edge in voter_ref_edges {
+        let mut voter_depths: Vec<u32> = vec![];
+        for edge in voter_edges {
+            //2a. Filter out votes which come from non-main-chain voter blocks
             let voter_block_hash = edge.1;
             let voter_node_data = self.voter_node_data[&voter_block_hash];
-            if !voter_node_data.is_on_longest_chain() {
+            if !voter_node_data.is_on_main_chain() {
                 continue;
             }
+            //2b Get the depth of the voter
             let voter_level = voter_node_data.level;
             let voter_chain_number = voter_node_data.chain_number;
             let voter_chain_depth = self.voter_chains[voter_chain_number as usize].best_level;
-            voter_ref_nodes.push(voter_chain_depth - voter_level);
+            voter_depths.push(voter_chain_depth - voter_level);
         }
-        return voter_ref_nodes;
+        return voter_depths;
     }
 
-    /// Update the ledger
+    /// Called when a new leader block is confirmed at some level.
     fn update_ledger(&mut self) {
-        // All the levels upto 'start_level' - 1 have a leader block
-        // 'end level' is the last level which has a leader block
+        // All the levels upto 'start_level' - 1 have a leader block and 'end level' is the last level which has a leader block.
+        // (There could potentially be levels between start_level and end_layer which dont have leader blocks)
         let start_level = self.proposer_tree.continuous_leader_level + 1;
         let end_level = self.proposer_tree.max_leader_level;
-        // Update the continuous_leader_level to level L s.t all levels upto L has a leader block
-        //        println!("start at {} until {}", start_level, end_level);
+
+        //
+        // Update the continuous_leader_level up to a level L s.t all levels upto L has a leader block
         for l in start_level..=end_level {
-            // if level 'l' has a leader block, update the ledger
+            // if level 'l' has a leader block, update the ledger w.r.t to this leader block.
             if self.proposer_tree.leader_nodes.contains_key(&l) {
                 self.proposer_tree.continuous_leader_level = l;
-                // The leader blocks upto level l - 1  is confirmed.
                 let leader_block_at_l = self.proposer_tree.leader_nodes[&l];
-                //                println!("Updating ledger for leader block {}", leader_block_at_l);
-                // Step 1. Recursively order the referred notleader proposer blocks.
-                let to_confirm_proposer_blocks_ordered = self
-                    .get_all_parent_and_referred_notleader_unconfirmed_prop_blocks_ordered(
-                        leader_block_at_l,
-                    );
-                // Step 2. Add the transactions blocks referred by these
-                for proposer_block in to_confirm_proposer_blocks_ordered.iter() {
-                    // Confirming all the tx blocks referred.
+
+                //1. Get all the proposer blocks referred by this leader block which are not confirmed and
+                // aren't themselves leader blocks on their level. We need an *ordered* list here.
+                // Reason: We can confirm these proposer blocks and thereby confirming the tx blocks referred by these proposer blocks.
+                let to_confirm_proposer_blocks =
+                    self.get_unconfirmed_notleader_referred_proposer_blocks(leader_block_at_l);
+
+                //2. Add the transactions blocks referred by these proposer blocks to the ledger.
+                for proposer_block in to_confirm_proposer_blocks.iter() {
+                    // Get all the tx blocks referred.
                     for tx_blocks in self.get_referred_tx_blocks_ordered(proposer_block) {
-                        if self.tx_pool.is_unconfirmed(&tx_blocks) {
-                            self.tx_pool.confirm(&tx_blocks);
+                        // Add the tx block to the ledger if not already in the ledger
+                        if !self.tx_pool.is_in_ledger(&tx_blocks) {
+                            self.tx_pool.add_to_ledger(&tx_blocks);
                         }
                     }
-                    // Changing the status of these prop blocks.
+                    // Changing the status of these prop blocks to 'not leader but confirmed'.
+                    // Reason: This is done to prevent these prop blocks from getting confirmed again.
                     if *proposer_block != leader_block_at_l {
                         self.proposer_node_data
                             .get_mut(proposer_block)
@@ -497,25 +510,27 @@ impl BlockChain {
                     }
                 }
             }
-            //if level 'l' doesnt have a leader block, we cant update the ledger for the next levels
+            //if level 'l' doesnt have a leader block, we cant update the ledger further.
             else {
                 break;
             }
         }
     }
 
-    /// Complicated function: When a new leader block, B, is confirmed, it also confirms
-    /// 'notleader' proposer blocks directly and indirectly referred by B.
-    /// Let set S be the list of all the notleader proposer blocks referred by B.
-    /// The set S is topologically ordered according to the following rule for B1, B2 \in S:
+    /// Idea: When a new leader block, B, is confirmed, it also confirms
+    /// 'notleader and unconfirmed' proposer blocks directly and indirectly referred by B.
+    /// Let set S be the list of all the 'notleader and unconfirmed' proposer blocks referred by B.
+    /// The function obtains S and orders them according the the following rule
+    /// Topologically ordering rule: for forall B1, B2 \in S:
     /// 1. If B1.level < B2.level ==> B1 < B2.
     /// 2. If B1.level == B2.level, then B1 < B2 if B1 is (directly or indirectly) referred before B2 in block B.
-    /// The ordering logic is in struct PropOrderingHelper.
-    fn get_all_parent_and_referred_notleader_unconfirmed_prop_blocks_ordered(
-        &self,
-        block_hash: H256,
-    ) -> Vec<H256> {
-        let mut all_blocks: BTreeMap<H256, PropOrderingHelper> = BTreeMap::new(); // Set S.
+    fn get_unconfirmed_notleader_referred_proposer_blocks(&self, block_hash: H256) -> Vec<H256> {
+        let mut all_blocks: BTreeMap<H256, PropOrderingHelper> = BTreeMap::new(); // Will store the set S.
+
+        //Algo: Run DFS graph traversal to obtain and order the 'notleader and unconfirmed' prop blocks.
+        // Each block has a 'position' and is ordered according to the position.
+
+        // The queue is used for DFS traversal. The topological ordering logic is present in struct PropOrderingHelper.
         let mut queue: VecDeque<(H256, PropOrderingHelper)> = VecDeque::new();
         let node_data = self.prop_node_data(&block_hash);
         queue.push_back((
@@ -524,36 +539,37 @@ impl BlockChain {
         ));
 
         while let Some(block) = queue.pop_front() {
-            let block_hash = block.0.clone();
-            let new_effective_ordering = block.1.clone();
+            let block_hash = block.0.clone(); // next block in the traversal path
+            let new_position = block.1.clone();
 
-            //1. Add the block to all_blocks
+            //1. Add the block to all_blocks.
 
-            //In case a block is already present in all_blocks, replace the previous
-            //if the new position is better than the previous.
+            //If the block is already present in all_blocks, remove it if the new position is better than the previous.
             if all_blocks.contains_key(&block.0) {
-                let old_effective_ordering = &all_blocks[&block.0];
-                if new_effective_ordering < *old_effective_ordering {
+                let old_position = &all_blocks[&block.0];
+                if new_position < *old_position {
                     all_blocks.remove(&block.0);
                 } else {
-                    continue;
+                    continue; // skip the loop to go the next block in the DFS traversal path
                 }
             }
+            // Add the block to all_blocks
             all_blocks.insert(block.0, block.1);
 
-            //2. Add the block's parent and referred notleader proposer blocks to the queue.
-            let prev_level_prop_blocks =
-                self.get_parent_and_referred_notleader_unconfirmed_prop_blocks(block_hash);
-            for block in prev_level_prop_blocks {
+            //2. Add the block's parent and referred notleader proposer blocks to the DFS traversal queue.
+            let referred_prop_blocks =
+                self.get_unconfirmed_notleader_referred_proposer_blocks_prev_level(block_hash);
+            for block in referred_prop_blocks {
                 let block_h = block.0;
                 let node_data = self.prop_node_data(&block_h);
                 let level = node_data.level; // level in the prop tree
-                let mut new_position_vec = new_effective_ordering.position.clone();
+                let mut new_position_vec = new_position.position.clone();
                 new_position_vec.push(block.1);
                 queue.push_back((block_h, PropOrderingHelper::new(level, new_position_vec)));
             }
         }
-        // Sorting all the blocks using logic in the comment of the function
+        // Order all_blocks using via comparision logic in the comment of the function which is
+        // coded in PropOrderingHelper.
         let mut v_all_blocks = Vec::from_iter(all_blocks);
         v_all_blocks.sort_by(|(_, a), (_, b)| a.cmp(&b));
 
@@ -582,30 +598,27 @@ impl BlockChain {
             .collect();
     }
 
-    /// Returns all the notleader proposer blocks references by the block_hash including the parent.
+    /// Returns all the notleader proposer blocks references by the block_hash including the parent on the previous level of the  block hash.
     /// The blocks are ordered by their position in the reference list.
-    fn get_parent_and_referred_notleader_unconfirmed_prop_blocks(
+    fn get_unconfirmed_notleader_referred_proposer_blocks_prev_level(
         &self,
         block_hash: H256,
     ) -> Vec<(H256, u32)> {
         let parent_block: H256 = self.get_proposer_parent(block_hash);
         let mut referred_prop_blocks: Vec<(H256, u32)> = self.get_referred_prop_blocks(block_hash);
         referred_prop_blocks.push((parent_block, 0));
-        // Filtering only NotLeaderUnconfirmed Blocks
-        //        println!("referred_prop_blocks len={}", referred_prop_blocks.len());
-        //        for (h256, pos) in referred_prop_blocks.iter(){
-        //            println!("{} ", h256);
-        //        }
-        let mut not_leader_prop_blocks: Vec<(H256, u32)> = referred_prop_blocks
+
+        // Filtering only NotLeader and Unconfirmed Blocks
+        let mut filtered_referred_prop_blocks: Vec<(H256, u32)> = referred_prop_blocks
             .into_iter()
             .filter(|&x| {
                 self.prop_node_data(&x.0).leadership_status == ProposerStatus::NotLeaderUnconfirmed
             })
             .collect();
-        not_leader_prop_blocks.sort_by_key(|k| k.1);
-        //        println!("not_leader_prop_blocks len={}", not_leader_prop_blocks.len());
+        // Order the proposer blocks by their edge number
+        filtered_referred_prop_blocks.sort_by_key(|k| k.1);
 
-        return not_leader_prop_blocks;
+        return filtered_referred_prop_blocks;
     }
 
     /// Return the proposer parent of the block
@@ -649,12 +662,9 @@ impl BlockChain {
     }
 
     /// Return a single leader block at the given level
-    pub fn get_leader_block_at_level(&mut self, level: u32) -> Option<H256> {
-        if self.proposer_tree.best_level >= level {
-            self.confirm_leader_block_at_level(level);
-            if self.proposer_tree.leader_nodes.contains_key(&level) {
-                return Some(self.proposer_tree.leader_nodes[&level]);
-            }
+    fn get_leader_block_at_level(&mut self, level: u32) -> Option<H256> {
+        if self.proposer_tree.leader_nodes.contains_key(&level) {
+            return Some(self.proposer_tree.leader_nodes[&level]);
         }
         return None;
     }
@@ -672,16 +682,6 @@ impl BlockChain {
 
 /// Functions for mining.
 impl BlockChain {
-    /// Return the best blocks on all voter chain.
-    pub fn get_all_voter_best_blocks(&self) -> Vec<H256> {
-        let voter_best_blocks: Vec<H256> = self
-            .voter_chains
-            .iter()
-            .map(|x| x.best_block.clone())
-            .collect();
-        return voter_best_blocks;
-    }
-
     /// Return the best blocks on voter chain 'chain number'.
     pub fn get_voter_best_block(&self, chain_number: u16) -> H256 {
         let voter_best_block: H256 = self.voter_chains[chain_number as usize].best_block;
@@ -711,7 +711,6 @@ impl BlockChain {
     pub fn get_unvoted_prop_blocks(&self, chain_number: u16) -> Vec<H256> {
         return self.voter_chains[chain_number as usize].get_unvoted_prop_blocks();
     }
-    //todo: Voter content - Unvoted proposer blocks.
 
     //The content for transaction blocks is maintained in the tx-mempool, not here.
 }
@@ -758,8 +757,8 @@ impl BlockChain {
             .iter()
             .map(|chain| chain.best_block.to_owned())
             .collect();
-        let pool_unconfirmed: HashSet<H256> = self.tx_pool.unconfirmed.to_owned();
-        let pool_ordered: Vec<H256> = self.tx_pool.ordered.to_owned();
+        let pool_unconfirmed: HashSet<H256> = self.tx_pool.not_in_ledger.to_owned();
+        let pool_ordered: Vec<H256> = self.tx_pool.ledger.to_owned();
         let pool_unreferred: HashSet<H256> = self.tx_pool.unreferred.to_owned();
         let proposer_node_data: Vec<(H256, u32, ProposerStatus, u16)> = self
             .proposer_node_data
@@ -1002,7 +1001,7 @@ mod tests {
         assert_eq!(7, prop_block2a_votes, "prop block 2a should have 7 votes");
         assert_eq!(3, prop_block2b_votes, "prop block 2b should have 3 votes");
         assert_eq!(
-            10, blockchain.proposer_tree.all_votes[&1],
+            10, blockchain.proposer_tree.number_of_votes[&1],
             "Level 2 total votes should have 10",
         );
         assert_eq!(44, blockchain.graph.node_count(), "Expecting 44 nodes");
@@ -1098,7 +1097,7 @@ mod tests {
         assert_eq!(58, blockchain.graph.node_count(), "Expecting 58 nodes");
         assert_eq!(186, blockchain.graph.edge_count(), "Expecting 186 edges");
         // Checking the number of unconfirmed tx blocks 2 of prop2a, 4 from prop3, and 2 from prop4.
-        assert_eq!(8, blockchain.tx_pool.unconfirmed.len());
+        assert_eq!(8, blockchain.tx_pool.not_in_ledger.len());
 
         println!("Step 10:  1-6 voter chains vote on prop4 and 6-10 voter blocks vote on prop3 and prop4" );
         //Storing voter_parents used in step 12 test
@@ -1130,7 +1129,7 @@ mod tests {
         }
 
         // prop3 is confirmed. Unconfirmed tx blocks 2 from prop4.
-        assert_eq!(2, blockchain.tx_pool.unconfirmed.len());
+        assert_eq!(2, blockchain.tx_pool.not_in_ledger.len());
 
         for i in 3..6 {
             assert_eq!(
@@ -1152,7 +1151,7 @@ mod tests {
             blockchain.insert_node(&voter_block);
         }
         // prop4 is also confirmed.
-        assert_eq!(0, blockchain.tx_pool.unconfirmed.len());
+        assert_eq!(0, blockchain.tx_pool.not_in_ledger.len());
 
         for i in 6..10 {
             assert_eq!(
@@ -1341,24 +1340,24 @@ mod tests {
         assert_eq!(
             0,
             blockchain
-                .get_parent_and_referred_notleader_unconfirmed_prop_blocks(prop_block1.hash())
+                .get_unconfirmed_notleader_referred_proposer_blocks_prev_level(prop_block1.hash())
                 .len()
         );
         assert_eq!(
             0,
             blockchain
-                .get_parent_and_referred_notleader_unconfirmed_prop_blocks(prop_block2a.hash())
+                .get_unconfirmed_notleader_referred_proposer_blocks_prev_level(prop_block2a.hash())
                 .len()
         );
         assert_eq!(
             0,
             blockchain
-                .get_parent_and_referred_notleader_unconfirmed_prop_blocks(prop_block4.hash())
+                .get_unconfirmed_notleader_referred_proposer_blocks_prev_level(prop_block4.hash())
                 .len()
         );
 
         println!("Step 19:  The ledger tx blocks");
-        assert_eq!(16, blockchain.tx_pool.ordered.len());
+        assert_eq!(16, blockchain.tx_pool.ledger.len());
         let ordered_tx_blocks = blockchain.get_ordered_tx_blocks();
         for i in 0..16 {
             assert_eq!(ordered_tx_blocks[i], tx_block_vec[i].hash());
@@ -1380,7 +1379,7 @@ mod tests {
         ); // Referring 4 tx blocks + 1 prop_block
         blockchain.insert_node(&prop_block5);
 
-        assert_eq!(2, blockchain.tx_pool.unconfirmed.len());
+        assert_eq!(2, blockchain.tx_pool.not_in_ledger.len());
     }
 
     #[test]
@@ -1528,44 +1527,42 @@ mod tests {
             .unwrap()
             .give_not_leader_status();
 
-        println!("Step 2:   Checking the order of get_parent_and_referred_notleader_unconfirmed_prop_blocks()");
+        println!("Step 2:   Checking the order of get_unconfirmed_notleader_referred_proposer_blocks_prev_level()");
         let prop_block_2a_ref = blockchain
-            .get_parent_and_referred_notleader_unconfirmed_prop_blocks(prop_block2a.hash());
+            .get_unconfirmed_notleader_referred_proposer_blocks_prev_level(prop_block2a.hash());
         assert_eq!(1, prop_block_2a_ref.len());
         assert_eq!(prop_block1.hash(), prop_block_2a_ref[0].0);
 
         let prop_block_3a_ref = blockchain
-            .get_parent_and_referred_notleader_unconfirmed_prop_blocks(prop_block3a.hash());
+            .get_unconfirmed_notleader_referred_proposer_blocks_prev_level(prop_block3a.hash());
         assert_eq!(2, prop_block_3a_ref.len());
         assert_eq!(prop_block2a.hash(), prop_block_3a_ref[0].0);
         assert_eq!(prop_block2b.hash(), prop_block_3a_ref[1].0);
 
         let prop_block_3b_ref = blockchain
-            .get_parent_and_referred_notleader_unconfirmed_prop_blocks(prop_block3b.hash());
+            .get_unconfirmed_notleader_referred_proposer_blocks_prev_level(prop_block3b.hash());
         assert_eq!(1, prop_block_3b_ref.len());
         assert_eq!(prop_block2b.hash(), prop_block_3b_ref[0].0);
 
         let prop_block_4a_ref = blockchain
-            .get_parent_and_referred_notleader_unconfirmed_prop_blocks(prop_block4a.hash());
+            .get_unconfirmed_notleader_referred_proposer_blocks_prev_level(prop_block4a.hash());
         assert_eq!(3, prop_block_4a_ref.len());
         assert_eq!(prop_block3b.hash(), prop_block_4a_ref[0].0);
         assert_eq!(prop_block2a.hash(), prop_block_4a_ref[1].0);
         assert_eq!(prop_block3a.hash(), prop_block_4a_ref[2].0);
 
-        println!("Step 3:   Checking the order of get_all_parent_and_referred_notleader_unconfirmed_prop_blocks_ordered()");
-        let prop_block_2a_ref = blockchain
-            .get_all_parent_and_referred_notleader_unconfirmed_prop_blocks_ordered(
-                prop_block2a.hash(),
-            );
+        println!(
+            "Step 3:   Checking the order of get_unconfirmed_notleader_referred_proposer_blocks()"
+        );
+        let prop_block_2a_ref =
+            blockchain.get_unconfirmed_notleader_referred_proposer_blocks(prop_block2a.hash());
         assert_eq!(2, prop_block_2a_ref.len());
         // The expected order
         assert_eq!(prop_block1.hash(), prop_block_2a_ref[0]);
         assert_eq!(prop_block2a.hash(), prop_block_2a_ref[1]);
 
-        let prop_block_3a_ref = blockchain
-            .get_all_parent_and_referred_notleader_unconfirmed_prop_blocks_ordered(
-                prop_block3a.hash(),
-            );
+        let prop_block_3a_ref =
+            blockchain.get_unconfirmed_notleader_referred_proposer_blocks(prop_block3a.hash());
         assert_eq!(4, prop_block_3a_ref.len());
 
         // The expected order
@@ -1574,10 +1571,8 @@ mod tests {
         assert_eq!(prop_block2b.hash(), prop_block_3a_ref[2]);
         assert_eq!(prop_block3a.hash(), prop_block_3a_ref[3]);
 
-        let prop_block_4a_ref = blockchain
-            .get_all_parent_and_referred_notleader_unconfirmed_prop_blocks_ordered(
-                prop_block4a.hash(),
-            );
+        let prop_block_4a_ref =
+            blockchain.get_unconfirmed_notleader_referred_proposer_blocks(prop_block4a.hash());
         assert_eq!(6, prop_block_4a_ref.len());
         assert_eq!(prop_block1.hash(), prop_block_4a_ref[0]);
         assert_eq!(prop_block2b.hash(), prop_block_4a_ref[1]);
@@ -1587,10 +1582,8 @@ mod tests {
         assert_eq!(prop_block4a.hash(), prop_block_4a_ref[5]);
 
         //        println!(" Here ");
-        let prop_block_5a_ref = blockchain
-            .get_all_parent_and_referred_notleader_unconfirmed_prop_blocks_ordered(
-                prop_block5a.hash(),
-            );
+        let prop_block_5a_ref =
+            blockchain.get_unconfirmed_notleader_referred_proposer_blocks(prop_block5a.hash());
         assert_eq!(prop_block2b.hash(), prop_block_5a_ref[1], "1");
         assert_eq!(prop_block2c.hash(), prop_block_5a_ref[2], "2");
         assert_eq!(prop_block2a.hash(), prop_block_5a_ref[3], "3");
@@ -1611,10 +1604,8 @@ mod tests {
             .get_mut(&prop_block2a.hash())
             .unwrap()
             .give_leader_status();
-        let prop_block_5a_ref = blockchain
-            .get_all_parent_and_referred_notleader_unconfirmed_prop_blocks_ordered(
-                prop_block5a.hash(),
-            );
+        let prop_block_5a_ref =
+            blockchain.get_unconfirmed_notleader_referred_proposer_blocks(prop_block5a.hash());
         assert_eq!(prop_block2b.hash(), prop_block_5a_ref[0], "1");
         assert_eq!(prop_block2c.hash(), prop_block_5a_ref[1], "2");
         assert_eq!(prop_block3b.hash(), prop_block_5a_ref[2], "4");

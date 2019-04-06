@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize, Clone, Copy, Ord, Eq, PartialEq, PartialOrd, Hash)]
 pub struct NodeData {
-    /// The chain of the voter node
+    /// The chain id of the voter node
     pub chain_number: u16,
     /// Height from the genesis node
     pub level: u32,
@@ -19,7 +19,7 @@ impl NodeData {
         return genesis;
     }
 
-    pub fn is_on_longest_chain(&self) -> bool {
+    pub fn is_on_main_chain(&self) -> bool {
         return self.status == NodeStatus::OnMainChain;
     }
 }
@@ -65,11 +65,11 @@ pub struct Chain {
     pub best_block: H256,
     /// Best level
     pub best_level: u32,
-    /// Unvoted proposer blocks
+    /// Unvoted proposer blocks. For mining.
     pub unvoted_proposer_blocks: HashMap<u32, H256>,
-    /// Minimum level of unvoted proposer block
+    /// Minimum level of unvoted proposer block. For mining.
     pub min_level_unvoted_proposer_block: u32, //inclusive
-    /// Maximum level of unvoted proposer block
+    /// Maximum level of unvoted proposer block. For mining.
     pub max_level_unvoted_proposer_block: u32, //inclusive
 }
 
@@ -128,8 +128,7 @@ impl Chain {
                 "Vote at level {} is skipped",
                 self.max_level_unvoted_proposer_block
             );
-        } else if level < self.max_level_unvoted_proposer_block + 1 {
-            // Ignore. Another proposer mined at 'level'
+        } else { // Ignore. Another proposer mined at 'level'
         }
     }
 
@@ -142,7 +141,7 @@ impl Chain {
         self.min_level_unvoted_proposer_block += 1;
     }
 
-    /// Returns a ordered list of proposer blocks to vote.
+    /// Returns a ordered list of proposer blocks to vote. For mining.
     pub fn get_unvoted_prop_blocks(&self) -> Vec<H256> {
         return (self.min_level_unvoted_proposer_block..=self.max_level_unvoted_proposer_block)
             .map(|level| self.unvoted_proposer_blocks[&level].clone())
