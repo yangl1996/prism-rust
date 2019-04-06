@@ -1,20 +1,14 @@
 #[macro_use]
-extern crate serde_derive;
-#[macro_use]
-extern crate hex_literal;
-#[macro_use]
 extern crate clap;
 
-use log::{debug, error, info, warn};
+use log::{debug, error, info};
 use std::net;
 use std::process;
-use std::sync::Arc;
 
-use prism::network;
-use prism::blockdb;
 use prism::blockchain;
+use prism::blockdb;
+use prism::config;
 use prism::miner::memory_pool;
-use prism::config::NUM_VOTER_CHAINS;
 
 const DEFAULT_IP: &str = "127.0.0.1";
 const DEFAULT_P2P_PORT: u16 = 6000;
@@ -46,7 +40,7 @@ fn main() {
     let blockdb = std::sync::Arc::new(blockdb);
 
     // init blockchain
-    let blockchain = blockchain::BlockChain::new(NUM_VOTER_CHAINS);
+    let blockchain = blockchain::BlockChain::new(config::NUM_VOTER_CHAINS);
     let blockchain = std::sync::Arc::new(std::sync::Mutex::new(blockchain));
 
     // init mempool
@@ -72,7 +66,8 @@ fn main() {
 
     // init server and miner
     debug!("Starting P2P server at {}", peer_socket_addr);
-    let (server, miner) = prism::start(peer_socket_addr, &blockdb, &blockchain, &mempool).unwrap();
+    let (server, miner, _wallet) =
+        prism::start(peer_socket_addr, &blockdb, &blockchain, &mempool).unwrap();
 
     // connect to known peers
     if let Some(known_peers) = matches.values_of("known_peer") {
@@ -82,7 +77,7 @@ fn main() {
                 Err(e) => {
                     error!("Error parsing peer address {}: {}", &peer, e);
                     continue;
-                },
+                }
             };
             match server.connect(addr) {
                 Ok(_) => info!("Connected to outgoing peer {}", &addr),
@@ -90,6 +85,8 @@ fn main() {
             }
         }
     }
+
+    miner.start();
 
     loop {
         std::thread::park();
