@@ -1,11 +1,8 @@
-use std::collections::HashMap;
-use std::collections::BTreeMap;
-use std::collections::VecDeque;
 use crate::crypto::hash::{Hashable, H256};
-use crate::transaction::{Transaction, Input};
-use bincode::serialize;
-use rand::Rng;
-
+use crate::transaction::{Input, Transaction};
+use std::collections::BTreeMap;
+use std::collections::HashMap;
+use std::collections::VecDeque;
 
 /// transactions storage
 #[derive(Debug)]
@@ -17,9 +14,9 @@ pub struct MemoryPool {
     /// Transactions by previous output
     by_input: HashMap<Input, H256>,
     /// Storage for order by storage index, it is equivalent to FIFO
-    by_storage_index: BTreeMap<u64, H256>,  // TODO: consider BTreeSet
-    // TODO: pending storage: txs whose input is in pool (or in pending?)
-    // TODO: orphan storage: txs whose input can't be found in utxo or pool
+    by_storage_index: BTreeMap<u64, H256>, // TODO: consider BTreeSet
+                                           // TODO: pending storage: txs whose input is in pool (or in pending?)
+                                           // TODO: orphan storage: txs whose input can't be found in utxo or pool
 }
 
 #[derive(Debug, Clone)]
@@ -58,7 +55,8 @@ impl MemoryPool {
         }
 
         // add to btree
-        self.by_storage_index.insert(entry.storage_index, entry.hash);
+        self.by_storage_index
+            .insert(entry.storage_index, entry.hash);
 
         // add to hashmap
         self.by_hash.insert(entry.hash, entry);
@@ -84,7 +82,9 @@ impl MemoryPool {
 
     pub fn is_double_spend(&self, inputs: &Vec<Input>) -> bool {
         for input in inputs {
-            if self.by_input.contains_key(input) { return true; }
+            if self.by_input.contains_key(input) {
+                return true;
+            }
         }
         return false;
     }
@@ -113,19 +113,22 @@ impl MemoryPool {
 
     /// get n transaction by fifo
     pub fn get_transactions(&self, n: usize) -> Vec<Entry> {
-        self.by_storage_index.values().take(n).map(|hash|self.get(hash).unwrap().clone()).collect()
+        self.by_storage_index
+            .values()
+            .take(n)
+            .map(|hash| self.get(hash).unwrap().clone())
+            .collect()
     }
 }
-
 
 #[cfg(test)]
 pub mod tests {
     // TODO: add more tests.
 
     use super::MemoryPool;
-    use crate::transaction::{Transaction, Input, Output};
     use crate::crypto::hash::{Hashable, H256};
     use crate::transaction::generator;
+    use crate::transaction::Transaction;
 
     #[test]
     fn insert_remove_one_transaction() {
@@ -150,14 +153,13 @@ pub mod tests {
         assert_eq!(pool.by_input.len(), txn.input.len());
         assert!(pool.contains(&h));
         assert!(pool.is_double_spend(&txn.input));
-
     }
 
     #[test]
     fn remove_by_input() {
         let mut pool = MemoryPool::new();
         let txn = generator::random();
-        let h = txn.hash();
+        let _h = txn.hash();
         pool.insert(txn.clone());
         pool.remove_by_input(&txn.input[0]);
         assert_eq!(pool.by_hash.len(), 0);
@@ -168,7 +170,7 @@ pub mod tests {
     fn fifo() {
         let mut pool = MemoryPool::new();
         let mut v = vec![];
-        for i in 0..20 {
+        for _i in 0..20 {
             let txn: Transaction = generator::random();
             v.push(txn.hash());
             pool.insert(txn);
@@ -177,7 +179,13 @@ pub mod tests {
         assert_eq!(pool.by_storage_index.len(), 20);
         assert_eq!(pool.get_transactions(15).len(), 15);
         //test the fifo property: we get the first 15 txs.
-        assert_eq!(pool.get_transactions(15).iter().map(|entry|entry.hash).collect::<Vec<H256>>()[..], v[..15]);
+        assert_eq!(
+            pool.get_transactions(15)
+                .iter()
+                .map(|entry| entry.hash)
+                .collect::<Vec<H256>>()[..],
+            v[..15]
+        );
         assert_eq!(pool.get_transactions(25).len(), 20);
     }
 

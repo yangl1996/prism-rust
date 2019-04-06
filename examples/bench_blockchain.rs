@@ -1,7 +1,7 @@
-use prism::crypto::hash::Hashable;
-use prism::blockchain::{BlockChain};
-use prism::block::{Block};
+use prism::block::Block;
 use prism::blockchain::utils as bc_utils;
+use prism::blockchain::BlockChain;
+use prism::crypto::hash::Hashable;
 use std::time::Instant;
 
 const REPEAT: usize = 1000;
@@ -9,7 +9,6 @@ const PROP_BLOCK_SIZE: u32 = 500;
 const NUM_VOTING_CHAIN: usize = 1000;
 
 fn main() {
-
     let mut blockchain = BlockChain::new(NUM_VOTING_CHAIN as u16);
     let mut all_tx_blocks: Vec<Vec<Block>> = vec![];
 
@@ -19,20 +18,29 @@ fn main() {
     let mut voter_blocks: Vec<Vec<Block>> = vec![];
     let mut voter_parent_hash = vec![];
     for i in 0..NUM_VOTING_CHAIN {
-        voter_parent_hash.push( blockchain.voter_chains[i].best_block );
+        voter_parent_hash.push(blockchain.voter_chains[i].best_block);
         voter_blocks.push(vec![]);
     }
-
 
     // generate data
     println!("Generating blocks in the blockchain");
     for _ in 0..REPEAT {
         // generate proposer block with random number of transaction blocks
-        let tx_blocks: Vec<Block> = bc_utils::test_tx_blocks_with_parent_hash(PROP_BLOCK_SIZE, proposer_parent_hash);
-        let prop_block = bc_utils::test_prop_block(proposer_parent_hash, tx_blocks.iter().map( |x| x.hash()).collect(), vec![]);
+        let tx_blocks: Vec<Block> =
+            bc_utils::test_tx_blocks_with_parent_hash(PROP_BLOCK_SIZE, proposer_parent_hash);
+        let prop_block = bc_utils::test_prop_block(
+            proposer_parent_hash,
+            tx_blocks.iter().map(|x| x.hash()).collect(),
+            vec![],
+        );
         // votes on the proposer block
         for i in 0..NUM_VOTING_CHAIN {
-            let voter_block = bc_utils::test_voter_block(proposer_parent_hash, i as u16, voter_parent_hash[i], vec![prop_block.hash().clone()]);
+            let voter_block = bc_utils::test_voter_block(
+                proposer_parent_hash,
+                i as u16,
+                voter_parent_hash[i],
+                vec![prop_block.hash().clone()],
+            );
             voter_parent_hash[i] = voter_block.hash();
             voter_blocks[i].push(voter_block);
         }
@@ -62,5 +70,4 @@ fn main() {
             println!("At level:{}. Insert  {:.2} levels/s", i, throughput);
         }
     }
-
 }

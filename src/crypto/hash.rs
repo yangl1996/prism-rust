@@ -3,13 +3,12 @@ use byteorder::{BigEndian, ByteOrder};
 /// An object that can be meaningfully hashed.
 pub trait Hashable {
     /// Hashes the object using SHA256.
-        fn hash(&self) -> H256;
+    fn hash(&self) -> H256;
 }
 
 /// A SHA256 hash
 #[derive(Eq, Serialize, Deserialize, Clone, Debug, Hash, Default, Copy)]
 pub struct H256([u128; 2]); // big endian u256
-
 
 impl Hashable for H256 {
     fn hash(&self) -> H256 {
@@ -47,9 +46,7 @@ impl Ord for H256 {
     fn cmp(&self, other: &H256) -> std::cmp::Ordering {
         let higher = self.0[0].cmp(&other.0[0]);
         match higher {
-            std::cmp::Ordering::Equal => {
-                return self.0[1].cmp(&other.0[1])
-            },
+            std::cmp::Ordering::Equal => return self.0[1].cmp(&other.0[1]),
             _ => {
                 return higher;
             }
@@ -67,8 +64,7 @@ impl PartialEq for H256 {
     fn eq(&self, other: &H256) -> bool {
         if (self.0[0] == other.0[0]) && (self.0[1] == other.0[1]) {
             return true;
-        }
-        else {
+        } else {
             return false;
         }
     }
@@ -77,10 +73,14 @@ impl PartialEq for H256 {
 impl std::fmt::Display for H256 {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let buffer: [u8; 32] = self.into();
-        write!(f, "{:>02x}{:>02x}..{:>02x}{:>02x}", &buffer[0], &buffer[1], &buffer[30], &buffer[31])?;
-//        for byte_idx in 0..32 {
-//            write!(f, "{:>02x}", &buffer[byte_idx])?;
-//        }
+        write!(
+            f,
+            "{:>02x}{:>02x}..{:>02x}{:>02x}",
+            &buffer[0], &buffer[1], &buffer[30], &buffer[31]
+        )?;
+        //        for byte_idx in 0..32 {
+        //            write!(f, "{:>02x}", &buffer[byte_idx])?;
+        //        }
         Ok(())
     }
 }
@@ -92,28 +92,22 @@ mod tests {
 
     #[test]
     fn ordering() {
-        let bigger_hash: H256 = (&hex!(
-            "0000000000000000000000000000000000000000000000000000000000000001"
-        )).into();
-        let smaller_hash: H256 = (&hex!(
-            "0000000000000000000000000000000000000000000000000000000000000000"
-        )).into();
+        let bigger_hash: H256 =
+            (&hex!("0000000000000000000000000000000000000000000000000000000000000001")).into();
+        let smaller_hash: H256 =
+            (&hex!("0000000000000000000000000000000000000000000000000000000000000000")).into();
         assert_eq!(bigger_hash > smaller_hash, true);
 
-        let bigger_hash: H256 = (&hex!(
-            "0001000000000000000000000000000000000000000000000000000000000001"
-        )).into();
-        let smaller_hash: H256 = (&hex!(
-            "0000010000000000000000000000000000000000000000000000000000000000"
-        )).into();
+        let bigger_hash: H256 =
+            (&hex!("0001000000000000000000000000000000000000000000000000000000000001")).into();
+        let smaller_hash: H256 =
+            (&hex!("0000010000000000000000000000000000000000000000000000000000000000")).into();
         assert_eq!(bigger_hash > smaller_hash, true);
 
-        let some_hash: H256 = (&hex!(
-            "0001000000000000000000000000000000000000000000000000000000000000"
-        )).into();
-        let same_hash: H256 = (&hex!(
-            "0001000000000000000000000000000000000000000000000000000000000000"
-        )).into();
+        let some_hash: H256 =
+            (&hex!("0001000000000000000000000000000000000000000000000000000000000000")).into();
+        let same_hash: H256 =
+            (&hex!("0001000000000000000000000000000000000000000000000000000000000000")).into();
         assert_eq!(some_hash >= same_hash, true);
         assert_eq!(some_hash <= same_hash, true);
         assert_eq!(some_hash == same_hash, true);
@@ -122,9 +116,8 @@ mod tests {
     #[test]
     fn from_u8() {
         let source = hex!("0101010102020202010101010202020201010101020202020101010102020202");
-        let should_be: H256 = (&hex!(
-            "0101010102020202010101010202020201010101020202020101010102020202"
-        )).into();
+        let should_be: H256 =
+            (&hex!("0101010102020202010101010202020201010101020202020101010102020202")).into();
         let result: H256 = H256::from(&source);
         assert_eq!(result, should_be);
     }
@@ -132,18 +125,16 @@ mod tests {
     #[test]
     fn into_u8() {
         let should_be = hex!("0101010102020202010101010202020201010101020202020101010102020202");
-        let source: H256 = (&hex!(
-            "0101010102020202010101010202020201010101020202020101010102020202"
-        )).into();
+        let source: H256 =
+            (&hex!("0101010102020202010101010202020201010101020202020101010102020202")).into();
         let result: [u8; 32] = (&source).into();
         assert_eq!(result, should_be);
     }
 
     #[test]
     fn hash() {
-        let hash: H256 = (&hex!(
-            "2017201720172017201720172017201720172017201720172017201720172017"
-        )).into();
+        let hash: H256 =
+            (&hex!("2017201720172017201720172017201720172017201720172017201720172017")).into();
         let hashed_hash = hash.hash();
         let should_be: [u8; 32] =
             hex!("cd9b88d7319caaf16bed3fd6d4880284e0283414b0b44c22978f7dc22d741713");

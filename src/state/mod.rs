@@ -1,6 +1,5 @@
-use crate::crypto::hash::{H256, Hashable};
-use std::collections::{HashSet, HashMap};
-use crate::transaction::{Transaction, Input, Output};
+use crate::transaction::{Input, Output};
+use std::collections::HashMap;
 
 // TODO: learn from Parity
 

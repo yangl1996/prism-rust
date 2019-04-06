@@ -6,4 +6,3 @@ pub enum Message {
     Pong(String),
     Block(Vec<Block>),
 }
-

@@ -1,27 +1,26 @@
-use crate::transaction::{Transaction};
-use crate::crypto::hash::{Hashable, H256};
-use crate::crypto::merkle::{MerkleTree};
-use crate::blockchain::{BlockChain};
-use crate::config::*;
-use crate::block::{Block, Content};
 use crate::block::header::Header;
-use crate::block::{transaction, proposer, voter};
-use crate::blockdb::{BlockDatabase};
+use crate::block::{proposer, transaction, voter};
+use crate::block::{Block, Content};
+use crate::blockchain::BlockChain;
+use crate::blockdb::BlockDatabase;
+use crate::config::*;
+use crate::crypto::hash::{Hashable, H256};
+use crate::crypto::merkle::MerkleTree;
+use crate::handler::new_block;
+use log::info;
 
-use super::memory_pool::{MemoryPool, Entry};
-use std::time::{SystemTime, Duration};
+use super::memory_pool::MemoryPool;
 use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
-use std::collections::{HashMap};
+use std::time::SystemTime;
 
 use std::sync::{Arc, Mutex};
 use std::thread;
 
 extern crate rand; // 0.6.0
-use rand::{Rng};
-use rand::prelude::ThreadRng;
+use rand::Rng;
 
 extern crate bigint;
-use bigint::uint::{U256};
+use bigint::uint::U256;
 
 #[derive(PartialEq)]
 enum ControlSignal {
@@ -56,8 +55,6 @@ pub struct Context {
     control_chan: Receiver<ControlSignal>,
     // Channel for notifing miner of new content
     context_update_chan: Receiver<ContextUpdateSignal>,
-    // Channel for returning newly-mined blocks
-    new_block_chan: Sender<Block>,
     // Proposer parent
     proposer_parent_hash: H256,
     // Block contents
@@ -72,21 +69,21 @@ pub struct Handle {
     control_chan: Sender<ControlSignal>,
 }
 
-pub fn new(tx_mempool: &Arc<Mutex<MemoryPool>>,
-           blockchain: &Arc<Mutex<BlockChain>>,
-           db: &Arc<BlockDatabase>,
-           block_sink: Sender<Block>,
-           ctx_update_source: Receiver<ContextUpdateSignal>) -> (Context, Handle) {
+pub fn new(
+    tx_mempool: &Arc<Mutex<MemoryPool>>,
+    blockchain: &Arc<Mutex<BlockChain>>,
+    db: &Arc<BlockDatabase>,
+    ctx_update_source: Receiver<ContextUpdateSignal>,
+) -> (Context, Handle) {
     let (signal_chan_sender, signal_chan_receiver) = channel();
     let ctx = Context {
         tx_mempool: Arc::clone(tx_mempool),
         blockchain: Arc::clone(blockchain),
         db: Arc::clone(db),
         control_chan: signal_chan_receiver,
-        new_block_chan: block_sink,
         context_update_chan: ctx_update_source,
         proposer_parent_hash: H256::default(),
-        content: vec![], 
+        content: vec![],
         content_merkle_tree_root: H256::default(),
         difficulty: DEFAULT_DIFFICULTY,
         operating_state: OperatingState::Paused,
@@ -124,16 +121,18 @@ impl Context {
     fn handle_control_signal(&mut self, signal: ControlSignal) {
         match signal {
             ControlSignal::Exit => {
+                info!("Miner shutting down");
                 self.operating_state = OperatingState::ShutDown;
             }
             ControlSignal::Start => {
+                info!("Miner starting");
                 self.operating_state = OperatingState::Run;
             }
             ControlSignal::Step => {
+                info!("Miner starting in stepping mode");
                 self.operating_state = OperatingState::Step;
             }
         }
-
     }
 
     fn miner_loop(&mut self) {
@@ -151,19 +150,17 @@ impl Context {
                     let signal = self.control_chan.recv().unwrap();
                     self.handle_control_signal(signal);
                     continue;
-                },
+                }
                 OperatingState::ShutDown => {
                     return;
-                },
-                _ => {
-                    match self.control_chan.try_recv() {
-                        Ok(signal) => {
-                            self.handle_control_signal(signal);
-                        },
-                        Err(TryRecvError::Empty) => {},
-                        Err(TryRecvError::Disconnected) => panic!("Miner control channel detached"),
-                    }
                 }
+                _ => match self.control_chan.try_recv() {
+                    Ok(signal) => {
+                        self.handle_control_signal(signal);
+                    }
+                    Err(TryRecvError::Empty) => {}
+                    Err(TryRecvError::Disconnected) => panic!("Miner control channel detached"),
+                },
             }
             if self.operating_state == OperatingState::ShutDown {
                 return;
@@ -175,8 +172,8 @@ impl Context {
                     // TODO: Only update block contents if relevant parent
                     self.update_context();
                     header = self.create_header();
-                },
-                Err(TryRecvError::Empty) => {},
+                }
+                Err(TryRecvError::Empty) => {}
                 Err(TryRecvError::Disconnected) => panic!("Miner context update channel detached"),
             }
 
@@ -192,13 +189,15 @@ impl Context {
                 // Create a block
                 let mined_block: Block = self.assemble_block(header);
                 // Release block to the network
-                self.new_block_chan.send(mined_block).unwrap();
+                new_block(mined_block, &self.db, &self.blockchain);
+                // TODO: update mempool
+                info!("Mined one block");
                 // if we are stepping, pause the miner loop
                 if self.operating_state == OperatingState::Step {
                     self.operating_state = OperatingState::Paused;
                 }
             }
-        };
+        }
     }
 
     /// Given a valid header, sortition its hash and create the block
@@ -211,7 +210,11 @@ impl Context {
         // assemble the merkle tree and get the proof
         let merkle_tree = MerkleTree::new(&self.content);
         let sortition_proof: Vec<H256> = merkle_tree.get_proof_from_index(sortition_id);
-        let mined_block = Block::from_header(header, self.content[sortition_id as usize].clone(), sortition_proof);
+        let mined_block = Block::from_header(
+            header,
+            self.content[sortition_id as usize].clone(),
+            sortition_proof,
+        );
 
         return mined_block;
     }
@@ -222,15 +225,17 @@ impl Context {
         let timestamp: u64 = get_time();
         let content_root = self.content_merkle_tree_root;
         let extra_content: [u8; 32] = [0; 32]; // TODO: Add miner id?
-        return Header::new(self.proposer_parent_hash.clone(),
-                           timestamp,
-                           nonce,
-                           content_root,
-                           extra_content,
-                           self.difficulty.clone());
+        return Header::new(
+            self.proposer_parent_hash.clone(),
+            timestamp,
+            nonce,
+            content_root,
+            extra_content,
+            self.difficulty.clone(),
+        );
     }
 
-    /// Update the block to be mined 
+    /// Update the block to be mined
     fn update_context(&mut self) {
         let blockchain = self.blockchain.lock().unwrap();
         self.proposer_parent_hash = blockchain.get_proposer_best_block();
@@ -241,31 +246,31 @@ impl Context {
 
         // TODO: since the content field will always contain three elements, could we switch it to
         // a tuple?
-        
+
         // Update proposer content
         content.push(Content::Proposer(proposer::Content::new(
-                        blockchain.get_unreferred_tx_blocks().clone(),
-                        blockchain.get_unreferred_prop_blocks().clone())
-                    ));
+            blockchain.get_unreferred_tx_blocks().clone(),
+            blockchain.get_unreferred_prop_blocks().clone(),
+        )));
 
         // Update transaction content with TX_BLOCK_SIZE mempool txs
         let mempool = self.tx_mempool.lock().unwrap();
         content.push(Content::Transaction(transaction::Content::new(
-                        mempool
-                            .get_transactions(TX_BLOCK_SIZE)
-                            .into_iter()
-                            .map(|s| s.transaction)
-                            .collect())
-                    ));
+            mempool
+                .get_transactions(TX_BLOCK_SIZE)
+                .into_iter()
+                .map(|s| s.transaction)
+                .collect(),
+        )));
         drop(mempool);
 
         // Update voter content/parents
         for i in 0..NUM_VOTER_CHAINS {
             content.push(Content::Voter(voter::Content::new(
-                            i,
-                            blockchain.get_voter_best_block(i as u16).clone(),
-                            blockchain.get_unvoted_prop_blocks(i as u16).clone())
-                        ));
+                i,
+                blockchain.get_voter_best_block(i as u16).clone(),
+                blockchain.get_unvoted_prop_blocks(i as u16).clone(),
+            )));
         }
         drop(blockchain);
         self.content = content;
@@ -283,17 +288,21 @@ impl Context {
         if big_hash < big_difficulty / 100.into() * big_proposer_rate {
             // transaction block
             return PROPOSER_INDEX;
-        } else if big_hash < big_difficulty / 100.into() * (big_transaction_rate + big_proposer_rate) {
+        } else if big_hash
+            < big_difficulty / 100.into() * (big_transaction_rate + big_proposer_rate)
+        {
             // proposer block
             return TRANSACTION_INDEX;
         } else if big_hash < big_difficulty {
             // voter index, figure out which voter tree we are in
-            let voter_id = (big_hash - big_transaction_rate - big_proposer_rate) % NUM_VOTER_CHAINS.into();
+            let voter_id =
+                (big_hash - big_transaction_rate - big_proposer_rate) % NUM_VOTER_CHAINS.into();
             return voter_id.as_u32() + FIRST_VOTER_INDEX;
         } else {
-            panic!("Difficulty {}, The function should not be called for such high value of hash {}",
-                   big_difficulty,
-                   big_hash);
+            panic!(
+                "Difficulty {}, The function should not be called for such high value of hash {}",
+                big_difficulty, big_hash
+            );
         }
     }
 
@@ -305,7 +314,7 @@ impl Context {
             // extract difficulty
             Some(b) => {
                 return b.header.difficulty.clone();
-            },
+            }
             None => {
                 return DEFAULT_DIFFICULTY.clone();
             }
@@ -319,7 +328,7 @@ fn get_time() -> u64 {
     match cur_time {
         Ok(v) => {
             return v.as_secs();
-        },
+        }
         Err(e) => println!("Error parsing time: {:?}", e),
     }
     // TODO: there should be a better way of handling this, or just unwrap and panic
@@ -328,18 +337,14 @@ fn get_time() -> u64 {
 
 #[cfg(test)]
 mod tests {
-    use crate::crypto::hash::{H256};
     use super::*;
     use crate::blockchain::BlockChain;
+    use crate::blockdb::BlockDatabase;
     use crate::miner::memory_pool::MemoryPool;
-    use crate::block::{Block};
-    use crate::blockdb::{BlockDatabase};
     use std::sync::mpsc::channel;
-    use std::thread;
-    use rand::{Rng, RngCore};
     use std::sync::{Arc, Mutex};
 
-
+    /*
     #[test]
     fn difficulty() {
         // Initialize a blockchain with 10 voter chains.
@@ -356,6 +361,7 @@ mod tests {
         handle.exit();
         assert_eq!(block1.header.difficulty, DEFAULT_DIFFICULTY);
     }
+    */
 
     // this test is commented out for now, since it requires that we add the newly mined blocks to
     // the db and the blockchain. if we add those, the test becomes an integration test, and no
@@ -413,12 +419,15 @@ mod tests {
     #[test]
     fn sortition_id() {
         let tx_mempool = Arc::new(Mutex::new(MemoryPool::new()));
-        let blockchain = Arc::new(Mutex::new(BlockChain::new(10)));
-        let db = Arc::new(BlockDatabase::new(
-            &std::path::Path::new("/tmp/prism_miner_test_sortition.rocksdb")).unwrap());
-        let (ctx_update_s, ctx_update_r) = channel();
-        let (sender, receiver) = channel();
-        let (ctx, handle) = new(&tx_mempool, &blockchain, &db, sender, ctx_update_r);
+        let blockchain = Arc::new(Mutex::new(BlockChain::new(NUM_VOTER_CHAINS)));
+        let db = Arc::new(
+            BlockDatabase::new(&std::path::Path::new(
+                "/tmp/prism_miner_test_sortition.rocksdb",
+            ))
+            .unwrap(),
+        );
+        let (_ctx_update_s, ctx_update_r) = channel();
+        let (ctx, _handle) = new(&tx_mempool, &blockchain, &db, ctx_update_r);
 
         let big_difficulty = U256::from_big_endian(&DEFAULT_DIFFICULTY);
 
@@ -432,48 +441,47 @@ mod tests {
         // Transaction blocks
         hash = [0; 32]; // hash = 0
         sortition_id = ctx.get_sortition_id(&hash);
-        assert_eq!(sortition_id,PROPOSER_INDEX);
+        assert_eq!(sortition_id, PROPOSER_INDEX);
 
         // Set the hash to just below the boundary between tx and proposer blocks
         big_hash = big_difficulty / 100.into() * big_proposer_rate - 1.into();
         hash = big_hash.into();
         sortition_id = ctx.get_sortition_id(&hash);
-        assert_eq!(sortition_id,PROPOSER_INDEX);
+        assert_eq!(sortition_id, PROPOSER_INDEX);
 
         // Proposer blocks
         // Set the hash to just above the boundary between tx and proposer blocks
         big_hash = big_difficulty / 100.into() * big_proposer_rate;
         hash = big_hash.into();
         sortition_id = ctx.get_sortition_id(&hash);
-        assert_eq!(sortition_id,TRANSACTION_INDEX);
+        assert_eq!(sortition_id, TRANSACTION_INDEX);
 
         // Set the hash to just below the boundary between tx and voter blocks
-        big_hash = big_difficulty / 100.into() *
-            (big_transaction_rate + big_proposer_rate) - 1.into();
+        big_hash =
+            big_difficulty / 100.into() * (big_transaction_rate + big_proposer_rate) - 1.into();
         hash = big_hash.into();
         sortition_id = ctx.get_sortition_id(&hash);
-        assert_eq!(sortition_id,TRANSACTION_INDEX);
+        assert_eq!(sortition_id, TRANSACTION_INDEX);
 
         // Voter blocks
         // Set the hash to just above the boundary between tx and voter blocks
-        big_hash = big_difficulty / 100.into() *
-            (big_transaction_rate + big_proposer_rate);
+        big_hash = big_difficulty / 100.into() * (big_transaction_rate + big_proposer_rate);
         hash = big_hash.into();
         sortition_id = ctx.get_sortition_id(&hash);
-        assert_eq!(sortition_id,FIRST_VOTER_INDEX);
+        assert_eq!(sortition_id, FIRST_VOTER_INDEX);
 
         // Adding NUM_VOTER_CHAINS to the previous hash should
         // give the same result
         big_hash = big_hash + NUM_VOTER_CHAINS.into();
         hash = big_hash.into();
         sortition_id = ctx.get_sortition_id(&hash);
-        assert_eq!(sortition_id,FIRST_VOTER_INDEX);
+        assert_eq!(sortition_id, FIRST_VOTER_INDEX);
 
         // Adding one to the previous hash should
         // increment the voter chain  ID by one
         big_hash = big_hash + 1.into();
         hash = big_hash.into();
         sortition_id = ctx.get_sortition_id(&hash);
-        assert_eq!(sortition_id,FIRST_VOTER_INDEX+1);
+        assert_eq!(sortition_id, FIRST_VOTER_INDEX + 1);
     }
 }
