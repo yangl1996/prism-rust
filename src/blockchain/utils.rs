@@ -1,14 +1,17 @@
+use crate::block::generator as block_generator;
 use crate::block::proposer::Content as Proposer_Content;
 use crate::block::voter::Content as Voter_Content;
 use crate::block::{Block, Content};
-
-use crate::crypto::hash::H256;
-
-use crate::block::generator as block_generator;
 use crate::crypto::generator as crypto_generator;
+use crate::crypto::hash::H256;
 
 use std::cmp;
 use std::cmp::Ordering;
+use std::collections::{HashMap, HashSet};
+
+use super::edge::Edge;
+use super::proposer::Status as ProposerStatus;
+use super::voter::NodeStatus as VoterNodeStatus;
 
 pub fn lcb_from_vote_depths(votes: Vec<u32>) -> f32 {
     let answer: f32 = votes.len() as f32;
@@ -57,8 +60,24 @@ impl PropOrderingHelper {
     }
 }
 
+/// Struct to hold blockchain data to be dumped
+#[derive(Serialize, Deserialize)]
+pub struct Dump {
+    pub edges: Vec<(H256, H256, Edge)>,
+    pub prop_nodes: Vec<Vec<H256>>,
+    pub leader_nodes: HashMap<u32, H256>,
+    pub voter_chain_best_blocks: Vec<H256>,
+    pub pool_unconfirmed: HashSet<H256>,
+    pub pool_ordered: Vec<H256>,
+    pub pool_unreferred: HashSet<H256>,
+    //proposer_node_data is a vec of (hash, level, status, votes)
+    pub proposer_node_data: Vec<(H256, u32, ProposerStatus, u16)>,
+    //voter_node_data is a vec of (hash, chain_num, level, status)
+    pub voter_node_data: Vec<(H256, u16, u32, VoterNodeStatus)>,
+}
+
 /*
- Test utils
+ Test utilities
 */
 
 /// Generates a random tx_block with the given parent_hash. Only used by 'tx_blocks_with_parent_hash' fn.
