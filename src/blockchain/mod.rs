@@ -271,10 +271,10 @@ impl BlockChain {
                 //6. If the voter node was added on the main chain try confirming the latest unconfirmed level .
                 if voter_node_update == VoterNodeUpdateStatus::ExtendedMainChain {
                     loop {
-                        let level = self.proposer_tree.continuous_leader_level + 1;
+                        let level = self.proposer_tree.max_leader_level + 1;
                         self.confirm_leader_block_at_level(level);
-                        // Exit the loop if previous step did not increase "self.proposer_tree.continuous_leader_level"
-                        if level == self.proposer_tree.continuous_leader_level + 1 {
+                        // Exit the loop if previous step did not increase "self.proposer_tree.max_leader_level"
+                        if level == self.proposer_tree.max_leader_level + 1 {
                             break;
                         }
                     }
@@ -284,7 +284,7 @@ impl BlockChain {
     }
 }
 
-// Functions to infer the voter chains. These functions are not currently used in logic but are tested
+// Functions to infer the voter chains. These functions are not currently used in logic but they are tested.
 impl BlockChain {
     /// Return the voter blocks on the longest voter chain `chain_number`
     pub fn get_longest_chain(&self, chain_number: u16) -> Vec<H256> {
@@ -424,7 +424,7 @@ impl BlockChain {
         // 2a. Adding the leader block for the level
         let leader_block = proposers_blocks[max_lcb_vote_index];
         self.proposer_tree.leader_nodes.insert(level, leader_block);
-        self.proposer_tree.max_leader_level = cmp::max(self.proposer_tree.max_leader_level, level);
+        self.proposer_tree.max_leader_level = level;
 
         // 2b. Giving leader status to leader_block
         let ref mut leader_node_data = self.proposer_node_data.get_mut(&leader_block).unwrap();
@@ -440,7 +440,7 @@ impl BlockChain {
         }
 
         // 3. Updating ledger because a new leader block is added.
-        self.update_ledger();
+        self.update_ledger(level);
     }
 
     /// For all the votes (on the voter chain) for a given proposer block, return the depth of
@@ -471,50 +471,35 @@ impl BlockChain {
     }
 
     /// Called when a new leader block is confirmed at some level.
-    fn update_ledger(&mut self) {
-        // All the levels upto 'start_level' - 1 have a leader block and 'end level' is the last level which has a leader block.
-        // (There could potentially be levels between start_level and end_layer which dont have leader blocks)
-        let start_level = self.proposer_tree.continuous_leader_level + 1;
-        let end_level = self.proposer_tree.max_leader_level;
+    fn update_ledger(&mut self, level: u32) {
 
-        //
-        // Update the continuous_leader_level up to a level L s.t all levels upto L has a leader block
-        for l in start_level..=end_level {
-            // if level 'l' has a leader block, update the ledger w.r.t to this leader block.
-            if self.proposer_tree.leader_nodes.contains_key(&l) {
-                self.proposer_tree.continuous_leader_level = l;
-                let leader_block_at_l = self.proposer_tree.leader_nodes[&l];
+        let leader_block = self.proposer_tree.leader_nodes[&level];
 
-                //1. Get all the proposer blocks referred by this leader block which are not confirmed and
-                // aren't themselves leader blocks on their level. We need an *ordered* list here.
-                // Reason: We can confirm these proposer blocks and thereby confirming the tx blocks referred by these proposer blocks.
-                let to_confirm_proposer_blocks =
-                    self.get_unconfirmed_notleader_referred_proposer_blocks(leader_block_at_l);
+        //1. Get all the proposer blocks referred by this leader block which are not confirmed and
+        // aren't themselves leader blocks on their level. We need an *ordered* list here.
+        // Reason: We can confirm these proposer blocks and thereby confirming the tx blocks referred by these proposer blocks.
+        let to_confirm_proposer_blocks =
+            self.get_unconfirmed_notleader_referred_proposer_blocks(leader_block);
 
-                //2. Add the transactions blocks referred by these proposer blocks to the ledger.
-                for proposer_block in to_confirm_proposer_blocks.iter() {
-                    // Get all the tx blocks referred.
-                    for tx_blocks in self.get_referred_tx_blocks_ordered(proposer_block) {
-                        // Add the tx block to the ledger if not already in the ledger
-                        if !self.tx_pool.is_in_ledger(&tx_blocks) {
-                            self.tx_pool.add_to_ledger(&tx_blocks);
-                        }
-                    }
-                    // Changing the status of these prop blocks to 'not leader but confirmed'.
-                    // Reason: This is done to prevent these prop blocks from getting confirmed again.
-                    if *proposer_block != leader_block_at_l {
-                        self.proposer_node_data
-                            .get_mut(proposer_block)
-                            .unwrap()
-                            .give_not_leader_confirmed_status();
-                    }
+        //2. Add the transactions blocks referred by these proposer blocks to the ledger.
+        for proposer_block in to_confirm_proposer_blocks.iter() {
+            // Get all the tx blocks referred.
+            for tx_blocks in self.get_referred_tx_blocks_ordered(proposer_block) {
+                // Add the tx block to the ledger if not already in the ledger
+                if !self.tx_pool.is_in_ledger(&tx_blocks) {
+                    self.tx_pool.add_to_ledger(&tx_blocks);
                 }
             }
-            //if level 'l' doesnt have a leader block, we cant update the ledger further.
-            else {
-                break;
+            // Changing the status of these prop blocks to 'not leader but confirmed'.
+            // Reason: This is done to prevent these prop blocks from getting confirmed again.
+            if *proposer_block != leader_block {
+                self.proposer_node_data
+                    .get_mut(proposer_block)
+                    .unwrap()
+                    .give_not_leader_confirmed_status();
             }
         }
+
     }
 
     /// Idea: When a new leader block, B, is confirmed, it also confirms
