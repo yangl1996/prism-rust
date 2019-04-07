@@ -37,7 +37,6 @@ impl Pool {
     }
 
     pub fn mark_confirmation_boundary(&mut self, level: u32) {
-        println!("Marked conf at level {}", level);
         if self.confirmation_boundary.len() + 1 != level as usize {
             panic!("The proposer level is either already confirmed or its previous level is unconfirmed.\
             Level {}, confirmation_boundary.len(): {}", level, self.confirmation_boundary.len());
@@ -53,14 +52,15 @@ impl Pool {
 
     /// Rollback the ledger. Technically, this event occurs only under 51% attack
     pub fn rollback_ledger(&mut self, level: usize) {
-        println!("51% attack!!");
         // The start index of tx blocks confirmed by leader block at 'level'
         let rollback_start = self.confirmation_boundary[level];
-        // Move the tx blocks in self.ledger confirmed by leader blocks from level onwards to self.not_in_ledger
+        //1. Move the tx blocks in self.ledger confirmed by leader blocks from level onwards to self.not_in_ledger
         let mut to_remove: Vec<H256> = self.ledger.split_off(rollback_start);
         for tx_block in to_remove {
             self.insert_not_in_ledger(tx_block);
         }
+        //2. Drain confirmation_boundary vector
+        self.confirmation_boundary.drain(level - 1..);
     }
 
     pub fn insert_unreferred(&mut self, hash: H256) {

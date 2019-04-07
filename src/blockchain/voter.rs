@@ -106,8 +106,11 @@ impl Chain {
             return NodeUpdateStatus::ExtendedMainChain;
         }
         // A fork of equal length found
-        else if self.best_block != block_parent && self.best_level == level - 1 {
-            println!("found a new fork of equal length");
+        else if self.best_block != block_parent && self.best_level == level {
+            //            println!(
+            //                "found a new fork of equal length {}, for chain number {} with best level {}",
+            //                level, self.chain_number, self.best_level
+            //            );
             return NodeUpdateStatus::SideChain;
         }
         // A side_chain block mined.
@@ -116,7 +119,12 @@ impl Chain {
             return NodeUpdateStatus::SideChain;
         }
         // Rollback required
-        else if self.best_level < level - 1 {
+        else if self.best_level < level {
+            //            println!(
+            //                "found a longer fork of length {}, for chain number {}",
+            //                level, self.chain_number
+            //            );
+
             return NodeUpdateStatus::LongerFork;
         } else {
             panic!("This should not happen");
@@ -220,6 +228,7 @@ impl Chain {
         right_segment_proposer_votes: Vec<(H256, u32)>,
     ) {
         for vote in right_segment_proposer_votes.iter() {
+            //            println!("Adding vote on {}", vote.0);
             self.remove_unvoted(vote.1);
         }
     }
