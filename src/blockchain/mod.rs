@@ -20,8 +20,8 @@ use std::iter::FromIterator;
 use transaction::Pool as TxPool;
 use utils::PropOrderingHelper;
 use voter::Chain as VoterChain;
-use voter::NodeData as VoterNodeData;
 use voter::Fork as VoterChainFork;
+use voter::NodeData as VoterNodeData;
 use voter::NodeStatus as VoterNodeStatus;
 use voter::NodeUpdateStatus as VoterNodeUpdateStatus;
 
@@ -239,17 +239,23 @@ impl BlockChain {
                         parent_voter_node_data.level + 1,
                     );
 
-                // 5. Creating voter node data using the level of the parent. And updating
-                // the unvoted_levels on the voter chain
+                // 5. Create voter node data.
+                // Also update the unvoted_levels on the voter chain. For mining.
                 // TODO: replace default with new
                 let mut voter_node_data = VoterNodeData::default();
                 voter_node_data.level = parent_voter_node_data.level + 1;
                 voter_node_data.chain_number = parent_voter_node_data.chain_number;
+                self.voter_node_data.insert(block_hash, voter_node_data);
 
                 match voter_node_update {
-                    // New block extends the main chain. Good situation.
+                    // Case: New block extends the main chain. Good situation.
                     VoterNodeUpdateStatus::ExtendedMainChain => {
-                        voter_node_data.status = VoterNodeStatus::OnMainChain;
+                        // change the status of the new voter block
+                        self.voter_node_data
+                            .get_mut(&block_hash)
+                            .unwrap()
+                            .make_on_main_chain();
+
                         // Remove the prop block levels voted by this block from list of unvoted levels of this chain.
                         for prop_block_hash in content.proposer_block_votes.iter() {
                             let proposer_level = self.prop_node_data(&prop_block_hash).level;
@@ -258,8 +264,10 @@ impl BlockChain {
                                 .unwrap()
                                 .remove_unvoted(proposer_level);
                         }
+
                     }
-                    // New block has a longer fork than the main chain. This is a bad situation (and complex to deal with)
+                    // Case: New block is part of a side fork which is longer fork than the main chain.
+                    // This is a bad situation (and complex to deal with)
                     VoterNodeUpdateStatus::LongerFork => {
 
                         //1. Construct the Fork
@@ -268,39 +276,41 @@ impl BlockChain {
                         let left_leaf_level = self.voter_chains[chain_number].best_level;
                         let right_leaf = block_hash;
                         let right_leaf_level = voter_node_data.level;
-                        let fork = self.get_fork(left_leaf, right_leaf, left_leaf_level, right_leaf_level);
+                        let fork =
+                            self.get_fork(left_leaf, right_leaf, left_leaf_level, right_leaf_level);
 
-                        //2. Switch the main chain to the right segment
+                        //2. Switch the main chain to the right segment of the fork
                         let new_best_block = fork.right_segment.last().unwrap();
                         let new_best_level = self.prop_node_data(new_best_block).level;
-
-                        self.voter_chains[chain_number].switch_the_main_chain(*new_best_block, new_best_level);
+                        self.voter_chains[chain_number]
+                            .switch_the_main_chain(*new_best_block, new_best_level);
 
                         //3a. Change the status of left_segment voter blocks to Orphan and get the votes by this segment.
                         let mut votes_on_proposers_left: Vec<(H256, u32)> = vec![];
-                        for voter_block in fork.left_segment.iter(){
+                        for voter_block in fork.left_segment.iter() {
                             self.voter_node_data
                                 .get_mut(voter_block)
                                 .unwrap()
                                 .make_orphan(); //change status
                             let proposer_blocks = self.get_votes_by_voter(voter_block);
-                            for proposer_block in proposer_blocks{
+                            for proposer_block in proposer_blocks {
                                 let level = self.prop_node_data(&proposer_block).level;
                                 votes_on_proposers_left.push((proposer_block, level));
                             }
                             votes_on_proposers_left.sort_by_key(|k| k.1);
                         }
 
+                        let earliest_vote_level = votes_on_proposers_left[0].1; // This will be used for rollback
 
                         //3b. Change the status of right_segment voter blocks to OnMainChain and get the votes by this segment.
                         let mut votes_on_proposers_right: Vec<(H256, u32)> = vec![];
-                        for voter_block in fork.right_segment.iter(){
+                        for voter_block in fork.right_segment.iter() {
                             self.voter_node_data
                                 .get_mut(voter_block)
                                 .unwrap()
                                 .make_on_main_chain(); //change status
                             let proposer_blocks = self.get_votes_by_voter(voter_block);
-                            for proposer_block in proposer_blocks{
+                            for proposer_block in proposer_blocks {
                                 let level = self.prop_node_data(&proposer_block).level;
                                 votes_on_proposers_right.push((proposer_block, level));
                             }
@@ -308,38 +318,46 @@ impl BlockChain {
                         }
 
                         //4a. Add votes_on_proposers_left to unvoted_proposer_blocks in voter chain. For mining.
-                        self.voter_chains[chain_number].add_unvoted_while_switching(votes_on_proposers_left);
+                        self.voter_chains[chain_number]
+                            .add_unvoted_while_switching(votes_on_proposers_left);
 
                         //4b. Remove the votes_on_proposers_left to unvoted_proposer_blocks in voter chain. For mining.
-                        self.voter_chains[chain_number].remove_unvoted_while_switching(votes_on_proposers_right);
+                        self.voter_chains[chain_number]
+                            .remove_unvoted_while_switching(votes_on_proposers_right);
 
-
-
-                    }
-                    // A orphan voter block. Nothing major
-                    VoterNodeUpdateStatus::SideChain => {
-                        // Orphan block if voter block was did not extend the main chain
-                        voter_node_data.status = VoterNodeStatus::Orphan;
-                    }
-                }
-                self.voter_node_data.insert(block_hash, voter_node_data);
-
-                //6. If the voter node was added on the main chain try confirming the latest unconfirmed level .
-                if voter_node_update == VoterNodeUpdateStatus::ExtendedMainChain {
-                    loop {
-                        let level = self.proposer_tree.max_leader_level + 1;
-                        self.confirm_leader_block_at_level(level);
-                        // Exit the loop if previous step did not increase "self.proposer_tree.max_leader_level"
-                        if level == self.proposer_tree.max_leader_level + 1 {
-                            break;
+                        //5 Rollback the ledger if required.
+                        if earliest_vote_level < self.proposer_tree.min_unconfirmed_level{
+                            self.tx_pool.rollback_ledger(earliest_vote_level as usize);
                         }
+
+                    }
+                    // Case: A orphan voter block. Do nothing.
+                    VoterNodeUpdateStatus::SideChain => {
+                    }
+
+                }
+
+                // Try confirming levels from the min unconfirmed proposer level.
+                loop {
+                    let level = self.proposer_tree.min_unconfirmed_level;
+                    self.confirm_leader_block_at_level(level);
+                    // Exit the loop if previous step did not increase "self.proposer_tree.min_unconfirmed_level"
+                    if level == self.proposer_tree.min_unconfirmed_level {
+                        break;
                     }
                 }
+
             }
         };
     }
 
-    fn get_fork(&self, left_leaf: H256, right_leaf: H256, left_leaf_level: u32, right_leaf_level: u32) -> VoterChainFork {
+    fn get_fork(
+        &self,
+        left_leaf: H256,
+        right_leaf: H256,
+        left_leaf_level: u32,
+        right_leaf_level: u32,
+    ) -> VoterChainFork {
         if left_leaf_level >= right_leaf_level {
             panic!("This function should not be called when a small fork appears")
         }
@@ -349,17 +367,21 @@ impl BlockChain {
         let mut right_end: H256 = right_leaf;
 
         //1. Construct right segment until the level of right_end is same as left_end
-        for level in left_leaf_level..right_leaf_level{
+        for level in left_leaf_level..right_leaf_level {
             right_segment.push(right_end);
             right_end = self.get_voter_parent(right_end);
         }
 
-        loop{
+        loop {
             // If the ends are the same, then we've found a common parent
             if left_end == right_end {
                 left_segment.reverse();
                 right_segment.reverse();
-                return VoterChainFork { common_parent: left_end, left_segment, right_segment }
+                return VoterChainFork {
+                    common_parent: left_end,
+                    left_segment,
+                    right_segment,
+                };
             }
             // Extends both the segments.
             right_segment.push(right_end);
@@ -367,10 +389,8 @@ impl BlockChain {
 
             left_segment.push(left_end);
             left_end = self.get_voter_parent(left_end);
-
         }
     }
-
 }
 
 // Functions to infer the voter chains. These functions are not currently used in logic but they are tested.
@@ -513,7 +533,7 @@ impl BlockChain {
         // 2a. Adding the leader block for the level
         let leader_block = proposers_blocks[max_lcb_vote_index];
         self.proposer_tree.leader_nodes.insert(level, leader_block);
-        self.proposer_tree.max_leader_level = level;
+        self.proposer_tree.min_unconfirmed_level = level + 1;
 
         // 2b. Giving leader status to leader_block
         let ref mut leader_node_data = self.proposer_node_data.get_mut(&leader_block).unwrap();
@@ -561,7 +581,6 @@ impl BlockChain {
 
     /// Called when a new leader block is confirmed at some level.
     fn update_ledger(&mut self, level: u32) {
-
         let leader_block = self.proposer_tree.leader_nodes[&level];
 
         //1. Get all the proposer blocks referred by this leader block which are not confirmed and
@@ -571,6 +590,7 @@ impl BlockChain {
             self.get_unconfirmed_notleader_referred_proposer_blocks(leader_block);
 
         //2. Add the transactions blocks referred by these proposer blocks to the ledger.
+        self.tx_pool.mark_confirmation_boundary(level);
         for proposer_block in to_confirm_proposer_blocks.iter() {
             // Get all the tx blocks referred.
             for tx_blocks in self.get_referred_tx_blocks_ordered(proposer_block) {
@@ -588,7 +608,6 @@ impl BlockChain {
                     .give_not_leader_confirmed_status();
             }
         }
-
     }
 
     /// Idea: When a new leader block, B, is confirmed, it also confirms
@@ -795,7 +814,7 @@ impl BlockChain {
         return &self.proposer_node_data[hash];
     }
 
-    fn get_prop_node_level(&self, hash: &H256) -> u32{
+    fn get_prop_node_level(&self, hash: &H256) -> u32 {
         return self.prop_node_data(hash).level;
     }
     fn voter_node_data(&self, hash: &H256) -> &VoterNodeData {
@@ -869,8 +888,6 @@ impl BlockChain {
         Ok(ret)
     }
 }
-
-
 
 #[cfg(test)]
 mod tests {

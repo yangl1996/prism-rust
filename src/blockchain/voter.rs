@@ -106,7 +106,7 @@ impl Chain {
             return NodeUpdateStatus::ExtendedMainChain;
         }
         // A fork of equal length found
-        else if self.best_block != block_parent && self.best_level == level - 1{
+        else if self.best_block != block_parent && self.best_level == level - 1 {
             println!("found a new fork of equal length");
             return NodeUpdateStatus::SideChain;
         }
@@ -123,7 +123,7 @@ impl Chain {
         }
     }
 
-    pub fn switch_the_main_chain(&mut self, best_block: H256, best_level: u32){
+    pub fn switch_the_main_chain(&mut self, best_block: H256, best_level: u32) {
         self.best_block = best_block;
         self.best_level = best_level;
     }
@@ -141,7 +141,8 @@ impl Chain {
                 "Vote at level {} is skipped",
                 self.max_level_unvoted_proposer_block
             );
-        } else { // Ignore. Another proposer mined at 'level'
+        } else {
+            // Ignore. Another proposer mined at 'level'
         }
     }
 
@@ -193,10 +194,11 @@ impl Chain {
     pub fn add_unvoted_while_switching(&mut self, left_segment_proposer_votes: Vec<(H256, u32)>) {
         let mut pre_level = left_segment_proposer_votes[0].1;
 
-        self.unvoted_proposer_blocks.insert(pre_level, left_segment_proposer_votes[0].0);
-        for proposer_block in left_segment_proposer_votes[1..].iter(){
+        self.unvoted_proposer_blocks
+            .insert(pre_level, left_segment_proposer_votes[0].0);
+        for proposer_block in left_segment_proposer_votes[1..].iter() {
             let level = proposer_block.1;
-            if level!= pre_level+1 {
+            if level != pre_level + 1 {
                 panic!("The votes on proposer levels were not continuous");
             }
             self.unvoted_proposer_blocks.insert(level, proposer_block.0);
@@ -204,17 +206,19 @@ impl Chain {
         }
 
         //Changing the min_level_unvoted_proposer_block
-        if pre_level!= self.min_level_unvoted_proposer_block - 1{
+        if pre_level != self.min_level_unvoted_proposer_block - 1 {
             panic!("The votes are not removed till the min_level_unvoted_proposer_block")
         }
         self.min_level_unvoted_proposer_block = left_segment_proposer_votes[0].1;
-
     }
 
     /*
     It removes the proposer blocks voted in the right segment
     */
-    pub fn remove_unvoted_while_switching(&mut self, right_segment_proposer_votes: Vec<(H256, u32)>) {
+    pub fn remove_unvoted_while_switching(
+        &mut self,
+        right_segment_proposer_votes: Vec<(H256, u32)>,
+    ) {
         for vote in right_segment_proposer_votes.iter() {
             self.remove_unvoted(vote.1);
         }
@@ -226,8 +230,6 @@ impl Chain {
             .map(|level| self.unvoted_proposer_blocks[&level].clone())
             .collect();
     }
-
-
 }
 
 impl std::fmt::Display for Chain {
@@ -240,7 +242,6 @@ impl std::fmt::Display for Chain {
         Ok(())
     }
 }
-
 
 /// This structure stores a fork in the voter chain and it is used when a longer fork appears in a voting chain.
 /*
@@ -264,5 +265,5 @@ pub struct Fork {
     /// The segment which is currently on the main chain
     pub left_segment: Vec<H256>,
     /// The new segment on the side chain (which is longer than left segment)
-    pub right_segment: Vec<H256>
+    pub right_segment: Vec<H256>,
 }
