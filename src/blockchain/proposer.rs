@@ -79,7 +79,7 @@ pub struct Tree {
     /// Stores Leader nodes
     pub leader_nodes: HashMap<u32, H256>, // Using hashmap because leader nodes might not be confirmed sequentially
     /// The level upto which all levels have a leader block.
-    pub max_leader_level: u32,
+    pub min_unconfirmed_level: u32,
     /// Pool of unreferred proposer blocks. For mining
     pub unreferred: HashSet<H256>,
 }
@@ -97,7 +97,7 @@ impl Default for Tree {
             prop_nodes,
             number_of_votes: all_votes,
             leader_nodes,
-            max_leader_level: 0,
+            min_unconfirmed_level: 1,
             unreferred,
         };
     }
