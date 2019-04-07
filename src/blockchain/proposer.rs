@@ -41,6 +41,9 @@ impl NodeData {
     pub fn give_leader_status(&mut self) {
         self.leadership_status = Status::Leader
     }
+    pub fn give_potential_leader_status(&mut self) {
+        self.leadership_status = Status::PotentialLeader
+    }
     pub fn give_not_leader_status(&mut self) {
         self.leadership_status = Status::NotLeaderUnconfirmed
     }
