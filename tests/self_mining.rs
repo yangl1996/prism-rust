@@ -2,6 +2,7 @@ use prism::crypto::hash::H256;
 use prism::transaction::{Output, Transaction};
 use prism::{self, blockchain, blockdb, miner::memory_pool};
 use std::sync::{Arc, Mutex};
+use prism::visualization;
 
 const NUM_VOTER_CHAINS: u16 = 3;
 
@@ -76,7 +77,7 @@ fn self_mining() {
     miner.step();
     miner.step();
     std::thread::sleep(std::time::Duration::from_millis(1000));
-    println!("{}", blockchain.lock().unwrap().dump().unwrap());
+    println!("{}", visualization::dump_blockchain(&blockchain.lock().unwrap()));
     miner.exit();
 
     std::thread::sleep(std::time::Duration::from_millis(1000));
