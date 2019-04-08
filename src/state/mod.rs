@@ -1,98 +1,31 @@
 use crate::transaction::{Input, Output};
-use std::collections::HashMap;
+use bincode::{deserialize, serialize};
 
-// TODO: learn from Parity
+pub type Result<T> = std::result::Result<T, rocksdb::Error>;
 
 #[derive(Debug)]
-pub struct Storage {
-    /// Transaction outpoint -> coin value and owner.
-    by_outpoint: HashMap<Input, Output>,
+pub struct UTXODatabase {
+    handle: rocksdb::DB,
 }
 
-impl Storage {
-    pub fn new() -> Self {
-        return Self {
-            by_outpoint: HashMap::new(),
-        };
+impl UTXODatabase {
+    pub fn new(path: &std::path::Path) -> Result<Self> {
+        let db_handle = rocksdb::DB::open_default(path)?;
+        return Ok(UTXODatabase {
+            handle: db_handle,
+        });
     }
 
-    pub fn insert(&mut self, outpoint: Input, coin: Output) {
-        self.by_outpoint.insert(outpoint, coin);
-        return;
+    pub fn insert(&self, input: &Input, output: &Output) -> Result<()> {
+        let input_serialized = serialize(input).unwrap();
+        let output_serialized = serialize(output).unwrap();
+        return self.handle.put(&input_serialized, &output_serialized);
     }
 
-    pub fn contains(&self, outpoint: &Input) -> bool {
-        return self.by_outpoint.contains_key(outpoint);
-    }
-
-    pub fn remove(&mut self, outpoint: &Input) {
-        self.by_outpoint.remove(outpoint);
-        return;
+    pub fn delete(&mut self, input: &Input) -> Result<()> {
+        let input_serialized = serialize(input).unwrap();
+        return self.handle.delete(&input_serialized);
     }
 }
 
-// TODO: add tests.
-/*
-#[cfg(test)]
-pub mod tests {
-    use super::Storage;
-    use crate::crypto;
-    use crate::transaction::{Transaction, generator};
-    use crate::crypto::hash::Hashable;
-
-    #[test]
-    fn test_state_basic() {
-        let mut state = StateStorage::new();
-        assert_eq!(state.by_outpoint.len(), 0);
-        let h = crypto::generator::h256();
-        state.insert(&h, &0);
-        assert_eq!(state.by_transaction_hash.len(), 1);
-        state.insert(&h, &1);
-        assert_eq!(state.by_transaction_hash.len(), 1);
-        assert_eq!(state.contains(&h,&0), true);
-        assert_eq!(state.contains(&h,&1), true);
-        assert_eq!(state.contains(&h,&2), false);
-        assert_eq!(state.contains(&crypto_generator::h256(),&0), false);
-        state.remove(&h, &1);
-        assert_eq!(state.contains(&h,&0), true);
-        assert_eq!(state.contains(&h,&1), false);
-        assert_eq!(state.contains(&h,&2), false);
-        state.remove(&h, &0);
-        assert_eq!(state.contains(&h,&0), false);
-        assert_eq!(state.contains(&h,&1), false);
-        assert_eq!(state.contains(&h,&2), false);
-        assert_eq!(state.by_transaction_hash.len(), 0);
-    }
-
-    #[test]
-    fn test_state_multiple() {
-        let mut state = StateStorage::new();
-        assert_eq!(state.by_transaction_hash.len(), 0);
-        for i in 1..5 {
-            let h = crypto_generator::h256();
-            state.insert(&h, &3);
-            assert_eq!(state.by_transaction_hash.len(), i);
-            state.insert(&h, &5);
-            assert_eq!(state.by_transaction_hash.len(), i);
-        }
-
-    }
-
-    #[test]
-    fn test_state_add() {
-        let mut state = StateStorage::new();
-        assert_eq!(state.by_transaction_hash.len(), 0);
-        let tx: Transaction = generator::random_transaction_builder().into();
-        let h = tx.hash();
-        state.add(&tx);
-        assert_eq!(state.by_transaction_hash.len(), 1);
-        for i in 0..tx.output.len() {
-            assert!(state.contains(&h, &(i as u32)));
-        }
-        for i in 0..tx.output.len() {
-            state.remove(&h, &(i as u32));
-        }
-        assert_eq!(state.by_transaction_hash.len(), 0);
-    }
-}
-*/
+// TODO: add tests
