@@ -10,7 +10,6 @@ use std::sync::{Arc, Mutex};
 
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub struct Coin {
-    /// The "outpoint" of a transaction, identified by a transaction hash and an index
     input: Input,
     output: Output,
 }
@@ -50,10 +49,11 @@ impl Wallet {
 
     /// Add coins in a transaction that are destined to us
     pub fn add_transaction(&mut self, tx: &Transaction) {
+        let hash = tx.hash();
         for (idx, output) in tx.output.iter().enumerate() {
             if self.keys.contains_key(&output.recipient) {
                 let input = Input {
-                    hash: tx.hash(),
+                    hash,
                     index: idx as u32,
                 };
                 let output = output.clone();
@@ -93,9 +93,9 @@ impl Wallet {
                 let mut input: Vec<Input> = vec![];
                 let _signatures: Vec<Signature> = vec![];
 
-                for _used_coin in coins {
-                    input.push(coin.input.clone());
-                    self.remove_coin(&coin);
+                for c in coins {
+                    input.push(c.input.clone());
+                    self.remove_coin(&c);
                 }
 
                 // create the output
@@ -143,25 +143,105 @@ impl Wallet {
     }
 }
 
-/*
 #[cfg(test)]
 pub mod tests {
     use super::Wallet;
-    use crate::transaction::{Input,Output};
+    use crate::transaction::{Transaction,Output};
     use crate::crypto::generator as crypto_generator;
+    use crate::miner::memory_pool::MemoryPool;
+    use std::sync::{mpsc, Arc, Mutex};
 
     #[test]
-    pub fn test_wallet_balance() {
+    pub fn test_balance() {
+        let (ctx_update_sink, ctx_update_source) = mpsc::channel();
+        let pool = Arc::new(Mutex::new(MemoryPool::new()));
         let hash = crypto_generator::h256();
-        let mut w = Wallet::new();
-        w.set_key(hash.clone());
-        w.(Input{hash: crypto_generator::h256(), index: 0}, Output{value: 10, recipient: crypto_generator::h256()});
-        assert_eq!(w.total_balance(), 0);
-        w.insert(Input{hash: crypto_generator::h256(), index: 0}, Output{value: 10, recipient: hash.clone()});
-        assert_eq!(w.total_balance(), 10);
-        assert_eq!(w.safe_balance(), 10);
+        let mut w = Wallet::new(&pool, ctx_update_sink);
+        w.add_key(hash.clone());
+        assert_eq!(w.balance(), 0);
+    }
+    #[test]
+    pub fn test_add_transaction() {
+        let (ctx_update_sink, ctx_update_source) = mpsc::channel();
+        let pool = Arc::new(Mutex::new(MemoryPool::new()));
+        let hash = crypto_generator::h256();
+        let mut w = Wallet::new(&pool, ctx_update_sink);
+        w.add_key(hash.clone());
+        let mut output: Vec<Output> = vec![];
+        for i in 0..10 {
+            output.push(Output{value: 10, recipient: hash.clone()});
+        }
+        let tx1 = Transaction {
+                    input: vec![],
+                    output,
+                    signatures: vec![],
+                };
+        w.add_transaction(&tx1);
+        assert_eq!(w.balance(), 100);
     }
 
+    #[test]
+    pub fn test_send_coin() {
+        let (ctx_update_sink, ctx_update_source) = mpsc::channel();
+        let pool = Arc::new(Mutex::new(MemoryPool::new()));
+        let hash = crypto_generator::h256();
+        let mut w = Wallet::new(&pool, ctx_update_sink);
+        w.add_key(hash.clone());
+        let mut output: Vec<Output> = vec![];
+        for i in 0..10 {
+            output.push(Output{value: 10, recipient: hash.clone()});
+        }
+        let tx1 = Transaction {
+                    input: vec![],
+                    output,
+                    signatures: vec![],
+                };
+        w.add_transaction(&tx1);
+        // now we have 10*10 coins, we try to spend them
+        for i in 0..5 {
+            w.send_coin(crypto_generator::h256(), 20);
+        }
+        assert_eq!(w.balance(), 0);
+        let m = pool.lock().unwrap();
+        let txs: Vec<Transaction> = m.get_transactions(5).iter().map(|entry|entry.transaction.clone()).collect();
+        drop(m);
+        assert_eq!(txs.len(), 5);
+        for tx in &txs {
+            println!("{:?}",tx);
+        }
+    }
+
+    #[test]
+    pub fn test_send_coin_2() {
+        let (ctx_update_sink, ctx_update_source) = mpsc::channel();
+        let pool = Arc::new(Mutex::new(MemoryPool::new()));
+        let hash = crypto_generator::h256();
+        let mut w = Wallet::new(&pool, ctx_update_sink);
+        w.add_key(hash.clone());
+        let mut output: Vec<Output> = vec![];
+        for i in 0..10 {
+            output.push(Output{value: 10, recipient: hash.clone()});
+        }
+        let tx1 = Transaction {
+                    input: vec![],
+                    output,
+                    signatures: vec![],
+                };
+        w.add_transaction(&tx1);
+        // now we have 10*10 coins, we try to spend them
+        for i in 0..5 {
+            w.send_coin(crypto_generator::h256(), 19);
+        }
+        assert_eq!(w.balance(), 0);
+        let m = pool.lock().unwrap();
+        let txs: Vec<Transaction> = m.get_transactions(5).iter().map(|entry|entry.transaction.clone()).collect();
+        drop(m);
+        assert_eq!(txs.len(), 5);
+        for tx in &txs {
+            println!("{:?}",tx);
+        }
+    }
+/*
     #[test]
     pub fn test_wallet_create() {
         let hash = crypto_generator::h256();
@@ -265,5 +345,5 @@ pub mod tests {
         assert!(w.create(crypto_generator::h256(), 1).is_none());
 
     }
-}
 */
+}
