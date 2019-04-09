@@ -1,7 +1,7 @@
 use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::merkle::MerkleTree;
 
-#[derive(Serialize, Deserialize, Hash, Debug, Default, Clone)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct Content {
     /// List of transaction blocks referred by this proposer block
     pub transaction_block_hashes: Vec<H256>,
