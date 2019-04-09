@@ -60,22 +60,6 @@ impl PropOrderingHelper {
     }
 }
 
-/// Struct to hold blockchain data to be dumped
-#[derive(Serialize, Deserialize)]
-pub struct Dump {
-    pub edges: Vec<(H256, H256, Edge)>,
-    pub prop_nodes: Vec<Vec<H256>>,
-    pub leader_nodes: HashMap<u32, H256>,
-    pub voter_chain_best_blocks: Vec<H256>,
-    pub pool_unconfirmed: HashSet<H256>,
-    pub pool_ordered: Vec<H256>,
-    pub pool_unreferred: HashSet<H256>,
-    //proposer_node_data is a vec of (hash, level, status, votes)
-    pub proposer_node_data: Vec<(H256, u32, ProposerStatus, u16)>,
-    //voter_node_data is a vec of (hash, chain_num, level, status)
-    pub voter_node_data: Vec<(H256, u16, u32, VoterNodeStatus)>,
-}
-
 /*
  Test utilities
 */

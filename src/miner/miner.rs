@@ -6,7 +6,7 @@ use crate::blockdb::BlockDatabase;
 use crate::config::*;
 use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::merkle::MerkleTree;
-use crate::handler::new_block;
+use crate::handler::new_validated_block;
 use log::info;
 
 use super::memory_pool::MemoryPool;
@@ -189,7 +189,7 @@ impl Context {
                 // Create a block
                 let mined_block: Block = self.assemble_block(header);
                 // Release block to the network
-                new_block(mined_block, &self.db, &self.blockchain);
+                new_validated_block(mined_block, &self.db, &self.blockchain);
                 // TODO: update mempool
                 info!("Mined one block");
                 // if we are stepping, pause the miner loop

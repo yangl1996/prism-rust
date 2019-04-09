@@ -80,8 +80,7 @@ fn main() {
 
                 //2. Inserting in db
                 let db_start = Instant::now();
-                let block_hash = block.hash();
-                blockdb.insert(&block_hash, &block);
+                blockdb.insert(&block);
                 let db_end = Instant::now();
                 db_time_ns += db_end.duration_since(db_start).as_micros() as f64;
 
