@@ -83,9 +83,8 @@ impl Wallet {
         let mut coins: Vec<Coin> = vec![];
         let mut value_sum = 0u64;
 
-        let iter_coins = self.coins.iter();
         // iterate thru our wallet
-        for coin in iter_coins {
+        for coin in self.coins.iter() {
             value_sum += coin.utxo.value;
             coins.push(coin.clone()); // coins that will be used for this transaction
 
