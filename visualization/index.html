@@ -29,6 +29,13 @@
 	xhr.send();
 }
 
+// colors
+// 4CECED
+// 69D979
+// E7E25B
+// E65026
+// C4282C
+
 var cy = cytoscape({
 	container: document.getElementById('cy'), // container to render in,
 	style: [ // the stylesheet for the graph
@@ -44,7 +51,30 @@ var cy = cytoscape({
 				'label': 'data(disp)'
 			}
 		},
-
+		{
+			selector: 'node[type="voter"]',
+			style: {
+				'shape': 'rectangle',
+				'width': 'label',
+				'height': 'label',
+				'text-halign': 'center',
+				'text-valign': 'center',
+				'background-color': '#4CECED',
+				'label': 'data(disp)'
+			}
+		},
+		{
+			selector: 'node[type="proposer"]',
+			style: {
+				'shape': 'rectangle',
+				'width': 'label',
+				'height': 'label',
+				'text-halign': 'center',
+				'text-valign': 'center',
+				'background-color': '#69D979',
+				'label': 'data(disp)'
+			}
+		},
 		{
 			selector: 'edge',
 			style: {
@@ -228,7 +258,8 @@ function handle_data(data) {
                 row: node.data("row"),
                 col: node.data("col"),
             };
-        }
+        },
+        condense: true,
 	}).run();
 }
 
