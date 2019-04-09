@@ -41,6 +41,9 @@ impl NodeData {
     pub fn give_leader_status(&mut self) {
         self.leadership_status = Status::Leader
     }
+    pub fn give_potential_leader_status(&mut self) {
+        self.leadership_status = Status::PotentialLeader
+    }
     pub fn give_not_leader_status(&mut self) {
         self.leadership_status = Status::NotLeaderUnconfirmed
     }
@@ -79,9 +82,7 @@ pub struct Tree {
     /// Stores Leader nodes
     pub leader_nodes: HashMap<u32, H256>, // Using hashmap because leader nodes might not be confirmed sequentially
     /// The level upto which all levels have a leader block.
-    pub continuous_leader_level: u32,
-    /// The max level at which a leader block exists.
-    pub max_leader_level: u32,
+    pub min_unconfirmed_level: u32,
     /// Pool of unreferred proposer blocks. For mining
     pub unreferred: HashSet<H256>,
 }
@@ -99,8 +100,7 @@ impl Default for Tree {
             prop_nodes,
             number_of_votes: all_votes,
             leader_nodes,
-            continuous_leader_level: 0,
-            max_leader_level: 0,
+            min_unconfirmed_level: 1,
             unreferred,
         };
     }
@@ -144,3 +144,42 @@ impl std::fmt::Display for Tree {
         Ok(())
     }
 }
+
+///// This structure is responsible for confirming blocks. Each level will have its own LeaderConfirmer
+///// object which *monitors* the voter chains to see if they have enough votes to confirm a leader
+///// block at the level
+//pub struct LeaderConfirmer{
+//    /// The level of the confirmer
+//    pub level: u32,
+//    /// Number of votes cast on the level
+//    pub number_of_votes: u32,
+//    /// The depths of the votes
+//    pub depths: Vec<u32>,
+//    /// The proposer blocks at the level with lcb of votes.
+//    pub proposer_blocks: HashMap<H256, f32>,
+//    /// The leader block at the level
+//    pub leader_block: Option<H256>
+//}
+//
+//
+//
+//
+//impl LeaderConfirmer{
+//    // Initializes a new object.
+//    fn new(level: u32, no_of_voting_chains: u16) -> Self {
+//        // Initializing zero-vector of no_of_voting_chains size
+//        let depths = std::iter::repeat(0).take(no_of_voting_chains as usize).collect::<Vec<u32>>();
+//        let proposer_blocks: HashMap<H256, Vec<H256>> = HashMap::<H256, Vec<H256>>::new();
+//        let leader_block: Option<H256> = None;
+//        return LeaderConfirmer {level, depths, proposer_blocks, leader_block};
+//    }
+//
+//    // Add a new block at level
+//    pub fn add_block(&mut self, hash: H256){
+//        self.proposer_blocks.insert(hash, 0.0);
+//    }
+//
+//    pub fn add_vote(&mut self, chain_number: u16){
+//        self.depths[chain_number as usize] += 1;
+//    }
+//}
