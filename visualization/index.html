@@ -3,8 +3,8 @@
 	<head>
 		<title>Prism</title>
 		<script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.5.2/cytoscape.min.js"></script>
-        <script src="http://marvl.infotech.monash.edu/webcola/cola.v3.min.js"></script>
-        <script src="https://cdn.jsdelivr.net/npm/cytoscape-cola@2.3.0/cytoscape-cola.min.js"></script>
+		<script src="http://marvl.infotech.monash.edu/webcola/cola.v3.min.js"></script>
+		<script src="https://cdn.jsdelivr.net/npm/cytoscape-cola@2.3.0/cytoscape-cola.min.js"></script>
 	</head>
 	<body>
 		<div id="cy" style="width: 100%; height: 100%; position: absolute; top: 0px; left: 0px;"></div>
@@ -62,6 +62,7 @@ function handle_error(xhr) {
 }
 
 function handle_data(data) {
+	// add voter nodes
 	for (hash in data['voter_nodes']) {
 		v = data['voter_nodes'][hash];
 		short_hash = hash.substring(58, 64);
@@ -79,6 +80,7 @@ function handle_data(data) {
 		cy.add(new_node);
 	}
 
+	// add proposer nodes
 	for (hash in data['proposer_nodes']) {
 		v = data['proposer_nodes'][hash];
 		short_hash = hash.substring(58, 64);
@@ -96,43 +98,43 @@ function handle_data(data) {
 		cy.add(new_node);
 	}
 
+	// add edges from block to its immediate parent
 	for (idx in data['edges']) {
 		e = data['edges'][idx];
-		new_edge = {
-			data: {
-				source: e['from'],
-				target: e['to']
+		if (e['edgetype'] == 'VoterToVoterParent' ||
+		    e['edgetype'] == 'ProposerToProposerParent') {
+			new_edge = {
+				data: {
+					source: e['from'],
+					target: e['to']
+				}
+			};
+			try {
+				cy.add(new_edge);
 			}
-		};
-		try {
-			cy.add(new_edge);
-		}
-		catch {
+			catch {
+			}
 		}
 	}
 
+	// run the layout with only edges between blocks and immediate parents
+	// or there will be too many edges for cola to determine the tree structure
 	cy.layout({
-		name: 'grid',
-		position: function(node) {
-			console.log('hi');
+		name: 'cola',
+		animate: false,
+		flow: {
+			axis: 'x'
+		},
+		avoidOverlap: true,
+		convergenceThreshold: 0.1,
+		randomize: false,
+		/*
+		alignment: function(node) {
 			return {
-				row: node.data('level'),
-				col: node.data('chain')
+				y: (node.data('level') + 1) * 100,
 			}
-		}}).run();
-
-/*
-    cy.layout({
-        name: 'cola',
-        alignment: function(node) {
-			console.log('hi');
-			return {
-				y: node.data('level'),
-				x: node.data('chain')
-		    };
-        },
-    }).run();
-*/
+		}*/
+	}).run();
 }
 
 loadJSON("http://localhost:8080", handle_data, handle_error)
