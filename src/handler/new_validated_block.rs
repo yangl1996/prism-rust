@@ -4,7 +4,7 @@ use crate::blockdb::BlockDatabase;
 use crate::crypto::hash::Hashable;
 use std::sync::Mutex;
 
-pub fn new_block(block: Block, db: &BlockDatabase, chain: &Mutex<BlockChain>) {
+pub fn new_validated_block(block: Block, db: &BlockDatabase, chain: &Mutex<BlockChain>) {
     // TODO: for now, we assume that blocks appear in order
     let hash = block.hash();
 
