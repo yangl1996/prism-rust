@@ -1,18 +1,22 @@
+use crate::crypto::hash::H256;
 use crate::transaction::{Input, Output, Transaction};
 use bincode::{deserialize, serialize};
-use std::hash::{Hash, Hasher};
 use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::sync::Mutex;
 
 pub type Result<T> = std::result::Result<T, rocksdb::Error>;
 
-#[derive(Hash, Serialize)]
-pub struct UTXO{
-    transaction: Transaction, //TODO: We only need the hash of the tx and index.
-    index: u32,
-    value: u64
-}
+// Bitcoin UTXO is much more complicated because they have extra seg-wit and locktime.
 
+
+type CoinId = Input;
+
+#[derive(Hash, Serialize)]
+pub struct UTXO {
+    coin_id: CoinId, // Hash of the transaction. This along with the index is the coin index is the key.
+    value: u64,
+}
 
 #[derive(Debug)]
 pub struct UTXODatabase {
@@ -29,29 +33,25 @@ impl UTXODatabase {
         });
     }
 
+    /// Add utxo to t he
     pub fn insert(&self, utxo: &UTXO) -> Result<()> {
-        let mut hasher = DefaultHasher::new();
-        let utxo_hash = serialize(& utxo.hash(&mut hasher)).unwrap();
-        let utxo_serialized = serialize(utxo).unwrap();
+        let key = serialize(&utxo.coin_id).unwrap();
+        let value = serialize(&utxo.value).unwrap();
         let mut count = self.count.lock().unwrap();
         *count += 1;
-        return self.handle.put(&utxo_hash, &utxo_serialized);
+        return self.handle.put(&key, &value);
     }
 
-    pub fn delete(&mut self, utxo: &UTXO) -> Result<()> { //TODO: Should accept a hash of the utxo.
-        let mut hasher = DefaultHasher::new();
-        let utxo_hash = serialize(&utxo.hash(&mut hasher)).unwrap();
+    pub fn delete(&mut self, coin_id: CoinId) -> Result<()> {
+        let key = serialize(&coin_id).unwrap();
         let mut count = self.count.lock().unwrap();
         *count -= 1;
-        return self.handle.delete(utxo_hash);
+        return self.handle.delete(key);
     }
 
-    //TODO: Should accept a hash of the utxo.
-    //TODO: Only check if the utxo exists. It should not 'get' it.
-    pub fn check(&self, utxo: &UTXO) -> Result<bool> {
-        let mut hasher = DefaultHasher::new();
-        let utxo_hash = serialize(&utxo.hash(&mut hasher)).unwrap();
-        let serialized = self.handle.get(&utxo_hash)?;
+    pub fn check(&mut self, coin_id: CoinId) -> Result<bool> {
+        let key = serialize(&coin_id).unwrap();
+        let serialized = self.handle.get(&key)?;
         match serialized {
             None => return Ok(false),
             Some(s) => return Ok(true),
