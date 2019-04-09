@@ -1,5 +1,5 @@
 use crate::block::Block;
-use crate::crypto::hash::H256;
+use crate::crypto::hash::{Hashable, H256};
 use bincode::{deserialize, serialize};
 use std::sync::Mutex;
 
@@ -19,8 +19,8 @@ impl BlockDatabase {
         });
     }
 
-    pub fn insert(&self, hash: &H256, block: &Block) -> Result<()> {
-        let hash_u8: [u8; 32] = hash.into(); // TODO: implement H256 asref<[u8]>
+    pub fn insert(&self, block: &Block) -> Result<()> {
+        let hash_u8: [u8; 32] = (&block.hash()).into(); // TODO: implement H256 asref<[u8]>
         let serialized = serialize(block).unwrap();
         let mut count = self.count.lock().unwrap();
         *count += 1;
@@ -62,7 +62,7 @@ mod tests {
         ))
         .unwrap();
         let test_block = generator::tx_block();
-        db.insert(&test_block.hash(), &test_block).unwrap();
+        db.insert(&test_block).unwrap();
         let got = db.get(&test_block.hash()).unwrap().unwrap();
         let num_block = db.num_blocks();
         assert_eq!(got.hash(), test_block.hash());

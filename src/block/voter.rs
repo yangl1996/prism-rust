@@ -1,7 +1,7 @@
 use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::merkle::MerkleTree;
 
-#[derive(Serialize, Deserialize, Hash, Debug, Default, Clone)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct Content {
     /// Voter chain id
     pub chain_number: u16,
