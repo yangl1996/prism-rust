@@ -14,6 +14,7 @@ pub mod network;
 pub mod state;
 pub mod transaction;
 pub mod validation;
+pub mod visualization;
 pub mod wallet;
 
 use blockchain::BlockChain;

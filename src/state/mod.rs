@@ -1,98 +1,112 @@
-use crate::transaction::{Input, Output};
-use std::collections::HashMap;
+pub mod generator;
 
-// TODO: learn from Parity
+use crate::block::transaction::Content as TxContent;
+use crate::crypto::hash::{Hashable, H256};
+use crate::transaction::{Input, Output, Transaction};
 
-#[derive(Debug)]
-pub struct Storage {
-    /// Transaction outpoint -> coin value and owner.
-    by_outpoint: HashMap<Input, Output>,
+use bincode::{deserialize, serialize};
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
+use std::sync::Mutex;
+
+pub type Result<T> = std::result::Result<T, rocksdb::Error>;
+pub type CoinId = Input;
+
+// Bitcoin UTXO is much more complicated because they have extra seg-wit and locktime.
+pub struct UTXO {
+    pub coin_id: CoinId, // Hash of the transaction. This along with the index is the coin index is the key.
+    pub value: u64,
 }
 
-impl Storage {
-    pub fn new() -> Self {
-        return Self {
-            by_outpoint: HashMap::new(),
-        };
+pub struct UTXODatabase {
+    handle: rocksdb::DB,
+    count: Mutex<u64>,
+}
+
+impl UTXODatabase {
+    pub fn new(path: &std::path::Path) -> Result<Self> {
+        let db_handle = rocksdb::DB::open_default(path)?;
+        return Ok(UTXODatabase {
+            handle: db_handle,
+            count: Mutex::new(0),
+        });
     }
 
-    pub fn insert(&mut self, outpoint: Input, coin: Output) {
-        self.by_outpoint.insert(outpoint, coin);
-        return;
+    pub fn insert(&self, utxo: &UTXO) -> Result<()> {
+        let key = serialize(&utxo.coin_id).unwrap();
+        let value = serialize(&utxo.value).unwrap();
+        let mut count = self.count.lock().unwrap();
+        *count += 1;
+        return self.handle.put(&key, &value);
     }
 
-    pub fn contains(&self, outpoint: &Input) -> bool {
-        return self.by_outpoint.contains_key(outpoint);
+    pub fn delete(&mut self, coin_id: &CoinId) -> Result<()> {
+        let key = serialize(coin_id).unwrap();
+        let mut count = self.count.lock().unwrap();
+        *count -= 1;
+        return self.handle.delete(key);
     }
 
-    pub fn remove(&mut self, outpoint: &Input) {
-        self.by_outpoint.remove(outpoint);
-        return;
+    pub fn get(&self, coin_id: &CoinId) -> Result<Option<u64>> {
+        let key = serialize(coin_id).unwrap();
+        let serialized = self.handle.get(&key)?;
+        match serialized {
+            None => return Ok(None),
+            Some(s) => return Ok(Some(deserialize(&s).unwrap())),
+        }
+    }
+
+    //TODO: Check the key without getting the value (Use Bloom filters maybe?)
+    pub fn check(&mut self, coin_id: &CoinId) -> Result<bool> {
+        let key = serialize(coin_id).unwrap();
+        let serialized = self.handle.get(&key)?;
+        match serialized {
+            None => return Ok(false),
+            Some(s) => return Ok(true),
+        }
+    }
+
+    pub fn num_utxo(&self) -> u64 {
+        let count = self.count.lock().unwrap();
+        return *count;
     }
 }
 
-// TODO: add tests.
-/*
 #[cfg(test)]
-pub mod tests {
-    use super::Storage;
-    use crate::crypto;
-    use crate::transaction::{Transaction, generator};
-    use crate::crypto::hash::Hashable;
+mod tests {
+    use super::*;
+    use crate::transaction::generator as tx_generator;
 
     #[test]
-    fn test_state_basic() {
-        let mut state = StateStorage::new();
-        assert_eq!(state.by_outpoint.len(), 0);
-        let h = crypto::generator::h256();
-        state.insert(&h, &0);
-        assert_eq!(state.by_transaction_hash.len(), 1);
-        state.insert(&h, &1);
-        assert_eq!(state.by_transaction_hash.len(), 1);
-        assert_eq!(state.contains(&h,&0), true);
-        assert_eq!(state.contains(&h,&1), true);
-        assert_eq!(state.contains(&h,&2), false);
-        assert_eq!(state.contains(&crypto_generator::h256(),&0), false);
-        state.remove(&h, &1);
-        assert_eq!(state.contains(&h,&0), true);
-        assert_eq!(state.contains(&h,&1), false);
-        assert_eq!(state.contains(&h,&2), false);
-        state.remove(&h, &0);
-        assert_eq!(state.contains(&h,&0), false);
-        assert_eq!(state.contains(&h,&1), false);
-        assert_eq!(state.contains(&h,&2), false);
-        assert_eq!(state.by_transaction_hash.len(), 0);
-    }
+    fn insert_get_check_and_delete() {
+        let mut state_db = generator::random();
+        let mut count = state_db.num_utxo();
 
-    #[test]
-    fn test_state_multiple() {
-        let mut state = StateStorage::new();
-        assert_eq!(state.by_transaction_hash.len(), 0);
-        for i in 1..5 {
-            let h = crypto_generator::h256();
-            state.insert(&h, &3);
-            assert_eq!(state.by_transaction_hash.len(), i);
-            state.insert(&h, &5);
-            assert_eq!(state.by_transaction_hash.len(), i);
+        println!("Test 1: count");
+        let transaction = tx_generator::random();
+        let utxos = generator::tx_to_utxos(transaction);
+        for utxo in utxos.iter() {
+            state_db.insert(utxo);
         }
 
-    }
+        assert_eq!(state_db.num_utxo(), count + utxos.len() as u64);
 
-    #[test]
-    fn test_state_add() {
-        let mut state = StateStorage::new();
-        assert_eq!(state.by_transaction_hash.len(), 0);
-        let tx: Transaction = generator::random_transaction_builder().into();
-        let h = tx.hash();
-        state.add(&tx);
-        assert_eq!(state.by_transaction_hash.len(), 1);
-        for i in 0..tx.output.len() {
-            assert!(state.contains(&h, &(i as u32)));
+        println!("Test 2: check()");
+        for utxo in utxos.iter() {
+            assert!(state_db.check(&utxo.coin_id).unwrap());
         }
-        for i in 0..tx.output.len() {
-            state.remove(&h, &(i as u32));
+
+        println!("Test 3: get()");
+        for utxo in utxos.iter() {
+            assert_eq!(state_db.get(&utxo.coin_id).unwrap().unwrap(), utxo.value);
         }
-        assert_eq!(state.by_transaction_hash.len(), 0);
+
+        println!("Test 4: delete()");
+        state_db.delete(&utxos[0].coin_id);
+        assert!(!state_db.check(&utxos[0].coin_id).unwrap());
+
+        assert_eq!(state_db.num_utxo(), count + utxos.len() as u64 - 1);
     }
 }
-*/
+
+// TODO: add tests

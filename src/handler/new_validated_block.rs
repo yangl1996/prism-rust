@@ -4,9 +4,8 @@ use crate::blockdb::BlockDatabase;
 use crate::crypto::hash::Hashable;
 use std::sync::Mutex;
 
-pub fn new_block(block: Block, db: &BlockDatabase, chain: &Mutex<BlockChain>) {
+pub fn new_validated_block(block: Block, db: &BlockDatabase, chain: &Mutex<BlockChain>) {
     // TODO: for now, we assume that blocks appear in order
-    let hash = block.hash();
 
     // insert the new block into the blockchain
     let mut chain = chain.lock().unwrap();
@@ -14,5 +13,5 @@ pub fn new_block(block: Block, db: &BlockDatabase, chain: &Mutex<BlockChain>) {
     drop(chain);
 
     // insert the new block into the blockdb
-    db.insert(&hash, &block).unwrap();
+    db.insert(&block).unwrap();
 }

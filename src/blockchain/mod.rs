@@ -1,8 +1,8 @@
-mod edge;
-mod proposer;
-mod transaction;
+pub mod edge;
+pub mod proposer;
+pub mod transaction;
 pub mod utils;
-mod voter;
+pub mod voter;
 use super::block::{Block, Content};
 use super::crypto::hash::{Hashable, H256};
 use edge::Edge;
@@ -16,7 +16,6 @@ use std::collections::VecDeque;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::iter::FromIterator;
 use transaction::Pool as TxBlkPool;
-use utils::Dump;
 use utils::PropOrderingHelper;
 use voter::Chain as VoterChain;
 use voter::Fork as VoterChainFork;
@@ -327,25 +326,26 @@ impl BlockChain {
                         //5 Rollback the ledger if required.
 
                         //5a. Check if the leader blocks have changed between first_left_segment_vote_level and min_unconfirmed_level.
-                        let mut roll_back_level = first_left_segment_vote_level;
+                        let mut roll_back_level = 0;
                         let mut roll_back_required = false;
-                        for roll_back_level in
+                        for level in
                             first_left_segment_vote_level..self.proposer_tree.min_unconfirmed_level
                         {
-                            let old_leader_block =
-                                self.get_leader_block_at_level(roll_back_level).unwrap();
-                            match self.compute_leader_block_at_level(roll_back_level) {
+                            let old_leader_block = self.get_leader_block_at_level(level).unwrap();
+                            match self.compute_leader_block_at_level(level) {
                                 Some(new_leader_block) => {
                                     if old_leader_block != new_leader_block {
                                         // Leader block changed at the level
                                         roll_back_required = true;
+                                        roll_back_level = level;
                                         break;
                                     }
                                 }
                                 None => {
                                     // level leader block is not the leader block and infact level has not leader block
-                                    self.proposer_tree.leader_nodes.remove(&roll_back_level);
+                                    self.proposer_tree.leader_nodes.remove(&level);
                                     roll_back_required = true;
+                                    roll_back_level = level;
                                     break;
                                 }
                             }
@@ -858,57 +858,6 @@ impl BlockChain {
 
     fn voter_node_data(&self, hash: &H256) -> &VoterNodeData {
         return &self.voter_node_data[hash];
-    }
-}
-
-// for dump the blockchain
-impl BlockChain {
-    pub fn dump(&self) -> serde_json::Result<String> {
-        let edges: Vec<(H256, H256, Edge)> = self
-            .graph
-            .all_edges()
-            .map(|x| (x.0, x.1, x.2.to_owned()))
-            .collect();
-        let prop_nodes: Vec<Vec<H256>> = self.proposer_tree.prop_nodes.to_owned();
-        let leader_nodes: HashMap<u32, H256> = self.proposer_tree.leader_nodes.to_owned();
-        let voter_chain_best_blocks: Vec<H256> = self
-            .voter_chains
-            .iter()
-            .map(|chain| chain.best_block.to_owned())
-            .collect();
-        let pool_unconfirmed: HashSet<H256> = self.tx_blk_pool.not_in_ledger.to_owned();
-        let pool_ordered: Vec<H256> = self.tx_blk_pool.ledger.to_owned();
-        let pool_unreferred: HashSet<H256> = self.tx_blk_pool.unreferred.to_owned();
-        let proposer_node_data: Vec<(H256, u32, ProposerStatus, u16)> = self
-            .proposer_node_data
-            .iter()
-            .map(|(k, v)| {
-                (
-                    k.to_owned(),
-                    v.level,
-                    v.leadership_status.to_owned(),
-                    v.votes,
-                )
-            })
-            .collect();
-        let voter_node_data: Vec<(H256, u16, u32, VoterNodeStatus)> = self
-            .voter_node_data
-            .iter()
-            .map(|(k, v)| (k.to_owned(), v.chain_number, v.level, v.status.to_owned()))
-            .collect();
-        let dump = Dump {
-            edges,
-            prop_nodes,
-            leader_nodes,
-            voter_chain_best_blocks,
-            pool_unconfirmed,
-            pool_ordered,
-            pool_unreferred,
-            proposer_node_data,
-            voter_node_data,
-        };
-        let ret = serde_json::to_string_pretty(&dump)?;
-        Ok(ret)
     }
 }
 
@@ -1812,44 +1761,5 @@ mod tests {
         assert_eq!(prop_block4b.hash(), prop_block_5a_ref[4], "6");
         assert_eq!(prop_block4a.hash(), prop_block_5a_ref[5], "7");
         assert_eq!(prop_block5a.hash(), prop_block_5a_ref[6], "8");
-    }
-
-    #[test]
-    fn test_json() {
-        let _rng = rand::thread_rng();
-        // Initialize a blockchain with 10 voter chains.
-        let mut blockchain = BlockChain::new(NUM_VOTER_CHAINS);
-
-        // Store the parent blocks to mine on voter trees.
-        let _voter_best_blocks: Vec<H256> = blockchain
-            .voter_chains
-            .iter()
-            .map(|c| c.best_block)
-            .collect();
-        // Currently the voter genesis blocks.
-
-        // Maintains the list of tx blocks.
-        let mut tx_block_vec: Vec<Block> = vec![];
-        let _unreferred_tx_block_index = 0;
-
-        // Mine 5 tx block's with prop_best_block as the parent
-        let tx_block_5: Vec<Block> =
-            utils::test_tx_blocks_with_parent_hash(5, blockchain.proposer_tree.best_block);
-        tx_block_vec.extend(tx_block_5.iter().cloned());
-        // Add the tx blocks to blockchain
-        for i in 0..5 {
-            blockchain.insert_node(&tx_block_vec[i]);
-        }
-        // Generate a proposer block with prop_parent_block as the parent which referencing the above 5 tx blocks
-        let prop_block1a = utils::test_prop_block(
-            blockchain.proposer_tree.best_block,
-            tx_block_vec[0..5].iter().map(|x| x.hash()).collect(),
-            vec![],
-        );
-        // Add the prop_block
-        blockchain.insert_node(&prop_block1a);
-
-        let s = blockchain.dump().unwrap();
-        //        println!("{}", s);
     }
 }
