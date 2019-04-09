@@ -83,6 +83,24 @@ var cy = cytoscape({
 				'target-arrow-color': '#ccc',
 				'target-arrow-shape': 'triangle'
 			}
+		},
+		{
+			selector: 'edge[type="ToParent"]',
+			style: {
+				'width': 3,
+				'line-color': '#C4282C',
+				'target-arrow-color': '#C4282C',
+				'target-arrow-shape': 'triangle'
+			}
+		},
+		{
+			selector: 'edge[type="VoterToProposerParent"]',
+			style: {
+				'width': 3,
+				'line-color': '#E65026',
+				'target-arrow-color': '#E65026',
+				'target-arrow-shape': 'triangle'
+			}
 		}
 	],
 });
@@ -236,14 +254,25 @@ function handle_data(data) {
 			new_edge = {
 				data: {
 					source: e['from'],
-					target: e['to']
+					target: e['to'],
+                    type: "ToParent"
 				}
 			};
-			try {
-				cy.add(new_edge);
-			}
-			catch {
-			}
+			
+		}
+        else if (e['edgetype'] == "VoterToProposerParent") {
+			new_edge = {
+				data: {
+					source: e['from'],
+					target: e['to'],
+                    type: "VoterToProposerParent"
+				}
+			};
+        }
+		try {
+			cy.add(new_edge);
+		}
+		catch {
 		}
 	}
 
