@@ -189,7 +189,7 @@ pub mod tests {
             v.push(tx.hash());
             pool.insert(tx);
         }
-        //test the fifo property: we get the first 15 txs.
+        //test the fifo property: we get the first i txs.
         for i in 0..20 {
             assert_eq!(
                 pool.get_transactions(i)
@@ -199,6 +199,7 @@ pub mod tests {
                 v[..i]
             )
         }
+        //if we pass in a larger integer, we get all transactions in mempool.
         assert_eq!(pool.get_transactions(25).len(), 20);
     }
 
