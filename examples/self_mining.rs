@@ -1,4 +1,4 @@
-use prism::crypto::hash::H256;
+use prism::crypto::hash::{Hashable, H256};
 use prism::transaction::{Output, Transaction};
 use prism::visualization;
 use prism::{self, blockchain, blockdb, miner::memory_pool};
@@ -30,9 +30,9 @@ fn main() {
     let vis_addr = std::net::SocketAddr::new(vis_ip, vis_port);
     visualization::Server::start(vis_addr, Arc::clone(&blockchain));
 
-    // insert a fake key into the wallet
-    let our_addr: H256 = (&[0; 32]).into();
-    wallet.add_key(our_addr);
+    // get an address from the wallet
+    wallet.generate_keypair();//add_keypair(our_addr);
+    let our_addr: H256 = wallet.get_pubkey_hash().unwrap();
 
     // fund-raising
     let funding = Transaction {
@@ -43,11 +43,11 @@ fn main() {
         }],
         signatures: vec![],
     };
-    wallet.add_transaction(&funding);
+    wallet.receive(&funding);
     assert_eq!(wallet.balance(), 1000000);
 
     // send some money to outself
-    wallet.send_coin(our_addr, 5000);
+    assert!(wallet.pay(our_addr, 5000).is_ok());
     // the transaction has not been mined, so our balance will dip for now
     assert_eq!(wallet.balance(), 0);
 
