@@ -44,8 +44,7 @@ impl Wallet {
     }
 
     pub fn add_key(&mut self, hash: H256) {
-        // TODO: this function does not take a real key for now
-        self.keys.insert(hash, KeyPair::default());
+        unimplemented!();
     }
 
     /// Add coins in a transaction that are destined to us
