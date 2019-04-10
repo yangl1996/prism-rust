@@ -43,3 +43,33 @@ pub struct Signature {
     pub pubkey: sign::PubKey,
     pub signature: sign::Signature,
 }
+
+
+impl std::fmt::Display for Input {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "[{0:<10} | {1:<10}]", self.hash, self.index)?;
+        Ok(())
+    }
+}
+
+impl std::fmt::Display for Output {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "[{0:<2} | {1:<10}]", self.value, self.recipient)?;
+        Ok(())
+    }
+}
+
+impl std::fmt::Display for Transaction {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "Tx: ")?;
+        for input in self.input.iter(){
+            write!(f, "{} ", input);
+        }
+
+        write!(f, " ==> ")?;
+        for output in self.output.iter(){
+            write!(f, "{} ", output);
+        }
+        Ok(())
+    }
+}
