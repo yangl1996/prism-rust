@@ -26,7 +26,7 @@ fn main() {
         prism::start(peer_addr, &blockdb, &blockchain, &mempool).unwrap();
 
     let vis_ip = "127.0.0.1".parse::<std::net::IpAddr>().unwrap();
-    let vis_port = 8080;
+    let vis_port = 8888;
     let vis_addr = std::net::SocketAddr::new(vis_ip, vis_port);
     visualization::Server::start(vis_addr, Arc::clone(&blockchain));
 

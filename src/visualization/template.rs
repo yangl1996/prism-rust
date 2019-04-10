@@ -1,10 +1,9 @@
+pub const BLOCKCHAIN_VISUALIZATION: &str = r###"
 <!DOCTYPE html>
 <html>
 	<head>
 		<title>Prism</title>
-		<script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.5.2/cytoscape.min.js"></script>
-		<script src="http://marvl.infotech.monash.edu/webcola/cola.v3.min.js"></script>
-		<script src="https://cdn.jsdelivr.net/npm/cytoscape-cola@2.3.0/cytoscape-cola.min.js"></script>
+		<script src="/cytoscape.min.js"></script>
 	</head>
 	<body>
 		<div id="cy" style="width: 100%; height: 100%; position: absolute; top: 0px; left: 0px;"></div>
@@ -292,6 +291,7 @@ function handle_data(data) {
 	}).run();
 }
 
-loadJSON("http://localhost:8080", handle_data, handle_error)
+loadJSON("http://SERVER_IP_ADDR:SERVER_PORT_NUMBER/blockchain.json", handle_data, handle_error)
 	</script>
 </html>
+"###;
