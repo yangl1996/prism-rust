@@ -125,14 +125,15 @@ impl Wallet {
         });
     }
 
-    pub fn send_coin(&mut self, recipient: H256, value: u64) -> Result<(),WalletError> {
-        let txn = self.create_transaction(recipient, value)?;
+    pub fn send_coin(&mut self, recipient: H256, value: u64) -> Result<H256,WalletError> {
+        let tx = self.create_transaction(recipient, value)?;
+        let hash = tx.hash();
         let mut mempool = self.mempool.lock().unwrap();// we should use handler to work with mempool
-        mempool.insert(txn);
+        mempool.insert(tx);
         drop(mempool);
         self.context_update_chan
             .send(ContextUpdateSignal::NewContent).unwrap();
-        return Ok(());
+        return Ok(hash);//return tx hash, later we can confirm it in ledger
     }
 }
 
@@ -191,7 +192,7 @@ pub mod tests {
         }
         assert_eq!(w.balance(), 0);
         let m = pool.lock().unwrap();
-        let txs: Vec<Transaction> = m.get_transactions(5).iter().map(|entry|entry.transaction.clone()).collect();
+        let txs: Vec<Transaction> = m.get_transactions(5).iter().map(|tx|tx.clone()).collect();
         drop(m);
         assert_eq!(txs.len(), 5);
         for tx in &txs {
@@ -214,7 +215,7 @@ pub mod tests {
         }
         assert_eq!(w.balance(), 0);
         let m = pool.lock().unwrap();
-        let txs: Vec<Transaction> = m.get_transactions(5).iter().map(|entry|entry.transaction.clone()).collect();
+        let txs: Vec<Transaction> = m.get_transactions(5).iter().map(|tx|tx.clone()).collect();
         drop(m);
         assert_eq!(txs.len(), 5);
         for tx in &txs {// for test, just add new tx into this wallet
