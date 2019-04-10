@@ -1,5 +1,5 @@
 use crate::crypto::hash::{Hashable, H256};
-use crate::crypto::sign::{KeyPair, Signature};
+use crate::crypto::sign::{KeyPair, Signature, PubKey};
 use crate::miner::memory_pool::MemoryPool;
 use crate::miner::miner::ContextUpdateSignal;
 use crate::transaction::{Input, Output, Transaction};
@@ -7,6 +7,8 @@ use std::collections::{HashMap, HashSet};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use crate::state::{UTXO, CoinId};
+
+pub type Result<T> = std::result::Result<T, WalletError>;
 
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub struct Coin {
@@ -18,7 +20,7 @@ pub struct Wallet {
     /// List of coins which can be spent
     coins: HashSet<Coin>,
     /// List of user keys
-    keys: HashMap<H256, KeyPair>,
+    keypairs: HashMap<H256, KeyPair>,
     /// Channel to notify the miner about context update
     context_update_chan: mpsc::Sender<ContextUpdateSignal>,
     /// Pool of unmined transactions
@@ -38,32 +40,46 @@ impl Wallet {
     ) -> Self {
         return Self {
             coins: HashSet::new(),
-            keys: HashMap::new(),
+            keypairs: HashMap::new(),
             context_update_chan: ctx_update_sink,
             mempool: Arc::clone(mempool),
         };
     }
 
-    pub fn generate_new_key(&mut self) {
-        unimplemented!();
+    // someone pay to A first, then I coincidentally generate A, I will NOT receive
+    /// Generate a new key pair
+    pub fn generate_keypair(&mut self) {
+        let keypair = KeyPair::default();// TODO: should generate new keypair rather than default
+        self.keypairs.insert(keypair.public.hash(), keypair);
     }
 
-    pub fn add_key(&mut self, hash: H256) {
-        // TODO: this function does not take a real key for now
-        self.keys.insert(hash, KeyPair::default());
+    /// Get one pubkey from this wallet
+    pub fn get_pubkey(&self) -> Result<&PubKey> {
+        if let Some(pubkey) = self.keypairs.values().next() {
+            return Ok(&pubkey.public);
+        }
+        Err(WalletError::MissingKey)
+    }
+
+    // this method doesn't compute hash again. we could get pubkey then compute the hash but that compute hash again!
+    pub fn get_pubkey_hash(&self) -> Result<H256> {
+        if let Some(&pubkey_hash) = self.keypairs.keys().next() {
+            return Ok(pubkey_hash);
+        }
+        Err(WalletError::MissingKey)
     }
 
     /// Add coins in a transaction that are destined to us
-    pub fn add_transaction(&mut self, tx: &Transaction) {
+    pub fn receive(&mut self, tx: &Transaction) {
         let hash = tx.hash();// compute hash here, and below inside Input we don't have to compute again (we just copy)
         for (idx, output) in tx.output.iter().enumerate() {
-            if self.keys.contains_key(&output.recipient) {
-                let input = CoinId {
+            if self.keypairs.contains_key(&output.recipient) {
+                let coin_id = CoinId {
                     hash,
                     index: idx as u32,
                 };
                 let coin = Coin {
-                    utxo: UTXO {coin_id: input, value: output.value},
+                    utxo: UTXO {coin_id: coin_id, value: output.value},
                     pubkey_hash: output.recipient,
                 };
                 self.coins.insert(coin);
@@ -72,7 +88,7 @@ impl Wallet {
     }
 
     /// Removes coin from the wallet. Will be used after spending the coin.
-    pub fn remove_coin(&mut self, coin: &Coin) {
+    fn remove_coin(&mut self, coin: &Coin) {
         self.coins.remove(coin);
     }
 
@@ -82,7 +98,7 @@ impl Wallet {
     }
 
     /// create a transaction using the wallet coins
-    fn create_transaction(&mut self, recipient: H256, value: u64) -> Result<Transaction,WalletError> {
+    fn create_transaction(&mut self, recipient: H256, value: u64) -> Result<Transaction> {
         let mut coins_to_use: Vec<Coin> = vec![];
         let mut value_sum = 0u64;
 
@@ -105,10 +121,7 @@ impl Wallet {
         let mut output = vec![Output { recipient, value }];
         if value_sum > value {
             // transfer the remaining value back to self
-            let recipient: H256 = match self.keys.keys().next() {
-                Some(&x) => x,
-                None => return Err(WalletError::MissingKey),
-            };
+            let recipient = self.get_pubkey_hash()?;
             output.push(Output {recipient, value: value_sum - value});
         }
 
@@ -118,14 +131,15 @@ impl Wallet {
         }
 
         // TODO: sign the transaction use coins
-        return Ok(Transaction {
+        Ok(Transaction {
             input,
             output,
             signatures: vec![],
-        });
+        })
     }
 
-    pub fn send_coin(&mut self, recipient: H256, value: u64) -> Result<H256,WalletError> {
+    /// pay to a recipient some value of money, note that the resulting transaction may not be confirmed
+    pub fn pay(&mut self, recipient: H256, value: u64) -> Result<H256> {
         let tx = self.create_transaction(recipient, value)?;
         let hash = tx.hash();
         let mut mempool = self.mempool.lock().unwrap();// we should use handler to work with mempool
@@ -133,7 +147,8 @@ impl Wallet {
         drop(mempool);
         self.context_update_chan
             .send(ContextUpdateSignal::NewContent).unwrap();
-        return Ok(hash);//return tx hash, later we can confirm it in ledger
+        //return tx hash, later we can confirm it in ledger
+        Ok(hash)
     }
 }
 
@@ -145,13 +160,15 @@ pub mod tests {
     use crate::miner::memory_pool::MemoryPool;
     use std::sync::{mpsc, Arc, Mutex};
     use crate::miner::miner::ContextUpdateSignal;
-    use crate::crypto::hash::H256;
+    use crate::crypto::hash::{Hashable, H256};
 
-    fn new_wallet_pool_receiver() -> (Wallet, Arc<Mutex<MemoryPool>>, mpsc::Receiver<ContextUpdateSignal>) {
+    fn new_wallet_pool_receiver_keyhash() -> (Wallet, Arc<Mutex<MemoryPool>>, mpsc::Receiver<ContextUpdateSignal>, H256) {
         let (ctx_update_sink, ctx_update_source) = mpsc::channel();
         let pool = Arc::new(Mutex::new(MemoryPool::new()));
-        let w = Wallet::new(&pool, ctx_update_sink);
-        return (w,pool,ctx_update_source);
+        let mut w = Wallet::new(&pool, ctx_update_sink);
+        w.generate_keypair();
+        let h: H256 = w.get_pubkey_hash().unwrap();
+        return (w,pool,ctx_update_source, h);
     }
     fn transaction_10_10(recipient: &H256) -> Transaction {
         let mut output: Vec<Output> = vec![];
@@ -166,29 +183,23 @@ pub mod tests {
     }
     #[test]
     pub fn test_balance() {
-        let (mut w,pool,ctx_update_source) = new_wallet_pool_receiver();
-        let hash = crypto_generator::h256();
-        w.add_key(hash.clone());
+        let (mut w,pool,ctx_update_source,hash) = new_wallet_pool_receiver_keyhash();
         assert_eq!(w.balance(), 0);
     }
     #[test]
     pub fn test_add_transaction() {
-        let (mut w,pool,ctx_update_source) = new_wallet_pool_receiver();
-        let hash = crypto_generator::h256();
-        w.add_key(hash.clone());
-        w.add_transaction(&transaction_10_10(&hash));
+        let (mut w,pool,ctx_update_source,hash) = new_wallet_pool_receiver_keyhash();
+        w.receive(&transaction_10_10(&hash));
         assert_eq!(w.balance(), 100);
     }
 
     #[test]
     pub fn test_send_coin() {
-        let (mut w,pool,ctx_update_source) = new_wallet_pool_receiver();
-        let hash = crypto_generator::h256();
-        w.add_key(hash.clone());
-        w.add_transaction(&transaction_10_10(&hash));
+        let (mut w,pool,ctx_update_source,hash) = new_wallet_pool_receiver_keyhash();
+        w.receive(&transaction_10_10(&hash));
         // now we have 10*10 coins, we try to spend them
         for i in 0..5 {
-            assert!(w.send_coin(crypto_generator::h256(), 20).is_ok());
+            assert!(w.pay(crypto_generator::h256(), 20).is_ok());
         }
         assert_eq!(w.balance(), 0);
         let m = pool.lock().unwrap();
@@ -205,13 +216,11 @@ pub mod tests {
 
     #[test]
     pub fn test_send_coin_2() {
-        let (mut w,pool,ctx_update_source) = new_wallet_pool_receiver();
-        let hash = crypto_generator::h256();
-        w.add_key(hash.clone());
-        w.add_transaction(&transaction_10_10(&hash));
+        let (mut w,pool,ctx_update_source,hash) = new_wallet_pool_receiver_keyhash();
+        w.receive(&transaction_10_10(&hash));
         // now we have 10*10 coins, we try to spend them
         for i in 0..5 {
-            assert!(w.send_coin(crypto_generator::h256(), 19).is_ok());
+            assert!(w.pay(crypto_generator::h256(), 19).is_ok());
         }
         assert_eq!(w.balance(), 0);
         let m = pool.lock().unwrap();
@@ -220,7 +229,7 @@ pub mod tests {
         assert_eq!(txs.len(), 5);
         for tx in &txs {// for test, just add new tx into this wallet
             println!("{:?}",tx);
-            w.add_transaction(tx);
+            w.receive(tx);
         }
         assert_eq!(w.balance(), 5);//10*10-5*19=5 remaining
         for i in 0..5 {
@@ -230,17 +239,29 @@ pub mod tests {
 
     #[test]
     pub fn test_send_coin_fail() {
-        let (mut w,pool,ctx_update_source) = new_wallet_pool_receiver();
-        let hash = crypto_generator::h256();
-        w.add_key(hash.clone());
-        w.add_transaction(&transaction_10_10(&hash));
+        let (mut w,pool,ctx_update_source,hash) = new_wallet_pool_receiver_keyhash();
+        w.receive(&transaction_10_10(&hash));
         // now we have 10*10 coins, we try to spend 101
-        assert!(w.send_coin(crypto_generator::h256(), 101).is_err());
+        assert!(w.pay(crypto_generator::h256(), 101).is_err());
         // we try to spend 20 6 times, the 6th time should have err
         for i in 0..5 {
-            assert!(w.send_coin(crypto_generator::h256(), 20).is_ok());
+            assert!(w.pay(crypto_generator::h256(), 20).is_ok());
         }
-        assert!(w.send_coin(crypto_generator::h256(), 20).is_err());
+        assert!(w.pay(crypto_generator::h256(), 20).is_err());
         assert_eq!(w.balance(), 0);
+    }
+
+    #[test]
+    pub fn key_missing() {
+        let (ctx_update_sink, ctx_update_source) = mpsc::channel();
+        let pool = Arc::new(Mutex::new(MemoryPool::new()));
+        let mut w = Wallet::new(&pool, ctx_update_sink);
+        assert!(w.get_pubkey_hash().is_err());
+        assert!(w.get_pubkey().is_err());
+        assert!(w.pay(crypto_generator::h256(), 1).is_err());
+        w.generate_keypair();
+        assert!(w.get_pubkey_hash().is_ok());
+        assert!(w.get_pubkey().is_ok());
+        assert!(w.pay(crypto_generator::h256(), 1).is_err());
     }
 }

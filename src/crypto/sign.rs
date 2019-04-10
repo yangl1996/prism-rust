@@ -1,4 +1,5 @@
 use byteorder::{BigEndian, ByteOrder};
+use crate::crypto::hash::{Hashable, H256};
 
 /// An Ed25519 signature.
 #[derive(Serialize, Deserialize, Hash, Clone, Default, PartialEq, Eq)]
@@ -92,5 +93,11 @@ pub struct SecKey([u128; 2]); // big endian u256.  TODO: Use Crypto
 #[derive(Default)]
 pub struct KeyPair {
     secret: SecKey,
-    public: PubKey,
+    pub public: PubKey,
+}
+
+impl Hashable for PubKey {
+    fn hash(&self) -> H256 {//just hash the public key
+        return ring::digest::digest(&ring::digest::SHA256, &bincode::serialize(&self).unwrap()).into();
+    }
 }
