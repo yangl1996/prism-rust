@@ -84,7 +84,7 @@ mod tests {
 
         println!("Test 1: count");
         let transaction = tx_generator::random();
-        let utxos = generator::tx_to_utxos(transaction);
+        let utxos = generator::tx_to_utxos(&transaction);
         for utxo in utxos.iter() {
             state_db.insert(utxo);
         }
