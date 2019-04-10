@@ -258,9 +258,6 @@ impl Context {
         content.push(Content::Transaction(transaction::Content::new(
             mempool
                 .get_transactions(TX_BLOCK_SIZE)
-                .into_iter()
-                .map(|s| s.transaction)
-                .collect(),
         )));
         drop(mempool);
 
