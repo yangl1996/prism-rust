@@ -1,5 +1,9 @@
 use byteorder::{BigEndian, ByteOrder};
 use crate::crypto::hash::{Hashable, H256};
+use ring::signature::{self, Ed25519KeyPair};
+use ring::rand;
+use ring::signature::KeyPair as KeyPairTrait;
+use untrusted;
 
 /// An Ed25519 signature.
 #[derive(Serialize, Deserialize, Hash, Clone, Default, PartialEq, Eq)]
@@ -87,17 +91,72 @@ impl std::fmt::Debug for PubKey {
     }
 }
 
-#[derive(Serialize, Deserialize, Hash, Clone, Default, PartialEq, Eq)]
-pub struct SecKey([u128; 2]); // big endian u256.  TODO: Use Crypto
+impl PubKey {
+    // TODO: store public key as bytes to avoid the conversion
+    // TODO: consider returning an Result<(), some_type>
+    pub fn verify(&self, msg: &[u8], sig: &Signature) -> bool {
+        let msg = untrusted::Input::from(msg);
+        let pubkey_raw_bytes: [u8; 32] = self.into();
+        let pubkey = untrusted::Input::from(&pubkey_raw_bytes);
+        let signature_raw_bytes: [u8; 64] = sig.into();
+        let signature = untrusted::Input::from(&signature_raw_bytes);
+        let result = signature::verify(&signature::ED25519, pubkey, msg, signature);
+        match result {
+            Ok(()) => return true,
+            _ => return false,
+        }
+    }
+}
 
-#[derive(Default)]
 pub struct KeyPair {
-    secret: SecKey,
-    pub public: PubKey,
+    ring_keypair: Ed25519KeyPair,
+    pkcs8_bytes: Vec<u8>,
+}
+
+impl KeyPair {
+    // generate a random Ed25519 key pair and the corresponding PKCS8 string
+    pub fn new() -> Self {
+        let rng = rand::SystemRandom::new();
+        let pkcs8_bytes = Ed25519KeyPair::generate_pkcs8(&rng).unwrap();
+        let key_pair = Ed25519KeyPair::from_pkcs8(untrusted::Input::from(pkcs8_bytes.as_ref())).unwrap();
+        return Self {
+            ring_keypair: key_pair,
+            pkcs8_bytes: pkcs8_bytes.as_ref().to_vec(),
+        };
+    }
+
+    // get the public key of the key pair
+    pub fn public_key(&self) -> PubKey {
+        let mut raw_pubkey: [u8; 32] = [0; 32];
+        raw_pubkey[0..32].copy_from_slice(self.ring_keypair.public_key().as_ref());
+        return (&raw_pubkey).into();
+    }
+
+    // sign the message using the key pair
+    pub fn sign(&self, msg: &[u8]) -> Signature {
+        let mut raw_sig: [u8; 64] = [0; 64];
+        raw_sig[0..64].copy_from_slice(self.ring_keypair.sign(msg).as_ref());
+        return (&raw_sig).into();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sign_and_verify() {
+        let keypair = KeyPair::new();
+        let message: [u8; 5] = [0, 1, 2, 3, 4];
+        let public_key = keypair.public_key();
+        let signature = keypair.sign(&message);
+        let result = public_key.verify(&message, &signature);
+        assert!(result);
+    }
 }
 
 impl Hashable for PubKey {
-    fn hash(&self) -> H256 {//just hash the public key
+    fn hash(&self) -> H256 {
         return ring::digest::digest(&ring::digest::SHA256, &bincode::serialize(&self).unwrap()).into();
     }
 }
