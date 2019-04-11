@@ -117,6 +117,11 @@ impl MemoryPool {
             .map(|hash| self.get(hash).unwrap().transaction.clone())
             .collect()
     }
+
+    /// get size/length
+    pub fn len(&self) -> usize {
+        self.by_hash.len()
+    }
 }
 
 #[cfg(test)]
