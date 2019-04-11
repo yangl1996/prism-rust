@@ -2,11 +2,12 @@ use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::sign::{KeyPair, Signature, PubKey};
 use crate::miner::memory_pool::MemoryPool;
 use crate::miner::miner::ContextUpdateSignal;
-use crate::transaction::{Input, Output, Transaction};
+use crate::transaction::{Input, Output, Transaction, Signature as PubkeySignature};
 use std::collections::{HashMap, HashSet};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use crate::state::{UTXO, CoinId};
+use crate::handler;
 
 pub type Result<T> = std::result::Result<T, WalletError>;
 
@@ -46,17 +47,17 @@ impl Wallet {
         };
     }
 
-    // someone pay to A first, then I coincidentally generate A, I will NOT receive
+    // someone pay to A first, then I coincidentally generate A, I will NOT receive the payment
     /// Generate a new key pair
     pub fn generate_keypair(&mut self) {
-        let keypair = KeyPair::default();// TODO: should generate new keypair rather than default
-        self.keypairs.insert(keypair.public.hash(), keypair);
+        let keypair = KeyPair::new();
+        self.keypairs.insert(keypair.public_key().hash(), keypair);
     }
 
     /// Get one pubkey from this wallet
-    pub fn get_pubkey(&self) -> Result<&PubKey> {
-        if let Some(pubkey) = self.keypairs.values().next() {
-            return Ok(&pubkey.public);
+    pub fn get_pubkey(&self) -> Result<PubKey> {
+        if let Some(keypair) = self.keypairs.values().next() {
+            return Ok(keypair.public_key());
         }
         Err(WalletError::MissingKey)
     }
@@ -130,21 +131,22 @@ impl Wallet {
             self.remove_coin(c);
         }
 
-        // TODO: sign the transaction use coins
-        Ok(Transaction {
-            input,
-            output,
-            signatures: vec![],
-        })
+        let unsigned = Transaction {input, output, signatures: vec![]};
+//        let mut signatures = vec![];
+//        let message = bincode::serialize(&unsigned).unwrap();
+//        for keypair in coins_to_use.iter().map(|c|self.keypairs.get(&c.pubkey_hash).unwrap()) {
+//            let signature = keypair.sign(&message);
+//            signatures.push(PubkeySignature{pubkey: keypair.public_key(), signature});
+//        }
+
+        Ok(unsigned)
     }
 
     /// pay to a recipient some value of money, note that the resulting transaction may not be confirmed
     pub fn pay(&mut self, recipient: H256, value: u64) -> Result<H256> {
         let tx = self.create_transaction(recipient, value)?;
         let hash = tx.hash();
-        let mut mempool = self.mempool.lock().unwrap();// we should use handler to work with mempool
-        mempool.insert(tx);
-        drop(mempool);
+        handler::new_transaction(tx, self.mempool.as_ref());
         self.context_update_chan
             .send(ContextUpdateSignal::NewContent).unwrap();
         //return tx hash, later we can confirm it in ledger
