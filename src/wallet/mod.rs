@@ -17,6 +17,9 @@ pub struct Coin {
     pubkey_hash: H256,
 }
 
+// one potential problem: if another program has the same keypair, then he may spend a coin, but this wallet don't know it's spend.
+// another problem is concurrency, it seems this wallet can only be run single-threaded.
+// so this wallet should just be used in experiment to generate transactions single-threaded.
 pub struct Wallet {
     /// List of coins which can be spent
     coins: HashSet<Coin>,
@@ -70,9 +73,15 @@ impl Wallet {
         Err(WalletError::MissingKey)
     }
 
+    /// Add coin to wallet
+    fn add_coin(&mut self, coin: Coin) {
+        self.coins.insert(coin);
+    }
+
     /// Add coins in a transaction that are destined to us
     pub fn receive(&mut self, tx: &Transaction) {
         let hash = tx.hash();// compute hash here, and below inside Input we don't have to compute again (we just copy)
+
         for (idx, output) in tx.output.iter().enumerate() {
             if self.keypairs.contains_key(&output.recipient) {
                 let coin_id = CoinId {
@@ -83,16 +92,20 @@ impl Wallet {
                     utxo: UTXO {coin_id: coin_id, value: output.value},
                     pubkey_hash: output.recipient,
                 };
-                self.coins.insert(coin);
+                self.add_coin(coin);
             }
         }
     }
 
-    /// Removes coin from the wallet. Will be used after spending the coin.
+    /// Removes coin from the wallet. Will be used after the tx is confirmed and the coin is spent. Also used in rollback
     fn remove_coin(&mut self, coin: &Coin) {
         self.coins.remove(coin);
     }
 
+    /// If Rollback on ledger happens, we need to rollback the wallet
+    pub fn rollback(&mut self, tx: &Transaction) {
+        unimplemented!();
+    }
     /// Returns the sum of values of all the coin in the wallet
     pub fn balance(&self) -> u64 {
         self.coins.iter().map(|coin| coin.utxo.value).sum::<u64>()
@@ -146,7 +159,7 @@ impl Wallet {
     pub fn pay(&mut self, recipient: H256, value: u64) -> Result<H256> {
         let tx = self.create_transaction(recipient, value)?;
         let hash = tx.hash();
-        handler::new_transaction(tx, self.mempool.as_ref());
+        handler::new_transaction(tx, &self.mempool);
         self.context_update_chan
             .send(ContextUpdateSignal::NewContent).unwrap();
         //return tx hash, later we can confirm it in ledger
