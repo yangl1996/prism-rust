@@ -96,7 +96,7 @@ var cy = cytoscape({
 			}
 		},
 		{
-			selector: 'edge[type="VoterToProposerParent"]',
+			selector: 'edge[type="VoteForProposer"]',
 			style: {
 				'width': 1,
                 'arrow-scale': 0.5,
@@ -264,12 +264,13 @@ function handle_data(data) {
 			};
 			
 		}
-        else if (e['edgetype'] == "VoterToProposerParent") {
+        else if (e['edgetype'] == "VoterToProposerParentAndVote" ||
+                 e['edgetype'] == "VoterToProposerVote") {
 			new_edge = {
 				data: {
 					source: e['from'],
 					target: e['to'],
-                    type: "VoterToProposerParent"
+                    type: "VoteForProposer"
 				}
 			};
         }

@@ -54,35 +54,10 @@ fn main() {
     */
 
     // mine a block
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    std::thread::sleep(std::time::Duration::from_millis(1000));
+    for _ in 0..50 {
+        miner.step();
+    }
+    std::thread::sleep(std::time::Duration::from_millis(2000));
     miner.exit();
 
     loop {
