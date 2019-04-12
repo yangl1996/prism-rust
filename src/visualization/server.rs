@@ -50,10 +50,23 @@ impl Server {
                                 .with_header(content_type);
                             req.respond(resp);
                         }
-                        _ => {
+                        "index.html" => {
                             let content_type = "Content-Type: text/html".parse::<Header>().unwrap();
                             let resp = Response::from_string(include_str!("index.html"))
                                 .with_header(content_type);
+                            req.respond(resp);
+                        }
+                        "" => {
+                            let redirect = "Location: /index.html".parse::<Header>().unwrap();
+                            let resp = Response::empty(301)
+                                .with_header(redirect);
+                            req.respond(resp);
+                        }
+                        _ => {
+                            let content_type = "Content-Type: text/html".parse::<Header>().unwrap();
+                            let resp = Response::from_string(include_str!("404.html"))
+                                .with_header(content_type)
+                                .with_status_code(404);
                             req.respond(resp);
                         }
                     }
