@@ -30,6 +30,7 @@ fn main() {
     let vis_addr = std::net::SocketAddr::new(vis_ip, vis_port);
     visualization::Server::start(vis_addr, Arc::clone(&blockchain));
 
+    /*
     // insert a fake key into the wallet
     let our_addr: H256 = (&[0; 32]).into();
     wallet.add_key(our_addr);
@@ -50,6 +51,7 @@ fn main() {
     wallet.send_coin(our_addr, 5000);
     // the transaction has not been mined, so our balance will dip for now
     assert_eq!(wallet.balance(), 0);
+    */
 
     // mine a block
     miner.step();
