@@ -80,25 +80,30 @@ var cy = cytoscape({
 				'width': 3,
 				'line-color': '#ccc',
 				'target-arrow-color': '#ccc',
-				'target-arrow-shape': 'triangle'
+				'target-arrow-shape': 'triangle',
+                'curve-style': 'straight'
 			}
 		},
 		{
 			selector: 'edge[type="ToParent"]',
 			style: {
-				'width': 3,
+				'width': 2,
+                'arrow-scale': 0.8,
 				'line-color': '#C4282C',
 				'target-arrow-color': '#C4282C',
-				'target-arrow-shape': 'triangle'
+				'target-arrow-shape': 'triangle',
+                'curve-style': 'straight'
 			}
 		},
 		{
 			selector: 'edge[type="VoterToProposerParent"]',
 			style: {
-				'width': 3,
+				'width': 1,
+                'arrow-scale': 0.5,
 				'line-color': '#E65026',
 				'target-arrow-color': '#E65026',
-				'target-arrow-shape': 'triangle'
+				'target-arrow-shape': 'triangle',
+                'curve-style': 'straight'
 			}
 		}
 	],
