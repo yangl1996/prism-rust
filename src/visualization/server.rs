@@ -41,12 +41,18 @@ impl Server {
                                 .with_header(cache_control);
                             req.respond(resp);
                         },
-                        "blockchain.html" => {
-                            let vis_page = include_str!("blockchain.html").to_string()
+                        "blockchain_vis.js" => {
+                            let vis_script = include_str!("blockchain_vis.js").to_string()
                                 .replace("SERVER_IP_ADDR", &addr.ip().to_string())
                                 .replace("SERVER_PORT_NUMBER", &addr.port().to_string());
+                            let content_type = "Content-Type: application/javascript".parse::<Header>().unwrap();
+                            let resp = Response::from_string(vis_script)
+                                .with_header(content_type);
+                            req.respond(resp);
+                        },
+                        "blockchain.html" => {
                             let content_type = "Content-Type: text/html".parse::<Header>().unwrap();
-                            let resp = Response::from_string(vis_page)
+                            let resp = Response::from_string(include_str!("blockchain.html"))
                                 .with_header(content_type);
                             req.respond(resp);
                         }
