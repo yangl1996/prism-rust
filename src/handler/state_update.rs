@@ -12,7 +12,7 @@ use std::sync::Mutex;
 pub fn confirm_new_tx_blocks(
     tx_block_hashes: Vec<H256>,
     block_db: &BlockDatabase,
-    utxo_state: &Mutex<UTXODatabase>,
+    utxo_state: &UTXODatabase,
 ) -> Vec<H256> {
     let mut sanitized_tx_block_hashes: Vec<H256> = vec![];
 
@@ -29,13 +29,13 @@ pub fn confirm_new_tx_blocks(
             _ => panic!("Wrong block stored"),
         };
         //2. Loop over the transactions
-        let state = utxo_state.lock().unwrap();
+        let state_lock = utxo_state.count.lock().unwrap();
         {
             for transaction in transactions.iter() {
                 //3a. Sanitize: Check if all the inputs are present in the state
                 let mut inputs_unspent = true;
                 for input in transaction.input.iter() {
-                    match state.check(input) {
+                    match utxo_state.check(input) {
                         Err(e) => panic!("StateDB not working: Error {}", e),
                         Ok(present) => {
                             if !present {
@@ -48,27 +48,14 @@ pub fn confirm_new_tx_blocks(
 
                 //3b. State transition: If all inputs are unspent, then delete the input coins and add output coins to the state
                 if inputs_unspent {
-                    for input in transaction.input.iter() {
-                        state.delete(input);
-                    }
-                    for (index, output) in transaction.output.iter().enumerate() {
-                        let coin_id = CoinId {
-                            hash: transaction.hash(),
-                            index: index as u32,
-                        };
-                        let utxo = UTXO {
-                            coin_id,
-                            value: output.value,
-                        };
-                        state.insert(&utxo);
-                    }
+                    utxo_state.receive(transaction).unwrap_or(panic!());
                     sanitized_transactions.push(*transaction);
                 } else {
                     //log the sanitization error.
                 }
             }
         }
-        drop(state);
+        drop(state_lock);
 
         // Construct the sanitized blocks
         let tx_content = Content::Transaction(TxContent {

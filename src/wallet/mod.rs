@@ -6,23 +6,19 @@ use crate::transaction::{Input, Output, Transaction, Signature as PubkeySignatur
 use std::collections::{HashMap, HashSet};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
-use crate::state::{UTXO, CoinId};
+use crate::state::{UTXO, CoinId, CoinData};
 use crate::handler;
 
 pub type Result<T> = std::result::Result<T, WalletError>;
 
-#[derive(Clone, Hash, PartialEq, Eq)]
-pub struct Coin {
-    utxo: UTXO,
-    pubkey_hash: H256,
-}
+pub type Coin = UTXO;
 
 // one potential problem: if another program has the same keypair, then he may spend a coin, but this wallet don't know it's spend.
 // another problem is concurrency, it seems this wallet can only be run single-threaded.
 // so this wallet should just be used in experiment to generate transactions single-threaded.
 pub struct Wallet {
     /// List of coins which can be spent
-    coins: HashSet<Coin>,
+    coins: HashMap<CoinId, CoinData>,
     /// List of user keys
     keypairs: HashMap<H256, KeyPair>,
     /// Channel to notify the miner about context update
@@ -43,7 +39,7 @@ impl Wallet {
         ctx_update_sink: mpsc::Sender<ContextUpdateSignal>,
     ) -> Self {
         return Self {
-            coins: HashSet::new(),
+            coins: HashMap::new(),
             keypairs: HashMap::new(),
             context_update_chan: ctx_update_sink,
             mempool: Arc::clone(mempool),
@@ -74,33 +70,36 @@ impl Wallet {
     }
 
     /// Add coin to wallet
-    fn add_coin(&mut self, coin: Coin) {
-        self.coins.insert(coin);
+    fn insert_coin(&mut self, coin: Coin) {
+        self.coins.insert(coin.coin_id, coin.coin_data);
     }
 
     /// Add coins in a transaction that are destined to us
     pub fn receive(&mut self, tx: &Transaction) {
-        let hash = tx.hash();// compute hash here, and below inside Input we don't have to compute again (we just copy)
-
+        let hash: H256 = tx.hash();// compute hash here, and below inside Input we don't have to compute again (we just copy)
+        for input in tx.input.iter() {
+            self.delete_coin(input);
+        }
         for (idx, output) in tx.output.iter().enumerate() {
             if self.keypairs.contains_key(&output.recipient) {
                 let coin_id = CoinId {
                     hash,
                     index: idx as u32,
                 };
-                let coin = Coin {
-                    utxo: UTXO {coin_id: coin_id, value: output.value},
-                    pubkey_hash: output.recipient,
+                let coin_data = CoinData {
+                    value: output.value,
+                    recipient: output.recipient,
                 };
-                self.add_coin(coin);
+                let coin = Coin  {coin_id, coin_data};
+                self.insert_coin(coin);
             }
         }
     }
 
     /// Removes coin from the wallet. Will be used after the tx is confirmed and the coin is spent. Also used in rollback
     /// If the coin was in, it is removed. If not, this fn does NOT panic/error.
-    fn remove_coin(&mut self, coin: &Coin) {
-        self.coins.remove(coin);
+    fn delete_coin(&mut self, coin_id: &CoinId) {
+        self.coins.remove(coin_id);
     }
 
     /// If Rollback on ledger happens, we need to rollback the wallet. The reverse of receive.
@@ -109,18 +108,18 @@ impl Wallet {
     }
     /// Returns the sum of values of all the coin in the wallet
     pub fn balance(&self) -> u64 {
-        self.coins.iter().map(|coin| coin.utxo.value).sum::<u64>()
+        self.coins.values().map(|coin_data| coin_data.value).sum::<u64>()
     }
 
     /// create a transaction using the wallet coins
     fn create_transaction(&mut self, recipient: H256, value: u64) -> Result<Transaction> {
-        let mut coins_to_use: Vec<Coin> = vec![];
+        let mut coins_to_use: Vec<CoinId> = vec![];
         let mut value_sum = 0u64;
 
         // iterate thru our wallet
-        for coin in self.coins.iter() {
-            value_sum += coin.utxo.value;
-            coins_to_use.push(coin.clone()); // coins that will be used for this transaction
+        for (coin_id, coin_data) in self.coins.iter() {
+            value_sum += coin_data.value;
+            coins_to_use.push(coin_id.clone()); // coins that will be used for this transaction
             if value_sum >= value {// if we already have enough money, break
                 break;
             }
@@ -131,7 +130,7 @@ impl Wallet {
         }
         // if we have enough money in our wallet, create tx
         // create transaction inputs
-        let input = coins_to_use.iter().map(|c|c.utxo.coin_id.clone()).collect();
+        let input = coins_to_use.clone();//since Input DS may change, this line may change
         // create the output
         let mut output = vec![Output { recipient, value }];
         if value_sum > value {
@@ -142,7 +141,7 @@ impl Wallet {
 
         // remove used coin from wallet
         for c in &coins_to_use {
-            self.remove_coin(c);
+            self.delete_coin(c);
         }
 
         let unsigned = Transaction {input, output, signatures: vec![]};
@@ -165,6 +164,11 @@ impl Wallet {
             .send(ContextUpdateSignal::NewContent).unwrap();
         //return tx hash, later we can confirm it in ledger
         Ok(hash)
+    }
+
+    // only for test, how to set pub functions just for test?
+    pub fn get_coin_id(&self) -> Vec<CoinId> {
+        self.coins.keys().cloned().collect()
     }
 }
 
