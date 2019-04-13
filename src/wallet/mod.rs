@@ -98,11 +98,12 @@ impl Wallet {
     }
 
     /// Removes coin from the wallet. Will be used after the tx is confirmed and the coin is spent. Also used in rollback
+    /// If the coin was in, it is removed. If not, this fn does NOT panic/error.
     fn remove_coin(&mut self, coin: &Coin) {
         self.coins.remove(coin);
     }
 
-    /// If Rollback on ledger happens, we need to rollback the wallet
+    /// If Rollback on ledger happens, we need to rollback the wallet. The reverse of receive.
     pub fn rollback(&mut self, tx: &Transaction) {
         unimplemented!();
     }
