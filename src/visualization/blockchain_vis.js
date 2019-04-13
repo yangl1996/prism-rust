@@ -1,14 +1,3 @@
-pub const BLOCKCHAIN_VISUALIZATION: &str = r###"
-<!DOCTYPE html>
-<html>
-	<head>
-		<title>Prism</title>
-		<script src="/cytoscape.min.js"></script>
-	</head>
-	<body>
-		<div id="cy" style="width: 100%; height: 100%; position: absolute; top: 0px; left: 0px;"></div>
-	</body>
-	<script>
 		function loadJSON(path, success, error)
 {
 	var xhr = new XMLHttpRequest();
@@ -80,25 +69,30 @@ var cy = cytoscape({
 				'width': 3,
 				'line-color': '#ccc',
 				'target-arrow-color': '#ccc',
-				'target-arrow-shape': 'triangle'
+				'target-arrow-shape': 'triangle',
+                'curve-style': 'straight'
 			}
 		},
 		{
 			selector: 'edge[type="ToParent"]',
 			style: {
-				'width': 3,
+				'width': 2,
+                'arrow-scale': 0.8,
 				'line-color': '#C4282C',
 				'target-arrow-color': '#C4282C',
-				'target-arrow-shape': 'triangle'
+				'target-arrow-shape': 'triangle',
+                'curve-style': 'straight'
 			}
 		},
 		{
-			selector: 'edge[type="VoterToProposerParent"]',
+			selector: 'edge[type="VoteForProposer"]',
 			style: {
-				'width': 3,
+				'width': 1,
+                'arrow-scale': 0.5,
 				'line-color': '#E65026',
 				'target-arrow-color': '#E65026',
-				'target-arrow-shape': 'triangle'
+				'target-arrow-shape': 'triangle',
+                'curve-style': 'straight'
 			}
 		}
 	],
@@ -259,12 +253,13 @@ function handle_data(data) {
 			};
 			
 		}
-        else if (e['edgetype'] == "VoterToProposerParent") {
+        else if (e['edgetype'] == "VoterToProposerParentAndVote" ||
+                 e['edgetype'] == "VoterToProposerVote") {
 			new_edge = {
 				data: {
 					source: e['from'],
 					target: e['to'],
-                    type: "VoterToProposerParent"
+                    type: "VoteForProposer"
 				}
 			};
         }
@@ -291,7 +286,4 @@ function handle_data(data) {
 	}).run();
 }
 
-loadJSON("http://SERVER_IP_ADDR:SERVER_PORT_NUMBER/blockchain.json", handle_data, handle_error)
-	</script>
-</html>
-"###;
+loadJSON("http://SERVER_IP_ADDR:SERVER_PORT_NUMBER/blockchain.json", handle_data, handle_error);
