@@ -1,8 +1,8 @@
-use prism::crypto::hash::{Hashable, H256};
+use prism::crypto::hash::H256;
 use prism::transaction::{Output, Transaction};
-use prism::visualization;
 use prism::{self, blockchain, blockdb, miner::memory_pool};
 use std::sync::{Arc, Mutex};
+use prism::visualization;
 
 const NUM_VOTER_CHAINS: u16 = 3;
 
@@ -30,9 +30,10 @@ fn main() {
     let vis_addr = std::net::SocketAddr::new(vis_ip, vis_port);
     visualization::Server::start(vis_addr, Arc::clone(&blockchain));
 
-    // get an address from the wallet
-    wallet.generate_keypair();//add_keypair(our_addr);
-    let our_addr: H256 = wallet.get_pubkey_hash().unwrap();
+    /*
+    // insert a fake key into the wallet
+    let our_addr: H256 = (&[0; 32]).into();
+    wallet.add_key(our_addr);
 
     // fund-raising
     let funding = Transaction {
@@ -43,44 +44,20 @@ fn main() {
         }],
         signatures: vec![],
     };
-    wallet.receive(&funding);
+    wallet.add_transaction(&funding);
     assert_eq!(wallet.balance(), 1000000);
 
     // send some money to outself
-    assert!(wallet.pay(our_addr, 5000).is_ok());
+    wallet.send_coin(our_addr, 5000);
     // the transaction has not been mined, so our balance will dip for now
     assert_eq!(wallet.balance(), 0);
+    */
 
     // mine a block
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    std::thread::sleep(std::time::Duration::from_millis(1000));
+    for _ in 0..50 {
+        miner.step();
+    }
+    std::thread::sleep(std::time::Duration::from_millis(2000));
     miner.exit();
 
     loop {
