@@ -11,6 +11,41 @@ pub struct Server {
     handle: HTTPServer,
 }
 
+/// This macro serves the static file at the location `path` and attaches the content type `type`.
+macro_rules! serve_static_file {
+    ( $req:expr, $path:expr, $type:expr ) => {
+        {
+            let content_type = concat!("Content-Type: ", $type).parse::<Header>().unwrap();
+            let cache_control = "Cache-Control: public, max-age=31536000".parse::<Header>().unwrap();
+            let resp = Response::from_string(include_str!($path))
+                .with_header(content_type)
+                .with_header(cache_control);
+            $req.respond(resp);
+        }
+    };
+}
+
+/// This macro serves the string `src` and attaches the content type `type`. Before serving the
+/// string, all occurrances of `SERVER_IP_ADDR` and `SERVER_PORT_NUMBER` in the string are replaced
+/// with the server IP and port respectively.
+macro_rules! serve_dynamic_file {
+    ( $req:expr, $src:expr, $type:expr, $addr:expr ) => {
+        {
+            let source = $src.to_string()
+                .replace("SERVER_IP_ADDR", &$addr.ip().to_string())
+                .replace("SERVER_PORT_NUMBER", &$addr.port().to_string());
+            let content_type = concat!("Content-Type: ", $type).parse::<Header>().unwrap();
+            let cache_control = "Cache-Control: no-store".parse::<Header>().unwrap();
+            let allow_all = "Access-Control-Allow-Origin: *".parse::<Header>().unwrap();
+            let resp = Response::from_string(source)
+                .with_header(content_type)
+                .with_header(cache_control)
+                .with_header(allow_all);
+            $req.respond(resp);
+        }
+    };
+}
+
 impl Server {
     pub fn start(addr: std::net::SocketAddr, chain: Arc<Mutex<BlockChain>>) {
         let handle = HTTPServer::http(&addr).unwrap();
@@ -23,45 +58,11 @@ impl Server {
                 let chain = Arc::clone(&server.chain);
                 thread::spawn(move || {
                     match req.url().trim_start_matches("/") {
-                        "blockchain.json" => {
-                            let allow_all_origin = "Access-Control-Allow-Origin: *".parse::<Header>().unwrap();
-                            let content_type = "Content-Type: application/json".parse::<Header>().unwrap();
-                            let cache_control = "Cache-Control: no-store".parse::<Header>().unwrap();
-                            let resp = Response::from_string(dump_blockchain(&chain.lock().unwrap()))
-                                .with_header(allow_all_origin)
-                                .with_header(cache_control)
-                                .with_header(content_type);
-                            req.respond(resp);
-                        },
-                        "cytoscape.min.js" => {
-                            let content_type = "Content-Type: application/javascript".parse::<Header>().unwrap();
-                            let cache_control = "Cache-Control: public, max-age=31536000".parse::<Header>().unwrap();
-                            let resp = Response::from_string(include_str!("cytoscape.js"))
-                                .with_header(content_type)
-                                .with_header(cache_control);
-                            req.respond(resp);
-                        },
-                        "blockchain_vis.js" => {
-                            let vis_script = include_str!("blockchain_vis.js").to_string()
-                                .replace("SERVER_IP_ADDR", &addr.ip().to_string())
-                                .replace("SERVER_PORT_NUMBER", &addr.port().to_string());
-                            let content_type = "Content-Type: application/javascript".parse::<Header>().unwrap();
-                            let resp = Response::from_string(vis_script)
-                                .with_header(content_type);
-                            req.respond(resp);
-                        },
-                        "visualize-blockchain" => {
-                            let content_type = "Content-Type: text/html".parse::<Header>().unwrap();
-                            let resp = Response::from_string(include_str!("blockchain_vis.html"))
-                                .with_header(content_type);
-                            req.respond(resp);
-                        }
-                        "" => {
-                            let content_type = "Content-Type: text/html".parse::<Header>().unwrap();
-                            let resp = Response::from_string(include_str!("index.html"))
-                                .with_header(content_type);
-                            req.respond(resp);
-                        }
+                        "blockchain.json" => serve_dynamic_file!(req, dump_blockchain(&chain.lock().unwrap()), "application/json", addr),
+                        "cytoscape.min.js" => serve_static_file!(req, "cytoscape.js", "application/javascript"),
+                        "blockchain_vis.js" => serve_dynamic_file!(req, include_str!("blockchain_vis.js"), "application/javascript", addr),
+                        "visualize-blockchain" => serve_dynamic_file!(req, include_str!("blockchain_vis.html"), "text/html", addr),
+                        "" => serve_dynamic_file!(req, include_str!("index.html"), "text/html", addr),
                         _ => {
                             let content_type = "Content-Type: text/html".parse::<Header>().unwrap();
                             let resp = Response::from_string(include_str!("404.html"))
@@ -75,3 +76,4 @@ impl Server {
         });
     }
 }
+
