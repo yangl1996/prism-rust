@@ -20,7 +20,7 @@ macro_rules! serve_static_file {
             let resp = Response::from_string(include_str!($path))
                 .with_header(content_type)
                 .with_header(cache_control);
-            $req.respond(resp);
+            $req.respond(resp).unwrap();
         }
     };
 }
@@ -41,7 +41,7 @@ macro_rules! serve_dynamic_file {
                 .with_header(content_type)
                 .with_header(cache_control)
                 .with_header(allow_all);
-            $req.respond(resp);
+            $req.respond(resp).unwrap();
         }
     };
 }
@@ -60,6 +60,7 @@ impl Server {
                     match req.url().trim_start_matches("/") {
                         "blockchain.json" => serve_dynamic_file!(req, dump_blockchain(&chain.lock().unwrap()), "application/json", addr),
                         "cytoscape.min.js" => serve_static_file!(req, "cytoscape.js", "application/javascript"),
+                        "bootstrap.min.css" => serve_static_file!(req, "bootstrap.min.css", "text/css"),
                         "blockchain_vis.js" => serve_dynamic_file!(req, include_str!("blockchain_vis.js"), "application/javascript", addr),
                         "visualize-blockchain" => serve_dynamic_file!(req, include_str!("blockchain_vis.html"), "text/html", addr),
                         "" => serve_dynamic_file!(req, include_str!("index.html"), "text/html", addr),
