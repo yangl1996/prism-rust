@@ -41,8 +41,8 @@ impl Server {
                                 .with_header(cache_control);
                             req.respond(resp);
                         },
-                        "proposer_voter_vis.js" => {
-                            let vis_script = include_str!("proposer_voter_vis.js").to_string()
+                        "blockchain_vis.js" => {
+                            let vis_script = include_str!("blockchain_vis.js").to_string()
                                 .replace("SERVER_IP_ADDR", &addr.ip().to_string())
                                 .replace("SERVER_PORT_NUMBER", &addr.port().to_string());
                             let content_type = "Content-Type: application/javascript".parse::<Header>().unwrap();
@@ -50,22 +50,16 @@ impl Server {
                                 .with_header(content_type);
                             req.respond(resp);
                         },
-                        "proposer_voter_vis" => {
+                        "visualize-blockchain" => {
                             let content_type = "Content-Type: text/html".parse::<Header>().unwrap();
-                            let resp = Response::from_string(include_str!("proposer_voter_vis.html"))
-                                .with_header(content_type);
-                            req.respond(resp);
-                        }
-                        "index.html" => {
-                            let content_type = "Content-Type: text/html".parse::<Header>().unwrap();
-                            let resp = Response::from_string(include_str!("index.html"))
+                            let resp = Response::from_string(include_str!("blockchain_vis.html"))
                                 .with_header(content_type);
                             req.respond(resp);
                         }
                         "" => {
-                            let redirect = "Location: /index.html".parse::<Header>().unwrap();
-                            let resp = Response::empty(301)
-                                .with_header(redirect);
+                            let content_type = "Content-Type: text/html".parse::<Header>().unwrap();
+                            let resp = Response::from_string(include_str!("index.html"))
+                                .with_header(content_type);
                             req.respond(resp);
                         }
                         _ => {
