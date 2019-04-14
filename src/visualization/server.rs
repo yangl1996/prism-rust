@@ -41,8 +41,8 @@ impl Server {
                                 .with_header(cache_control);
                             req.respond(resp);
                         },
-                        "blockchain_vis.js" => {
-                            let vis_script = include_str!("blockchain_vis.js").to_string()
+                        "proposer_voter_vis.js" => {
+                            let vis_script = include_str!("proposer_voter_vis.js").to_string()
                                 .replace("SERVER_IP_ADDR", &addr.ip().to_string())
                                 .replace("SERVER_PORT_NUMBER", &addr.port().to_string());
                             let content_type = "Content-Type: application/javascript".parse::<Header>().unwrap();
@@ -50,9 +50,9 @@ impl Server {
                                 .with_header(content_type);
                             req.respond(resp);
                         },
-                        "blockchain.html" => {
+                        "proposer_voter_vis" => {
                             let content_type = "Content-Type: text/html".parse::<Header>().unwrap();
-                            let resp = Response::from_string(include_str!("blockchain.html"))
+                            let resp = Response::from_string(include_str!("proposer_voter_vis.html"))
                                 .with_header(content_type);
                             req.respond(resp);
                         }
