@@ -60,6 +60,8 @@ impl Server {
                     match req.url().trim_start_matches("/") {
                         "blockchain.json" => serve_dynamic_file!(req, dump_blockchain(&chain.lock().unwrap()), "application/json", addr),
                         "cytoscape.min.js" => serve_static_file!(req, "cytoscape.js", "application/javascript"),
+                        "dagre.min.js" => serve_static_file!(req, "dagre.min.js", "application/javascript"),
+                        "cytoscape-dagre.js" => serve_static_file!(req, "cytoscape-dagre.js", "application/javascript"),
                         "bootstrap.min.css" => serve_static_file!(req, "bootstrap.min.css", "text/css"),
                         "blockchain_vis.js" => serve_dynamic_file!(req, include_str!("blockchain_vis.js"), "application/javascript", addr),
                         "visualize-blockchain" => serve_dynamic_file!(req, include_str!("blockchain_vis.html"), "text/html", addr),
