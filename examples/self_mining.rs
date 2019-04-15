@@ -22,7 +22,7 @@ fn main() {
     let peer_port = 12345;
     let peer_addr = std::net::SocketAddr::new(peer_ip, peer_port);
 
-    let (_server, miner, mut wallet) =
+    let (_server, miner, _wallet) =
         prism::start(peer_addr, &blockdb, &blockchain, &mempool).unwrap();
 
     let vis_ip = "127.0.0.1".parse::<std::net::IpAddr>().unwrap();
