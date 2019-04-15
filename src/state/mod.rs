@@ -101,9 +101,10 @@ impl UTXODatabase {
 #[cfg(test)]
 pub mod tests {
     use crate::crypto::hash::{Hashable, H256};
-    use super::{UTXODatabase, CoinId, CoinData, UTXO, init_with_tx};
+    use super::{UTXODatabase, CoinId, CoinData, UTXO, generator};
     use crate::transaction::{generator as tx_generator, Transaction};
     use crate::crypto::generator as crypto_generator;
+
     fn init_with_tx(state_db: &mut UTXODatabase, tx: &Transaction) {
         let hash: H256 = tx.hash();// compute hash here, and below inside Input we don't have to compute again (we just copy)
         for input in tx.input.iter() {
@@ -122,36 +123,36 @@ pub mod tests {
         }
     }
 
-    #[test]
-    fn insert_get_check_and_delete() {
-        let mut state_db = generator::random();
-        let mut count = state_db.num_utxo();
-
-        println!("Test 1: count");
-        let transaction = tx_generator::random();
-        let utxos = generator::tx_to_utxos(transaction);
-        for utxo in utxos.iter() {
-            state_db.insert(utxo);
-        }
-
-        assert_eq!(state_db.num_utxo(), count + utxos.len() as u64);
-
-        println!("Test 2: check()");
-        for utxo in utxos.iter() {
-            assert!(state_db.check(&utxo.coin_id).unwrap());
-        }
-
-        println!("Test 3: get()");
-        for utxo in utxos.iter() {
-            assert_eq!(state_db.get(&utxo.coin_id).unwrap().unwrap(), utxo.value);
-        }
-
-        println!("Test 4: delete()");
-        state_db.delete(&utxos[0].coin_id);
-        assert!(!state_db.check(&utxos[0].coin_id).unwrap());
-
-        assert_eq!(state_db.num_utxo(), count + utxos.len() as u64 - 1);
-    }
+//    #[test]
+//    fn insert_get_check_and_delete() {
+//        let mut state_db = generator::random();
+//        let mut count = state_db.num_utxo();
+//
+//        println!("Test 1: count");
+//        let transaction = tx_generator::random();
+//        let utxos = generator::tx_to_utxos(transaction);
+//        for utxo in utxos.iter() {
+//            state_db.insert(utxo);
+//        }
+//
+//        assert_eq!(state_db.num_utxo(), count + utxos.len() as u64);
+//
+//        println!("Test 2: check()");
+//        for utxo in utxos.iter() {
+//            assert!(state_db.check(&utxo.coin_id).unwrap());
+//        }
+//
+//        println!("Test 3: get()");
+//        for utxo in utxos.iter() {
+//            assert_eq!(state_db.get(&utxo.coin_id).unwrap().unwrap(), utxo.value);
+//        }
+//
+//        println!("Test 4: delete()");
+//        state_db.delete(&utxos[0].coin_id);
+//        assert!(!state_db.check(&utxos[0].coin_id).unwrap());
+//
+//        assert_eq!(state_db.num_utxo(), count + utxos.len() as u64 - 1);
+//    }
 
     #[test]
     pub fn create_receive() {
@@ -165,7 +166,8 @@ pub mod tests {
         let hash = tx.hash();
         for index in 0..tx.output.len() as u32 {
             assert_eq!(state_db.check(&CoinId{hash, index}), Ok(true));
-            let _coin_data = state_db.get(&CoinId{hash, index}).unwrap().unwrap();
+            let coin_data = state_db.get(&CoinId{hash, index}).unwrap().unwrap();
+            assert_eq!(coin_data, tx.output[index as usize])
         }
         drop(state_db);
         assert!(rocksdb::DB::destroy(&rocksdb::Options::default(), "/tmp/prism_test_state.rocksdb").is_ok());
