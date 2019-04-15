@@ -3,7 +3,7 @@ use crate::crypto::merkle::MerkleTree;
 
 use crate::transaction::Transaction;
 
-#[derive(Serialize, Deserialize, Hash, Debug, Default, Clone)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct Content {
     pub transactions: Vec<Transaction>, // TODO(V): No coinbase transaction added
 }

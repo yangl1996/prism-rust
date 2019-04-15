@@ -60,7 +60,6 @@ impl PropOrderingHelper {
     }
 }
 
-
 /*
  Test utilities
 */
