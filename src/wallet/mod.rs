@@ -1,13 +1,13 @@
 use crate::crypto::hash::{Hashable, H256};
-use crate::crypto::sign::{KeyPair, Signature, PubKey};
+use crate::crypto::sign::{KeyPair, PubKey, Signature};
+use crate::handler;
 use crate::miner::memory_pool::MemoryPool;
 use crate::miner::miner::ContextUpdateSignal;
-use crate::transaction::{Input, Output, Transaction, Signature as PubkeySignature};
+use crate::state::{CoinData, CoinId, UTXO};
+use crate::transaction::{Input, Output, Signature as PubkeySignature, Transaction};
 use std::collections::{HashMap, HashSet};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
-use crate::state::{UTXO, CoinId, CoinData};
-use crate::handler;
 
 pub type Result<T> = std::result::Result<T, WalletError>;
 
@@ -76,7 +76,7 @@ impl Wallet {
 
     /// Add coins in a transaction that are destined to us
     pub fn receive(&mut self, tx: &Transaction) {
-        let hash: H256 = tx.hash();// compute hash here, and below inside Input we don't have to compute again (we just copy)
+        let hash: H256 = tx.hash(); // compute hash here, and below inside Input we don't have to compute again (we just copy)
         for input in tx.input.iter() {
             self.delete_coin(input);
         }
@@ -90,7 +90,7 @@ impl Wallet {
                     value: output.value,
                     recipient: output.recipient,
                 };
-                let coin = Coin  {coin_id, coin_data};
+                let coin = Coin { coin_id, coin_data };
                 self.insert_coin(coin);
             }
         }
@@ -108,7 +108,10 @@ impl Wallet {
     }
     /// Returns the sum of values of all the coin in the wallet
     pub fn balance(&self) -> u64 {
-        self.coins.values().map(|coin_data| coin_data.value).sum::<u64>()
+        self.coins
+            .values()
+            .map(|coin_data| coin_data.value)
+            .sum::<u64>()
     }
 
     /// create a transaction using the wallet coins
@@ -120,7 +123,8 @@ impl Wallet {
         for (coin_id, coin_data) in self.coins.iter() {
             value_sum += coin_data.value;
             coins_to_use.push(coin_id.clone()); // coins that will be used for this transaction
-            if value_sum >= value {// if we already have enough money, break
+            if value_sum >= value {
+                // if we already have enough money, break
                 break;
             }
         }
@@ -130,13 +134,16 @@ impl Wallet {
         }
         // if we have enough money in our wallet, create tx
         // create transaction inputs
-        let input = coins_to_use.clone();//since Input DS may change, this line may change
-        // create the output
+        let input = coins_to_use.clone(); //since Input DS may change, this line may change
+                                          // create the output
         let mut output = vec![Output { recipient, value }];
         if value_sum > value {
             // transfer the remaining value back to self
             let recipient = self.get_pubkey_hash()?;
-            output.push(Output {recipient, value: value_sum - value});
+            output.push(Output {
+                recipient,
+                value: value_sum - value,
+            });
         }
 
         // remove used coin from wallet
@@ -144,13 +151,17 @@ impl Wallet {
             self.delete_coin(c);
         }
 
-        let unsigned = Transaction {input, output, signatures: vec![]};
-//        let mut signatures = vec![];
-//        let message = bincode::serialize(&unsigned).unwrap();
-//        for keypair in coins_to_use.iter().map(|c|self.keypairs.get(&c.pubkey_hash).unwrap()) {
-//            let signature = keypair.sign(&message);
-//            signatures.push(PubkeySignature{pubkey: keypair.public_key(), signature});
-//        }
+        let unsigned = Transaction {
+            input,
+            output,
+            signatures: vec![],
+        };
+        //        let mut signatures = vec![];
+        //        let message = bincode::serialize(&unsigned).unwrap();
+        //        for keypair in coins_to_use.iter().map(|c|self.keypairs.get(&c.pubkey_hash).unwrap()) {
+        //            let signature = keypair.sign(&message);
+        //            signatures.push(PubkeySignature{pubkey: keypair.public_key(), signature});
+        //        }
 
         Ok(unsigned)
     }
@@ -161,7 +172,8 @@ impl Wallet {
         let hash = tx.hash();
         handler::new_transaction(tx, &self.mempool);
         self.context_update_chan
-            .send(ContextUpdateSignal::NewContent).unwrap();
+            .send(ContextUpdateSignal::NewContent)
+            .unwrap();
         //return tx hash, later we can confirm it in ledger
         Ok(hash)
     }
@@ -175,25 +187,33 @@ impl Wallet {
 #[cfg(test)]
 pub mod tests {
     use super::Wallet;
-    use crate::transaction::{Transaction,Output};
     use crate::crypto::generator as crypto_generator;
-    use crate::miner::memory_pool::MemoryPool;
-    use std::sync::{mpsc, Arc, Mutex};
-    use crate::miner::miner::ContextUpdateSignal;
     use crate::crypto::hash::{Hashable, H256};
+    use crate::miner::memory_pool::MemoryPool;
+    use crate::miner::miner::ContextUpdateSignal;
+    use crate::transaction::{Output, Transaction};
+    use std::sync::{mpsc, Arc, Mutex};
 
-    fn new_wallet_pool_receiver_keyhash() -> (Wallet, Arc<Mutex<MemoryPool>>, mpsc::Receiver<ContextUpdateSignal>, H256) {
+    fn new_wallet_pool_receiver_keyhash() -> (
+        Wallet,
+        Arc<Mutex<MemoryPool>>,
+        mpsc::Receiver<ContextUpdateSignal>,
+        H256,
+    ) {
         let (ctx_update_sink, ctx_update_source) = mpsc::channel();
         let pool = Arc::new(Mutex::new(MemoryPool::new()));
         let mut w = Wallet::new(&pool, ctx_update_sink);
         w.generate_keypair();
         let h: H256 = w.get_pubkey_hash().unwrap();
-        return (w,pool,ctx_update_source, h);
+        return (w, pool, ctx_update_source, h);
     }
     fn transaction_10_10(recipient: &H256) -> Transaction {
         let mut output: Vec<Output> = vec![];
         for i in 0..10 {
-            output.push(Output{value: 10, recipient: recipient.clone()});
+            output.push(Output {
+                value: 10,
+                recipient: recipient.clone(),
+            });
         }
         return Transaction {
             input: vec![],
@@ -203,19 +223,19 @@ pub mod tests {
     }
     #[test]
     pub fn test_balance() {
-        let (mut w,pool,ctx_update_source,hash) = new_wallet_pool_receiver_keyhash();
+        let (mut w, pool, ctx_update_source, hash) = new_wallet_pool_receiver_keyhash();
         assert_eq!(w.balance(), 0);
     }
     #[test]
     pub fn test_add_transaction() {
-        let (mut w,pool,ctx_update_source,hash) = new_wallet_pool_receiver_keyhash();
+        let (mut w, pool, ctx_update_source, hash) = new_wallet_pool_receiver_keyhash();
         w.receive(&transaction_10_10(&hash));
         assert_eq!(w.balance(), 100);
     }
 
     #[test]
     pub fn test_send_coin() {
-        let (mut w,pool,ctx_update_source,hash) = new_wallet_pool_receiver_keyhash();
+        let (mut w, pool, ctx_update_source, hash) = new_wallet_pool_receiver_keyhash();
         w.receive(&transaction_10_10(&hash));
         // now we have 10*10 coins, we try to spend them
         for i in 0..5 {
@@ -223,11 +243,11 @@ pub mod tests {
         }
         assert_eq!(w.balance(), 0);
         let m = pool.lock().unwrap();
-        let txs: Vec<Transaction> = m.get_transactions(5).iter().map(|tx|tx.clone()).collect();
+        let txs: Vec<Transaction> = m.get_transactions(5).iter().map(|tx| tx.clone()).collect();
         drop(m);
         assert_eq!(txs.len(), 5);
         for tx in &txs {
-            println!("{:?}",tx);
+            println!("{:?}", tx);
         }
         for i in 0..5 {
             ctx_update_source.recv().unwrap();
@@ -236,7 +256,7 @@ pub mod tests {
 
     #[test]
     pub fn test_send_coin_2() {
-        let (mut w,pool,ctx_update_source,hash) = new_wallet_pool_receiver_keyhash();
+        let (mut w, pool, ctx_update_source, hash) = new_wallet_pool_receiver_keyhash();
         w.receive(&transaction_10_10(&hash));
         // now we have 10*10 coins, we try to spend them
         for i in 0..5 {
@@ -244,14 +264,15 @@ pub mod tests {
         }
         assert_eq!(w.balance(), 0);
         let m = pool.lock().unwrap();
-        let txs: Vec<Transaction> = m.get_transactions(5).iter().map(|tx|tx.clone()).collect();
+        let txs: Vec<Transaction> = m.get_transactions(5).iter().map(|tx| tx.clone()).collect();
         drop(m);
         assert_eq!(txs.len(), 5);
-        for tx in &txs {// for test, just add new tx into this wallet
-            println!("{:?}",tx);
+        for tx in &txs {
+            // for test, just add new tx into this wallet
+            println!("{:?}", tx);
             w.receive(tx);
         }
-        assert_eq!(w.balance(), 5);//10*10-5*19=5 remaining
+        assert_eq!(w.balance(), 5); //10*10-5*19=5 remaining
         for i in 0..5 {
             ctx_update_source.recv().unwrap();
         }
@@ -259,7 +280,7 @@ pub mod tests {
 
     #[test]
     pub fn test_send_coin_fail() {
-        let (mut w,pool,ctx_update_source,hash) = new_wallet_pool_receiver_keyhash();
+        let (mut w, pool, ctx_update_source, hash) = new_wallet_pool_receiver_keyhash();
         w.receive(&transaction_10_10(&hash));
         // now we have 10*10 coins, we try to spend 101
         assert!(w.pay(crypto_generator::h256(), 101).is_err());

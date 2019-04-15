@@ -3,8 +3,8 @@ use crate::block::{Block, Content};
 use crate::blockdb::BlockDatabase;
 use crate::crypto::hash::{Hashable, H256};
 use crate::state::UTXODatabase;
-use crate::state::{CoinId, CoinData, UTXO};
-use crate::transaction::{Transaction, Input};
+use crate::state::{CoinData, CoinId, UTXO};
+use crate::transaction::{Input, Transaction};
 
 use std::sync::Mutex;
 
@@ -45,7 +45,7 @@ pub fn confirm_new_tx_blocks(
                 if inputs_unspent {
                     match utxo_state.receive(transaction) {
                         Err(e) => panic!("StateDB not working: Error {}", e),
-                        Ok(_) => ()
+                        Ok(_) => (),
                     }
                 } else {
                     //log the sanitization error.
@@ -55,7 +55,6 @@ pub fn confirm_new_tx_blocks(
         drop(utxo_state); //@Lei: is this required?
     }
 }
-
 
 /// This function removes the ledger changes from last 'tx_block_hashes'.
 pub fn unconfirm_old_tx_blocks(
@@ -76,7 +75,8 @@ pub fn unconfirm_old_tx_blocks(
         //2. Loop over the transactions
         let utxo_state = state_db.lock().unwrap();
         {
-            for (tx_pos, transaction) in transactions.iter().enumerate().rev() {// also need rev?
+            for (tx_pos, transaction) in transactions.iter().enumerate().rev() {
+                // also need rev?
                 let transaction_hash = transaction.hash();
                 //3a. Revert the transaction only if it was valid when it was added in the state.
                 // Logic: If the transaction was valid, *all* its output should be unspent/present in the state.
@@ -114,7 +114,10 @@ pub fn unconfirm_old_tx_blocks(
                         let coin_id = input;
                         let utxo = UTXO {
                             coin_id: input.clone(),
-                            coin_data: CoinData {value: get_value_input(input), recipient: get_recipient_input(input)},
+                            coin_data: CoinData {
+                                value: get_value_input(input),
+                                recipient: get_recipient_input(input),
+                            },
                         };
                         utxo_state.insert(&utxo);
                     }
@@ -129,11 +132,11 @@ pub fn unconfirm_old_tx_blocks(
     }
 }
 
-fn get_value_input(input: &Input) -> u64{
+fn get_value_input(input: &Input) -> u64 {
     return 10; //TODO: Implement another DB? Or change Input ds?
 }
 
-fn get_recipient_input(input: &Input) -> H256{
+fn get_recipient_input(input: &Input) -> H256 {
     return (&[0u8; 32]).into(); //TODO: Implement another DB?
 }
 
@@ -168,6 +171,5 @@ fn get_recipient_input(input: &Input) -> H256{
 //
 //    }
 //}
-
 
 //TODO: Add tests

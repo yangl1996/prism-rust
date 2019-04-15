@@ -1,8 +1,8 @@
 use prism::crypto::hash::H256;
 use prism::transaction::{Output, Transaction};
+use prism::visualization;
 use prism::{self, blockchain, blockdb, miner::memory_pool};
 use std::sync::{Arc, Mutex};
-use prism::visualization;
 
 const NUM_VOTER_CHAINS: u16 = 3;
 
