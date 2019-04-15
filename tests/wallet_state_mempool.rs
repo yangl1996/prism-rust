@@ -78,7 +78,7 @@ fn wallets_pay_eachother() {//also need to test rollback
         println!("Dummy mining, sanitization and ledger generation");
         mine_whole_mempool(&mempool, Arc::get_mut(&mut state_db).unwrap(), &mut wallets);
         println!("Balance of wallets: {:?}.", wallets.iter().map(|w|w.balance()).collect::<Vec<u64>>());
-        println!("UTXO num: {} (should change in range [0,1])", state_db.num_utxo());
+        println!("UTXO num: {}", state_db.num_utxo());
         for w in wallets.iter() {
             let mut balance_in_state = 0u64;
             for coin_id in w.get_coin_id().iter() {
