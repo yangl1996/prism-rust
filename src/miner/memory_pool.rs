@@ -52,8 +52,7 @@ impl MemoryPool {
         }
 
         // add to btree
-        self.by_storage_index
-            .insert(entry.storage_index, hash);
+        self.by_storage_index.insert(entry.storage_index, hash);
 
         // add to hashmap
         self.by_hash.insert(hash, entry);
@@ -129,10 +128,10 @@ pub mod tests {
     // TODO: add more tests.
 
     use super::MemoryPool;
-    use crate::crypto::hash::{Hashable, H256};
     use crate::crypto::generator as crypto_generator;
-    use crate::transaction::{generator as tx_generator, Input};
+    use crate::crypto::hash::{Hashable, H256};
     use crate::transaction::Transaction;
+    use crate::transaction::{generator as tx_generator, Input};
 
     #[test]
     fn insert_remove_transactions() {
@@ -169,18 +168,30 @@ pub mod tests {
     fn remove_by_input() {
         let mut pool = MemoryPool::new();
         let first_tx = tx_generator::random();
-        let mut input = vec![Input{ hash: first_tx.hash(), index: 0}];
+        let mut input = vec![Input {
+            hash: first_tx.hash(),
+            index: 0,
+        }];
         //although for now we don't want to add tx into mempool if it's inputs are also in mempool
         //let's add them and test remove
         for i in 1..=20 {
-            let tx = Transaction { input: input.clone(), ..tx_generator::random() };
+            let tx = Transaction {
+                input: input.clone(),
+                ..tx_generator::random()
+            };
             pool.insert(tx.clone());
             assert_eq!(pool.by_hash.len(), i);
             assert_eq!(pool.by_storage_index.len(), i);
-            input = vec![Input{ hash: tx.hash(), index: 0}];
+            input = vec![Input {
+                hash: tx.hash(),
+                index: 0,
+            }];
         }
         //one remove should remove all correlated transactions
-        pool.remove_by_input(&Input{ hash: first_tx.hash(), index: 0});
+        pool.remove_by_input(&Input {
+            hash: first_tx.hash(),
+            index: 0,
+        });
         assert_eq!(pool.by_hash.len(), 0);
         assert_eq!(pool.by_input.len(), 0);
     }

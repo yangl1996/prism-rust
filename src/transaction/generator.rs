@@ -22,10 +22,7 @@ fn tx_input() -> Input {
     let mut rng = rand::thread_rng();
     let hash = crypto::generator::h256();
     let index = rng.next_u32();
-    return Input {
-        hash,
-        index,
-    };
+    return Input { hash, index };
 }
 
 fn tx_output() -> Output {

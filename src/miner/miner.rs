@@ -259,8 +259,7 @@ impl Context {
         // Update transaction content with TX_BLOCK_SIZE mempool txs
         let mempool = self.tx_mempool.lock().unwrap();
         content.push(Content::Transaction(transaction::Content::new(
-            mempool
-                .get_transactions(TX_BLOCK_SIZE)
+            mempool.get_transactions(TX_BLOCK_SIZE),
         )));
         drop(mempool);
 

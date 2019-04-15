@@ -1,8 +1,8 @@
 use super::{CoinId, UTXODatabase, UTXO};
 use crate::crypto::hash::Hashable;
+use crate::state::CoinData;
 use crate::transaction::generator as tx_generator;
 use crate::transaction::Transaction;
-use crate::state::CoinData;
 
 // Converts a transaction to bunch of utxos. TODO: Where should we put this function?
 pub fn tx_to_utxos(transaction: &Transaction) -> Vec<UTXO> {
@@ -16,10 +16,7 @@ pub fn tx_to_utxos(transaction: &Transaction) -> Vec<UTXO> {
             value: output.value,
             recipient: output.recipient,
         };
-        let utxo = UTXO {
-            coin_id,
-            coin_data,
-        };
+        let utxo = UTXO { coin_id, coin_data };
         utxos.push(utxo);
     }
     return utxos;

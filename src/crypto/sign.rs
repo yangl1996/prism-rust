@@ -1,8 +1,8 @@
-use byteorder::{BigEndian, ByteOrder};
 use crate::crypto::hash::{Hashable, H256};
-use ring::signature::{self, Ed25519KeyPair};
+use byteorder::{BigEndian, ByteOrder};
 use ring::rand;
 use ring::signature::KeyPair as KeyPairTrait;
+use ring::signature::{self, Ed25519KeyPair};
 use untrusted;
 
 /// An Ed25519 signature.
@@ -118,7 +118,8 @@ impl KeyPair {
     pub fn new() -> Self {
         let rng = rand::SystemRandom::new();
         let pkcs8_bytes = Ed25519KeyPair::generate_pkcs8(&rng).unwrap();
-        let key_pair = Ed25519KeyPair::from_pkcs8(untrusted::Input::from(pkcs8_bytes.as_ref())).unwrap();
+        let key_pair =
+            Ed25519KeyPair::from_pkcs8(untrusted::Input::from(pkcs8_bytes.as_ref())).unwrap();
         return Self {
             ring_keypair: key_pair,
             pkcs8_bytes: pkcs8_bytes.as_ref().to_vec(),
@@ -157,6 +158,7 @@ mod tests {
 
 impl Hashable for PubKey {
     fn hash(&self) -> H256 {
-        return ring::digest::digest(&ring::digest::SHA256, &bincode::serialize(&self).unwrap()).into();
+        return ring::digest::digest(&ring::digest::SHA256, &bincode::serialize(&self).unwrap())
+            .into();
     }
 }
