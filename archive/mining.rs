@@ -131,15 +131,4 @@ fn main() {
 
         }
     }
-
-
-
-
-//    let two_seconds = Duration::from_secs(2);
-//
-//    // Parking the main thread so that the miner thread can run
-//    loop {
-////        thread::sleep(two_seconds);
-////        println!("Time spent on main thread : {:?}", Instant::now()- beginning_park);
-//    }
 }

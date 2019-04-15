@@ -2,11 +2,11 @@ use prism::crypto::hash::H256;
 use prism::transaction::{Output, Transaction};
 use prism::{self, blockchain, blockdb, miner::memory_pool};
 use std::sync::{Arc, Mutex};
+use prism::visualization;
 
 const NUM_VOTER_CHAINS: u16 = 3;
 
-#[test]
-fn self_mining() {
+fn main() {
     // initialize all sorts of stuff
     let blockdb_path = std::path::Path::new("/tmp/prism_itest_self_mining.rocksdb");
     let blockdb = blockdb::BlockDatabase::new(blockdb_path).unwrap();
@@ -25,6 +25,12 @@ fn self_mining() {
     let (_server, miner, mut wallet) =
         prism::start(peer_addr, &blockdb, &blockchain, &mempool).unwrap();
 
+    let vis_ip = "127.0.0.1".parse::<std::net::IpAddr>().unwrap();
+    let vis_port = 8888;
+    let vis_addr = std::net::SocketAddr::new(vis_ip, vis_port);
+    visualization::Server::start(vis_addr, Arc::clone(&blockchain));
+
+    /*
     // insert a fake key into the wallet
     let our_addr: H256 = (&[0; 32]).into();
     wallet.add_key(our_addr);
@@ -45,39 +51,16 @@ fn self_mining() {
     wallet.send_coin(our_addr, 5000);
     // the transaction has not been mined, so our balance will dip for now
     assert_eq!(wallet.balance(), 0);
+    */
 
     // mine a block
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    miner.step();
-    std::thread::sleep(std::time::Duration::from_millis(1000));
-    println!("{}", blockchain.lock().unwrap().dump().unwrap());
+    for _ in 0..50 {
+        miner.step();
+    }
+    std::thread::sleep(std::time::Duration::from_millis(2000));
     miner.exit();
 
-    std::thread::sleep(std::time::Duration::from_millis(1000));
+    loop {
+        std::thread::park();
+    }
 }

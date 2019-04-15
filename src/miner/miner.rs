@@ -192,6 +192,9 @@ impl Context {
                 new_block(mined_block, &self.db, &self.blockchain);
                 // TODO: update mempool
                 info!("Mined one block");
+                // TODO: Only update block contents if relevant parent
+                self.update_context();
+                header = self.create_header();
                 // if we are stepping, pause the miner loop
                 if self.operating_state == OperatingState::Step {
                     self.operating_state = OperatingState::Paused;

@@ -1,14 +1,17 @@
+use crate::block::generator as block_generator;
 use crate::block::proposer::Content as Proposer_Content;
 use crate::block::voter::Content as Voter_Content;
 use crate::block::{Block, Content};
-
-use crate::crypto::hash::H256;
-
-use crate::block::generator as block_generator;
 use crate::crypto::generator as crypto_generator;
+use crate::crypto::hash::H256;
 
 use std::cmp;
 use std::cmp::Ordering;
+use std::collections::{HashMap, HashSet};
+
+use super::edge::Edge;
+use super::proposer::Status as ProposerStatus;
+use super::voter::NodeStatus as VoterNodeStatus;
 
 pub fn lcb_from_vote_depths(votes: Vec<u32>) -> f32 {
     let answer: f32 = votes.len() as f32;
@@ -57,8 +60,9 @@ impl PropOrderingHelper {
     }
 }
 
+
 /*
- Test utils
+ Test utilities
 */
 
 /// Generates a random tx_block with the given parent_hash. Only used by 'tx_blocks_with_parent_hash' fn.

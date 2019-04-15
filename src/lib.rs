@@ -15,6 +15,7 @@ pub mod state;
 pub mod transaction;
 pub mod validation;
 pub mod wallet;
+pub mod visualization;
 
 use blockchain::BlockChain;
 use blockdb::BlockDatabase;
