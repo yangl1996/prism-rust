@@ -1,4 +1,5 @@
 use byteorder::{BigEndian, ByteOrder};
+use crate::crypto::hash::{Hashable, H256};
 use ring::signature::{self, Ed25519KeyPair};
 use ring::rand;
 use ring::signature::KeyPair as KeyPairTrait;
@@ -151,5 +152,11 @@ mod tests {
         let signature = keypair.sign(&message);
         let result = public_key.verify(&message, &signature);
         assert!(result);
+    }
+}
+
+impl Hashable for PubKey {
+    fn hash(&self) -> H256 {
+        return ring::digest::digest(&ring::digest::SHA256, &bincode::serialize(&self).unwrap()).into();
     }
 }

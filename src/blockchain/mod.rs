@@ -326,25 +326,26 @@ impl BlockChain {
                         //5 Rollback the ledger if required.
 
                         //5a. Check if the leader blocks have changed between first_left_segment_vote_level and min_unconfirmed_level.
-                        let mut roll_back_level = first_left_segment_vote_level;
+                        let mut roll_back_level = 0;
                         let mut roll_back_required = false;
-                        for roll_back_level in
+                        for level in
                             first_left_segment_vote_level..self.proposer_tree.min_unconfirmed_level
                         {
-                            let old_leader_block =
-                                self.get_leader_block_at_level(roll_back_level).unwrap();
-                            match self.compute_leader_block_at_level(roll_back_level) {
+                            let old_leader_block = self.get_leader_block_at_level(level).unwrap();
+                            match self.compute_leader_block_at_level(level) {
                                 Some(new_leader_block) => {
                                     if old_leader_block != new_leader_block {
                                         // Leader block changed at the level
                                         roll_back_required = true;
+                                        roll_back_level = level;
                                         break;
                                     }
                                 }
                                 None => {
                                     // level leader block is not the leader block and infact level has not leader block
-                                    self.proposer_tree.leader_nodes.remove(&roll_back_level);
+                                    self.proposer_tree.leader_nodes.remove(&level);
                                     roll_back_required = true;
+                                    roll_back_level = level;
                                     break;
                                 }
                             }

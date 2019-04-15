@@ -9,7 +9,7 @@ use crate::config::*;
 use crate::crypto::hash::{Hashable, H256};
 
 /// A block in the Prism blockchain.
-#[derive(Serialize, Deserialize, Debug, Hash, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 // TODO: discuss. I removed Default trait. It seems that the only place that it will be needed is in tests, to
 // quickly generate some fake blocks. PartialEq is also removed for now
 pub struct Block {
@@ -90,7 +90,7 @@ impl std::fmt::Display for Block {
 
 /// The content of a block. It could contain transactions, references, or votes, depending on the
 /// type of the block.
-#[derive(Serialize, Deserialize, Debug, Hash, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Content {
     Transaction(transaction::Content),
     Proposer(proposer::Content),
