@@ -34,6 +34,24 @@ impl std::convert::From<&H256> for [u8; 32] {
     }
 }
 
+impl std::convert::From<&H256> for String {
+    fn from(input: &H256) -> String {
+        let buffer: [u8; 32] = input.into();
+        let mut result: String = "".to_string();
+        for byte_idx in 0..32 {
+            let b = format!("{:>02x}", &buffer[byte_idx]);
+            result += &b;
+        }
+        return result;
+    }
+}
+
+impl std::convert::From<H256> for String {
+    fn from(input: H256) -> String {
+        return (&input).into();
+    }
+}
+
 impl std::convert::From<ring::digest::Digest> for H256 {
     fn from(input: ring::digest::Digest) -> H256 {
         let mut raw_hash: [u8; 32] = [0; 32];
