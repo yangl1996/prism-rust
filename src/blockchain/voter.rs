@@ -177,7 +177,7 @@ impl Chain {
     /// last until right behind the current smallest unvoted proposer level.
     /// 
     /// An example:
-    /// ```
+    /// ```ignore
     /// Initial State:
     ///     PB proposer_blocks[0].1
     ///     |
@@ -264,7 +264,7 @@ impl std::fmt::Display for Chain {
 
 /// Represent a fork in the voter chain. It is used when a longer fork appears in a voting chain.
 ///
-/// ```
+/// ```ignore
 ///             B
 ///             |
 ///             B---- (common parent)
