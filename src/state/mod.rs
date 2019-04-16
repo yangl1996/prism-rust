@@ -8,7 +8,22 @@ use bincode::{deserialize, serialize};
 use std::sync::Mutex;
 
 pub type Result<T> = std::result::Result<T, rocksdb::Error>;
-pub type CoinId = Input;
+
+/// The struct that identifies an UTXO, it contains two fields of Input
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct CoinId {
+    /// The hash of the transaction being referred to.
+    pub hash: H256,
+    /// The index of the output in question in that transaction.
+    pub index: u32,
+}
+
+impl From<&Input> for CoinId {
+    fn from(other: &Input) -> Self {
+        Self { hash: other.hash, index: other.index}
+    }
+}
+
 pub type CoinData = Output;
 
 // Bitcoin UTXO is much more complicated because they have extra seg-wit and locktime.
@@ -74,25 +89,46 @@ impl UTXODatabase {
     pub fn receive(&mut self, tx: &Transaction) -> Result<()> {
         let hash: H256 = tx.hash(); // compute hash here, and below inside Input we don't have to compute again (we just copy)
         for input in tx.input.iter() {
-            self.delete(input)?;
+            let coin_id: CoinId = input.into();
+            self.delete(&coin_id)?;
         }
-        for (idx, output) in tx.output.iter().enumerate() {
-            let coin_id = CoinId {
-                hash,
-                index: idx as u32,
+        for (index, output) in tx.output.iter().enumerate() {
+            let utxo = UTXO {
+                coin_id: CoinId {
+                    hash,
+                    index: index as u32,
+                },
+                coin_data: CoinData {
+                    value: output.value,
+                    recipient: output.recipient,
+                },
             };
-            let coin_data = CoinData {
-                value: output.value,
-                recipient: output.recipient,
-            };
-            let utxo = UTXO { coin_id, coin_data };
             self.insert(&utxo)?;
         }
         Ok(())
     }
 
     pub fn rollback(&mut self, tx: &Transaction) -> Result<()> {
-        unimplemented!();
+        let hash: H256 = tx.hash();
+        for index in 0..tx.output.len() {
+            let coin_id = CoinId {
+                hash,
+                index: index as u32,
+            };
+            self.delete(&coin_id)?;
+        }
+        for (index, input) in tx.input.iter().enumerate() {
+            // Get the value
+            let utxo = UTXO {
+                coin_id: input.into(),
+                coin_data: CoinData {
+                    value: input.value,
+                    recipient: input.recipient,
+                },
+            };
+            self.insert(&utxo)?;
+        }
+        Ok(())
     }
 }
 

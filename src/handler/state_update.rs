@@ -4,7 +4,7 @@ use crate::blockdb::BlockDatabase;
 use crate::crypto::hash::{Hashable, H256};
 use crate::state::UTXODatabase;
 use crate::state::{CoinData, CoinId, UTXO};
-use crate::transaction::{Input, Transaction};
+use crate::transaction::{Transaction};
 
 use std::sync::Mutex;
 
@@ -31,7 +31,7 @@ pub fn confirm_new_tx_blocks(
                 //3a. Sanitize: Check if all the inputs are unspent (in the state)
                 let mut inputs_unspent = true;
                 for input in transaction.input.iter() {
-                    match utxo_state.check(input) {
+                    match utxo_state.check(&(input.into())) {
                         Err(e) => panic!("State DB not working: Error {}", e),
                         Ok(unspent) => {
                             if !unspent {
@@ -100,27 +100,34 @@ pub fn unconfirm_old_tx_blocks(
                 //3b. State transition: If the transaction was valid, then delete all the outputs and add back all the inputs
                 if no_unspent_outputs == output_size as u32 {
                     // Gerui: write the following as a function called rollback(transaction) in state module. It's clear
-                    //3b.i Get the input locations of the  output coins and delete the output coins.
-                    for (index, _) in transaction.output.iter().enumerate() {
-                        let coin_id = CoinId {
-                            hash: transaction.hash(),
-                            index: index as u32,
-                        };
-                        utxo_state.delete(&coin_id);
+                    match utxo_state.rollback(transaction) {
+                        Err(e) => panic!("StateDB not working: Error {}", e),
+                        Ok(_) => (),
                     }
-                    //3b.ii Reconstruct the input utxos
-                    for (index, input) in transaction.input.iter().enumerate() {
-                        // Get the value
-                        let coin_id = input;
-                        let utxo = UTXO {
-                            coin_id: input.clone(),
-                            coin_data: CoinData {
-                                value: get_value_input(input),
-                                recipient: get_recipient_input(input),
-                            },
-                        };
-                        utxo_state.insert(&utxo);
-                    }
+//                    //3b.i Get the input locations of the  output coins and delete the output coins.
+//                    for (index, _) in transaction.output.iter().enumerate() {
+//                        let coin_id = CoinId {
+//                            hash: transaction.hash(),
+//                            index: index as u32,
+//                        };
+//                        utxo_state.delete(&coin_id);
+//                    }
+//                    //3b.ii Reconstruct the input utxos
+//                    for (index, input) in transaction.input.iter().enumerate() {
+//                        // Get the value
+//                        let coin_id = input;
+//                        let utxo = UTXO {
+//                            coin_id: CoinId {
+//                                hash: input.hash,
+//                                index: input.index,
+//                            },
+//                            coin_data: CoinData {
+//                                value: input.value,
+//                                recipient: input.recipient,
+//                            },
+//                        };
+//                        utxo_state.insert(&utxo);
+//                    }
                 } else if no_unspent_outputs == 0 {
                     //log the sanitization error.
                 } else {
@@ -130,14 +137,6 @@ pub fn unconfirm_old_tx_blocks(
         }
         drop(utxo_state);
     }
-}
-
-fn get_value_input(input: &Input) -> u64 {
-    return 10; //TODO: Implement another DB? Or change Input ds?
-}
-
-fn get_recipient_input(input: &Input) -> H256 {
-    return (&[0u8; 32]).into(); //TODO: Implement another DB?
 }
 
 //#[cfg(test)]
