@@ -16,6 +16,7 @@ pub type Coin = UTXO;
 // one potential problem: if another program has the same keypair, then he may spend a coin, but this wallet don't know it's spend.
 // another problem is concurrency, it seems this wallet can only be run single-threaded.
 // so this wallet should just be used in experiment to generate transactions single-threaded.
+/// A data structure to maintain key pairs and their coins, and to generate transactions.
 pub struct Wallet {
     /// List of coins which can be spent
     coins: HashMap<CoinId, CoinData>,
@@ -46,7 +47,7 @@ impl Wallet {
         };
     }
 
-    // someone pay to A first, then I coincidentally generate A, I will NOT receive the payment
+    // someone pay to public key A first, then I coincidentally generate A, I will NOT receive the payment
     /// Generate a new key pair
     pub fn generate_keypair(&mut self) {
         let keypair = KeyPair::new();
@@ -62,6 +63,7 @@ impl Wallet {
     }
 
     // this method doesn't compute hash again. we could get pubkey then compute the hash but that compute hash again!
+    /// Get one pubkey's hash from this wallet
     pub fn get_pubkey_hash(&self) -> Result<H256> {
         if let Some(&pubkey_hash) = self.keypairs.keys().next() {
             return Ok(pubkey_hash);
@@ -74,7 +76,7 @@ impl Wallet {
         self.coins.insert(coin.coin_id, coin.coin_data);
     }
 
-    /// Add coins in a transaction that are destined to us
+    /// Remove the spent coins belong to us in a transaction. Add coins in a transaction that are destined to us
     pub fn receive(&mut self, tx: &Transaction) {
         let hash: H256 = tx.hash(); // compute hash here, and below inside Input we don't have to compute again (we just copy)
         for input in tx.input.iter() {

@@ -70,7 +70,7 @@ impl UTXODatabase {
         return *count;
     }
 
-    /// Add coins in a transaction
+    /// Delete the spent coins, then add coins in a transaction
     pub fn receive(&mut self, tx: &Transaction) -> Result<()> {
         let hash: H256 = tx.hash(); // compute hash here, and below inside Input we don't have to compute again (we just copy)
         for input in tx.input.iter() {
