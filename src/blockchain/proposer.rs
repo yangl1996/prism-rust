@@ -3,15 +3,17 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 
 #[derive(Serialize, Deserialize, Clone, Copy, Ord, Eq, PartialEq, PartialOrd, Hash)]
+/// The metadata of a proposer block.
 pub struct NodeData {
-    /// Level of the proposer node
+    /// Level of the proposer node.
     pub level: u32,
-    /// Leadership Status
+    /// Leadership Status.
     pub leadership_status: Status,
-    /// Number of votes from main-chain voter blocks
+    /// Number of votes from voter blocks on the main chains (longest chains).
     pub votes: u16,
 }
 
+// TODO: remove it and replace with a new() function
 impl Default for NodeData {
     fn default() -> Self {
         let level = 0;
@@ -32,6 +34,7 @@ impl std::fmt::Display for NodeData {
 }
 
 impl NodeData {
+    // TODO: either make `votes` and `leadership_status` private, or remove those functions
     pub fn increment_vote(&mut self) {
         self.votes += 1;
     }
@@ -53,14 +56,21 @@ impl NodeData {
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Ord, Eq, PartialEq, PartialOrd, Hash, Debug)]
+/// The leader status of a proposer block.
 pub enum Status {
+    /// The leader of this level.
     Leader,
-    PotentialLeader,       // Will be later used for fast active confirmation.
-    NotLeaderUnconfirmed, // When a leader block at a level is confirmed, rest of the proposer block at that level become NotLeaderUnconfirmed
-    NotLeaderAndConfirmed, // When a notleader block is confirmed by a one of the child leader block
+    /// Will be later used for fast active confirmation.
+    PotentialLeader,
+    /// When a leader block at a level is confirmed, rest of the proposer blocks at that level become `NotLeaderUnconfirmed`
+    NotLeaderUnconfirmed, 
+    /// When a proposer block is not a leader, and this has been confirmed by ony of the child
+    /// leader blocks.
+    NotLeaderAndConfirmed,
 }
 
 impl NodeData {
+    /// Generates the metadata of the genesis block.
     pub fn genesis(number_of_voter_chains: u16) -> Self {
         let mut genesis = NodeData::default();
         genesis.leadership_status = Status::Leader;
@@ -70,20 +80,21 @@ impl NodeData {
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
+/// The metadata of a proposer block tree.
 pub struct Tree {
-    /// Best proposer node on the tree chain -- The node with max level. For mining.
+    /// The best proposer node on the tree (the node with the deepest level). This info is for mining.
     pub best_block: H256,
-    /// Best level. For mining.
+    /// The deepest level. This is for mining.
     pub best_level: u32,
-    /// Proposer nodes stored level wise
+    /// The hashes of proposer blocks, stored by level.
     pub prop_nodes: Vec<Vec<H256>>,
-    /// Votes at each level
-    pub number_of_votes: HashMap<u32, u32>,
-    /// Stores Leader nodes
-    pub leader_nodes: HashMap<u32, H256>, // Using hashmap because leader nodes might not be confirmed sequentially
-    /// The level upto which all levels have a leader block.
+    /// The number of votes at each level.
+    pub number_of_votes: HashMap<u32, u32>, // TODO: why are we using hashmap here?
+    /// The hashes of leader blocks of each level.
+    pub leader_nodes: HashMap<u32, H256>,   // Using hashmap because leader nodes might not be confirmed sequentially
+    /// The level upto which all levels have a leader.
     pub min_unconfirmed_level: u32,
-    /// Pool of unreferred proposer blocks. For mining
+    /// The pool of unreferred proposer blocks. This is for mining.
     pub unreferred: HashSet<H256>,
 }
 
@@ -107,7 +118,7 @@ impl Default for Tree {
 }
 
 impl Tree {
-    ///  Adding a proposer block at a level
+    /// Adds a proposer block at the given level.
     pub fn add_block_at_level(&mut self, block: H256, level: u32) {
         if self.best_level >= level {
             self.prop_nodes[level as usize].push(block);
@@ -116,19 +127,21 @@ impl Tree {
             self.best_block = block;
             self.best_level = level;
         } else {
-            panic!("Proposer block mined at level without parent block at previous level. Validation fail.")
+            panic!("Trying to insert a new proposer block at level greater than best level + 1.")
         }
     }
 
-    /// Adding a vote at a level
+    /// Adds a vote to the given level.
     pub fn increment_vote_at_level(&mut self, level: u32) {
         *self.number_of_votes.entry(level).or_insert(0) += 1;
     }
 
+    /// Inserts an entry to the unreferred proposer block list.
     pub fn insert_unreferred(&mut self, hash: H256) {
         self.unreferred.insert(hash);
     }
 
+    /// Remove an entry from the unreferred proposer block list.
     pub fn remove_unreferred(&mut self, hash: &H256) {
         self.unreferred.remove(hash);
     }
@@ -145,41 +158,3 @@ impl std::fmt::Display for Tree {
     }
 }
 
-///// This structure is responsible for confirming blocks. Each level will have its own LeaderConfirmer
-///// object which *monitors* the voter chains to see if they have enough votes to confirm a leader
-///// block at the level
-//pub struct LeaderConfirmer{
-//    /// The level of the confirmer
-//    pub level: u32,
-//    /// Number of votes cast on the level
-//    pub number_of_votes: u32,
-//    /// The depths of the votes
-//    pub depths: Vec<u32>,
-//    /// The proposer blocks at the level with lcb of votes.
-//    pub proposer_blocks: HashMap<H256, f32>,
-//    /// The leader block at the level
-//    pub leader_block: Option<H256>
-//}
-//
-//
-//
-//
-//impl LeaderConfirmer{
-//    // Initializes a new object.
-//    fn new(level: u32, no_of_voting_chains: u16) -> Self {
-//        // Initializing zero-vector of no_of_voting_chains size
-//        let depths = std::iter::repeat(0).take(no_of_voting_chains as usize).collect::<Vec<u32>>();
-//        let proposer_blocks: HashMap<H256, Vec<H256>> = HashMap::<H256, Vec<H256>>::new();
-//        let leader_block: Option<H256> = None;
-//        return LeaderConfirmer {level, depths, proposer_blocks, leader_block};
-//    }
-//
-//    // Add a new block at level
-//    pub fn add_block(&mut self, hash: H256){
-//        self.proposer_blocks.insert(hash, 0.0);
-//    }
-//
-//    pub fn add_vote(&mut self, chain_number: u16){
-//        self.depths[chain_number as usize] += 1;
-//    }
-//}
