@@ -4,7 +4,7 @@ use crate::handler;
 use crate::miner::memory_pool::MemoryPool;
 use crate::miner::miner::ContextUpdateSignal;
 use crate::state::{CoinData, CoinId, UTXO};
-use crate::transaction::{Input, Output, Signature as PubkeySignature, Transaction};
+use crate::transaction::{Output, Signature as PubkeySignature, Transaction, Input};
 use std::collections::{HashMap, HashSet};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
@@ -80,19 +80,21 @@ impl Wallet {
     pub fn receive(&mut self, tx: &Transaction) {
         let hash: H256 = tx.hash(); // compute hash here, and below inside Input we don't have to compute again (we just copy)
         for input in tx.input.iter() {
-            self.delete_coin(input);
+            let coin_id: CoinId = input.into();
+            self.delete_coin(&coin_id);
         }
-        for (idx, output) in tx.output.iter().enumerate() {
+        for (index, output) in tx.output.iter().enumerate() {
             if self.keypairs.contains_key(&output.recipient) {
-                let coin_id = CoinId {
-                    hash,
-                    index: idx as u32,
+                let coin = Coin {
+                    coin_id: CoinId {
+                        hash,
+                        index: index as u32,
+                    },
+                    coin_data: CoinData {
+                        value: output.value,
+                        recipient: output.recipient,
+                    },
                 };
-                let coin_data = CoinData {
-                    value: output.value,
-                    recipient: output.recipient,
-                };
-                let coin = Coin { coin_id, coin_data };
                 self.insert_coin(coin);
             }
         }
@@ -106,7 +108,25 @@ impl Wallet {
 
     /// If Rollback on ledger happens, we need to rollback the wallet. The reverse of receive.
     pub fn rollback(&mut self, tx: &Transaction) {
-        unimplemented!();
+        let hash: H256 = tx.hash();
+        for index in 0..tx.output.len() {
+            let coin_id = CoinId {
+                hash,
+                index: index as u32,
+            };
+            self.delete_coin(&coin_id);
+        }
+        for (index, input) in tx.input.iter().enumerate() {
+            // Get the value
+            let coin = Coin {
+                coin_id: input.into(),
+                coin_data: CoinData {
+                    value: input.value,
+                    recipient: input.recipient,
+                },
+            };
+            self.insert_coin(coin);
+        }
     }
     /// Returns the sum of values of all the coin in the wallet
     pub fn balance(&self) -> u64 {
@@ -118,13 +138,13 @@ impl Wallet {
 
     /// create a transaction using the wallet coins
     fn create_transaction(&mut self, recipient: H256, value: u64) -> Result<Transaction> {
-        let mut coins_to_use: Vec<CoinId> = vec![];
+        let mut coins_to_use: Vec<Coin> = vec![];
         let mut value_sum = 0u64;
 
         // iterate thru our wallet
         for (coin_id, coin_data) in self.coins.iter() {
             value_sum += coin_data.value;
-            coins_to_use.push(coin_id.clone()); // coins that will be used for this transaction
+            coins_to_use.push(Coin {coin_id: coin_id.clone(), coin_data: coin_data.clone()}); // coins that will be used for this transaction
             if value_sum >= value {
                 // if we already have enough money, break
                 break;
@@ -136,8 +156,14 @@ impl Wallet {
         }
         // if we have enough money in our wallet, create tx
         // create transaction inputs
-        let input = coins_to_use.clone(); //since Input DS may change, this line may change
-                                          // create the output
+        let input: Vec<Input> = coins_to_use.iter().map(|c|
+            Input{
+                hash: c.coin_id.hash,
+                index: c.coin_id.index,
+                value: c.coin_data.value,
+                recipient: c.coin_data.recipient,
+            }).collect();
+        // create the output
         let mut output = vec![Output { recipient, value }];
         if value_sum > value {
             // transfer the remaining value back to self
@@ -150,7 +176,7 @@ impl Wallet {
 
         // remove used coin from wallet
         for c in &coins_to_use {
-            self.delete_coin(c);
+            self.delete_coin(&c.coin_id);
         }
 
         let unsigned = Transaction {

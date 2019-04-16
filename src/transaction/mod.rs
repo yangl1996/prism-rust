@@ -26,6 +26,10 @@ pub struct Input {
     pub hash: H256,
     /// The index of the output in question in that transaction.
     pub index: u32,
+    /// The amount of this input, this is redundant since it is also stored in the transaction referred by hash
+    pub value: u64,
+    /// The hash of the public key of the recipient of this input, this is redundant since it is also stored in the transaction referred by hash
+    pub recipient: H256,
 }
 
 /// An output of a transaction.
