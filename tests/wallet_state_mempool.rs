@@ -3,6 +3,7 @@ use prism::transaction::{Output, Transaction};
 use prism::{self, miner::memory_pool, state, wallet};
 use rand::Rng;
 use std::sync::{mpsc, Arc, Mutex};
+use prism::handler::{to_utxo, to_rollback_utxo};
 
 // suppose the ledger confirms a new tx, suppose tx is from a sanitized tx block
 fn ledger_new_tx(
@@ -16,12 +17,12 @@ fn ledger_new_tx(
         m.remove_by_input(input);
     }
     drop(m);
-
-    if state_db.receive(&tx).is_err() {
+    let (to_delete, to_insert) = to_utxo(&tx);
+    if state_db.update(&to_delete, &to_insert).is_err() {
         panic!("State DB error.");
     }
     for w in wallets.iter_mut() {
-        w.receive(&tx);
+        w.update(&to_delete, &to_insert);
     }
 }
 
@@ -61,6 +62,7 @@ fn wallets_pay_eachother() {
         let mut w = wallet::Wallet::new(&mempool, ctx_update_sink.clone());
         w.generate_keypair(); //add_keypair(our_addr);
         let addr: H256 = w.get_pubkey_hash().unwrap();
+        //TODO Wallet wrapped by Arc Mutex
         wallets.push(w);
         addrs.push(addr);
     }
