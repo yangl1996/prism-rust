@@ -2,6 +2,15 @@
 
 This is an ongoing effort to implement Prism in Rust.
 
-# Self-minging Demo
+# Build
 
-Run `cargo run --example self_mining` and go to `localhost:8888`
+Run `cargo build`.
+
+# Run Tests
+
+Run `cargo test`. To see all the outputs, append `-- --no_capture`.
+
+# Visualization
+
+Run `cargo run --example self_mining` and go to `localhost:8888`.
+
