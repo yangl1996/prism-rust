@@ -85,55 +85,18 @@ impl UTXODatabase {
         return *count;
     }
 
-    /// Delete the spent coins, then add coins in a transaction
-    pub fn receive(&mut self, tx: &Transaction) -> Result<()> {
-        let hash: H256 = tx.hash(); // compute hash here, and below inside Input we don't have to compute again (we just copy)
-        // i) delete all the input coins
-        for input in tx.input.iter() {
-            let coin_id: CoinId = input.into();
-            self.delete(&coin_id)?;
+    /// Update the state.
+    /// Can serve as receive(transaction) or rollback, based on arguments to_delete and to_insert.
+    pub fn update(&mut self, to_delete: &Vec<CoinId>, to_insert: &Vec<UTXO>) -> Result<()> {
+        for coin_id in to_delete {
+            self.delete(coin_id)?;
         }
-        // ii) add all output coins to the state
-        for (index, output) in tx.output.iter().enumerate() {
-            let utxo = UTXO {
-                coin_id: CoinId {
-                    hash,
-                    index: index as u32,
-                },
-                coin_data: CoinData {
-                    value: output.value,
-                    recipient: output.recipient,
-                },
-            };
-            self.insert(&utxo)?;
+        for utxo in to_insert {
+            self.insert(utxo)?;
         }
         Ok(())
     }
 
-    pub fn rollback(&mut self, tx: &Transaction) -> Result<()> {
-        let hash: H256 = tx.hash();
-        // i) Get the input locations of the output coins and delete the output coins.
-        for index in 0..tx.output.len() {
-            let coin_id = CoinId {
-                hash,
-                index: index as u32,
-            };
-            self.delete(&coin_id)?;
-        }
-        // ii) Reconstruct the input utxos
-        for input in tx.input.iter() {
-            // Get the value
-            let utxo = UTXO {
-                coin_id: input.into(),
-                coin_data: CoinData {
-                    value: input.value,
-                    recipient: input.recipient,
-                },
-            };
-            self.insert(&utxo)?;
-        }
-        Ok(())
-    }
 }
 
 #[cfg(test)]
@@ -142,6 +105,7 @@ pub mod tests {
     use crate::crypto::generator as crypto_generator;
     use crate::crypto::hash::{Hashable, H256};
     use crate::transaction::{generator as tx_generator, Transaction, Input};
+    use crate::handler::{to_utxo, to_rollback_utxo};
 
     fn init_with_tx_input(state_db: &mut UTXODatabase, tx: &Transaction) {
         let hash: H256 = tx.hash(); // compute hash here, and below inside Input we don't have to compute again (we just copy)
@@ -162,7 +126,8 @@ pub mod tests {
     }
 
     fn try_receive_transaction(state_db: &mut UTXODatabase, tx: &Transaction) {
-        assert!(state_db.receive(&tx).is_ok());
+        let (to_delete, to_insert) = to_utxo(tx);
+        assert!(state_db.update(&to_delete, &to_insert).is_ok());
         // assume this tx spends all utxo in state
         assert_eq!(state_db.num_utxo() as usize, tx.output.len());
         let hash = tx.hash();
@@ -171,6 +136,10 @@ pub mod tests {
             let coin_data = state_db.get(&CoinId { hash, index }).unwrap().unwrap();
             assert_eq!(coin_data, tx.output[index as usize])
         }
+    }
+    fn try_rollback_transaction(state_db: &mut UTXODatabase, tx: &Transaction) {
+        let (to_delete, to_insert) = to_rollback_utxo(tx);
+        assert!(state_db.update(&to_delete, &to_insert).is_ok());
     }
     #[test]
     pub fn create_receive_rollback() {
@@ -182,7 +151,7 @@ pub mod tests {
         // receive tx
         try_receive_transaction(&mut state_db, &tx);
         // rollback tx, after rollback, the db should be identical just after init_with_tx_input
-        assert!(state_db.rollback(&tx).is_ok());
+        try_rollback_transaction(&mut state_db, &tx);
         assert_eq!(state_db.num_utxo() as usize, tx.input.len());
         drop(state_db);
 
@@ -211,7 +180,7 @@ pub mod tests {
         try_receive_transaction(&mut state_db, &tx1);
 
         // rollback tx1, after rollback, the db should be identical just after receive tx0
-        assert!(state_db.rollback(&tx1).is_ok());
+        try_rollback_transaction(&mut state_db, &tx1);
         assert_eq!(state_db.num_utxo() as usize, tx0.output.len());
         // receive tx2
         try_receive_transaction(&mut state_db, &tx2);
