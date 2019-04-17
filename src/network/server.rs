@@ -141,7 +141,12 @@ impl Context {
                                             let handle = self.connect(&req.addr)?;
                                             req.result_chan.send(Ok(handle)).unwrap();
                                         }
-                                        _ => {
+                                        ControlSignal::BroadcastMessage(msg) => {
+                                            // TODO: slab iteration is slow. use a hashset to keep
+                                            // the id of live connections
+                                            for peer in self.peers.iter() {
+                                                peer.1.handle.write(msg.clone());
+                                            }
                                         }
                                     }
                                 }
@@ -322,6 +327,10 @@ impl Handle {
         };
         self.control_chan.send(ControlSignal::ConnectNewPeer(request)).unwrap();
         return receiver.recv().unwrap();
+    }
+
+    pub fn broadcast(&self, msg: message::Message) {
+        self.control_chan.send(ControlSignal::BroadcastMessage(msg)).unwrap();
     }
 }
 
