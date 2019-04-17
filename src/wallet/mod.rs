@@ -11,8 +11,6 @@ use std::sync::{Arc, Mutex};
 
 pub type Result<T> = std::result::Result<T, WalletError>;
 
-pub type Coin = UTXO;
-
 // one potential problem: if another program has the same keypair, then he may spend a coin, but this wallet don't know it's spend.
 // another problem is concurrency, it seems this wallet can only be run single-threaded.
 // so this wallet should just be used in experiment to generate transactions single-threaded.
@@ -72,8 +70,8 @@ impl Wallet {
     }
 
     /// Add coin to wallet
-    fn insert_coin(&mut self, coin: Coin) {
-        self.coins.insert(coin.coin_id, coin.coin_data);
+    fn insert_coin(&mut self, coin: &UTXO) {
+        self.coins.insert(coin.coin_id.clone(), coin.coin_data.clone());
     }
 
     /// Remove the spent coins belong to us in a transaction. Add coins in a transaction that are destined to us
@@ -85,7 +83,7 @@ impl Wallet {
         }
         for (index, output) in tx.output.iter().enumerate() {
             if self.keypairs.contains_key(&output.recipient) {
-                let coin = Coin {
+                let coin = UTXO {
                     coin_id: CoinId {
                         hash,
                         index: index as u32,
@@ -95,7 +93,7 @@ impl Wallet {
                         recipient: output.recipient,
                     },
                 };
-                self.insert_coin(coin);
+                self.insert_coin(&coin);
             }
         }
     }
@@ -118,14 +116,14 @@ impl Wallet {
         }
         for (index, input) in tx.input.iter().enumerate() {
             // Get the value
-            let coin = Coin {
+            let coin = UTXO {
                 coin_id: input.into(),
                 coin_data: CoinData {
                     value: input.value,
                     recipient: input.recipient,
                 },
             };
-            self.insert_coin(coin);
+            self.insert_coin(&coin);
         }
     }
     /// Returns the sum of values of all the coin in the wallet
@@ -138,13 +136,13 @@ impl Wallet {
 
     /// create a transaction using the wallet coins
     fn create_transaction(&mut self, recipient: H256, value: u64) -> Result<Transaction> {
-        let mut coins_to_use: Vec<Coin> = vec![];
+        let mut coins_to_use: Vec<UTXO> = vec![];
         let mut value_sum = 0u64;
 
         // iterate thru our wallet
         for (coin_id, coin_data) in self.coins.iter() {
             value_sum += coin_data.value;
-            coins_to_use.push(Coin {coin_id: coin_id.clone(), coin_data: coin_data.clone()}); // coins that will be used for this transaction
+            coins_to_use.push(UTXO {coin_id: coin_id.clone(), coin_data: coin_data.clone()}); // coins that will be used for this transaction
             if value_sum >= value {
                 // if we already have enough money, break
                 break;
@@ -250,19 +248,19 @@ pub mod tests {
         };
     }
     #[test]
-    pub fn test_balance() {
+    pub fn balance() {
         let (mut w, pool, ctx_update_source, hash) = new_wallet_pool_receiver_keyhash();
         assert_eq!(w.balance(), 0);
     }
     #[test]
-    pub fn test_add_transaction() {
+    pub fn add_transaction() {
         let (mut w, pool, ctx_update_source, hash) = new_wallet_pool_receiver_keyhash();
         w.receive(&transaction_10_10(&hash));
         assert_eq!(w.balance(), 100);
     }
 
     #[test]
-    pub fn test_send_coin() {
+    pub fn send_coin() {
         let (mut w, pool, ctx_update_source, hash) = new_wallet_pool_receiver_keyhash();
         w.receive(&transaction_10_10(&hash));
         // now we have 10*10 coins, we try to spend them
@@ -283,7 +281,7 @@ pub mod tests {
     }
 
     #[test]
-    pub fn test_send_coin_2() {
+    pub fn send_coin_2() {
         let (mut w, pool, ctx_update_source, hash) = new_wallet_pool_receiver_keyhash();
         w.receive(&transaction_10_10(&hash));
         // now we have 10*10 coins, we try to spend them
@@ -307,7 +305,7 @@ pub mod tests {
     }
 
     #[test]
-    pub fn test_send_coin_fail() {
+    pub fn send_coin_fail() {
         let (mut w, pool, ctx_update_source, hash) = new_wallet_pool_receiver_keyhash();
         w.receive(&transaction_10_10(&hash));
         // now we have 10*10 coins, we try to spend 101
