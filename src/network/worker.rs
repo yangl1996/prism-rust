@@ -62,8 +62,7 @@ impl Context {
                 Message::Pong(nonce) => {
                     info!("Pong: {}", nonce);
                 }
-                Message::Block(blocks) => {
-                    info!("Got {} new blocks", blocks.len());
+                _ => {
                 }
             }
         }

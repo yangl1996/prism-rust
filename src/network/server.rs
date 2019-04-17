@@ -314,6 +314,7 @@ impl Context {
     }
 }
 
+#[derive(Clone)]
 pub struct Handle {
     control_chan: channel::Sender<ControlSignal>,
 }
