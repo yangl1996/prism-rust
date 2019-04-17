@@ -43,7 +43,7 @@ pub fn start(
     let ctx = network::worker::new(4, msg_source, blockchain, blockdb, mempool, ctx_update_sink);
     ctx.start();
 
-    let (ctx, miner) = miner::miner::new(mempool, blockchain, blockdb, ctx_update_source);
+    let (ctx, miner) = miner::miner::new(mempool, blockchain, blockdb, ctx_update_source, server.clone());
     ctx.start();
 
     let wallet = wallet::Wallet::new(mempool, ctx_update_sink_wallet);
