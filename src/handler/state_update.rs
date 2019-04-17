@@ -12,7 +12,7 @@ use std::sync::Mutex;
 pub fn confirm_new_tx_blocks(
     tx_block_hashes: Vec<H256>,
     block_db: &BlockDatabase,
-    state_db: &Mutex<UTXODatabase>,
+    state_db: &Mutex<UTXODatabase>,//TODO: add wallets, when state_db receive/rollback, wallet also receive/rollback.
 ) {
     //1. Loop over the tx blocks
     for tx_block_hash in tx_block_hashes.iter() {
@@ -24,10 +24,11 @@ pub fn confirm_new_tx_blocks(
             Content::Transaction(content) => content.transactions,
             _ => panic!("Wrong block stored"),
         };
+        let tmp:Vec<(Vec<CoinId>, Vec<UTXO>)> = transactions.iter().map(|tx|to_utxo(tx)).collect();
         //2. Loop over the transactions
         let utxo_state = state_db.lock().unwrap();
         {
-            for (tx_pos, transaction) in transactions.iter().enumerate() {
+            for transaction in transactions.iter() {
                 //3a. Sanitize: Check if all the inputs are unspent (in the state)
                 let mut inputs_unspent = true;
                 for input in transaction.input.iter() {
@@ -41,7 +42,7 @@ pub fn confirm_new_tx_blocks(
                         }
                     }
                 }
-                //3b. State transition: If all inputs are unspent, then i) delete all the input coins, and ii) add all output coins to the state.
+                //3b. State transition: If all inputs are unspent, then receive this transaction
                 if inputs_unspent {
                     match utxo_state.receive(transaction) {
                         Err(e) => panic!("StateDB not working: Error {}", e),
@@ -75,16 +76,16 @@ pub fn unconfirm_old_tx_blocks(
         //2. Loop over the transactions
         let utxo_state = state_db.lock().unwrap();
         {
-            for (tx_pos, transaction) in transactions.iter().enumerate().rev() {
+            for transaction in transactions.iter().rev() {
                 // also need rev?
-                let transaction_hash = transaction.hash();
+                let hash: H256 = transaction.hash();
                 //3a. Revert the transaction only if it was valid when it was added in the state.
                 // Logic: If the transaction was valid, *all* its output should be unspent/present in the state.
                 let output_size = transaction.output.len();
-                let mut no_unspent_outputs: u32 = 0;
-                for (index, _) in transaction.output.iter().enumerate() {
+                let mut no_unspent_outputs: usize = 0;
+                for index in 0..output_size {
                     let coin_id = CoinId {
-                        hash: transaction_hash,
+                        hash,
                         index: index as u32,
                     };
                     match utxo_state.check(&coin_id) {
@@ -98,36 +99,11 @@ pub fn unconfirm_old_tx_blocks(
                 }
 
                 //3b. State transition: If the transaction was valid, then delete all the outputs and add back all the inputs
-                if no_unspent_outputs == output_size as u32 {
-                    // Gerui: write the following as a function called rollback(transaction) in state module. It's clear
+                if no_unspent_outputs == output_size {
                     match utxo_state.rollback(transaction) {
                         Err(e) => panic!("StateDB not working: Error {}", e),
                         Ok(_) => (),
                     }
-//                    //3b.i Get the input locations of the  output coins and delete the output coins.
-//                    for (index, _) in transaction.output.iter().enumerate() {
-//                        let coin_id = CoinId {
-//                            hash: transaction.hash(),
-//                            index: index as u32,
-//                        };
-//                        utxo_state.delete(&coin_id);
-//                    }
-//                    //3b.ii Reconstruct the input utxos
-//                    for (index, input) in transaction.input.iter().enumerate() {
-//                        // Get the value
-//                        let coin_id = input;
-//                        let utxo = UTXO {
-//                            coin_id: CoinId {
-//                                hash: input.hash,
-//                                index: input.index,
-//                            },
-//                            coin_data: CoinData {
-//                                value: input.value,
-//                                recipient: input.recipient,
-//                            },
-//                        };
-//                        utxo_state.insert(&utxo);
-//                    }
                 } else if no_unspent_outputs == 0 {
                     //log the sanitization error.
                 } else {
@@ -139,6 +115,46 @@ pub fn unconfirm_old_tx_blocks(
     }
 }
 
+// future: use this function in receive
+pub fn to_utxo(tx: &Transaction) -> (Vec<CoinId>, Vec<UTXO>) {
+    let hash: H256 = tx.hash(); // compute hash here, and below inside Input we don't have to compute again (we just copy)
+    // i) delete all the input coins
+    let to_delete: Vec<CoinId> = tx.input.iter().map(|input|input.into()).collect();
+    // ii) add all output coins to the state
+    let to_add: Vec<UTXO> = tx.output.iter().enumerate().map(|(index, output)|
+        UTXO {
+            coin_id: CoinId {
+                hash,
+                index: index as u32,
+            },
+            coin_data: CoinData {
+                value: output.value,
+                recipient: output.recipient,
+            },
+        }).collect();
+    (to_delete, to_add)
+}
+
+// future: use this function in rollback
+pub fn to_rollback_utxo(tx: &Transaction) -> (Vec<CoinId>, Vec<UTXO>) {
+    let hash: H256 = tx.hash();
+    // i) Get the input locations of the output coins and delete the output coins.
+    let to_delete: Vec<CoinId> = (0..(tx.output.len() as u32)).map(|index|
+        CoinId {
+            hash,
+            index: index as u32,
+        }).collect();
+    // ii) Reconstruct the input utxos
+    let to_add: Vec<UTXO> = tx.input.iter().map(|input|
+        UTXO {
+            coin_id: input.into(),
+            coin_data: CoinData {
+                value: input.value,
+                recipient: input.recipient,
+            },
+        }).collect();
+    (to_delete, to_add)
+}
 //#[cfg(test)]
 //mod tests {
 //    use super::*;

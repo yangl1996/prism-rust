@@ -88,10 +88,12 @@ impl UTXODatabase {
     /// Delete the spent coins, then add coins in a transaction
     pub fn receive(&mut self, tx: &Transaction) -> Result<()> {
         let hash: H256 = tx.hash(); // compute hash here, and below inside Input we don't have to compute again (we just copy)
+        // i) delete all the input coins
         for input in tx.input.iter() {
             let coin_id: CoinId = input.into();
             self.delete(&coin_id)?;
         }
+        // ii) add all output coins to the state
         for (index, output) in tx.output.iter().enumerate() {
             let utxo = UTXO {
                 coin_id: CoinId {
@@ -110,6 +112,7 @@ impl UTXODatabase {
 
     pub fn rollback(&mut self, tx: &Transaction) -> Result<()> {
         let hash: H256 = tx.hash();
+        // i) Get the input locations of the output coins and delete the output coins.
         for index in 0..tx.output.len() {
             let coin_id = CoinId {
                 hash,
@@ -117,7 +120,8 @@ impl UTXODatabase {
             };
             self.delete(&coin_id)?;
         }
-        for (index, input) in tx.input.iter().enumerate() {
+        // ii) Reconstruct the input utxos
+        for input in tx.input.iter() {
             // Get the value
             let utxo = UTXO {
                 coin_id: input.into(),
@@ -137,9 +141,9 @@ pub mod tests {
     use super::{generator, CoinData, CoinId, UTXODatabase, UTXO};
     use crate::crypto::generator as crypto_generator;
     use crate::crypto::hash::{Hashable, H256};
-    use crate::transaction::{generator as tx_generator, Transaction};
+    use crate::transaction::{generator as tx_generator, Transaction, Input};
 
-    fn init_with_tx(state_db: &mut UTXODatabase, tx: &Transaction) {
+    fn init_with_tx_input(state_db: &mut UTXODatabase, tx: &Transaction) {
         let hash: H256 = tx.hash(); // compute hash here, and below inside Input we don't have to compute again (we just copy)
         for input in tx.input.iter() {
             let coin_id = CoinId {
@@ -157,45 +161,9 @@ pub mod tests {
         }
     }
 
-    //    #[test]
-    //    fn insert_get_check_and_delete() {
-    //        let mut state_db = generator::random();
-    //        let mut count = state_db.num_utxo();
-    //
-    //        println!("Test 1: count");
-    //        let transaction = tx_generator::random();
-    //        let utxos = generator::tx_to_utxos(transaction);
-    //        for utxo in utxos.iter() {
-    //            state_db.insert(utxo);
-    //        }
-    //
-    //        assert_eq!(state_db.num_utxo(), count + utxos.len() as u64);
-    //
-    //        println!("Test 2: check()");
-    //        for utxo in utxos.iter() {
-    //            assert!(state_db.check(&utxo.coin_id).unwrap());
-    //        }
-    //
-    //        println!("Test 3: get()");
-    //        for utxo in utxos.iter() {
-    //            assert_eq!(state_db.get(&utxo.coin_id).unwrap().unwrap(), utxo.value);
-    //        }
-    //
-    //        println!("Test 4: delete()");
-    //        state_db.delete(&utxos[0].coin_id);
-    //        assert!(!state_db.check(&utxos[0].coin_id).unwrap());
-    //
-    //        assert_eq!(state_db.num_utxo(), count + utxos.len() as u64 - 1);
-    //    }
-
-    #[test]
-    pub fn create_receive() {
-        let state_path = std::path::Path::new("/tmp/prism_test_state.rocksdb");
-        let mut state_db = UTXODatabase::new(state_path).unwrap();
-        let tx = tx_generator::random();
-        init_with_tx(&mut state_db, &tx);
-        assert_eq!(state_db.num_utxo() as usize, tx.input.len());
+    fn try_receive_transaction(state_db: &mut UTXODatabase, tx: &Transaction) {
         assert!(state_db.receive(&tx).is_ok());
+        // assume this tx spends all utxo in state
         assert_eq!(state_db.num_utxo() as usize, tx.output.len());
         let hash = tx.hash();
         for index in 0..tx.output.len() as u32 {
@@ -203,13 +171,54 @@ pub mod tests {
             let coin_data = state_db.get(&CoinId { hash, index }).unwrap().unwrap();
             assert_eq!(coin_data, tx.output[index as usize])
         }
+    }
+    #[test]
+    pub fn create_receive_rollback() {
+        let mut state_db = generator::random();
+        let tx = tx_generator::random();
+        // we have to init with the inputs, otherwise we cannot receive a tx
+        init_with_tx_input(&mut state_db, &tx);
+        assert_eq!(state_db.num_utxo() as usize, tx.input.len());
+        // receive tx
+        try_receive_transaction(&mut state_db, &tx);
+        // rollback tx, after rollback, the db should be identical just after init_with_tx_input
+        assert!(state_db.rollback(&tx).is_ok());
+        assert_eq!(state_db.num_utxo() as usize, tx.input.len());
+        drop(state_db);
+
+    }
+
+    #[test]
+    pub fn rollback_at_fork() {
+        let mut state_db = generator::random();
+        let tx0 = tx_generator::random();
+        let input1: Vec<Input> = (0..tx0.output.len()).map(|i|
+            Input{hash: tx0.hash(), index: i as u32, value: tx0.output[i].value, recipient: tx0.output[i].recipient})
+            .collect();
+        let tx1 = Transaction{input: input1.clone(), ..tx_generator::random()};
+        let tx2 = Transaction{input: input1.clone(), ..tx_generator::random()};
+        /*
+        tx0 <---- tx1
+              |
+              --- tx2
+        */
+        // we have to init with the inputs, otherwise we cannot receive a tx
+        init_with_tx_input(&mut state_db, &tx0);
+        assert_eq!(state_db.num_utxo() as usize, tx0.input.len());
+        // receive tx0
+        try_receive_transaction(&mut state_db, &tx0);
+        // receive tx1
+        try_receive_transaction(&mut state_db, &tx1);
+
+        // rollback tx1, after rollback, the db should be identical just after receive tx0
+        assert!(state_db.rollback(&tx1).is_ok());
+        assert_eq!(state_db.num_utxo() as usize, tx0.output.len());
+        // receive tx2
+        try_receive_transaction(&mut state_db, &tx2);
         drop(state_db);
         assert!(rocksdb::DB::destroy(
             &rocksdb::Options::default(),
-            "/tmp/prism_test_state.rocksdb"
-        )
-        .is_ok());
+            "/tmp/prism_test_state_2.rocksdb"
+        ).is_ok());
     }
 }
-
-// TODO: add tests
