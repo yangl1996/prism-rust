@@ -53,7 +53,7 @@ pub struct Context {
     db: Arc<BlockDatabase>,
     // Channel for receiving control signal
     control_chan: Receiver<ControlSignal>,
-    // Channel for notifing miner of new content
+    // Channel for notifying miner of new content
     context_update_chan: Receiver<ContextUpdateSignal>,
     // Proposer parent
     proposer_parent_hash: H256,
@@ -169,7 +169,7 @@ impl Context {
             // check whether there is new content
             match self.context_update_chan.try_recv() {
                 Ok(_) => {
-                    // TODO: Only update block contents if relevant parent
+                    // TODO: Only update block contents of the relevant structures
                     self.update_context();
                     header = self.create_header();
                 }

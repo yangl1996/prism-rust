@@ -64,7 +64,7 @@ impl Pool {
             self.insert_not_in_ledger(tx_block);
         }
         // Drain confirmation_boundary vector
-        self.confirmation_boundary.drain(level - 1..);  // TODO: why -1?
+        self.confirmation_boundary.drain(level - 1..); // TODO: why -1?
     }
 
     /// Insert a block to the unreferred transaction block set.

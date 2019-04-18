@@ -85,7 +85,7 @@ impl BlockChain {
             voter_node_data.insert(voter_hash, voter_genesis_node);
 
             // 2b. Initializing a Voter chain
-            let voter_chain = VoterChain::new(chain_number, voter_hash);
+            let voter_chain = VoterChain::new(voter_hash);
             voter_chains.push(voter_chain);
             proposer_tree.increment_vote_at_level(0);
         }
