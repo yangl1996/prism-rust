@@ -126,8 +126,6 @@ impl MemoryPool {
 
 #[cfg(test)]
 pub mod tests {
-    // TODO: add more tests.
-
     use super::MemoryPool;
     use crate::crypto::generator as crypto_generator;
     use crate::crypto::hash::{Hashable, H256};
