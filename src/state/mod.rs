@@ -20,7 +20,10 @@ pub struct CoinId {
 
 impl From<&Input> for CoinId {
     fn from(other: &Input) -> Self {
-        Self { hash: other.hash, index: other.index}
+        Self {
+            hash: other.hash,
+            index: other.index,
+        }
     }
 }
 
@@ -96,7 +99,6 @@ impl UTXODatabase {
         }
         Ok(())
     }
-
 }
 
 #[cfg(test)]
@@ -104,8 +106,8 @@ pub mod tests {
     use super::{generator, CoinData, CoinId, UTXODatabase, UTXO};
     use crate::crypto::generator as crypto_generator;
     use crate::crypto::hash::{Hashable, H256};
-    use crate::transaction::{generator as tx_generator, Transaction, Input};
-    use crate::handler::{to_utxo, to_rollback_utxo};
+    use crate::handler::{to_rollback_utxo, to_utxo};
+    use crate::transaction::{generator as tx_generator, Input, Transaction};
 
     fn init_with_tx_input(state_db: &mut UTXODatabase, tx: &Transaction) {
         let hash: H256 = tx.hash(); // compute hash here, and below inside Input we don't have to compute again (we just copy)
@@ -154,18 +156,28 @@ pub mod tests {
         try_rollback_transaction(&mut state_db, &tx);
         assert_eq!(state_db.num_utxo() as usize, tx.input.len());
         drop(state_db);
-
     }
 
     #[test]
     pub fn rollback_at_fork() {
         let mut state_db = generator::random();
         let tx0 = tx_generator::random();
-        let input1: Vec<Input> = (0..tx0.output.len()).map(|i|
-            Input{hash: tx0.hash(), index: i as u32, value: tx0.output[i].value, recipient: tx0.output[i].recipient})
+        let input1: Vec<Input> = (0..tx0.output.len())
+            .map(|i| Input {
+                hash: tx0.hash(),
+                index: i as u32,
+                value: tx0.output[i].value,
+                recipient: tx0.output[i].recipient,
+            })
             .collect();
-        let tx1 = Transaction{input: input1.clone(), ..tx_generator::random()};
-        let tx2 = Transaction{input: input1.clone(), ..tx_generator::random()};
+        let tx1 = Transaction {
+            input: input1.clone(),
+            ..tx_generator::random()
+        };
+        let tx2 = Transaction {
+            input: input1.clone(),
+            ..tx_generator::random()
+        };
         /*
         tx0 <---- tx1
               |
@@ -188,6 +200,7 @@ pub mod tests {
         assert!(rocksdb::DB::destroy(
             &rocksdb::Options::default(),
             "/tmp/prism_test_state_2.rocksdb"
-        ).is_ok());
+        )
+        .is_ok());
     }
 }

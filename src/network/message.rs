@@ -9,4 +9,3 @@ pub enum Message {
     GetBlocks(Vec<H256>),
     Blocks(Vec<Block>),
 }
-

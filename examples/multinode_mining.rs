@@ -2,8 +2,8 @@ use prism::crypto::hash::H256;
 use prism::transaction::{Output, Transaction};
 use prism::visualization;
 use prism::{self, blockchain, blockdb, miner::memory_pool};
-use std::sync::{Arc, Mutex};
 use std::sync::mpsc;
+use std::sync::{Arc, Mutex};
 
 const NUM_VOTER_CHAINS: u16 = 3;
 
@@ -14,7 +14,8 @@ fn main() {
         println!("Exiting");
         let mut ef = exit_flag.lock().unwrap();
         *ef = true;
-    }).expect("Error setting Ctrl-C handler");
+    })
+    .expect("Error setting Ctrl-C handler");
     stderrlog::new().verbosity(0).init().unwrap();
 
     let mut peer_addrs = vec![];
@@ -54,7 +55,7 @@ fn main() {
         servers.push(server);
         miners.push(miner);
     }
-    
+
     for i in 1..10 {
         servers[i].connect(peer_addrs[i - 1]);
         println!("Node {} connected to Node {}", i, i - 1);

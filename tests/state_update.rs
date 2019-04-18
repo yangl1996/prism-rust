@@ -1,11 +1,11 @@
 use prism::crypto::hash::H256;
+use prism::handler::{confirm_new_tx_block_transactions, unconfirm_old_tx_block_transactions};
+use prism::miner::memory_pool::MemoryPool;
+use prism::state::UTXODatabase;
 use prism::transaction::{Output, Transaction};
+use prism::wallet::Wallet;
 use rand::Rng;
 use std::sync::{mpsc, Arc, Mutex};
-use prism::handler::{confirm_new_tx_block_transactions, unconfirm_old_tx_block_transactions};
-use prism::state::UTXODatabase;
-use prism::wallet::Wallet;
-use prism::miner::memory_pool::MemoryPool;
 
 // suppose the ledger confirms a new tx, suppose tx is from a sanitized tx block
 fn ledger_new_txs(
@@ -37,11 +37,13 @@ fn mine_whole_mempool(
     ledger_new_txs(txs, mempool, state_db, wallets);
 }
 
-fn status_check(state_db: &Mutex<UTXODatabase>,
-                wallets: &Vec<Arc<Mutex<Wallet>>>,) {
+fn status_check(state_db: &Mutex<UTXODatabase>, wallets: &Vec<Arc<Mutex<Wallet>>>) {
     println!(
         "Balance of wallets: {:?}.",
-        wallets.iter().map(|w| w.lock().unwrap().balance()).collect::<Vec<u64>>()
+        wallets
+            .iter()
+            .map(|w| w.lock().unwrap().balance())
+            .collect::<Vec<u64>>()
     );
     println!("UTXO num: {}", state_db.lock().unwrap().num_utxo());
     for w in wallets.iter() {
@@ -90,21 +92,17 @@ fn wallets_pay_eachother() {
         input: vec![],
         output: addrs
             .iter()
-            .map(|addr|
-                (0..100).map(move|_|Output {
-                value: 100,
-                recipient: addr.clone(),
+            .map(|addr| {
+                (0..100).map(move |_| Output {
+                    value: 100,
+                    recipient: addr.clone(),
                 })
-            ).flatten()
+            })
+            .flatten()
             .collect(),
         signatures: vec![],
     };
-    ledger_new_txs(
-        vec![funding],
-        &mempool,
-        &state_db,
-        &wallets,
-    );
+    ledger_new_txs(vec![funding], &mempool, &state_db, &wallets);
     status_check(&state_db, &wallets);
     let mut rng = rand::thread_rng();
     // test payment for some iterations

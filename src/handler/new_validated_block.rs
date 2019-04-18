@@ -2,12 +2,18 @@ use crate::block::{Block, Content};
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
 use crate::crypto::hash::Hashable;
-use std::sync::Mutex;
-use crate::network::server::Handle as ServerHandle;
-use crate::network::message;
 use crate::miner::memory_pool::MemoryPool;
+use crate::network::message;
+use crate::network::server::Handle as ServerHandle;
+use std::sync::Mutex;
 
-pub fn new_validated_block(block: Block, mempool: &Mutex<MemoryPool>, db: &BlockDatabase, chain: &Mutex<BlockChain>, server: &ServerHandle) {
+pub fn new_validated_block(
+    block: Block,
+    mempool: &Mutex<MemoryPool>,
+    db: &BlockDatabase,
+    chain: &Mutex<BlockChain>,
+    server: &ServerHandle,
+) {
     // insert the new block into the blockdb
     db.insert(&block).unwrap();
 
@@ -21,8 +27,8 @@ pub fn new_validated_block(block: Block, mempool: &Mutex<MemoryPool>, db: &Block
                 }
             }
             drop(mempool);
-        },
-        _ => ()
+        }
+        _ => (),
     };
 
     // insert the new block into the blockchain

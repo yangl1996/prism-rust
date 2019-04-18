@@ -326,12 +326,16 @@ impl Handle {
             addr: addr,
             result_chan: sender,
         };
-        self.control_chan.send(ControlSignal::ConnectNewPeer(request)).unwrap();
+        self.control_chan
+            .send(ControlSignal::ConnectNewPeer(request))
+            .unwrap();
         return receiver.recv().unwrap();
     }
 
     pub fn broadcast(&self, msg: message::Message) {
-        self.control_chan.send(ControlSignal::BroadcastMessage(msg)).unwrap();
+        self.control_chan
+            .send(ControlSignal::BroadcastMessage(msg))
+            .unwrap();
     }
 }
 

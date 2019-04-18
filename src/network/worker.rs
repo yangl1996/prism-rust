@@ -2,13 +2,13 @@ use super::message::{self, Message};
 use super::peer;
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
+use crate::handler::new_validated_block;
 use crate::miner::memory_pool::MemoryPool;
 use crate::miner::miner::ContextUpdateSignal;
-use log::{info, debug};
+use crate::network::server::Handle as ServerHandle;
+use log::{debug, info};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
-use crate::handler::new_validated_block;
-use crate::network::server::Handle as ServerHandle;
 
 #[derive(Clone)]
 pub struct Context {
@@ -28,7 +28,7 @@ pub fn new(
     blockdb: &Arc<BlockDatabase>,
     mempool: &Arc<Mutex<MemoryPool>>,
     ctx_update_sink: mpsc::Sender<ContextUpdateSignal>,
-    server: ServerHandle
+    server: ServerHandle,
 ) -> Context {
     let ctx = Context {
         msg_chan: Arc::new(Mutex::new(msg_src)),
@@ -37,7 +37,7 @@ pub fn new(
         blockdb: Arc::clone(blockdb),
         mempool: Arc::clone(mempool),
         context_update_chan: ctx_update_sink,
-        server: server
+        server: server,
     };
     return ctx;
 }
@@ -76,8 +76,7 @@ impl Context {
                             None => {
                                 hashes_to_request.push(hash);
                             }
-                            _ => {
-                            }
+                            _ => {}
                         }
                     }
                     if hashes_to_request.len() != 0 {
@@ -89,8 +88,7 @@ impl Context {
                     let mut blocks = vec![];
                     for hash in hashes {
                         match self.blockdb.get(&hash).unwrap() {
-                            None => {
-                            }
+                            None => {}
                             Some(block) => {
                                 blocks.push(block);
                             }
@@ -103,13 +101,20 @@ impl Context {
                     // TODO: add validation and buffer logic here
                     for block in blocks {
                         // TODO: avoid inserting the same block again here
-                        new_validated_block(block, &self.mempool, &self.blockdb, &self.chain, &self.server);
+                        new_validated_block(
+                            block,
+                            &self.mempool,
+                            &self.blockdb,
+                            &self.chain,
+                            &self.server,
+                        );
                     }
                     // tell the miner to update the context
-                    self.context_update_chan.send(ContextUpdateSignal::NewContent).unwrap();
+                    self.context_update_chan
+                        .send(ContextUpdateSignal::NewContent)
+                        .unwrap();
                 }
-                _ => {
-                }
+                _ => {}
             }
         }
     }
