@@ -3,6 +3,7 @@ pub mod generator;
 use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::sign;
 use bincode::serialize;
+use crate::crypto::sign::{Signable, PubKey, KeyPair};
 
 /// A Prism transaction. A transaction takes a set of existing coins and transforms them into a set
 /// of output coins.
@@ -17,6 +18,24 @@ impl Hashable for Transaction {
     fn hash(&self) -> H256 {
         return ring::digest::digest(&ring::digest::SHA256, &serialize(self).unwrap()).into();
     }
+}
+
+impl Signable for Transaction {
+    fn sign(&self, keypair: &KeyPair) -> sign::Signature {
+        //only sign fields input, output. not signatures.
+        let unsigned_input = serialize(&self.input).unwrap();
+        let unsigned_output = serialize(&self.output).unwrap();
+        let unsigned = [&unsigned_input[..], &unsigned_output[..]].concat();// we can also use Vec extend, don't know which is better
+        keypair.sign(&unsigned)
+    }
+
+    fn verify(&self, public_key: &PubKey, signature: &sign::Signature) -> bool {
+        let unsigned_input = serialize(&self.input).unwrap();
+        let unsigned_output = serialize(&self.output).unwrap();
+        let unsigned = [&unsigned_input[..], &unsigned_output[..]].concat();// we can also use Vec extend, don't know which is better
+        public_key.verify(&unsigned, signature)
+    }
+
 }
 
 /// An input of a transaction.
@@ -44,7 +63,7 @@ pub struct Output {
 
 #[derive(Serialize, Deserialize, Debug, Hash, Clone, PartialEq, Eq)]
 pub struct Signature {
-    pub pubkey: sign::PubKey,
+    pub pubkey: PubKey,
     pub signature: sign::Signature,
 }
 
@@ -75,4 +94,10 @@ impl std::fmt::Display for Transaction {
         }
         Ok(())
     }
+}
+
+#[cfg(test)]
+pub mod tests {
+    use super::*;
+
 }

@@ -1,10 +1,10 @@
 use crate::crypto::hash::{Hashable, H256};
-use crate::crypto::sign::{KeyPair, PubKey, Signature};
+use crate::crypto::sign::{KeyPair, PubKey, Signature, Signable};
 use crate::handler;
 use crate::miner::memory_pool::MemoryPool;
 use crate::miner::miner::ContextUpdateSignal;
 use crate::state::{CoinData, CoinId, UTXO};
-use crate::transaction::{Output, Signature as PubkeySignature, Transaction, Input};
+use crate::transaction::{Output, Signature as PubKeySignature, Transaction, Input};
 use std::collections::{HashMap, HashSet};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
@@ -150,14 +150,12 @@ impl Wallet {
             output,
             signatures: vec![],
         };
-        //        let mut signatures = vec![];
-        //        let message = bincode::serialize(&unsigned).unwrap();
-        //        for keypair in coins_to_use.iter().map(|c|self.keypairs.get(&c.pubkey_hash).unwrap()) {
-        //            let signature = keypair.sign(&message);
-        //            signatures.push(PubkeySignature{pubkey: keypair.public_key(), signature});
-        //        }
+        let mut signatures = vec![];
+        for keypair in coins_to_use.iter().map(|utxo|self.keypairs.get(&utxo.coin_data.recipient).unwrap()) {
+            signatures.push(PubKeySignature{pubkey: keypair.public_key(), signature: unsigned.sign(keypair)});
+        }
 
-        Ok(unsigned)
+        Ok(Transaction{ signatures, ..unsigned })
     }
 
     /// pay to a recipient some value of money, note that the resulting transaction may not be confirmed
@@ -188,6 +186,7 @@ pub mod tests {
     use crate::transaction::{Output, Transaction};
     use crate::handler::{to_utxo, to_rollback_utxo};
     use std::sync::{mpsc, Arc, Mutex};
+    use crate::crypto::sign::Signable;
 
     fn new_wallet_pool_receiver_keyhash() -> (
         Wallet,
@@ -217,6 +216,10 @@ pub mod tests {
         };
     }
     fn receive(w: &mut Wallet, tx: &Transaction) {
+        // test verify of signature before receive
+        for sig in tx.signatures.iter() {
+            assert!(tx.verify(&sig.pubkey, &sig.signature));
+        }
         let (to_delete, to_insert) = to_utxo(tx);
         w.update(&to_delete, &to_insert);
     }
