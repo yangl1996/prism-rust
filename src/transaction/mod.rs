@@ -66,12 +66,12 @@ impl std::fmt::Display for Transaction {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "Tx: ")?;
         for input in self.input.iter() {
-            write!(f, "{} ", input);
+            write!(f, "{} ", input)?;
         }
 
         write!(f, " ==> ")?;
         for output in self.output.iter() {
-            write!(f, "{} ", output);
+            write!(f, "{} ", output)?;
         }
         Ok(())
     }
