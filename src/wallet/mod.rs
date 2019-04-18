@@ -4,7 +4,7 @@ use crate::handler;
 use crate::miner::memory_pool::MemoryPool;
 use crate::miner::miner::ContextUpdateSignal;
 use crate::state::{CoinData, CoinId, UTXO};
-use crate::transaction::{Output, Signature as PubkeySignature, Transaction, Input};
+use crate::transaction::{Output, KeyAndSignature, Transaction, Input};
 use std::collections::{HashMap, HashSet};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
@@ -154,14 +154,14 @@ impl Wallet {
         let unsigned = Transaction {
             input,
             output,
-            signatures: vec![],
+            key_sig: vec![],
         };
-        let mut signatures = vec![];
+        let mut key_sig = vec![];
         for keypair in coins_to_use.iter().map(|utxo|self.keypairs.get(&utxo.coin_data.recipient).unwrap()) {
-            signatures.push(PubKeySignature{pubkey: keypair.public_key(), signature: unsigned.sign(keypair)});
+            key_sig.push(KeyAndSignature{ public_key: keypair.public_key(), signature: unsigned.sign(keypair)});
         }
 
-        Ok(Transaction{ signatures, ..unsigned })
+        Ok(Transaction{ key_sig, ..unsigned })
     }
 
     /// pay to a recipient some value of money, note that the resulting transaction may not be confirmed
@@ -218,13 +218,13 @@ pub mod tests {
         return Transaction {
             input: vec![],
             output,
-            signatures: vec![],
+            key_sig: vec![],
         };
     }
     fn receive(w: &mut Wallet, tx: &Transaction) {
         // test verify of signature before receive
-        for sig in tx.signatures.iter() {
-            assert!(tx.verify(&sig.pubkey, &sig.signature));
+        for sig in tx.key_sig.iter() {
+            assert!(tx.verify(&sig.public_key, &sig.signature));
         }
         let (to_delete, to_insert) = to_utxo(tx);
         w.update(&to_delete, &to_insert);

@@ -6,7 +6,7 @@ use super::{Block, Content};
 
 use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::merkle::MerkleTree;
-use crate::transaction::{Input, Output, Signature, Transaction};
+use crate::transaction::{Input, Output, KeyAndSignature, Transaction};
 
 macro_rules! gen_hashed_data {
     () => {{
@@ -84,12 +84,12 @@ pub fn sample_transaction_content() -> tx_Content {
     };
     let output_vec: Vec<Output> = vec![output1, output2];
 
-    let signature_vec: Vec<Signature> = vec![];
+    let signature_vec: Vec<KeyAndSignature> = vec![];
 
     let sample_transaction = Transaction {
         input: input_vec,
         output: output_vec,
-        signatures: signature_vec,
+        key_sig: signature_vec,
     };
 
     let mut transaction_vec: Vec<Transaction> = vec![];

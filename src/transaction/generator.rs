@@ -1,6 +1,6 @@
 // Randomly generates objects of the given class
 
-use super::{Input, Output, Signature, Transaction};
+use super::{Input, Output, KeyAndSignature, Transaction};
 use crate::crypto;
 use rand::{Rng, RngCore};
 
@@ -10,11 +10,11 @@ pub fn random() -> Transaction {
     let input: Vec<Input> = (0..num_inputs).map(|_| tx_input()).collect();
     let num_outputs = rng.gen_range(2, 3);
     let output: Vec<Output> = (0..num_outputs).map(|_| tx_output()).collect();
-    let signatures: Vec<Signature> = vec![]; // It's hard to generate valid signatures, so just don't put signatures here
+    let signatures: Vec<KeyAndSignature> = vec![]; // It's hard to generate valid signatures, so just don't put signatures here
     return Transaction {
         input,
         output,
-        signatures,
+        key_sig: signatures,
     };
 }
 
