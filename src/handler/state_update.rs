@@ -88,7 +88,8 @@ pub fn unconfirm_old_tx_block_transactions(
         //2. Loop over the transactions
         let mut utxo_state = state_db.lock().unwrap();
         {
-            for (to_delete, to_insert) in to_delete_insert.iter().rev() {//need rev here?
+            for (to_delete, to_insert) in to_delete_insert.iter().rev() {
+                //note: we have rev in the above iteration
                 //3a. Revert the transaction only if it was valid when it was added in the state.
                 // Logic: If the transaction was valid, *all* its output should be unspent/present in the state.
                 let mut no_unspent_outputs: usize = 0;
