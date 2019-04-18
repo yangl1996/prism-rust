@@ -17,10 +17,10 @@ pub fn confirm_new_tx_block_hashes (
     wallets: &Vec<Arc<Mutex<Wallet>>>,
 ) {
     let tx_block_transactions: Vec<Vec<Transaction>> = tx_block_hashes.iter().map(|hash|get_tx_block_content_transactions(hash, block_db)).collect();
-    confirm_new_tx_blocks(tx_block_transactions, state_db, wallets);
+    confirm_new_tx_block_transactions(tx_block_transactions, state_db, wallets);
 }
 
-pub fn confirm_new_tx_blocks (
+pub fn confirm_new_tx_block_transactions(
     tx_block_transactions: Vec<Vec<Transaction>>,
     state_db: &Mutex<UTXODatabase>,//do we need a mutex here?
     wallets: &Vec<Arc<Mutex<Wallet>>>,
@@ -66,7 +66,7 @@ pub fn confirm_new_tx_blocks (
 }
 
 /// This function removes the ledger changes from last 'tx_block_hashes'.
-pub fn unconfirm_old_tx_blocks (
+pub fn unconfirm_old_tx_block_hashes (
     tx_block_hashes: Vec<H256>, // These blocks must be the tip of the ordered tx blocks.
     block_db: &BlockDatabase,
     state_db: &Mutex<UTXODatabase>,
@@ -74,9 +74,9 @@ pub fn unconfirm_old_tx_blocks (
 ) {
     // note: we have a rev() here
     let tx_block_transactions: Vec<Vec<Transaction>> = tx_block_hashes.iter().rev().map(|hash|get_tx_block_content_transactions(hash, block_db)).collect();
-    unconfirm_old_tx_block_hashes(tx_block_transactions, state_db, wallets);
+    unconfirm_old_tx_block_transactions(tx_block_transactions, state_db, wallets);
 }
-pub fn unconfirm_old_tx_block_hashes (
+pub fn unconfirm_old_tx_block_transactions(
     tx_block_transactions: Vec<Vec<Transaction>>, // These blocks must be the tip of the ordered tx blocks.
     state_db: &Mutex<UTXODatabase>,
     wallets: &Vec<Arc<Mutex<Wallet>>>,
@@ -175,36 +175,5 @@ pub fn to_rollback_utxo(tx: &Transaction) -> (Vec<CoinId>, Vec<UTXO>) {
         }).collect();
     (to_delete, to_insert)
 }
-//#[cfg(test)]
-//mod tests {
-//    use super::*;
-//    use crate::state::generator as state_generator;
-//    use crate::transaction::generator as tx_generator;
-//    use crate::crypto::generator as crypto_generator;
-//    use crate::transaction::Transaction;
-//    use crate::state::UTXODatabase;
-//
-//
-//    #[test]
-//    pub fn confirm_unconfirm(){
-//        //1. init database
-//        let default_path = "/tmp/state_db_rocksdb";
-//        let statedb_path = std::path::Path::new(&default_path);
-//        let statedb = UTXODatabase::new(statedb_path).unwrap();
-//        let tx_block = crypto_generator::h256();
-//
-//        //2. Add a few transactions  to begin with
-//        let mut transactions: Vec<Transaction> = vec![];
-//        for position in 0..20 {
-//            let transaction = tx_generator::random();
-//            for utxo in state_generator::tx_to_utxos(&transaction) {
-//                statedb.insert(&utxo);
-//            }
-//            transactions.push(transaction);
-//        }
-//        println!("{}", transactions[0]);
-//
-//    }
-//}
 
-//TODO: Add tests
+// Tests are in tests/state_update.rs
