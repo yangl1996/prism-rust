@@ -12,8 +12,8 @@ use std::sync::Mutex;
 #[derive(Serialize)]
 pub struct DisplayTransactionBlock {
     /// List of transactions and list output indices which are unspent
-    pub transactions: Vec<(Transaction, Vec<usize>)>, //TODO: Add tx validity
-                                                      // To add more fields if required
+    pub transactions: Vec<(Transaction, Vec<usize>)> //TODO: Add tx validity
+    // To add more fields if required
 }
 
 #[derive(Serialize)]
@@ -32,7 +32,7 @@ pub fn dump_ledger(
     // loop over all tx blocks in the ledger
     for tx_hash in ordered_tx_block_hashes.iter() {
         let tx_block = blockdb.get(tx_hash).unwrap().unwrap(); //TODO: Handle unwrap errors
-        let mut display_transactions: Vec<(Transaction, Vec<usize>)>;
+        let mut display_transactions: Vec<(Transaction, Vec<usize>)> = vec![];
         let transactions = match tx_block.content {
             Content::Transaction(content) => content.transactions,
             _ => panic!("Wrong block stored"),
@@ -42,7 +42,7 @@ pub fn dump_ledger(
         for tx in transactions {
             let hash: H256 = tx.hash();
             //Collect the indices of unspent outputs of the tx.
-            let mut unspent_indices: Vec<usize>;
+            let mut unspent_indices: Vec<usize> = vec![];
             // loop over the outputs to check if they are unspent
             for (idx, _output) in tx.output.iter().enumerate() {
                 let coin_id = CoinId {
