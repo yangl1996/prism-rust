@@ -193,7 +193,13 @@ impl Context {
                 // Create a block
                 let mined_block: Block = self.assemble_block(header);
                 // Release block to the network
-                new_validated_block(mined_block, &self.tx_mempool, &self.db, &self.blockchain, &self.server);
+                new_validated_block(
+                    mined_block,
+                    &self.tx_mempool,
+                    &self.db,
+                    &self.blockchain,
+                    &self.server,
+                );
                 // TODO: update mempool
                 info!("Mined one block");
                 // TODO: Only update block contents if relevant parent

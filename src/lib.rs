@@ -40,10 +40,24 @@ pub fn start(
     let (ctx, server) = network::server::new(addr, msg_sink)?;
     ctx.start().unwrap();
 
-    let ctx = network::worker::new(4, msg_source, blockchain, blockdb, mempool, ctx_update_sink, server.clone());
+    let ctx = network::worker::new(
+        4,
+        msg_source,
+        blockchain,
+        blockdb,
+        mempool,
+        ctx_update_sink,
+        server.clone(),
+    );
     ctx.start();
 
-    let (ctx, miner) = miner::miner::new(mempool, blockchain, blockdb, ctx_update_source, server.clone());
+    let (ctx, miner) = miner::miner::new(
+        mempool,
+        blockchain,
+        blockdb,
+        ctx_update_source,
+        server.clone(),
+    );
     ctx.start();
 
     let wallet = wallet::Wallet::new(mempool, ctx_update_sink_wallet);
