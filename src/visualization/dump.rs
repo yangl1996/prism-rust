@@ -69,20 +69,20 @@ pub fn dump_blockchain(chain: &BlockChain) -> String {
         .map(|c| c.best_block.into())
         .collect();
     let transaction_unconfirmed: Vec<String> = chain
-        .tx_blk_pool
+        .tx_blocks
         .not_in_ledger
         .iter()
         .map(|b| b.into())
         .collect();
     let transaction_ordered = chain
-        .tx_blk_pool
+        .tx_blocks
         .ledger
         .to_owned()
         .iter()
         .map(|v| v.into())
         .collect();
     let transaction_unreferred: Vec<String> = chain
-        .tx_blk_pool
+        .tx_blocks
         .unreferred
         .iter()
         .map(|b| b.into())
