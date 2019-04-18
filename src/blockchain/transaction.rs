@@ -1,6 +1,16 @@
 // TODO: Txblock currently has no metadata. It future it could have epsilon.
 use crate::crypto::hash::H256;
 use std::collections::HashSet;
+use std::sync::mpsc::Sender;
+
+/// Message metadata to communicate between blockchain and utxo state
+#[derive(PartialEq)]
+pub enum UpdateMessage {
+    /// Used when new tx blocks are confirmed and the state has to be updated.
+    Add,
+    /// Used when old tx blocks are UNconfirmed and the state has to be rollbacked.
+    Rollback,
+}
 
 /// A pool of transaction blocks.
 pub struct Pool {
@@ -12,20 +22,23 @@ pub struct Pool {
     pub confirmation_boundary: Vec<usize>,
     /// A pool of unreferred transaction blocks. This is for mining.
     pub unreferred: HashSet<H256>,
+    /// Channel to update the utxo state
+    pub utxo_update: Sender<(UpdateMessage, Vec<H256>)>,
 }
 
 impl Pool {
     /// Create a new transaction block pool.
-    pub fn new() -> Self {
+    pub fn new(utxo_update: Sender<(UpdateMessage, Vec<H256>)>) -> Self {
         let not_in_ledger: HashSet<H256> = HashSet::new();
         let ledger: Vec<H256> = vec![];
         let unreferred: HashSet<H256> = HashSet::new();
-        let confirmation_boundaries: Vec<usize> = vec![];
+        let confirmation_boundary: Vec<usize> = vec![];
         return Self {
             not_in_ledger,
             ledger,
-            confirmation_boundary: confirmation_boundaries,
+            confirmation_boundary,
             unreferred,
+            utxo_update,
         };
     }
 
@@ -48,9 +61,15 @@ impl Pool {
     }
 
     /// Add a transaction block to the ordered ledger, and remove it from the unconfirmed set.
-    pub fn add_to_ledger(&mut self, hash: &H256) {
-        self.ledger.push(*hash);
-        self.not_in_ledger.remove(hash);
+    pub fn add_to_ledger(&mut self, to_add_tx_blocks: Vec<H256>) {
+        for tx_block in to_add_tx_blocks.iter() {
+            self.ledger.push(*tx_block);
+            self.not_in_ledger.remove(tx_block);
+        }
+        // Ask the utxo state thread to extend its state based on to_add_tx_blocks
+        self.utxo_update
+            .send((UpdateMessage::Add, to_add_tx_blocks))
+            .unwrap();
     }
 
     /// Roll back the transaction blocks in the ledger confirmed by the leader proposer blocks at
@@ -59,12 +78,17 @@ impl Pool {
         // Get the start index of transaction blocks confirmed by leader block at 'level'
         let rollback_start = self.confirmation_boundary[level];
         // Move the tx blocks from the ledger to the unconfirmed set.
-        let mut to_remove: Vec<H256> = self.ledger.split_off(rollback_start);
-        for tx_block in to_remove {
-            self.insert_not_in_ledger(tx_block);
+        let mut to_remove_tx_blocks: Vec<H256> = self.ledger.split_off(rollback_start);
+        for tx_block in to_remove_tx_blocks.iter() {
+            self.insert_not_in_ledger(*tx_block);
         }
+        // Ask the utxo state thread to rollback its state for the 'to_remove_tx_blocks'
+        self.utxo_update
+            .send((UpdateMessage::Rollback, to_remove_tx_blocks))
+            .unwrap();
+
         // Drain confirmation_boundary vector
-        self.confirmation_boundary.drain(level - 1..);  // TODO: why -1?
+        self.confirmation_boundary.drain(level - 1..); // TODO: why -1?
     }
 
     /// Insert a block to the unreferred transaction block set.

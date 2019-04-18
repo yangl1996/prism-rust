@@ -2,11 +2,20 @@ use crate::block::{Block, Content};
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
 use crate::crypto::hash::Hashable;
-use std::sync::Mutex;
 use crate::miner::memory_pool::MemoryPool;
+use crate::network::message;
+use crate::network::server::Handle as ServerHandle;
+use std::sync::Mutex;
 
-pub fn new_validated_block(block: Block, mempool: &Mutex<MemoryPool>, db: &BlockDatabase, chain: &Mutex<BlockChain>) {
-    // TODO: for now, we assume that blocks appear in order
+pub fn new_validated_block(
+    block: Block,
+    mempool: &Mutex<MemoryPool>,
+    db: &BlockDatabase,
+    chain: &Mutex<BlockChain>,
+    server: &ServerHandle,
+) {
+    // insert the new block into the blockdb
+    db.insert(&block).unwrap();
 
     // if this block is a tx_block, remove transactions from mempool
     match &block.content {
@@ -18,8 +27,8 @@ pub fn new_validated_block(block: Block, mempool: &Mutex<MemoryPool>, db: &Block
                 }
             }
             drop(mempool);
-        },
-        _ => ()
+        }
+        _ => (),
     };
 
     // insert the new block into the blockchain
@@ -27,6 +36,6 @@ pub fn new_validated_block(block: Block, mempool: &Mutex<MemoryPool>, db: &Block
     chain.insert_node(&block);
     drop(chain);
 
-    // insert the new block into the blockdb
-    db.insert(&block).unwrap();
+    // tell the neighbors that we have a new block
+    server.broadcast(message::Message::NewBlockHashes(vec![block.hash()]));
 }
