@@ -2,21 +2,31 @@ use crate::block::transaction::Content as TxContent;
 use crate::block::{Block, Content};
 use crate::blockdb::BlockDatabase;
 use crate::crypto::hash::{Hashable, H256};
-use crate::state::UTXODatabase;
-use crate::state::{CoinData, CoinId, UTXO};
-use crate::transaction::{Transaction};
+use crate::state::{UTXODatabase, CoinData, CoinId, UTXO};
+use crate::transaction::{Transaction, generator as tx_generator};
+use crate::wallet::Wallet;
+use std::sync::{Mutex, Arc};
+use rand::{Rng, RngCore};
 
-use std::sync::Mutex;
 
 /// This function changes the ledger to incorporate txs from last 'tx_block_hashes'.
-pub fn confirm_new_tx_blocks(
+pub fn confirm_new_tx_block_hashes (
     tx_block_hashes: Vec<H256>,
     block_db: &BlockDatabase,
-    state_db: &Mutex<UTXODatabase>,//TODO: add Mutex<wallets>, when state_db receive/rollback, wallet also receive/rollback.
+    state_db: &Mutex<UTXODatabase>,//do we need a mutex here?
+    wallets: &Vec<Arc<Mutex<Wallet>>>,
 ) {
-    //1. Loop over the tx blocks
-    for tx_block_hash in tx_block_hashes.iter() {
-        let transactions: Vec<Transaction> = get_tx_block_content(tx_block_hash, block_db);
+    let tx_block_transactions: Vec<Vec<Transaction>> = tx_block_hashes.iter().map(|hash|get_tx_block_content_transactions(hash, block_db)).collect();
+    confirm_new_tx_blocks(tx_block_transactions, state_db, wallets);
+}
+
+pub fn confirm_new_tx_blocks (
+    tx_block_transactions: Vec<Vec<Transaction>>,
+    state_db: &Mutex<UTXODatabase>,//do we need a mutex here?
+    wallets: &Vec<Arc<Mutex<Wallet>>>,
+) {
+    //1. Loop over the tx block's transactionss
+    for transactions in tx_block_transactions {
         // pre-compute the utxos to be deleted and inserted
         let to_delete_insert: Vec<(Vec<CoinId>, Vec<UTXO>)> = transactions.iter().map(|tx|to_utxo(tx)).collect();
         //2. Loop over the transactions
@@ -42,6 +52,10 @@ pub fn confirm_new_tx_blocks(
                         Err(e) => panic!("StateDB not working: Error {}", e),
                         Ok(_) => (),
                     }
+                    for wallet in wallets {
+                        let mut w = wallet.lock().unwrap();
+                        w.update(to_delete, to_insert);
+                    }
                 } else {
                     //log the sanitization error.
                 }
@@ -52,20 +66,29 @@ pub fn confirm_new_tx_blocks(
 }
 
 /// This function removes the ledger changes from last 'tx_block_hashes'.
-pub fn unconfirm_old_tx_blocks(
+pub fn unconfirm_old_tx_blocks (
     tx_block_hashes: Vec<H256>, // These blocks must be the tip of the ordered tx blocks.
     block_db: &BlockDatabase,
     state_db: &Mutex<UTXODatabase>,
+    wallets: &Vec<Arc<Mutex<Wallet>>>,
 ) {
-    //1. Loop over the tx blocks in reverse
-    for tx_block_hash in tx_block_hashes.iter().rev() {
-        let transactions: Vec<Transaction> = get_tx_block_content(tx_block_hash, block_db);
+    // note: we have a rev() here
+    let tx_block_transactions: Vec<Vec<Transaction>> = tx_block_hashes.iter().rev().map(|hash|get_tx_block_content_transactions(hash, block_db)).collect();
+    unconfirm_old_tx_block_hashes(tx_block_transactions, state_db, wallets);
+}
+pub fn unconfirm_old_tx_block_hashes (
+    tx_block_transactions: Vec<Vec<Transaction>>, // These blocks must be the tip of the ordered tx blocks.
+    state_db: &Mutex<UTXODatabase>,
+    wallets: &Vec<Arc<Mutex<Wallet>>>,
+) {
+    //1. Loop over the tx block's transactions (already in reverse order)
+    for transactions in tx_block_transactions {
         // pre-compute the utxos to be deleted and inserted
         let to_delete_insert: Vec<(Vec<CoinId>, Vec<UTXO>)> = transactions.iter().map(|tx|to_rollback_utxo(tx)).collect();
         //2. Loop over the transactions
         let mut utxo_state = state_db.lock().unwrap();
         {
-            for (to_delete, to_insert) in to_delete_insert.iter().rev() {
+            for (to_delete, to_insert) in to_delete_insert.iter().rev() {//need rev here?
                 //3a. Revert the transaction only if it was valid when it was added in the state.
                 // Logic: If the transaction was valid, *all* its output should be unspent/present in the state.
                 let mut no_unspent_outputs: usize = 0;
@@ -85,6 +108,10 @@ pub fn unconfirm_old_tx_blocks(
                         Err(e) => panic!("StateDB not working: Error {}", e),
                         Ok(_) => (),
                     }
+                    for wallet in wallets {
+                        let mut w = wallet.lock().unwrap();
+                        w.update(to_delete, to_insert);
+                    }
                 } else if no_unspent_outputs == 0 {
                     //log the sanitization error.
                 } else {
@@ -96,7 +123,7 @@ pub fn unconfirm_old_tx_blocks(
     }
 }
 
-pub fn get_tx_block_content(hash: &H256, block_db: &BlockDatabase) -> Vec<Transaction> {
+fn get_tx_block_content_transactions(hash: &H256, block_db: &BlockDatabase) -> Vec<Transaction> {
     let tx_block: Block = block_db
         .get(hash)
         .unwrap_or(panic!("TX block not found in DB. 1"))
