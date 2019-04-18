@@ -103,7 +103,7 @@ impl Context {
                     // TODO: add validation and buffer logic here
                     for block in blocks {
                         // TODO: avoid inserting the same block again here
-                        new_validated_block(block, &self.blockdb, &self.chain, &self.server);
+                        new_validated_block(block, &self.mempool, &self.blockdb, &self.chain, &self.server);
                     }
                     // tell the miner to update the context
                     self.context_update_chan.send(ContextUpdateSignal::NewContent).unwrap();
