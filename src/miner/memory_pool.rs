@@ -97,11 +97,12 @@ impl MemoryPool {
             if let Some(entry_hash) = self.by_input.get(&prevout) {
                 let entry_hash = *entry_hash;
                 let entry = self.remove_and_get(&entry_hash).unwrap();
-                let num_out = entry.transaction.output.len();
-                for out_idx in 0..num_out {
+                for (index, output) in entry.transaction.output.iter().enumerate() {
                     queue.push_back(Input {
                         hash: entry_hash,
-                        index: out_idx as u32,
+                        index: index as u32,
+                        value: output.value,
+                        recipient: output.recipient,
                     });
                 }
             }
@@ -171,6 +172,8 @@ pub mod tests {
         let mut input = vec![Input {
             hash: first_tx.hash(),
             index: 0,
+            value: first_tx.output[0].value,
+            recipient: first_tx.output[0].recipient,
         }];
         //although for now we don't want to add tx into mempool if it's inputs are also in mempool
         //let's add them and test remove
@@ -185,12 +188,16 @@ pub mod tests {
             input = vec![Input {
                 hash: tx.hash(),
                 index: 0,
+                value: tx.output[0].value,
+                recipient: tx.output[0].recipient,
             }];
         }
         //one remove should remove all correlated transactions
         pool.remove_by_input(&Input {
             hash: first_tx.hash(),
             index: 0,
+            value: first_tx.output[0].value,
+            recipient: first_tx.output[0].recipient,
         });
         assert_eq!(pool.by_hash.len(), 0);
         assert_eq!(pool.by_input.len(), 0);
