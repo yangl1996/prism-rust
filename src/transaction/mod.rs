@@ -3,7 +3,7 @@ pub mod generator;
 use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::sign;
 use bincode::serialize;
-use crate::crypto::sign::{Signable, PubKey, KeyPair};
+use crate::crypto::sign::{Signable, PubKey, KeyPair, Signature};
 
 /// A Prism transaction. A transaction takes a set of existing coins and transforms them into a set
 /// of output coins.
@@ -11,7 +11,7 @@ use crate::crypto::sign::{Signable, PubKey, KeyPair};
 pub struct Transaction {
     pub input: Vec<Input>,
     pub output: Vec<Output>,
-    pub signatures: Vec<Signature>,
+    pub key_sig: Vec<KeyAndSignature>,
 }
 
 impl Hashable for Transaction {
@@ -21,7 +21,7 @@ impl Hashable for Transaction {
 }
 
 impl Signable for Transaction {
-    fn sign(&self, keypair: &KeyPair) -> sign::Signature {
+    fn sign(&self, keypair: &KeyPair) -> Signature {
         //only sign fields input, output. not signatures.
         let unsigned_input = serialize(&self.input).unwrap();
         let unsigned_output = serialize(&self.output).unwrap();
@@ -29,7 +29,7 @@ impl Signable for Transaction {
         keypair.sign(&unsigned)
     }
 
-    fn verify(&self, public_key: &PubKey, signature: &sign::Signature) -> bool {
+    fn verify(&self, public_key: &PubKey, signature: &Signature) -> bool {
         let unsigned_input = serialize(&self.input).unwrap();
         let unsigned_output = serialize(&self.output).unwrap();
         let unsigned = [&unsigned_input[..], &unsigned_output[..]].concat();// we can also use Vec extend, don't know which is better
@@ -62,9 +62,9 @@ pub struct Output {
 }
 
 #[derive(Serialize, Deserialize, Debug, Hash, Clone, PartialEq, Eq)]
-pub struct Signature {
-    pub pubkey: PubKey,
-    pub signature: sign::Signature,
+pub struct KeyAndSignature {
+    pub public_key: PubKey,
+    pub signature: Signature,
 }
 
 impl std::fmt::Display for Input {
@@ -100,4 +100,13 @@ impl std::fmt::Display for Transaction {
 pub mod tests {
     use super::*;
 
+    #[test]
+    pub fn sign() {
+        let unsigned = generator::random();
+        let keypair = KeyPair::new();
+        let signature = unsigned.sign(&keypair);
+        assert!(unsigned.verify(&keypair.public_key(), &signature));
+        let keypair_2 = KeyPair::new();
+        assert!(!unsigned.verify(&keypair_2.public_key(), &signature));
+    }
 }

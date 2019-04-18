@@ -100,7 +100,7 @@ fn wallets_pay_eachother() {
             })
             .flatten()
             .collect(),
-        signatures: vec![],
+        key_sig: vec![],
     };
     ledger_new_txs(vec![funding], &mempool, &state_db, &wallets);
     status_check(&state_db, &wallets);
