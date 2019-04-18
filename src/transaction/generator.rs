@@ -24,12 +24,17 @@ fn tx_input() -> Input {
     let index = rng.next_u32();
     let value = rng.next_u64();
     let recipient = crypto::generator::h256();
-    return Input { hash, index, value, recipient };
+    return Input {
+        hash,
+        index,
+        value,
+        recipient,
+    };
 }
 
 fn tx_output() -> Output {
     let mut rng = rand::thread_rng();
-    let value = 10;
+    let value = rng.gen_range(10, 30);
     let recipient = crypto::generator::h256();
     return Output { value, recipient };
 }

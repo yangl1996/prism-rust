@@ -23,7 +23,7 @@ pub struct MemoryPool {
 pub struct Entry {
     /// Transaction
     pub transaction: Transaction,
-    /// counter of the block
+    /// counter of the tx
     storage_index: u64,
 }
 
@@ -38,7 +38,7 @@ impl MemoryPool {
     }
 
     pub fn insert(&mut self, tx: Transaction) {
-        // assume duplicate and double spend already checked/validated
+        // assumes no duplicates nor double spends
         let hash = tx.hash();
         let entry = Entry {
             transaction: tx,
