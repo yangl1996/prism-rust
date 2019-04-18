@@ -1,7 +1,6 @@
 use crate::crypto::hash::H256;
 use std::collections::HashMap;
 
-
 #[derive(Serialize, Deserialize, Clone, Copy, Ord, Eq, PartialEq, PartialOrd, Hash)]
 /// The metadata of a voter block.
 pub struct NodeData {
@@ -82,8 +81,6 @@ pub enum NodeUpdateStatus {
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
 /// The metadata of a voter chain.
 pub struct Chain {
-    /// The chain number.
-    pub chain_number: u16, //todo: remove this?
     /// The hash of the deepest block on this chain.
     pub best_block: H256,
     /// The level of the deepest block.
@@ -99,10 +96,9 @@ pub struct Chain {
 
 impl Chain {
     /// Create a new voter chain.
-    pub fn new(chain_number: u16, best_block: H256) -> Self {
+    pub fn new(best_block: H256) -> Self {
         let unvoted_proposer_blocks: HashMap<u32, H256> = HashMap::new();
         return Self {
-            chain_number,
             best_block,
             best_level: 0,
             unvoted_proposer_blocks,
@@ -175,7 +171,7 @@ impl Chain {
     // TODO: so many panics
     /// Set the proposer blocks to vote for at the given levels. The levels must be continuous and
     /// last until right behind the current smallest unvoted proposer level.
-    /// 
+    ///
     /// An example:
     /// ```ignore
     /// Initial State:
@@ -255,8 +251,8 @@ impl std::fmt::Display for Chain {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(
             f,
-            "CN: {}; best_block: {}; best_level: {}",
-            self.chain_number, self.best_block, self.best_level
+            "best_block: {}; best_level: {}",
+            self.best_block, self.best_level
         )?; // Ignoring status for now
         Ok(())
     }
