@@ -10,7 +10,6 @@ Run `cargo build`.
 
 Run `cargo test`. To see all the outputs, append `-- --no_capture`.
 
-# Visualization
+# Multi-node Mining Demo
 
-Run `cargo run --example self_mining` and go to `localhost:8888`.
-
+Run `cargo run --example multinode_mining`.
