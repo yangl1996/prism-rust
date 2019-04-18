@@ -43,9 +43,9 @@ impl Block {
             difficulty,
         );
         Self {
-            header: header,
-            content: content,
-            sortition_proof: sortition_proof,
+            header,
+            content,
+            sortition_proof,
         }
     }
 
@@ -64,8 +64,8 @@ impl Block {
 
     pub fn get_block_type(&self) -> Option<u32> {
         match &self.content {
-            Content::Transaction(_c) => return Some(TRANSACTION_INDEX),
-            Content::Proposer(_c) => return Some(PROPOSER_INDEX),
+            Content::Transaction(_) => return Some(TRANSACTION_INDEX),
+            Content::Proposer(_) => return Some(PROPOSER_INDEX),
             Content::Voter(c) => {
                 let chain_num: u32 = FIRST_VOTER_INDEX + (c.chain_number as u32);
                 return Some(chain_num);
@@ -120,7 +120,7 @@ impl std::fmt::Display for Content {
                 Ok(())
             }
             Content::Voter(c) => {
-                write!(f, "Voter block ({})", c.chain_number)?;
+                write!(f, "Voter block @ ({})", c.chain_number)?;
                 Ok(())
             }
         }

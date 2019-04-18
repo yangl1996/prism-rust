@@ -29,7 +29,7 @@ fn tx_input() -> Input {
 
 fn tx_output() -> Output {
     let mut rng = rand::thread_rng();
-    let value = 10;
+    let value = rng.gen_range(10, 30);
     let recipient = crypto::generator::h256();
     return Output { value, recipient };
 }

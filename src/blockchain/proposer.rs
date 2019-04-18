@@ -63,8 +63,8 @@ pub enum Status {
     /// Will be later used for fast active confirmation.
     PotentialLeader,
     /// When a leader block at a level is confirmed, rest of the proposer blocks at that level become `NotLeaderUnconfirmed`
-    NotLeaderUnconfirmed, 
-    /// When a proposer block is not a leader, and this has been confirmed by ony of the child
+    NotLeaderUnconfirmed,
+    /// When a proposer block is not a leader, and has been confirmed by any of the child
     /// leader blocks.
     NotLeaderAndConfirmed,
 }
@@ -91,7 +91,7 @@ pub struct Tree {
     /// The number of votes at each level.
     pub number_of_votes: HashMap<u32, u32>, // TODO: why are we using hashmap here?
     /// The hashes of leader blocks of each level.
-    pub leader_nodes: HashMap<u32, H256>,   // Using hashmap because leader nodes might not be confirmed sequentially
+    pub leader_nodes: HashMap<u32, H256>, // Using hashmap because leader nodes might not be confirmed sequentially
     /// The level upto which all levels have a leader.
     pub min_unconfirmed_level: u32,
     /// The pool of unreferred proposer blocks. This is for mining.
@@ -157,4 +157,3 @@ impl std::fmt::Display for Tree {
         Ok(())
     }
 }
-

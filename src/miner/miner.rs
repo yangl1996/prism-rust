@@ -54,7 +54,7 @@ pub struct Context {
     db: Arc<BlockDatabase>,
     // Channel for receiving control signal
     control_chan: Receiver<ControlSignal>,
-    // Channel for notifing miner of new content
+    // Channel for notifying miner of new content
     context_update_chan: Receiver<ContextUpdateSignal>,
     // Proposer parent
     proposer_parent_hash: H256,
@@ -173,7 +173,7 @@ impl Context {
             // check whether there is new content
             match self.context_update_chan.try_recv() {
                 Ok(_) => {
-                    // TODO: Only update block contents if relevant parent
+                    // TODO: Only update block contents of the relevant structures
                     self.update_context();
                     header = self.create_header();
                 }
@@ -345,7 +345,7 @@ mod tests {
     use crate::blockdb::BlockDatabase;
     use crate::miner::memory_pool::MemoryPool;
     use std::sync::mpsc::channel;
-    use std::sync::{Arc, Mutex};
+    use std::sync::{mpsc, Arc, Mutex};
 
     /*
     #[test]
@@ -423,7 +423,11 @@ mod tests {
     #[test]
     fn sortition_id() {
         let tx_mempool = Arc::new(Mutex::new(MemoryPool::new()));
-        let blockchain = Arc::new(Mutex::new(BlockChain::new(NUM_VOTER_CHAINS)));
+        let (state_update_sink, state_update_source) = mpsc::channel();
+        let blockchain = Arc::new(Mutex::new(BlockChain::new(
+            NUM_VOTER_CHAINS,
+            state_update_sink,
+        )));
         let db = Arc::new(
             BlockDatabase::new(&std::path::Path::new(
                 "/tmp/prism_miner_test_sortition.rocksdb",

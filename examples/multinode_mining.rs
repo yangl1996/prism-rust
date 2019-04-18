@@ -3,6 +3,7 @@ use prism::transaction::{Output, Transaction};
 use prism::visualization;
 use prism::{self, blockchain, blockdb, miner::memory_pool};
 use std::sync::{Arc, Mutex};
+use std::sync::mpsc;
 
 const NUM_VOTER_CHAINS: u16 = 3;
 
@@ -19,6 +20,7 @@ fn main() {
     let mut peer_addrs = vec![];
     let mut servers = vec![];
     let mut miners = vec![];
+    let mut channels = vec![];
 
     for i in 0..10 {
         let blockdb_path_string = format!("/tmp/prism_multinode_mining_{}.rocksdb", i);
@@ -26,8 +28,10 @@ fn main() {
         let blockdb = blockdb::BlockDatabase::new(blockdb_path).unwrap();
         let blockdb = Arc::new(blockdb);
 
-        let blockchain = blockchain::BlockChain::new(NUM_VOTER_CHAINS);
+        let (state_update_sink, state_update_source) = mpsc::channel();
+        let blockchain = blockchain::BlockChain::new(NUM_VOTER_CHAINS, state_update_sink);
         let blockchain = Arc::new(Mutex::new(blockchain));
+        channels.push(state_update_source);
 
         let mempool = memory_pool::MemoryPool::new();
         let mempool = Arc::new(Mutex::new(mempool));
