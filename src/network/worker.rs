@@ -4,7 +4,7 @@ use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
 use crate::miner::memory_pool::MemoryPool;
 use crate::miner::miner::ContextUpdateSignal;
-use log::info;
+use log::{info, debug};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use crate::handler::new_validated_block;
@@ -68,6 +68,7 @@ impl Context {
                     info!("Pong: {}", nonce);
                 }
                 Message::NewBlockHashes(hashes) => {
+                    debug!("NewBlockHashes");
                     let mut hashes_to_request = vec![];
                     for hash in hashes {
                         // TODO: add a method to blockdb to quickly check whether a block exists
@@ -79,9 +80,12 @@ impl Context {
                             }
                         }
                     }
-                    peer.write(Message::GetBlocks(hashes_to_request));
+                    if hashes_to_request.len() != 0 {
+                        peer.write(Message::GetBlocks(hashes_to_request));
+                    }
                 }
                 Message::GetBlocks(hashes) => {
+                    debug!("GetBlocks");
                     let mut blocks = vec![];
                     for hash in hashes {
                         match self.blockdb.get(&hash).unwrap() {
@@ -95,6 +99,7 @@ impl Context {
                     peer.write(Message::Blocks(blocks));
                 }
                 Message::Blocks(blocks) => {
+                    debug!("Blocks");
                     // TODO: add validation and buffer logic here
                     for block in blocks {
                         // TODO: avoid inserting the same block again here

@@ -7,6 +7,8 @@ use std::sync::{Arc, Mutex};
 const NUM_VOTER_CHAINS: u16 = 3;
 
 fn main() {
+    stderrlog::new().verbosity(3).init().unwrap();
+
     // initialize all sorts of stuff for server 1
     let blockdb_path = std::path::Path::new("/tmp/prism_itest_two_node_mining_1.rocksdb");
     let blockdb = blockdb::BlockDatabase::new(blockdb_path).unwrap();
