@@ -5,6 +5,7 @@ use ring::signature::KeyPair as KeyPairTrait;
 use ring::signature::{self, Ed25519KeyPair};
 use untrusted;
 
+
 /// An Ed25519 signature.
 #[derive(Serialize, Deserialize, Hash, Clone, Default, PartialEq, Eq)]
 pub struct Signature([u128; 4]); // big endian u512

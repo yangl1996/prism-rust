@@ -4,18 +4,18 @@ use crate::handler;
 use crate::miner::memory_pool::MemoryPool;
 use crate::miner::miner::ContextUpdateSignal;
 use crate::state::{CoinData, CoinId, UTXO};
-use crate::transaction::{Input, Output, Signature as PubkeySignature, Transaction};
+use crate::transaction::{Output, Signature as PubkeySignature, Transaction, Input};
 use std::collections::{HashMap, HashSet};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 
 pub type Result<T> = std::result::Result<T, WalletError>;
 
-pub type Coin = UTXO;
-
 // one potential problem: if another program has the same keypair, then he may spend a coin, but this wallet don't know it's spend.
 // another problem is concurrency, it seems this wallet can only be run single-threaded.
 // so this wallet should just be used in experiment to generate transactions single-threaded.
+// otherwise we may want a mutex
+/// A data structure to maintain key pairs and their coins, and to generate transactions.
 pub struct Wallet {
     /// List of coins which can be spent
     coins: HashMap<CoinId, CoinData>,
@@ -46,7 +46,7 @@ impl Wallet {
         };
     }
 
-    // someone pay to A first, then I coincidentally generate A, I will NOT receive the payment
+    // someone pay to public key A first, then I coincidentally generate A, I will NOT receive the payment
     /// Generate a new key pair
     pub fn generate_keypair(&mut self) {
         let keypair = KeyPair::new();
@@ -62,6 +62,7 @@ impl Wallet {
     }
 
     // this method doesn't compute hash again. we could get pubkey then compute the hash but that compute hash again!
+    /// Get one pubkey's hash from this wallet
     pub fn get_pubkey_hash(&self) -> Result<H256> {
         if let Some(&pubkey_hash) = self.keypairs.keys().next() {
             return Ok(pubkey_hash);
@@ -70,30 +71,8 @@ impl Wallet {
     }
 
     /// Add coin to wallet
-    fn insert_coin(&mut self, coin: Coin) {
-        self.coins.insert(coin.coin_id, coin.coin_data);
-    }
-
-    /// Add coins in a transaction that are destined to us
-    pub fn receive(&mut self, tx: &Transaction) {
-        let hash: H256 = tx.hash(); // compute hash here, and below inside Input we don't have to compute again (we just copy)
-        for input in tx.input.iter() {
-            self.delete_coin(input);
-        }
-        for (idx, output) in tx.output.iter().enumerate() {
-            if self.keypairs.contains_key(&output.recipient) {
-                let coin_id = CoinId {
-                    hash,
-                    index: idx as u32,
-                };
-                let coin_data = CoinData {
-                    value: output.value,
-                    recipient: output.recipient,
-                };
-                let coin = Coin { coin_id, coin_data };
-                self.insert_coin(coin);
-            }
-        }
+    fn insert_coin(&mut self, coin: &UTXO) {
+        self.coins.insert(coin.coin_id.clone(), coin.coin_data.clone());
     }
 
     /// Removes coin from the wallet. Will be used after the tx is confirmed and the coin is spent. Also used in rollback
@@ -102,10 +81,19 @@ impl Wallet {
         self.coins.remove(coin_id);
     }
 
-    /// If Rollback on ledger happens, we need to rollback the wallet. The reverse of receive.
-    pub fn rollback(&mut self, tx: &Transaction) {
-        unimplemented!();
+    /// Update the wallet.
+    /// Can serve as receive(transaction) or rollback, based on arguments to_delete and to_insert.
+    pub fn update(&mut self, to_delete: &Vec<CoinId>, to_insert: &Vec<UTXO>) {
+        for coin_id in to_delete {
+            self.delete_coin(coin_id);
+        }
+        for utxo in to_insert {
+            if self.keypairs.contains_key(&utxo.coin_data.recipient) {
+                self.insert_coin(utxo);
+            }
+        }
     }
+
     /// Returns the sum of values of all the coin in the wallet
     pub fn balance(&self) -> u64 {
         self.coins
@@ -116,13 +104,13 @@ impl Wallet {
 
     /// create a transaction using the wallet coins
     fn create_transaction(&mut self, recipient: H256, value: u64) -> Result<Transaction> {
-        let mut coins_to_use: Vec<CoinId> = vec![];
+        let mut coins_to_use: Vec<UTXO> = vec![];
         let mut value_sum = 0u64;
 
         // iterate thru our wallet
         for (coin_id, coin_data) in self.coins.iter() {
             value_sum += coin_data.value;
-            coins_to_use.push(coin_id.clone()); // coins that will be used for this transaction
+            coins_to_use.push(UTXO {coin_id: coin_id.clone(), coin_data: coin_data.clone()}); // coins that will be used for this transaction
             if value_sum >= value {
                 // if we already have enough money, break
                 break;
@@ -134,8 +122,14 @@ impl Wallet {
         }
         // if we have enough money in our wallet, create tx
         // create transaction inputs
-        let input = coins_to_use.clone(); //since Input DS may change, this line may change
-                                          // create the output
+        let input: Vec<Input> = coins_to_use.iter().map(|c|
+            Input{
+                hash: c.coin_id.hash,
+                index: c.coin_id.index,
+                value: c.coin_data.value,
+                recipient: c.coin_data.recipient,
+            }).collect();
+        // create the output
         let mut output = vec![Output { recipient, value }];
         if value_sum > value {
             // transfer the remaining value back to self
@@ -148,7 +142,7 @@ impl Wallet {
 
         // remove used coin from wallet
         for c in &coins_to_use {
-            self.delete_coin(c);
+            self.delete_coin(&c.coin_id);
         }
 
         let unsigned = Transaction {
@@ -192,6 +186,7 @@ pub mod tests {
     use crate::miner::memory_pool::MemoryPool;
     use crate::miner::miner::ContextUpdateSignal;
     use crate::transaction::{Output, Transaction};
+    use crate::handler::{to_utxo, to_rollback_utxo};
     use std::sync::{mpsc, Arc, Mutex};
 
     fn new_wallet_pool_receiver_keyhash() -> (
@@ -209,7 +204,7 @@ pub mod tests {
     }
     fn transaction_10_10(recipient: &H256) -> Transaction {
         let mut output: Vec<Output> = vec![];
-        for i in 0..10 {
+        for _ in 0..10 {
             output.push(Output {
                 value: 10,
                 recipient: recipient.clone(),
@@ -221,71 +216,79 @@ pub mod tests {
             signatures: vec![],
         };
     }
+    fn receive(w: &mut Wallet, tx: &Transaction) {
+        let (to_delete, to_insert) = to_utxo(tx);
+        w.update(&to_delete, &to_insert);
+    }
+    fn rollback(w: &mut Wallet, tx: &Transaction) {
+        let (to_delete, to_insert) = to_rollback_utxo(tx);
+        w.update(&to_delete, &to_insert);
+    }
     #[test]
-    pub fn test_balance() {
-        let (mut w, pool, ctx_update_source, hash) = new_wallet_pool_receiver_keyhash();
+    pub fn balance() {
+        let (mut w, _pool, _ctx_update_source, hash) = new_wallet_pool_receiver_keyhash();
         assert_eq!(w.balance(), 0);
     }
     #[test]
-    pub fn test_add_transaction() {
-        let (mut w, pool, ctx_update_source, hash) = new_wallet_pool_receiver_keyhash();
-        w.receive(&transaction_10_10(&hash));
+    pub fn add_transaction() {
+        let (mut w, _pool, _ctx_update_source, hash) = new_wallet_pool_receiver_keyhash();
+        receive(&mut w,&transaction_10_10(&hash));
         assert_eq!(w.balance(), 100);
     }
 
     #[test]
-    pub fn test_send_coin() {
+    pub fn send_coin() {
         let (mut w, pool, ctx_update_source, hash) = new_wallet_pool_receiver_keyhash();
-        w.receive(&transaction_10_10(&hash));
+        receive(&mut w,&transaction_10_10(&hash));
         // now we have 10*10 coins, we try to spend them
-        for i in 0..5 {
+        for _ in 0..5 {
             assert!(w.pay(crypto_generator::h256(), 20).is_ok());
         }
         assert_eq!(w.balance(), 0);
         let m = pool.lock().unwrap();
-        let txs: Vec<Transaction> = m.get_transactions(5).iter().map(|tx| tx.clone()).collect();
+        let txs: Vec<Transaction> = m.get_transactions(5);
         drop(m);
         assert_eq!(txs.len(), 5);
         for tx in &txs {
-            println!("{:?}", tx);
+//            println!("{:?}", tx);
         }
-        for i in 0..5 {
+        for _ in 0..5 {
             ctx_update_source.recv().unwrap();
         }
     }
 
     #[test]
-    pub fn test_send_coin_2() {
+    pub fn send_coin_2() {
         let (mut w, pool, ctx_update_source, hash) = new_wallet_pool_receiver_keyhash();
-        w.receive(&transaction_10_10(&hash));
+        receive(&mut w,&transaction_10_10(&hash));
         // now we have 10*10 coins, we try to spend them
-        for i in 0..5 {
+        for _ in 0..5 {
             assert!(w.pay(crypto_generator::h256(), 19).is_ok());
         }
         assert_eq!(w.balance(), 0);
         let m = pool.lock().unwrap();
-        let txs: Vec<Transaction> = m.get_transactions(5).iter().map(|tx| tx.clone()).collect();
+        let txs: Vec<Transaction> = m.get_transactions(5);
         drop(m);
         assert_eq!(txs.len(), 5);
         for tx in &txs {
             // for test, just add new tx into this wallet
-            println!("{:?}", tx);
-            w.receive(tx);
+//            println!("{:?}", tx);
+            receive(&mut w,&tx);
         }
         assert_eq!(w.balance(), 5); //10*10-5*19=5 remaining
-        for i in 0..5 {
+        for _ in 0..5 {
             ctx_update_source.recv().unwrap();
         }
     }
 
     #[test]
-    pub fn test_send_coin_fail() {
-        let (mut w, pool, ctx_update_source, hash) = new_wallet_pool_receiver_keyhash();
-        w.receive(&transaction_10_10(&hash));
+    pub fn send_coin_fail() {
+        let (mut w, _pool, _ctx_update_source, hash) = new_wallet_pool_receiver_keyhash();
+        receive(&mut w,&transaction_10_10(&hash));
         // now we have 10*10 coins, we try to spend 101
         assert!(w.pay(crypto_generator::h256(), 101).is_err());
         // we try to spend 20 6 times, the 6th time should have err
-        for i in 0..5 {
+        for _ in 0..5 {
             assert!(w.pay(crypto_generator::h256(), 20).is_ok());
         }
         assert!(w.pay(crypto_generator::h256(), 20).is_err());
@@ -294,7 +297,7 @@ pub mod tests {
 
     #[test]
     pub fn key_missing() {
-        let (ctx_update_sink, ctx_update_source) = mpsc::channel();
+        let (ctx_update_sink, _ctx_update_source) = mpsc::channel();
         let pool = Arc::new(Mutex::new(MemoryPool::new()));
         let mut w = Wallet::new(&pool, ctx_update_sink);
         assert!(w.get_pubkey_hash().is_err());
@@ -304,5 +307,27 @@ pub mod tests {
         assert!(w.get_pubkey_hash().is_ok());
         assert!(w.get_pubkey().is_ok());
         assert!(w.pay(crypto_generator::h256(), 1).is_err());
+    }
+
+    #[test]
+    pub fn rollback_at_fork() {
+        let (mut w, pool, _ctx_update_source, hash) = new_wallet_pool_receiver_keyhash();
+        receive(&mut w,&transaction_10_10(&hash));
+        assert_eq!(w.balance(), 100);
+        // spend 100
+        assert!(w.pay(crypto_generator::h256(), 100).is_ok());
+        assert_eq!(w.balance(), 0);
+        let m = pool.lock().unwrap();
+        let txs: Vec<Transaction> = m.get_transactions(1);
+        drop(m);
+        assert_eq!(txs.len(), 1);
+        receive(&mut w,&txs[0]);
+        assert_eq!(w.balance(), 0);
+        // rollback, after which we can spend 100 again!
+        rollback(&mut w,&txs[0]);
+        // after rollback, I can spend the 100 coins again!
+        assert_eq!(w.balance(), 100);
+        assert!(w.pay(crypto_generator::h256(), 100).is_ok());
+        assert_eq!(w.balance(), 0);
     }
 }
