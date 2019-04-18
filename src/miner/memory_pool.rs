@@ -97,7 +97,6 @@ impl MemoryPool {
             if let Some(entry_hash) = self.by_input.get(&prevout) {
                 let entry_hash = *entry_hash;
                 let entry = self.remove_and_get(&entry_hash).unwrap();
-                let num_out = entry.transaction.output.len();
                 for (index, output) in entry.transaction.output.iter().enumerate() {
                     queue.push_back(Input {
                         hash: entry_hash,

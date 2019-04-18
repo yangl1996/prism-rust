@@ -6,7 +6,6 @@ use crate::state::{UTXODatabase, CoinData, CoinId, UTXO};
 use crate::transaction::{Transaction, generator as tx_generator};
 use crate::wallet::Wallet;
 use std::sync::{Mutex, Arc};
-use rand::{Rng, RngCore};
 
 
 /// This function changes the ledger to incorporate txs from last 'tx_block_hashes'.
@@ -76,6 +75,7 @@ pub fn unconfirm_old_tx_block_hashes (
     let tx_block_transactions: Vec<Vec<Transaction>> = tx_block_hashes.iter().rev().map(|hash|get_tx_block_content_transactions(hash, block_db)).collect();
     unconfirm_old_tx_block_transactions(tx_block_transactions, state_db, wallets);
 }
+
 pub fn unconfirm_old_tx_block_transactions(
     tx_block_transactions: Vec<Vec<Transaction>>, // These blocks must be the tip of the ordered tx blocks.
     state_db: &Mutex<UTXODatabase>,

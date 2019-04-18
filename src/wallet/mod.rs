@@ -204,7 +204,7 @@ pub mod tests {
     }
     fn transaction_10_10(recipient: &H256) -> Transaction {
         let mut output: Vec<Output> = vec![];
-        for i in 0..10 {
+        for _ in 0..10 {
             output.push(Output {
                 value: 10,
                 recipient: recipient.clone(),
@@ -226,12 +226,12 @@ pub mod tests {
     }
     #[test]
     pub fn balance() {
-        let (mut w, pool, ctx_update_source, hash) = new_wallet_pool_receiver_keyhash();
+        let (mut w, _pool, _ctx_update_source, hash) = new_wallet_pool_receiver_keyhash();
         assert_eq!(w.balance(), 0);
     }
     #[test]
     pub fn add_transaction() {
-        let (mut w, pool, ctx_update_source, hash) = new_wallet_pool_receiver_keyhash();
+        let (mut w, _pool, _ctx_update_source, hash) = new_wallet_pool_receiver_keyhash();
         receive(&mut w,&transaction_10_10(&hash));
         assert_eq!(w.balance(), 100);
     }
@@ -241,7 +241,7 @@ pub mod tests {
         let (mut w, pool, ctx_update_source, hash) = new_wallet_pool_receiver_keyhash();
         receive(&mut w,&transaction_10_10(&hash));
         // now we have 10*10 coins, we try to spend them
-        for i in 0..5 {
+        for _ in 0..5 {
             assert!(w.pay(crypto_generator::h256(), 20).is_ok());
         }
         assert_eq!(w.balance(), 0);
@@ -252,7 +252,7 @@ pub mod tests {
         for tx in &txs {
 //            println!("{:?}", tx);
         }
-        for i in 0..5 {
+        for _ in 0..5 {
             ctx_update_source.recv().unwrap();
         }
     }
@@ -262,7 +262,7 @@ pub mod tests {
         let (mut w, pool, ctx_update_source, hash) = new_wallet_pool_receiver_keyhash();
         receive(&mut w,&transaction_10_10(&hash));
         // now we have 10*10 coins, we try to spend them
-        for i in 0..5 {
+        for _ in 0..5 {
             assert!(w.pay(crypto_generator::h256(), 19).is_ok());
         }
         assert_eq!(w.balance(), 0);
@@ -276,19 +276,19 @@ pub mod tests {
             receive(&mut w,&tx);
         }
         assert_eq!(w.balance(), 5); //10*10-5*19=5 remaining
-        for i in 0..5 {
+        for _ in 0..5 {
             ctx_update_source.recv().unwrap();
         }
     }
 
     #[test]
     pub fn send_coin_fail() {
-        let (mut w, pool, ctx_update_source, hash) = new_wallet_pool_receiver_keyhash();
+        let (mut w, _pool, _ctx_update_source, hash) = new_wallet_pool_receiver_keyhash();
         receive(&mut w,&transaction_10_10(&hash));
         // now we have 10*10 coins, we try to spend 101
         assert!(w.pay(crypto_generator::h256(), 101).is_err());
         // we try to spend 20 6 times, the 6th time should have err
-        for i in 0..5 {
+        for _ in 0..5 {
             assert!(w.pay(crypto_generator::h256(), 20).is_ok());
         }
         assert!(w.pay(crypto_generator::h256(), 20).is_err());
@@ -297,7 +297,7 @@ pub mod tests {
 
     #[test]
     pub fn key_missing() {
-        let (ctx_update_sink, ctx_update_source) = mpsc::channel();
+        let (ctx_update_sink, _ctx_update_source) = mpsc::channel();
         let pool = Arc::new(Mutex::new(MemoryPool::new()));
         let mut w = Wallet::new(&pool, ctx_update_sink);
         assert!(w.get_pubkey_hash().is_err());
@@ -311,7 +311,7 @@ pub mod tests {
 
     #[test]
     pub fn rollback_at_fork() {
-        let (mut w, pool, ctx_update_source, hash) = new_wallet_pool_receiver_keyhash();
+        let (mut w, pool, _ctx_update_source, hash) = new_wallet_pool_receiver_keyhash();
         receive(&mut w,&transaction_10_10(&hash));
         assert_eq!(w.balance(), 100);
         // spend 100
