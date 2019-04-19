@@ -63,10 +63,14 @@ pub fn sample_transaction_content() -> tx_Content {
     let input1 = Input {
         hash: hashed_data[0],
         index: 1,
+        value: 9,
+        recipient: hashed_data[2], //or other hash?
     };
     let input2 = Input {
         hash: hashed_data[1],
         index: 2,
+        value: 13,
+        recipient: hashed_data[3], //or other hash?
     };
     let input_vec: Vec<Input> = vec![input1, input2];
 

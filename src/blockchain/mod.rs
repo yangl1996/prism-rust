@@ -15,7 +15,9 @@ use std::cmp;
 use std::collections::VecDeque;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::iter::FromIterator;
+use std::sync::mpsc::Sender;
 use transaction::Pool as TxBlkPool;
+use transaction::UpdateMessage as LedgerUpdateMessage;
 use utils::PropOrderingHelper;
 use voter::Chain as VoterChain;
 use voter::Fork as VoterChainFork;
@@ -31,7 +33,7 @@ pub struct BlockChain {
     /// Metadata of the voter chains
     pub voter_chains: Vec<VoterChain>,
     /// Metadata of the transaction blocks
-    pub tx_blk_pool: TxBlkPool,
+    pub tx_blocks: TxBlkPool,
     /// Metadata of individual proposer blocks
     pub proposer_node_data: HashMap<H256, ProposerNodeData>,
     /// Metadata of individual voter blocks
@@ -41,12 +43,15 @@ pub struct BlockChain {
 // Functions to edit the blockchain
 impl BlockChain {
     /// Initializing blockchain graph with genesis blocks.
-    pub fn new(num_voting_chains: u16) -> Self {
+    pub fn new(
+        num_voting_chains: u16,
+        utxo_update: Sender<(LedgerUpdateMessage, Vec<H256>)>, //Sends updates to utxo state thread
+    ) -> Self {
         // Initializing an empty object
         let mut graph = GraphMap::<H256, Edge, Directed>::new();
         let mut proposer_tree = ProposerTree::default();
         let mut voter_chains: Vec<VoterChain> = vec![];
-        let tx_blk_pool: TxBlkPool = TxBlkPool::new();
+        let tx_blocks: TxBlkPool = TxBlkPool::new(utxo_update);
         let mut proposer_node_data = HashMap::<H256, ProposerNodeData>::new();
         let mut voter_node_data = HashMap::<H256, VoterNodeData>::new();
 
@@ -93,7 +98,7 @@ impl BlockChain {
             graph,
             proposer_tree,
             voter_chains,
-            tx_blk_pool,
+            tx_blocks,
             proposer_node_data,
             voter_node_data,
         };
@@ -131,8 +136,8 @@ impl BlockChain {
                 );
 
                 // mark this new tx block as not in ledger and as unreferred
-                self.tx_blk_pool.insert_not_in_ledger(block_hash);
-                self.tx_blk_pool.insert_unreferred(block_hash);
+                self.tx_blocks.insert_not_in_ledger(block_hash);
+                self.tx_blocks.insert_unreferred(block_hash);
             }
 
             Content::Proposer(content) => {
@@ -166,7 +171,7 @@ impl BlockChain {
                         Edge::ProposerToTransactionReference(position as u32),
                     );
                     // Since the tx proposer block is now referred, remove it from the unreferred tx pool
-                    self.tx_blk_pool.remove_unreferred(&block_hash);
+                    self.tx_blocks.remove_unreferred(tx_hash);
                 }
 
                 // 4. Add the proposer block to the list of unvoted blocks on all the voter chains.
@@ -367,7 +372,7 @@ impl BlockChain {
                                 self.proposer_tree.leader_nodes.remove(&level);
                             }
                             //5c. Rollback ledger from 'roll_back_level' level onwards.
-                            self.tx_blk_pool.rollback_ledger(roll_back_level as usize);
+                            self.tx_blocks.rollback_ledger(roll_back_level as usize);
                             self.proposer_tree.min_unconfirmed_level = roll_back_level as u32;
                         }
                     }
@@ -503,7 +508,7 @@ impl BlockChain {
 impl BlockChain {
     /// Returns the list of ordered tx blocks. This is the initial step of creating the full ledger.
     pub fn get_ordered_tx_blocks(&self) -> &Vec<H256> {
-        return &self.tx_blk_pool.ledger;
+        return &self.tx_blocks.ledger;
     }
 
     /// Checks if there are sufficient votes to confirm leader block at the level.
@@ -635,14 +640,16 @@ impl BlockChain {
             self.get_unconfirmed_notleader_referred_proposer_blocks(leader_block);
 
         //2. Add the transactions blocks referred by these proposer blocks to the ledger.
-        self.tx_blk_pool.mark_confirmation_boundary(level);
+        self.tx_blocks.mark_confirmation_boundary(level);
         for proposer_block in to_confirm_proposer_blocks.iter() {
             // Get all the tx blocks referred.
-            for tx_blocks in self.get_referred_tx_blocks_ordered(proposer_block) {
+            for tx_block in self.get_referred_tx_blocks_ordered(proposer_block) {
                 // Add the tx block to the ledger if not already in the ledger
-                if !self.tx_blk_pool.is_in_ledger(&tx_blocks) {
-                    self.tx_blk_pool.add_to_ledger(&tx_blocks);
+                let mut tx_blocks_to_add: Vec<H256> = vec![];
+                if !self.tx_blocks.is_in_ledger(&tx_block) {
+                    tx_blocks_to_add.push(tx_block);
                 }
+                self.tx_blocks.add_to_ledger(tx_blocks_to_add);
             }
             // Changing the status of these prop blocks to 'not leader but confirmed'.
             // Reason: This is done to prevent these prop blocks from getting confirmed again.
@@ -838,7 +845,7 @@ impl BlockChain {
 
     /// Proposer block content 2
     pub fn get_unreferred_tx_blocks(&self) -> Vec<H256> {
-        let unreferred_tx_blocks = self.tx_blk_pool.unreferred.clone();
+        let unreferred_tx_blocks = self.tx_blocks.unreferred.clone();
         return Vec::from_iter(unreferred_tx_blocks);
     }
 
@@ -868,6 +875,7 @@ mod tests {
     use crate::block::Block;
     use crate::crypto::hash::H256;
     const NUM_VOTER_CHAINS: u16 = 10;
+    use std::sync::mpsc;
 
     // At initialization the blockchain only consists of (m+1) genesis blocks.
     // The hash of these genesis nodes in the blockchain graph are fixed for now
@@ -875,7 +883,9 @@ mod tests {
     #[test]
     fn blockchain_initialization() {
         // Initialize a blockchain with 10  voter chains.
-        let blockchain = BlockChain::new(NUM_VOTER_CHAINS);
+        let (state_update_sink, state_update_source) = mpsc::channel();
+
+        let mut blockchain = BlockChain::new(NUM_VOTER_CHAINS, state_update_sink);
 
         // Checking proposer tree's genesis block hash
         let proposer_genesis_hash_shouldbe: [u8; 32] = [
@@ -910,7 +920,8 @@ mod tests {
     fn blockchain_growing() {
         let _rng = rand::thread_rng();
         // Initialize a blockchain with 10 voter chains.
-        let mut blockchain = BlockChain::new(NUM_VOTER_CHAINS);
+        let (state_update_sink, state_update_source) = mpsc::channel();
+        let mut blockchain = BlockChain::new(NUM_VOTER_CHAINS, state_update_sink);
 
         // Store the parent blocks to mine on voter trees.
         let mut voter_best_blocks: Vec<H256> = (0..NUM_VOTER_CHAINS)
@@ -1167,7 +1178,7 @@ mod tests {
         assert_eq!(58, blockchain.graph.node_count(), "Expecting 58 nodes");
         assert_eq!(116, blockchain.graph.edge_count(), "Expecting 186 edges");
         // Checking the number of unconfirmed tx blocks 2 of prop2a, 4 from prop3, and 2 from prop4.
-        assert_eq!(8, blockchain.tx_blk_pool.not_in_ledger.len());
+        assert_eq!(8, blockchain.tx_blocks.not_in_ledger.len());
 
         println!("Test 10:  1-6 voter chains vote on prop4 and 6-10 voter blocks vote on prop3 and prop4" );
         //Storing voter_parents used in step 12 test
@@ -1199,7 +1210,7 @@ mod tests {
         }
 
         // prop3 is confirmed. Unconfirmed tx blocks 2 from prop4.
-        assert_eq!(2, blockchain.tx_blk_pool.not_in_ledger.len());
+        assert_eq!(2, blockchain.tx_blocks.not_in_ledger.len());
 
         for i in 3..6 {
             assert_eq!(
@@ -1221,7 +1232,7 @@ mod tests {
             blockchain.insert_node(&voter_block);
         }
         // prop4 is also confirmed.
-        assert_eq!(0, blockchain.tx_blk_pool.not_in_ledger.len());
+        assert_eq!(0, blockchain.tx_blocks.not_in_ledger.len());
 
         for i in 6..10 {
             assert_eq!(
@@ -1427,7 +1438,7 @@ mod tests {
         );
 
         println!("Test 19:  The ledger tx blocks");
-        assert_eq!(16, blockchain.tx_blk_pool.ledger.len());
+        assert_eq!(16, blockchain.tx_blocks.ledger.len());
         let ordered_tx_blocks = blockchain.get_ordered_tx_blocks();
         for i in 0..16 {
             assert_eq!(ordered_tx_blocks[i], tx_block_vec[i].hash());
@@ -1449,7 +1460,7 @@ mod tests {
         ); // Referring 4 tx blocks + 1 prop_block
         blockchain.insert_node(&prop_block5);
 
-        assert_eq!(2, blockchain.tx_blk_pool.not_in_ledger.len());
+        assert_eq!(2, blockchain.tx_blocks.not_in_ledger.len());
 
         println!("Test 21: 51% attack - Changing level 1 leader ");
 
@@ -1535,7 +1546,8 @@ mod tests {
         pub const NUM_VOTER_CHAINS: u16 = 10;
         let _rng = rand::thread_rng();
         // Initialize a blockchain with 10 voter chains.
-        let mut blockchain = BlockChain::new(NUM_VOTER_CHAINS);
+        let (state_update_sink, state_update_source) = mpsc::channel();
+        let mut blockchain = BlockChain::new(NUM_VOTER_CHAINS, state_update_sink);
 
         // Store the parent blocks to mine on voter trees.
         let _voter_best_blocks: Vec<H256> = (0..NUM_VOTER_CHAINS)

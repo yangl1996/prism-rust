@@ -2,6 +2,7 @@ use prism::block::Block;
 use prism::blockchain::utils as bc_utils;
 use prism::blockchain::BlockChain;
 use prism::crypto::hash::Hashable;
+use std::sync::mpsc;
 use std::time::Instant;
 
 const REPEAT: usize = 1000;
@@ -9,7 +10,8 @@ const PROP_BLOCK_SIZE: u32 = 500;
 const NUM_VOTING_CHAIN: usize = 1000;
 
 fn main() {
-    let mut blockchain = BlockChain::new(NUM_VOTING_CHAIN as u16);
+    let (state_update_sink, state_update_source) = mpsc::channel();
+    let mut blockchain = BlockChain::new(NUM_VOTING_CHAIN as u16, state_update_sink);
     let mut all_tx_blocks: Vec<Vec<Block>> = vec![];
 
     let mut proposer_blocks: Vec<Block> = vec![];

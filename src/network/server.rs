@@ -13,16 +13,16 @@ pub fn new(
     addr: std::net::SocketAddr,
     msg_sink: mpsc::Sender<(message::Message, peer::Handle)>,
 ) -> std::io::Result<(Context, Handle)> {
-    let (connect_req_sender, connect_req_receiver) = channel::channel();
+    let (control_signal_sender, control_signal_receiver) = channel::channel();
     let ctx = Context {
         peers: slab::Slab::new(),
         addr: addr,
         poll: mio::Poll::new()?,
-        connect_req_chan: connect_req_receiver,
+        control_chan: control_signal_receiver,
         new_msg_chan: msg_sink,
     };
     let handle = Handle {
-        connect_req_chan: connect_req_sender,
+        control_chan: control_signal_sender,
     };
     return Ok((ctx, handle));
 }
@@ -31,7 +31,7 @@ pub struct Context {
     peers: slab::Slab<peer::Context>,
     addr: std::net::SocketAddr,
     poll: mio::Poll,
-    connect_req_chan: channel::Receiver<ConnectRequest>,
+    control_chan: channel::Receiver<ControlSignal>,
     new_msg_chan: mpsc::Sender<(message::Message, peer::Handle)>,
 }
 
@@ -99,7 +99,7 @@ impl Context {
         // bind server to passed addr and register to the poll
         let server = net::TcpListener::bind(&self.addr)?;
 
-        // token for server new connection event
+        // token for new incoming connection
         const INCOMING: mio::Token = mio::Token(std::usize::MAX - 1);
         self.poll.register(
             &server,
@@ -108,11 +108,11 @@ impl Context {
             mio::PollOpt::edge(),
         )?;
 
-        // token for outgoing connection request
-        const OUTGOING: mio::Token = mio::Token(std::usize::MAX - 2);
+        // token for new control signal from the handle
+        const CONTROL: mio::Token = mio::Token(std::usize::MAX - 2);
         self.poll.register(
-            &self.connect_req_chan,
-            OUTGOING,
+            &self.control_chan,
+            CONTROL,
             mio::Ready::readable(),
             mio::PollOpt::edge(),
         )?;
@@ -130,19 +130,30 @@ impl Context {
 
             for event in events.iter() {
                 match event.token() {
-                    OUTGOING => {
-                        // we have a request for new outgoing connection
+                    CONTROL => {
+                        // we have a new control signal
                         loop {
-                            // get the connect request from the channel
-                            match self.connect_req_chan.try_recv() {
+                            // get the new control singal from the channel
+                            match self.control_chan.try_recv() {
                                 Ok(req) => {
-                                    let handle = self.connect(&req.addr)?;
-                                    req.result_chan.send(Ok(handle)).unwrap();
+                                    match req {
+                                        ControlSignal::ConnectNewPeer(req) => {
+                                            let handle = self.connect(&req.addr)?;
+                                            req.result_chan.send(Ok(handle)).unwrap();
+                                        }
+                                        ControlSignal::BroadcastMessage(msg) => {
+                                            // TODO: slab iteration is slow. use a hashset to keep
+                                            // the id of live connections
+                                            for peer in self.peers.iter() {
+                                                peer.1.handle.write(msg.clone());
+                                            }
+                                        }
+                                    }
                                 }
                                 Err(e) => match e {
                                     mpsc::TryRecvError::Empty => break,
                                     mpsc::TryRecvError::Disconnected => {
-                                        self.poll.deregister(&self.connect_req_chan)?;
+                                        self.poll.deregister(&self.control_chan)?;
                                         break;
                                     }
                                 },
@@ -303,8 +314,9 @@ impl Context {
     }
 }
 
+#[derive(Clone)]
 pub struct Handle {
-    connect_req_chan: channel::Sender<ConnectRequest>,
+    control_chan: channel::Sender<ControlSignal>,
 }
 
 impl Handle {
@@ -314,9 +326,22 @@ impl Handle {
             addr: addr,
             result_chan: sender,
         };
-        self.connect_req_chan.send(request).unwrap();
+        self.control_chan
+            .send(ControlSignal::ConnectNewPeer(request))
+            .unwrap();
         return receiver.recv().unwrap();
     }
+
+    pub fn broadcast(&self, msg: message::Message) {
+        self.control_chan
+            .send(ControlSignal::BroadcastMessage(msg))
+            .unwrap();
+    }
+}
+
+enum ControlSignal {
+    ConnectNewPeer(ConnectRequest),
+    BroadcastMessage(message::Message),
 }
 
 struct ConnectRequest {
