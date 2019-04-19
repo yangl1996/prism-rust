@@ -21,16 +21,21 @@ use blockchain::BlockChain;
 use blockdb::BlockDatabase;
 use miner::memory_pool::MemoryPool;
 use std::sync::{mpsc, Arc, Mutex};
+use crate::state::UTXODatabase;
+use crate::crypto::hash::H256;
+use crate::blockchain::transaction::UpdateMessage as LedgerUpdateMessage;
 
 pub fn start(
     addr: std::net::SocketAddr,
     blockdb: &Arc<BlockDatabase>,
     blockchain: &Arc<Mutex<BlockChain>>,
+    utxodb: &Arc<Mutex<UTXODatabase>>,
     mempool: &Arc<Mutex<MemoryPool>>,
+    state_update_source: mpsc::Receiver<(LedgerUpdateMessage, Vec<H256>)>,
 ) -> std::io::Result<(
     network::server::Handle,
     miner::miner::Handle,
-    wallet::Wallet,
+    Arc<Vec<Mutex<wallet::Wallet>>>,
 )> {
     // create channels between server and worker, worker and miner, miner and worker
     let (msg_sink, msg_source) = mpsc::channel();
@@ -60,7 +65,18 @@ pub fn start(
     );
     ctx.start();
 
-    let wallet = wallet::Wallet::new(mempool, ctx_update_sink_wallet);
+    let mut wallet = wallet::Wallet::new(mempool, ctx_update_sink_wallet);
+    wallet.generate_keypair();
+    let wallets = Arc::new(vec![Mutex::new(wallet)]);
 
-    return Ok((server, miner, wallet));
+    //state_updater part
+    let ctx = state::updater::new(
+        blockdb,
+        utxodb,
+        &wallets,
+        state_update_source,
+    );
+    ctx.start();
+
+    return Ok((server, miner, wallets));
 }

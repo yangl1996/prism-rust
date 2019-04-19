@@ -1,6 +1,6 @@
 use prism::crypto::hash::H256;
 use prism::transaction::{Output, Transaction};
-use prism::visualization;
+use prism::{visualization, state};
 use prism::{self, blockchain, blockdb, miner::memory_pool};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
@@ -21,7 +21,7 @@ fn main() {
     let mut peer_addrs = vec![];
     let mut servers = vec![];
     let mut miners = vec![];
-    let mut channels = vec![];
+//    let mut channels = vec![];
 
     for i in 0..10 {
         let blockdb_path_string = format!("/tmp/prism_multinode_mining_{}.rocksdb", i);
@@ -29,10 +29,15 @@ fn main() {
         let blockdb = blockdb::BlockDatabase::new(blockdb_path).unwrap();
         let blockdb = Arc::new(blockdb);
 
+        let utxodb_path_string = format!("/tmp/prism_multinode_mining_utxo_{}.rocksdb",i);
+        let utxodb_path = std::path::Path::new(&utxodb_path_string);
+        let utxodb = state::UTXODatabase::new(utxodb_path).unwrap();
+        let utxodb = Arc::new(Mutex::new(utxodb));
+
         let (state_update_sink, state_update_source) = mpsc::channel();
         let blockchain = blockchain::BlockChain::new(NUM_VOTER_CHAINS, state_update_sink);
         let blockchain = Arc::new(Mutex::new(blockchain));
-        channels.push(state_update_source);
+        //channels.push(state_update_source);
 
         let mempool = memory_pool::MemoryPool::new();
         let mempool = Arc::new(Mutex::new(mempool));
@@ -42,7 +47,7 @@ fn main() {
         let peer_addr = std::net::SocketAddr::new(peer_ip, peer_port);
 
         let (server, miner, _wallet) =
-            prism::start(peer_addr, &blockdb, &blockchain, &mempool).unwrap();
+            prism::start(peer_addr, &blockdb, &blockchain, &utxodb, &mempool, state_update_source).unwrap();
         println!("Node {} live at localhost:{}", i, peer_port);
 
         let vis_ip = "127.0.0.1".parse::<std::net::IpAddr>().unwrap();
