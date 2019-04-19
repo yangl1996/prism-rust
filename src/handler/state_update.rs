@@ -157,7 +157,7 @@ pub fn to_utxo(tx: &Transaction) -> (Vec<CoinId>, Vec<UTXO>) {
         .map(|(index, output)| UTXO {
             coin_id: CoinId {
                 hash,
-                index: index as u32,
+                index: index,
             },
             coin_data: CoinData {
                 value: output.value,
@@ -172,10 +172,10 @@ pub fn to_utxo(tx: &Transaction) -> (Vec<CoinId>, Vec<UTXO>) {
 pub fn to_rollback_utxo(tx: &Transaction) -> (Vec<CoinId>, Vec<UTXO>) {
     let hash: H256 = tx.hash();
     // i) Get the input locations of the output coins and delete the output coins.
-    let to_delete: Vec<CoinId> = (0..(tx.output.len() as u32))
+    let to_delete: Vec<CoinId> = (0..(tx.output.len()))
         .map(|index| CoinId {
             hash,
-            index: index as u32,
+            index: index,
         })
         .collect();
     // ii) Reconstruct the input utxos

@@ -130,7 +130,7 @@ impl Wallet {
             .iter()
             .map(|c| Input {
                 hash: c.coin_id.hash,
-                index: c.coin_id.index,
+                index: c.coin_id.index as u32,
                 value: c.coin_data.value,
                 recipient: c.coin_data.recipient,
             })
