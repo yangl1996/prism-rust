@@ -24,14 +24,14 @@ pub struct Dump {
 
 pub fn dump_ledger(
     blockchain: &BlockChain,
-    blockdb: &BlockDatabase,
+    block_db: &BlockDatabase,
     state_db: &Mutex<UTXODatabase>,
 ) -> String {
     let ordered_tx_block_hashes = blockchain.get_ordered_tx_blocks();
     let mut transactions_blocks: Vec<DisplayTransactionBlock> = vec![];
     // loop over all tx blocks in the ledger
     for tx_hash in ordered_tx_block_hashes.iter() {
-        let tx_block = blockdb.get(tx_hash).unwrap().unwrap(); //TODO: Handle unwrap errors
+        let tx_block = block_db.get(tx_hash).unwrap().unwrap(); //TODO: Handle unwrap errors
         let mut display_transactions: Vec<(Transaction, Vec<usize>)> = vec![];
         let transactions = match tx_block.content {
             Content::Transaction(content) => content.transactions,
@@ -44,12 +44,11 @@ pub fn dump_ledger(
             //Collect the indices of unspent outputs of the tx.
             let mut unspent_indices: Vec<usize> = vec![];
             // loop over the outputs to check if they are unspent
-            for (idx, _output) in tx.output.iter().enumerate() {
+            for (idx, _) in tx.output.iter().enumerate() {
                 let coin_id = CoinId {
                     hash,
-                    index: idx as u32,
+                    index: idx,
                 };
-                // @Gerui: use data from _output to get recipient and value if required.
                 if utxo_state.check(&coin_id).unwrap() {
                     //TODO: Handle unwrap error
                     unspent_indices.push(idx);
