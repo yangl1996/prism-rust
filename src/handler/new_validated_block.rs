@@ -14,19 +14,6 @@ pub fn new_validated_block(
     chain: &Mutex<BlockChain>,
     server: &ServerHandle,
 ) {
-//    println!("New Block handled: {:?}.", block.hash());
-//    match &block.content {
-//        Content::Transaction(_) => {
-//            println!("\tTx Block");
-//        }
-//        Content::Proposer(_) => {
-//            println!("\tProp Block");
-//        }
-//        Content::Voter(_) => {
-//            println!("\tVoter Block");
-//        }
-//        _ => (),
-//    };
     // insert the new block into the blockdb
     db.insert(&block).unwrap();
 
