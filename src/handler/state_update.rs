@@ -11,19 +11,19 @@ use std::sync::{Arc, Mutex};
 pub fn confirm_new_tx_block_hashes(
     tx_block_hashes: Vec<H256>,
     block_db: &BlockDatabase,
-    state_db: &Mutex<UTXODatabase>, //do we need a mutex here?
+    utxodb: &Mutex<UTXODatabase>, //do we need a mutex here?
     wallets: &Vec<Arc<Mutex<Wallet>>>,
 ) {
     let tx_block_transactions: Vec<Vec<Transaction>> = tx_block_hashes
         .iter()
         .map(|hash| get_tx_block_content_transactions(hash, block_db))
         .collect();
-    confirm_new_tx_block_transactions(tx_block_transactions, state_db, wallets);
+    confirm_new_tx_block_transactions(tx_block_transactions, utxodb, wallets);
 }
 
 pub fn confirm_new_tx_block_transactions(
     tx_block_transactions: Vec<Vec<Transaction>>,
-    state_db: &Mutex<UTXODatabase>, //do we need a mutex here?
+    utxodb: &Mutex<UTXODatabase>, //do we need a mutex here?
     wallets: &Vec<Arc<Mutex<Wallet>>>,
 ) {
     //1. Loop over the tx block's transactionss
@@ -32,7 +32,7 @@ pub fn confirm_new_tx_block_transactions(
         let to_delete_insert: Vec<(Vec<CoinId>, Vec<UTXO>)> =
             transactions.iter().map(|tx| to_utxo(tx)).collect();
         //2. Loop over the transactions
-        let mut utxo_state = state_db.lock().unwrap();
+        let mut utxo_state = utxodb.lock().unwrap();
         {
             for (to_delete, to_insert) in to_delete_insert.iter() {
                 //3a. Sanitize: Check if all the inputs are unspent (in the state)
@@ -71,7 +71,7 @@ pub fn confirm_new_tx_block_transactions(
 pub fn unconfirm_old_tx_block_hashes(
     tx_block_hashes: Vec<H256>, // These blocks must be the tip of the ordered tx blocks.
     block_db: &BlockDatabase,
-    state_db: &Mutex<UTXODatabase>,
+    utxodb: &Mutex<UTXODatabase>,
     wallets: &Vec<Arc<Mutex<Wallet>>>,
 ) {
     // note: we have a rev() here
@@ -80,12 +80,12 @@ pub fn unconfirm_old_tx_block_hashes(
         .rev()
         .map(|hash| get_tx_block_content_transactions(hash, block_db))
         .collect();
-    unconfirm_old_tx_block_transactions(tx_block_transactions, state_db, wallets);
+    unconfirm_old_tx_block_transactions(tx_block_transactions, utxodb, wallets);
 }
 
 pub fn unconfirm_old_tx_block_transactions(
     tx_block_transactions: Vec<Vec<Transaction>>, // These blocks must be the tip of the ordered tx blocks.
-    state_db: &Mutex<UTXODatabase>,
+    utxodb: &Mutex<UTXODatabase>,
     wallets: &Vec<Arc<Mutex<Wallet>>>,
 ) {
     //1. Loop over the tx block's transactions (already in reverse order)
@@ -94,7 +94,7 @@ pub fn unconfirm_old_tx_block_transactions(
         let to_delete_insert: Vec<(Vec<CoinId>, Vec<UTXO>)> =
             transactions.iter().map(|tx| to_rollback_utxo(tx)).collect();
         //2. Loop over the transactions
-        let mut utxo_state = state_db.lock().unwrap();
+        let mut utxo_state = utxodb.lock().unwrap();
         {
             for (to_delete, to_insert) in to_delete_insert.iter().rev() {
                 //note: we have rev in the above iteration

@@ -31,7 +31,7 @@ pub type CoinData = Output;
 
 // Bitcoin UTXO is much more complicated because they have extra seg-wit and locktime.
 pub struct UTXO {
-    pub coin_id: CoinId, // Hash of the transaction. This along with the index is the coin index is the key.
+    pub coin_id: CoinId,
     pub coin_data: CoinData,
 }
 
