@@ -192,10 +192,11 @@ impl Context {
             if hash < self.difficulty {
                 // Create a block
                 let mined_block: Block = self.assemble_block(header);
+                //if the mined block is an empty tx block, we ignore it, and go straight to next mining loop
                 match &mined_block.content {
                     Content::Transaction(content) => {
                         if content.transactions.is_empty() {
-                            continue;//if the tx block is empty, we ignore it, and go straight to next mining step
+                            continue;
                         }
                     },
                     _ => ()

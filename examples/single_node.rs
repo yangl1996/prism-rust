@@ -64,7 +64,7 @@ fn main() {
     //wait for some time, wait for initial tx get into ledger so our wallet can have money
     std::thread::sleep(std::time::Duration::from_millis(1000));
 
-    // here we simulate a user who transfers 1 coin to someone every .5s.
+    // here we simulate a user who transfers some money to someone every .5s.
     let mut rng = rand::thread_rng();
     for i in 0..10 {
         println!(
