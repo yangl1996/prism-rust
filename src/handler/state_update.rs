@@ -133,15 +133,16 @@ pub fn unconfirm_old_tx_block_transactions(
 }
 
 fn get_tx_block_content_transactions(hash: &H256, block_db: &BlockDatabase) -> Vec<Transaction> {
-    let tx_block: Block = block_db
-        .get(hash)
-        .unwrap_or(panic!("TX block not found in DB. 1"))
-        .unwrap_or(panic!("TX block not found in DB. 2"));
-    let transactions = match tx_block.content {
-        Content::Transaction(content) => content.transactions,
-        _ => panic!("Wrong block stored"),
-    };
-    transactions
+    match block_db.get(hash) {
+        Ok(Some(block)) => {
+            match block.content {
+                Content::Transaction(content) => return content.transactions,
+                _ => panic!("Wrong block stored"),
+            }
+        }
+        Ok(None) => panic!("TX block not found in DB. (not db err)"),
+        Err(_) => panic!("TX block not found in DB. db err"),
+    }
 }
 
 /// convert a transaction to two vectors of utxos, first is to be deleted from state, second is to be inserted
