@@ -171,7 +171,7 @@ impl BlockChain {
                         Edge::ProposerToTransactionReference(position as u32),
                     );
                     // Since the tx proposer block is now referred, remove it from the unreferred tx pool
-                    self.tx_blocks.remove_unreferred(&block_hash);
+                    self.tx_blocks.remove_unreferred(tx_hash);
                 }
 
                 // 4. Add the proposer block to the list of unvoted blocks on all the voter chains.
