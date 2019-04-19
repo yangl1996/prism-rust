@@ -14,6 +14,19 @@ pub fn new_validated_block(
     chain: &Mutex<BlockChain>,
     server: &ServerHandle,
 ) {
+//    println!("New Block handled: {:?}.", block.hash());
+//    match &block.content {
+//        Content::Transaction(_) => {
+//            println!("\tTx Block");
+//        }
+//        Content::Proposer(_) => {
+//            println!("\tProp Block");
+//        }
+//        Content::Voter(_) => {
+//            println!("\tVoter Block");
+//        }
+//        _ => (),
+//    };
     // insert the new block into the blockdb
     db.insert(&block).unwrap();
 
@@ -22,11 +35,11 @@ pub fn new_validated_block(
         Content::Transaction(content) => {
             let mut mempool = mempool.lock().unwrap();
             for tx in content.transactions.iter() {
+                mempool.remove_by_hash(&tx.hash());
                 for input in tx.input.iter() {
                     mempool.remove_by_input(input);
                 }
             }
-            drop(mempool);
         }
         _ => (),
     };

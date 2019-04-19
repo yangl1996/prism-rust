@@ -11,7 +11,7 @@ pub struct MemoryPool {
     counter: u64,
     /// By-hash storage
     by_hash: HashMap<H256, Entry>,
-    /// Transactions by previous output
+    /// Transactions by previous output, formatted as Input
     by_input: HashMap<Input, H256>,
     /// Storage for order by storage index, it is equivalent to FIFO
     by_storage_index: BTreeMap<u64, H256>, // consider BTreeSet, why BTreeSet?
@@ -78,8 +78,8 @@ impl MemoryPool {
         return false;
     }
 
-    fn remove_and_get(&mut self, h: &H256) -> Option<Entry> {
-        let entry = self.by_hash.remove(h)?;
+    fn remove_and_get(&mut self, hash: &H256) -> Option<Entry> {
+        let entry = self.by_hash.remove(hash)?;
         for input in &entry.transaction.input {
             self.by_input.remove(&input.clone());
         }
@@ -87,7 +87,12 @@ impl MemoryPool {
         return Some(entry);
     }
 
-    // only need this remove function, don't need remove_by_hash
+    /// Remove a tx by its hash
+    pub fn remove_by_hash(&mut self, hash: &H256) {
+        self.remove_and_get(hash);
+    }
+
+    /// Remove potential tx that use this input.
     pub fn remove_by_input(&mut self, prevout: &Input) {
         //use a deque to recursively remove, in case there are multi level dependency between txs.
         let mut queue: VecDeque<Input> = VecDeque::new();
