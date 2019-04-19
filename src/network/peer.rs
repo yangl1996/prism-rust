@@ -45,7 +45,7 @@ impl ReadContext {
                             self.state = DecodeState::Payload;
                             self.read_length = 0;
                             self.msg_length = message_length as usize;
-                            if self.buffer.capacity() < self.msg_length {
+                            if self.buffer.len() < self.msg_length {
                                 self.buffer.resize(self.msg_length, 0);
                             }
                             return Ok(ReadResult::Continue);

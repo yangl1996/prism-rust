@@ -2,13 +2,13 @@
 extern crate clap;
 
 use log::{debug, error, info};
-use std::net;
-use std::process;
-
 use prism::blockchain;
 use prism::blockdb;
 use prism::config;
 use prism::miner::memory_pool;
+use std::net;
+use std::process;
+use std::sync::mpsc;
 
 const DEFAULT_IP: &str = "127.0.0.1";
 const DEFAULT_P2P_PORT: u16 = 6000;
@@ -40,7 +40,8 @@ fn main() {
     let blockdb = std::sync::Arc::new(blockdb);
 
     // init blockchain
-    let blockchain = blockchain::BlockChain::new(config::NUM_VOTER_CHAINS);
+    let (state_update_sink, state_update_source) = mpsc::channel();
+    let blockchain = blockchain::BlockChain::new(config::NUM_VOTER_CHAINS, state_update_sink);
     let blockchain = std::sync::Arc::new(std::sync::Mutex::new(blockchain));
 
     // init mempool
