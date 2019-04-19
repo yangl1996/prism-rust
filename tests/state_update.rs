@@ -12,7 +12,7 @@ fn ledger_new_txs(
     txs: Vec<Transaction>,
     mempool: &Mutex<MemoryPool>,
     utxodb: &Mutex<UTXODatabase>,
-    wallets: &Vec<Arc<Mutex<Wallet>>>,
+    wallets: &Vec<Mutex<Wallet>>,
 ) {
     let mut m = mempool.lock().unwrap();
     for tx in txs.iter() {
@@ -28,7 +28,7 @@ fn ledger_new_txs(
 fn mine_whole_mempool(
     mempool: &Mutex<MemoryPool>,
     utxodb: &Mutex<UTXODatabase>,
-    wallets: &Vec<Arc<Mutex<Wallet>>>,
+    wallets: &Vec<Mutex<Wallet>>,
 ) {
     let m = mempool.lock().unwrap();
     let len = m.len();
@@ -37,7 +37,7 @@ fn mine_whole_mempool(
     ledger_new_txs(txs, mempool, utxodb, wallets);
 }
 
-fn status_check(utxodb: &Mutex<UTXODatabase>, wallets: &Vec<Arc<Mutex<Wallet>>>) {
+fn status_check(utxodb: &Mutex<UTXODatabase>, wallets: &Vec<Mutex<Wallet>>) {
     println!(
         "Balance of wallets: {:?}.",
         wallets
@@ -78,15 +78,14 @@ fn wallets_pay_eachother() {
 
     let mut wallets = vec![];
     let mut addrs = vec![];
-    //let's generate
     for _ in 0..NUM {
         let mut w = Wallet::new(&mempool, ctx_update_sink.clone());
         w.generate_keypair(); //add_keypair(our_addr);
         let addr: H256 = w.get_pubkey_hash().unwrap();
-        wallets.push(Arc::new(Mutex::new(w)));
+        wallets.push(Mutex::new(w));
         addrs.push(addr);
     }
-
+    let wallets = Arc::new(wallets);
     // fund-raising, give every wallet 100*100
     let funding = Transaction {
         input: vec![],

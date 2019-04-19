@@ -117,7 +117,7 @@ impl Handle {
 impl Context {
     pub fn start(mut self) {
         println!("Miner started");
-        thread::spawn(move || {
+        thread::Builder::new().name("miner".to_string()).spawn(move || {
             self.miner_loop();
         });
     }
@@ -192,6 +192,14 @@ impl Context {
             if hash < self.difficulty {
                 // Create a block
                 let mined_block: Block = self.assemble_block(header);
+                match &mined_block.content {
+                    Content::Transaction(content) => {
+                        if content.transactions.is_empty() {
+                            continue;//if the tx block is empty, we ignore it, and go straight to next mining step
+                        }
+                    },
+                    _ => ()
+                }
                 // Release block to the network
                 new_validated_block(
                     mined_block,

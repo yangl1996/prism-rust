@@ -10,13 +10,13 @@ use std::sync::{Arc, Mutex};
 /// This function changes the ledger to incorporate txs from last 'tx_block_hashes'.
 pub fn confirm_new_tx_block_hashes(
     tx_block_hashes: Vec<H256>,
-    block_db: &BlockDatabase,
+    blockdb: &BlockDatabase,
     utxodb: &Mutex<UTXODatabase>, //do we need a mutex here?
-    wallets: &Vec<Arc<Mutex<Wallet>>>,
+    wallets: &Vec<Mutex<Wallet>>,
 ) {
     let tx_block_transactions: Vec<Vec<Transaction>> = tx_block_hashes
         .iter()
-        .map(|hash| get_tx_block_content_transactions(hash, block_db))
+        .map(|hash| get_tx_block_content_transactions(hash, blockdb))
         .collect();
     confirm_new_tx_block_transactions(tx_block_transactions, utxodb, wallets);
 }
@@ -24,7 +24,7 @@ pub fn confirm_new_tx_block_hashes(
 pub fn confirm_new_tx_block_transactions(
     tx_block_transactions: Vec<Vec<Transaction>>,
     utxodb: &Mutex<UTXODatabase>, //do we need a mutex here?
-    wallets: &Vec<Arc<Mutex<Wallet>>>,
+    wallets: &Vec<Mutex<Wallet>>,
 ) {
     //1. Loop over the tx block's transactionss
     for transactions in tx_block_transactions {
@@ -70,15 +70,15 @@ pub fn confirm_new_tx_block_transactions(
 /// This function removes the ledger changes from last 'tx_block_hashes'.
 pub fn unconfirm_old_tx_block_hashes(
     tx_block_hashes: Vec<H256>, // These blocks must be the tip of the ordered tx blocks.
-    block_db: &BlockDatabase,
+    blockdb: &BlockDatabase,
     utxodb: &Mutex<UTXODatabase>,
-    wallets: &Vec<Arc<Mutex<Wallet>>>,
+    wallets: &Vec<Mutex<Wallet>>,
 ) {
     // note: we have a rev() here
     let tx_block_transactions: Vec<Vec<Transaction>> = tx_block_hashes
         .iter()
         .rev()
-        .map(|hash| get_tx_block_content_transactions(hash, block_db))
+        .map(|hash| get_tx_block_content_transactions(hash, blockdb))
         .collect();
     unconfirm_old_tx_block_transactions(tx_block_transactions, utxodb, wallets);
 }
@@ -86,7 +86,7 @@ pub fn unconfirm_old_tx_block_hashes(
 pub fn unconfirm_old_tx_block_transactions(
     tx_block_transactions: Vec<Vec<Transaction>>, // These blocks must be the tip of the ordered tx blocks.
     utxodb: &Mutex<UTXODatabase>,
-    wallets: &Vec<Arc<Mutex<Wallet>>>,
+    wallets: &Vec<Mutex<Wallet>>,
 ) {
     //1. Loop over the tx block's transactions (already in reverse order)
     for transactions in tx_block_transactions {
@@ -132,8 +132,8 @@ pub fn unconfirm_old_tx_block_transactions(
     }
 }
 
-fn get_tx_block_content_transactions(hash: &H256, block_db: &BlockDatabase) -> Vec<Transaction> {
-    match block_db.get(hash) {
+fn get_tx_block_content_transactions(hash: &H256, blockdb: &BlockDatabase) -> Vec<Transaction> {
+    match blockdb.get(hash) {
         Ok(Some(block)) => {
             match block.content {
                 Content::Transaction(content) => return content.transactions,

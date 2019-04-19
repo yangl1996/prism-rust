@@ -1,4 +1,5 @@
 pub mod generator;
+pub mod updater;
 
 use crate::block::transaction::Content as TxContent;
 use crate::crypto::hash::{Hashable, H256};
