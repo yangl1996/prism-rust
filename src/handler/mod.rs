@@ -10,3 +10,4 @@ pub use state_update::to_rollback_utxo;
 pub use state_update::to_utxo;
 pub use state_update::unconfirm_old_tx_block_hashes;
 pub use state_update::unconfirm_old_tx_block_transactions; //only pub for tests
+pub use state_update::get_tx_block_content_transactions;

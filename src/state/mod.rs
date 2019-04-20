@@ -113,10 +113,7 @@ pub mod tests {
     fn init_with_tx_input(state_db: &mut UTXODatabase, tx: &Transaction) {
         let hash: H256 = tx.hash(); // compute hash here, and below inside Input we don't have to compute again (we just copy)
         for input in tx.input.iter() {
-            let coin_id = CoinId {
-                hash: input.hash,
-                index: input.index,
-            };
+            let coin_id: CoinId = input.into();
             let coin_data = CoinData {
                 value: 1,
                 recipient: crypto_generator::h256(),

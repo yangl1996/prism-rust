@@ -35,7 +35,7 @@ fn main() {
     let vis_ip = "127.0.0.1".parse::<std::net::IpAddr>().unwrap();
     let vis_port = 8888;
     let vis_addr = std::net::SocketAddr::new(vis_ip, vis_port);
-    visualization::Server::start(vis_addr, Arc::clone(&blockchain));
+    visualization::Server::start(vis_addr, Arc::clone(&blockchain), Arc::clone(&blockdb), Arc::clone(&utxodb));
 
     // get the addr of the wallet
     let our_addr: H256 = {
@@ -45,7 +45,7 @@ fn main() {
     // fund-raising, a 100 coin to the wallet
     let funding = Transaction {
         input: vec![],
-        output: (0..1).map(|_| Output {
+        output: (0..10).map(|_| Output {
                     value: 100,
                     recipient: our_addr.clone(),
                 }).collect(),

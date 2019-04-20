@@ -132,7 +132,7 @@ pub fn unconfirm_old_tx_block_transactions(
     }
 }
 
-fn get_tx_block_content_transactions(hash: &H256, blockdb: &BlockDatabase) -> Vec<Transaction> {
+pub fn get_tx_block_content_transactions(hash: &H256, blockdb: &BlockDatabase) -> Vec<Transaction> {
     match blockdb.get(hash) {
         Ok(Some(block)) => {
             match block.content {
