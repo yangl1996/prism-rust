@@ -16,14 +16,14 @@ pub struct CoinId {
     /// The hash of the transaction being referred to.
     pub hash: H256,
     /// The index of the output in question in that transaction.
-    pub index: u32,
+    pub index: usize,
 }
 
 impl From<&Input> for CoinId {
     fn from(other: &Input) -> Self {
         Self {
             hash: other.hash,
-            index: other.index,
+            index: other.index as usize,
         }
     }
 }
@@ -134,10 +134,10 @@ pub mod tests {
         // assume this tx spends all utxo in state
         assert_eq!(state_db.num_utxo() as usize, tx.output.len());
         let hash = tx.hash();
-        for index in 0..tx.output.len() as u32 {
+        for index in 0..tx.output.len() {
             assert_eq!(state_db.check(&CoinId { hash, index }), Ok(true));
             let coin_data = state_db.get(&CoinId { hash, index }).unwrap().unwrap();
-            assert_eq!(coin_data, tx.output[index as usize])
+            assert_eq!(coin_data, tx.output[index])
         }
     }
     fn try_rollback_transaction(state_db: &mut UTXODatabase, tx: &Transaction) {
@@ -166,7 +166,7 @@ pub mod tests {
         let input1: Vec<Input> = (0..tx0.output.len())
             .map(|i| Input {
                 hash: tx0.hash(),
-                index: i as u32,
+                index: i,
                 value: tx0.output[i].value,
                 recipient: tx0.output[i].recipient,
             })
