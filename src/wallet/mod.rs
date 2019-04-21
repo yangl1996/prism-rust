@@ -31,6 +31,7 @@ pub struct Wallet {
 pub enum WalletError {
     InsufficientMoney,
     MissingKey,
+    ContextUpdateChannelError,//this may due to the miner is down
 }
 
 impl Wallet {
@@ -169,9 +170,10 @@ impl Wallet {
         let tx = self.create_transaction(recipient, value)?;
         let hash = tx.hash();
         handler::new_transaction(tx, &self.mempool);
-        self.context_update_chan
-            .send(ContextUpdateSignal::NewContent)
-            .unwrap();
+        match self.context_update_chan.send(ContextUpdateSignal::NewContent) {
+            Err(e) => return Err(WalletError::ContextUpdateChannelError),
+            _ => ()
+        };
         //return tx hash, later we can confirm it in ledger
         Ok(hash)
     }

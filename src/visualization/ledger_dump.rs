@@ -8,15 +8,15 @@ use crate::transaction::Transaction;
 use crate::handler;
 use std::sync::Mutex;
 
-/// Struct to display transactions/input/output human-readable
+/// Struct to display input human-readable, (hash, index)
 #[derive(Serialize)]
 pub struct DisplayInput(String, u32);
 
-/// Struct to display transactions/input/output human-readable
+/// Struct to display output human-readable, (value, recipient)
 #[derive(Serialize)]
 pub struct DisplayOutput(u64, String);
 
-/// Struct to display transactions/input/output human-readable
+/// Struct to display transactions human-readable
 #[derive(Serialize)]
 pub struct DisplayTransaction {
     tx_hash: String,
@@ -79,9 +79,10 @@ pub fn dump_ledger(
                     hash,
                     index: idx,
                 };
-                if utxo_state.check(&coin_id).unwrap() {
-                    //TODO: Handle unwrap error
-                    unspent_indices.push(idx);
+                if let Ok(unspent) = utxo_state.check(&coin_id) {
+                    if unspent {
+                        unspent_indices.push(idx);
+                    }
                 }
             }
             transactions.push((&tx).into());
