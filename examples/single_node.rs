@@ -5,6 +5,7 @@ use prism::{self, blockchain, blockdb, miner::memory_pool, state, handler};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use rand::Rng;
+use prism::wallet::WalletError;
 
 const NUM_VOTER_CHAINS: u16 = 3;
 
@@ -37,18 +38,22 @@ fn main() {
     let vis_addr = std::net::SocketAddr::new(vis_ip, vis_port);
     visualization::Server::start(vis_addr, Arc::clone(&blockchain), Arc::clone(&blockdb), Arc::clone(&utxodb));
 
-    // get the addr of the wallet
-    let our_addr: H256 = {
-        wallets[0].lock().unwrap().get_pubkey_hash().unwrap()
-    };
+    // get the addr of the wallets
+    let addrs: Vec<H256> = wallets.iter().map(|w| w.lock().unwrap().get_pubkey_hash().unwrap()).collect();
 
     // fund-raising, a 100 coin to the wallet
     let funding = Transaction {
         input: vec![],
-        output: (0..10).map(|_| Output {
+        output: addrs
+            .iter()
+            .map(|addr| {
+                (0..10).map(move |_| Output {
                     value: 100,
-                    recipient: our_addr.clone(),
-                }).collect(),
+                    recipient: addr.clone(),
+                })
+            })
+            .flatten()
+            .collect(),
         key_sig: vec![],
     };
     handler::new_transaction(funding, &mempool);
@@ -64,9 +69,10 @@ fn main() {
     //wait for some time, wait for initial tx get into ledger so our wallet can have money
     std::thread::sleep(std::time::Duration::from_millis(1000));
 
+    let mut balance_test = vec![1000u64; wallets.len()];
     // here we simulate a user who transfers some money to someone every .5s.
     let mut rng = rand::thread_rng();
-    for i in 0..10 {
+    for i in 0..15 {
         println!(
             "At {} round, Balance of wallets: {:?}.",i,
             wallets
@@ -75,14 +81,32 @@ fn main() {
                 .collect::<Vec<u64>>()
         );
         let v: u64 = rng.gen_range(1, 10);
-        wallets.iter().for_each(|w|{
-            match w.lock().unwrap().pay((&[0u8;32]).into(), v) {
+        let payer = rng.gen_range(0,wallets.len());
+        match wallets[payer].lock().unwrap().pay((&[0u8;32]).into(), v) {
+            Ok(hash) => {
+                println!("The wallet {} pay to trash {} coin. payment successfully added to mempool, tx hash: {}", payer, v, hash);
+                balance_test[payer] -= v;
+            },
+            Err(WalletError::ContextUpdateChannelError) => {
+                panic!("cannot send miner context update, perhaps the miner is down?");
+            },
+            Err(_) => println!("payment error, perhaps last tx hasn't got into ledger"),
+        };
+        let receiver = rng.gen_range(0, wallets.len());
+        if payer != receiver {
+            let v: u64 = rng.gen_range(1, 10);
+            match wallets[payer].lock().unwrap().pay(addrs[receiver], v) {
                 Ok(hash) => {
-                    println!("The wallet pay someone {} coin. payment successfully added to mempool, tx hash: {}", v, hash);
+                    println!("The wallet {} pay {}, {} coin. payment successfully added to mempool, tx hash: {}", payer, receiver, v, hash);
+                    balance_test[payer] -= v;
+                    balance_test[receiver] += v;
+                },
+                Err(WalletError::ContextUpdateChannelError) => {
+                    panic!("cannot send miner context update, perhaps the miner is down?");
                 },
                 Err(_) => println!("payment error, perhaps last tx hasn't got into ledger"),
-            }
-        });
+            };
+        }
         std::thread::sleep(std::time::Duration::from_millis(500));
     }
 
@@ -93,7 +117,24 @@ fn main() {
             .map(|w| w.lock().unwrap().balance())
             .collect::<Vec<u64>>()
     );
-
+    assert_eq!(wallets
+                   .iter()
+                   .map(|w| w.lock().unwrap().balance())
+                   .collect::<Vec<u64>>(),
+               balance_test,"balances are not as expected");
+    for w in wallets.iter() {
+        let mut balance_in_state = 0u64;
+        let w = w.lock().unwrap();
+        for coin_id in w.get_coin_id().iter() {
+            let coin_data = utxodb.lock().unwrap().get(coin_id).unwrap().unwrap();
+            balance_in_state += coin_data.value;
+        }
+        assert_eq!(
+            balance_in_state,
+            w.balance(),
+            "state and wallet not compatible"
+        );
+    }
     loop {
         std::thread::park();
     }

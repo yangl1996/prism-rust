@@ -21,3 +21,6 @@ pub const PROPOSER_MINING_RATE: u32 = 20;
 pub const TRANSACTION_MINING_RATE: u32 = 100 - PROPOSER_MINING_RATE - VOTER_MINING_RATE;
 
 pub const DEFAULT_DIFFICULTY: [u8; 32] = [255; 32];
+
+// Number of wallets
+pub const NUM_WALLETS: usize = 3;

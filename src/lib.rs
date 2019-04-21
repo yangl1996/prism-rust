@@ -24,6 +24,7 @@ use std::sync::{mpsc, Arc, Mutex};
 use crate::state::UTXODatabase;
 use crate::crypto::hash::H256;
 use crate::blockchain::transaction::UpdateMessage as LedgerUpdateMessage;
+use config::NUM_WALLETS;
 
 pub fn start(
     addr: std::net::SocketAddr,
@@ -65,9 +66,13 @@ pub fn start(
     );
     ctx.start();
 
-    let mut wallet = wallet::Wallet::new(mempool, ctx_update_sink_wallet);
-    wallet.generate_keypair();
-    let wallets = Arc::new(vec![Mutex::new(wallet)]);
+    let mut wallets = vec![];
+    for _ in 0..NUM_WALLETS {
+        let mut w = wallet::Wallet::new(&mempool, ctx_update_sink_wallet.clone());
+        w.generate_keypair();
+        wallets.push(Mutex::new(w));
+    }
+    let wallets = Arc::new(wallets);
 
     //state_updater part
     let ctx = state::updater::new(
