@@ -114,7 +114,7 @@ pub mod tests {
         for input in tx.input.iter() {
             let coin_id = CoinId {
                 hash: input.hash,
-                index: input.index,
+                index: input.index as usize,
             };
             let coin_data = CoinData {
                 value: 1,
@@ -165,7 +165,7 @@ pub mod tests {
         let input1: Vec<Input> = (0..tx0.output.len())
             .map(|i| Input {
                 hash: tx0.hash(),
-                index: i,
+                index: i as u32,
                 value: tx0.output[i].value,
                 recipient: tx0.output[i].recipient,
             })

@@ -6,7 +6,7 @@ use ring::signature::{self, Ed25519KeyPair};
 use untrusted;
 
 /// An Ed25519 signature.
-#[derive(Serialize, Deserialize, Hash, Clone, Default, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Hash, Clone, Default, PartialEq, Eq, Copy)]
 pub struct Signature([u128; 4]); // big endian u512
 
 impl std::convert::From<&[u8; 64]> for Signature {
@@ -51,7 +51,7 @@ impl std::fmt::Debug for Signature {
 }
 
 /// An Ed25519 public key.
-#[derive(Serialize, Deserialize, Hash, Clone, Default, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Hash, Clone, Default, PartialEq, Eq, Copy)]
 pub struct PubKey([u128; 2]); // big endian u256. TODO: Use Crypto
 
 impl std::convert::From<&[u8; 32]> for PubKey {

@@ -12,8 +12,8 @@ use std::sync::Mutex;
 #[derive(Serialize)]
 pub struct DisplayTransactionBlock {
     /// List of transactions and list output indices which are unspent
-    pub transactions: Vec<(Transaction, Vec<usize>)> //TODO: Add tx validity
-    // To add more fields if required
+    pub transactions: Vec<(Transaction, Vec<usize>)>, //TODO: Add tx validity
+                                                      // To add more fields if required
 }
 
 #[derive(Serialize)]
@@ -45,10 +45,7 @@ pub fn dump_ledger(
             let mut unspent_indices: Vec<usize> = vec![];
             // loop over the outputs to check if they are unspent
             for (idx, _) in tx.output.iter().enumerate() {
-                let coin_id = CoinId {
-                    hash,
-                    index: idx,
-                };
+                let coin_id = CoinId { hash, index: idx };
                 if utxo_state.check(&coin_id).unwrap() {
                     //TODO: Handle unwrap error
                     unspent_indices.push(idx);
