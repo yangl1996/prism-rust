@@ -1,5 +1,5 @@
 /*
-Validation for blocks and transactions.
+Validation for transactions.
 */
 
 use crate::crypto::hash::Hashable;
