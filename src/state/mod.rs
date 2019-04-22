@@ -23,7 +23,7 @@ impl From<&Input> for CoinId {
     fn from(other: &Input) -> Self {
         Self {
             hash: other.hash,
-            index: other.index as usize,
+            index: other.index,
         }
     }
 }
@@ -107,7 +107,7 @@ pub mod tests {
     use super::{generator, CoinData, CoinId, UTXODatabase, UTXO};
     use crate::crypto::generator as crypto_generator;
     use crate::crypto::hash::{Hashable, H256};
-    use crate::handler::{to_rollback_utxo, to_utxo};
+    use crate::handler::{to_rollback_coinid_and_potential_utxo, to_coinid_and_potential_utxo};
     use crate::transaction::{generator as tx_generator, Input, Transaction};
 
     fn init_with_tx_input(state_db: &mut UTXODatabase, tx: &Transaction) {
@@ -126,7 +126,7 @@ pub mod tests {
     }
 
     fn try_receive_transaction(state_db: &mut UTXODatabase, tx: &Transaction) {
-        let (to_delete, to_insert) = to_utxo(tx);
+        let (to_delete, to_insert) = to_coinid_and_potential_utxo(tx);
         assert!(state_db.update(&to_delete, &to_insert).is_ok());
         // assume this tx spends all utxo in state
         assert_eq!(state_db.num_utxo() as usize, tx.output.len());
@@ -138,7 +138,7 @@ pub mod tests {
         }
     }
     fn try_rollback_transaction(state_db: &mut UTXODatabase, tx: &Transaction) {
-        let (to_delete, to_insert) = to_rollback_utxo(tx);
+        let (to_delete, to_insert) = to_rollback_coinid_and_potential_utxo(tx);
         assert!(state_db.update(&to_delete, &to_insert).is_ok());
     }
     #[test]

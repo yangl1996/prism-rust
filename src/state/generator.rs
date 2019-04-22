@@ -1,6 +1,5 @@
 use super::UTXODatabase;
 use rand::{Rng, RngCore};
-// tx_to_utxos moved to handler?
 
 pub fn random() -> UTXODatabase {
     //1. init database

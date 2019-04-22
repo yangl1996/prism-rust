@@ -105,7 +105,7 @@ impl MemoryPool {
                 for (index, output) in entry.transaction.output.iter().enumerate() {
                     queue.push_back(Input {
                         hash: entry_hash,
-                        index: index as u32,
+                        index: index,
                         value: output.value,
                         recipient: output.recipient,
                     });

@@ -30,7 +30,7 @@ pub fn confirm_new_tx_block_transactions(
     for transactions in tx_block_transactions {
         // pre-compute the utxos to be deleted and inserted
         let to_delete_insert: Vec<(Vec<CoinId>, Vec<UTXO>)> =
-            transactions.iter().map(|tx| to_utxo(tx)).collect();
+            transactions.iter().map(|tx| to_coinid_and_potential_utxo(tx)).collect();
         //2. Loop over the transactions
         let mut utxo_state = utxodb.lock().unwrap();
         {
@@ -92,7 +92,7 @@ pub fn unconfirm_old_tx_block_transactions(
     for transactions in tx_block_transactions {
         // pre-compute the utxos to be deleted and inserted
         let to_delete_insert: Vec<(Vec<CoinId>, Vec<UTXO>)> =
-            transactions.iter().map(|tx| to_rollback_utxo(tx)).collect();
+            transactions.iter().map(|tx| to_rollback_coinid_and_potential_utxo(tx)).collect();
         //2. Loop over the transactions
         let mut utxo_state = utxodb.lock().unwrap();
         {
@@ -145,8 +145,8 @@ pub fn get_tx_block_content_transactions(hash: &H256, blockdb: &BlockDatabase) -
     }
 }
 
-/// convert a transaction to two vectors of utxos, first is to be deleted from state, second is to be inserted
-pub fn to_utxo(tx: &Transaction) -> (Vec<CoinId>, Vec<UTXO>) {
+/// convert a transaction to two vectors of coinid/utxos, first is to be deleted from state, second is to be inserted
+pub fn to_coinid_and_potential_utxo(tx: &Transaction) -> (Vec<CoinId>, Vec<UTXO>) {
     let hash: H256 = tx.hash(); // compute hash here, and below inside Input we don't have to compute again (we just copy)
                                 // i) delete all the input coins
     let to_delete: Vec<CoinId> = tx.input.iter().map(|input| input.into()).collect();
@@ -169,8 +169,8 @@ pub fn to_utxo(tx: &Transaction) -> (Vec<CoinId>, Vec<UTXO>) {
     (to_delete, to_insert)
 }
 
-/// Reverse version of to_utxo. When rollback, convert a transaction to two vectors of utxos, first is to be deleted from state, second is to be inserted
-pub fn to_rollback_utxo(tx: &Transaction) -> (Vec<CoinId>, Vec<UTXO>) {
+/// Reverse version of to_utxo. When rollback, convert a transaction to two vectors of coinid/utxos, first is to be deleted from state, second is to be inserted
+pub fn to_rollback_coinid_and_potential_utxo(tx: &Transaction) -> (Vec<CoinId>, Vec<UTXO>) {
     let hash: H256 = tx.hash();
     // i) Get the input locations of the output coins and delete the output coins.
     let to_delete: Vec<CoinId> = (0..(tx.output.len()))
