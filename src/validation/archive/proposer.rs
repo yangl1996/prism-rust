@@ -7,12 +7,23 @@ use crate::blockchain::BlockChain;
 use crate::config::*;
 use crate::crypto::hash::{Hashable, H256};
 
+
+pub trait Validator<'a> {
+    fn new(blockchain: &'a BlockChain) -> Self;
+    fn is_valid(&self, block: &'a Block) -> bool;
+    fn is_duplicate(&self, block: &'a Block) -> bool;
+    fn is_empty(&self, block: &'a Block) -> bool;
+    fn is_pow_valid(&self, block: &'a Block) -> bool;
+    fn is_coinbase_valid(&self, block: &'a Block) -> bool;
+}
+
+
 pub struct ProposerBlockValidator<'a> {
     // Database of known blocks
     pub blockchain: &'a BlockChain,
 }
 
-impl<'a> super::Validator<'a> for ProposerBlockValidator<'a> {
+impl<'a> Validator<'a> for ProposerBlockValidator<'a> {
     fn new(blockchain: &'a BlockChain) -> Self {
         ProposerBlockValidator {
             blockchain: blockchain,

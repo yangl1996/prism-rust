@@ -11,9 +11,8 @@ use petgraph::Directed;
 use proposer::NodeData as ProposerNodeData;
 use proposer::Status as ProposerStatus;
 use proposer::Tree as ProposerTree;
-use std::cmp;
 use std::collections::VecDeque;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap};
 use std::iter::FromIterator;
 use std::sync::mpsc::Sender;
 use transaction::Pool as TxBlkPool;
@@ -22,7 +21,6 @@ use utils::PropOrderingHelper;
 use voter::Chain as VoterChain;
 use voter::Fork as VoterChainFork;
 use voter::NodeData as VoterNodeData;
-use voter::NodeStatus as VoterNodeStatus;
 use voter::NodeUpdateStatus as VoterNodeUpdateStatus;
 
 pub struct BlockChain {
@@ -857,13 +855,20 @@ impl BlockChain {
     //The content for transaction blocks is maintained in the tx-mempool, not here.
 }
 
+/// Functions for block validation
+impl BlockChain {
+    pub fn check_node(&self, hash: H256) -> bool {
+        return self.graph.contains_node(hash);
+    }
+}
+
 /// Helper functions: Get proposer and node data
 impl BlockChain {
-    fn prop_node_data(&self, hash: &H256) -> &ProposerNodeData {
+    pub fn prop_node_data(&self, hash: &H256) -> &ProposerNodeData {
         return &self.proposer_node_data[hash];
     }
 
-    fn voter_node_data(&self, hash: &H256) -> &VoterNodeData {
+    pub fn voter_node_data(&self, hash: &H256) -> &VoterNodeData {
         return &self.voter_node_data[hash];
     }
 }
