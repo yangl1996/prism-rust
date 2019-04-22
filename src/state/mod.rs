@@ -57,7 +57,7 @@ impl UTXODatabase {
         return self.handle.put(&key, &value);
     }
 
-    pub fn delete(&mut self, coin_id: &CoinId) -> Result<()> {
+    pub fn delete(&self, coin_id: &CoinId) -> Result<()> {
         let key = serialize(coin_id).unwrap();
         let mut count = self.count.lock().unwrap();
         *count -= 1;
@@ -74,7 +74,7 @@ impl UTXODatabase {
     }
 
     //TODO: Check the key without getting the value (Use Bloom filters maybe?)
-    pub fn check(&mut self, coin_id: &CoinId) -> Result<bool> {
+    pub fn check(&self, coin_id: &CoinId) -> Result<bool> {
         let key = serialize(coin_id).unwrap();
         let serialized = self.handle.get(&key)?;
         match serialized {
@@ -90,7 +90,7 @@ impl UTXODatabase {
 
     /// Update the state.
     /// Can serve as receive(transaction) or rollback, based on arguments to_delete and to_insert.
-    pub fn update(&mut self, to_delete: &Vec<CoinId>, to_insert: &Vec<UTXO>) -> Result<()> {
+    pub fn update(&self, to_delete: &Vec<CoinId>, to_insert: &Vec<UTXO>) -> Result<()> {
         for coin_id in to_delete {
             self.delete(coin_id)?;
         }
