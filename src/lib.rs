@@ -19,12 +19,14 @@ pub mod wallet;
 
 use blockchain::BlockChain;
 use blockdb::BlockDatabase;
+use state::UTXODatabase;
 use miner::memory_pool::MemoryPool;
 use std::sync::{mpsc, Arc, Mutex};
 
 pub fn start(
     addr: std::net::SocketAddr,
     blockdb: &Arc<BlockDatabase>,
+    utxodb: &Arc<UTXODatabase>,
     blockchain: &Arc<Mutex<BlockChain>>,
     mempool: &Arc<Mutex<MemoryPool>>,
 ) -> std::io::Result<(
@@ -45,6 +47,7 @@ pub fn start(
         msg_source,
         blockchain,
         blockdb,
+        utxodb,
         mempool,
         ctx_update_sink,
         server.clone(),

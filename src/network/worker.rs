@@ -2,6 +2,7 @@ use super::message::{self, Message};
 use super::peer;
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
+use crate::state::UTXODatabase;
 use crate::handler::new_validated_block;
 use crate::miner::memory_pool::MemoryPool;
 use crate::miner::miner::ContextUpdateSignal;
@@ -16,6 +17,7 @@ pub struct Context {
     num_worker: usize,
     chain: Arc<Mutex<BlockChain>>,
     blockdb: Arc<BlockDatabase>,
+    utxodb: Arc<UTXODatabase>,
     mempool: Arc<Mutex<MemoryPool>>,
     context_update_chan: mpsc::Sender<ContextUpdateSignal>,
     server: ServerHandle,
@@ -26,6 +28,7 @@ pub fn new(
     msg_src: mpsc::Receiver<(message::Message, peer::Handle)>,
     blockchain: &Arc<Mutex<BlockChain>>,
     blockdb: &Arc<BlockDatabase>,
+    utxodb: &Arc<UTXODatabase>,
     mempool: &Arc<Mutex<MemoryPool>>,
     ctx_update_sink: mpsc::Sender<ContextUpdateSignal>,
     server: ServerHandle,
@@ -35,6 +38,7 @@ pub fn new(
         num_worker: num_worker,
         chain: Arc::clone(blockchain),
         blockdb: Arc::clone(blockdb),
+        utxodb: Arc::clone(utxodb),
         mempool: Arc::clone(mempool),
         context_update_chan: ctx_update_sink,
         server: server,

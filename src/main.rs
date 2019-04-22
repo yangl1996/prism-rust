@@ -4,6 +4,7 @@ extern crate clap;
 use log::{debug, error, info};
 use prism::blockchain;
 use prism::blockdb;
+use prism::state::UTXODatabase;
 use prism::config;
 use prism::miner::memory_pool;
 use std::net;
@@ -13,6 +14,7 @@ use std::sync::mpsc;
 const DEFAULT_IP: &str = "127.0.0.1";
 const DEFAULT_P2P_PORT: u16 = 6000;
 const DEFAULT_BLOCKDB: &str = "/tmp/prismblocks.rocksdb";
+const DEFAULT_UTXODB: &str = "/tmp/prismutxo.rocksdb";
 
 fn main() {
     // parse command line arguments
@@ -24,6 +26,7 @@ fn main() {
      (@arg peer_port: --port [PORT] "Sets the port to listen to peers")
      (@arg known_peer: -c --connect ... [PEER] "Sets the peers to connect to")
      (@arg block_db: --blockdb ... [PATH] "Sets the path of the block database")
+     (@arg utxo_db: --utxodb ... [PATH] "Sets the path of the UTXO database")
     )
     .get_matches();
 
@@ -38,6 +41,14 @@ fn main() {
     };
     let blockdb = blockdb::BlockDatabase::new(blockdb_path).unwrap();
     let blockdb = std::sync::Arc::new(blockdb);
+
+    // init utxo database
+    let utxodb_path = match matches.value_of("utxo_db") {
+        Some(path) => std::path::Path::new(path),
+        None => std::path::Path::new(&DEFAULT_UTXODB),
+    };
+    let utxodb = UTXODatabase::new(utxodb_path).unwrap();
+    let utxodb = std::sync::Arc::new(utxodb);
 
     // init blockchain
     let (state_update_sink, state_update_source) = mpsc::channel();
@@ -68,7 +79,7 @@ fn main() {
     // init server and miner
     debug!("Starting P2P server at {}", peer_socket_addr);
     let (server, miner, _wallet) =
-        prism::start(peer_socket_addr, &blockdb, &blockchain, &mempool).unwrap();
+        prism::start(peer_socket_addr, &blockdb, &utxodb, &blockchain, &mempool).unwrap();
 
     // connect to known peers
     if let Some(known_peers) = matches.values_of("known_peer") {
