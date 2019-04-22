@@ -112,6 +112,7 @@ impl Context {
                                                             &self.blockdb, &self.utxodb);
                         match validation_result {
                             BlockResult::MissingParent(_) | BlockResult::MissingReferences(_) => {
+                                debug!("Missing parent/references");
                                 self.buffer.lock().unwrap().push(block);
                             }
                             BlockResult::Pass => {
@@ -125,6 +126,7 @@ impl Context {
                                 );
                             }
                             _ => {
+                                debug!("Invalid block");
                                 // pass invalid block
                             }
                         }
