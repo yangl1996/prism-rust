@@ -11,6 +11,14 @@ use crate::crypto::hash::{Hashable, H256};
 use crate::transaction::Transaction;
 use std::sync::{Arc, Mutex};
 
+/// The error type for this module.
+pub enum Error {
+    MissingInDB,
+    MissingInBlockchain,
+}
+
+pub type Result<T> = std::result::Result<T, Error>;
+
 /// The common trait for transaction rules
 pub trait TransactionRule {
     fn is_satisfied(&self, transaction: &Transaction) -> bool;
