@@ -3,6 +3,7 @@ use super::data_availability::*;
 use super::*;
 use crate::block::Block;
 use crate::blockchain::BlockChain;
+use crate::blockchain::utils::get_voter_genesis_hash;
 use crate::blockdb::BlockDatabase;
 use crate::crypto::hash::{Hashable, H256};
 use std::sync::{Arc, Mutex};
@@ -87,19 +88,23 @@ fn latest_level_voted_on_chain(
     blockchain: &Mutex<BlockChain>,
     block_db: &BlockDatabase,
 ) -> usize {
-    let mut content = voter_block.get_voter_content();
-    // Find the latest ancestor on the chain which has voted
-        // If the ancestor has any votes, then return the latest vote
-    if content.proposer_block_votes.len() > 0 {
+    let content = voter_block.get_voter_content();
+    let genesis_hash = get_voter_genesis_hash(content.chain_number);
+    // Base case
+    if voter_block.hash() == genesis_hash {
+        return 0;
+    } else if content.proposer_block_votes.len() > 0 {
+        // If the block content has any votes, then return the latest voted level
         let latest_prop_voted = content.proposer_block_votes.last().unwrap();
         let blockchain_l = blockchain.lock().unwrap();
         return blockchain_l.prop_node_data(latest_prop_voted).level as usize;
     } else {
+        // Else call the function on its voter parent block
         let voter_parent = get_available_block(content.voter_parent_hash, blockchain, block_db);
         match voter_parent {
             BlockDataAvailability::Block(voter_block_inner) => {
                 return latest_level_voted_on_chain(&voter_block_inner, blockchain, block_db);
-            },
+            }
             _ => panic!("This shouldn't have happened"),
         }
     }
