@@ -17,14 +17,15 @@ impl BlockRule for VoterBlockRule {
     fn result(&self, block: &Block) -> BlockRuleResult {
         let content = block.get_voter_content();
         let chain_number = content.chain_number;
-        //1. Check if the chain number is valid
+        //Check 1. If the chain number is valid
         if chain_number < 0 || chain_number > config::NUM_VOTER_CHAINS {
+            // Invalid chain number
             return BlockRuleResult::False;
         }
         let mut blocks_not_in_db: Vec<H256> = vec![];
         let mut blocks_not_in_blockchain: Vec<H256> = vec![];
 
-        //2. Check if the parent voter block is available
+        //Check 2. If the parent voter block is available
         let mut latest_level_voted_by_ancestor: usize = 0;
         let voter_parent =
             get_available_block(content.voter_parent_hash, &self.blockchain, &self.block_db);
@@ -46,31 +47,33 @@ impl BlockRule for VoterBlockRule {
             }
         }
 
-        //3. Check if all voted proposer blocks are available and have continuous by level from latest_level_voted_by_ancestor onwards
+        //Check 3. If all voted proposer blocks are available and are on continuous level from
+        //   latest_level_voted_by_ancestor onwards
         for (index, proposer_vote) in content.proposer_block_votes.iter().enumerate() {
             let proposer_block =
                 get_available_block(*proposer_vote, &self.blockchain, &self.block_db);
             match proposer_block {
                 BlockDataAvailability::NotInDB => {
                     // The voter parent should be requested from the network
-                    blocks_not_in_db.push(content.voter_parent_hash);
+                    blocks_not_in_db.push(*proposer_vote);
                 }
                 BlockDataAvailability::NotInBlockchain => {
                     // The voter parent should be added to the blockchain first
-                    blocks_not_in_blockchain.push(content.voter_parent_hash);
+                    blocks_not_in_blockchain.push(*proposer_vote);
                 }
                 BlockDataAvailability::Block(block) => {
                     let blockchain_l = self.blockchain.lock().unwrap();
                     let level = blockchain_l.prop_node_data(&block.hash()).level as usize;
                     drop(blockchain_l);
                     if level != index + 1 + latest_level_voted_by_ancestor {
-                        //The votes  are not on contigous levels
+                        //The votes are not on continuous levels and hence the block is invalid.
                         return BlockRuleResult::False;
                     }
                 }
             }
         }
-        // The block is valid if all the data is available
+
+        //Final result: If all the data is available then the block is valid
         if blocks_not_in_db.len() == 0 && blocks_not_in_blockchain.len() == 0 {
             return BlockRuleResult::True;
         } else {
@@ -89,9 +92,9 @@ fn latest_level_voted_on_chain(
     block_db: &BlockDatabase,
 ) -> usize {
     let content = voter_block.get_voter_content();
-    let genesis_hash = get_voter_genesis_hash(content.chain_number);
+    let voter_genesis_hash = get_voter_genesis_hash(content.chain_number);
     // Base case
-    if voter_block.hash() == genesis_hash {
+    if voter_block.hash() == voter_genesis_hash {
         return 0;
     } else if content.proposer_block_votes.len() > 0 {
         // If the block content has any votes, then return the latest voted level
@@ -105,7 +108,7 @@ fn latest_level_voted_on_chain(
             BlockDataAvailability::Block(voter_block_inner) => {
                 return latest_level_voted_on_chain(&voter_block_inner, blockchain, block_db);
             }
-            _ => panic!("This shouldn't have happened"),
+            _ => panic!("This shouldn't have happened! The parent block should be there in both db and bc."),
         }
     }
 }

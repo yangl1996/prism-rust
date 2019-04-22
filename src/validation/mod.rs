@@ -2,6 +2,7 @@ pub mod data_availability;
 pub mod header;
 pub mod transaction;
 pub mod transaction_block;
+pub mod proposer_block;
 pub mod voter_block;
 use crate::block::Block;
 use crate::blockchain::BlockChain;
