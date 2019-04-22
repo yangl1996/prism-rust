@@ -89,18 +89,18 @@ fn latest_level_voted_on_chain(
 ) -> usize {
     let mut content = voter_block.get_voter_content();
     // Find the latest ancestor on the chain which has voted
-    loop {
         // If the ancestor has any votes, then return the latest vote
-        if content.proposer_block_votes.len() > 0 {
-            let latest_prop_voted = content.proposer_block_votes.last().unwrap();
-            let blockchain_l = blockchain.lock().unwrap();
-            return blockchain_l.prop_node_data(latest_prop_voted).level as usize;
-        } else {
-            let voter_parent = get_available_block(content.voter_parent_hash, blockchain, block_db);
-            match voter_parent {
-                BlockDataAvailability::Block(voter_block) => unimplemented!(), //content = voter_block.get_voter_content(),
-                _ => panic!("This shouldn't have happened"),
-            }
+    if content.proposer_block_votes.len() > 0 {
+        let latest_prop_voted = content.proposer_block_votes.last().unwrap();
+        let blockchain_l = blockchain.lock().unwrap();
+        return blockchain_l.prop_node_data(latest_prop_voted).level as usize;
+    } else {
+        let voter_parent = get_available_block(content.voter_parent_hash, blockchain, block_db);
+        match voter_parent {
+            BlockDataAvailability::Block(voter_block_inner) => {
+                return latest_level_voted_on_chain(&voter_block_inner, blockchain, block_db);
+            },
+            _ => panic!("This shouldn't have happened"),
         }
     }
 }
