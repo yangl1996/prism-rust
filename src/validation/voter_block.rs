@@ -1,5 +1,5 @@
 use super::super::config;
-use super::data_availability;
+use super::data_availability::*;
 use super::*;
 use crate::block::Block;
 use crate::blockchain::BlockChain;
@@ -7,7 +7,7 @@ use crate::blockdb::BlockDatabase;
 use crate::crypto::hash::{Hashable, H256};
 use std::sync::{Arc, Mutex};
 
-///  Checks data availability and prism logic
+/// Checks data availability and prism logic
 pub struct VoterBlockRule {
     blockchain: Arc<Mutex<BlockChain>>,
     block_db: Arc<BlockDatabase>,
@@ -25,11 +25,8 @@ impl BlockRule for VoterBlockRule {
 
         //2. Check if the parent voter block is available
         let mut latest_level_voted_by_ancestor: usize = 0;
-        let voter_parent = data_availability::get_available_block(
-            content.voter_parent_hash,
-            &self.blockchain,
-            &self.block_db,
-        );
+        let voter_parent =
+            get_available_block(content.voter_parent_hash, &self.blockchain, &self.block_db);
         match voter_parent {
             BlockDataAvailability::NotInDB => {
                 // The voter parent should be requested from the network
@@ -50,11 +47,8 @@ impl BlockRule for VoterBlockRule {
 
         //3. Check if all voted proposer blocks are available and have continuous by level from latest_level_voted_by_ancestor onwards
         for (index, proposer_vote) in content.proposer_block_votes.iter().enumerate() {
-            let proposer_block = data_availability::get_available_block(
-                *proposer_vote,
-                &self.blockchain,
-                &self.block_db,
-            );
+            let proposer_block =
+                get_available_block(*proposer_vote, &self.blockchain, &self.block_db);
             match proposer_block {
                 BlockDataAvailability::NotInDB => {
                     // The voter parent should be requested from the network
@@ -102,11 +96,7 @@ fn latest_level_voted_on_chain(
             let blockchain_l = blockchain.lock().unwrap();
             return blockchain_l.prop_node_data(latest_prop_voted).level as usize;
         } else {
-            let voter_parent = data_availability::get_available_block(
-                content.voter_parent_hash,
-                blockchain,
-                block_db,
-            );
+            let voter_parent = get_available_block(content.voter_parent_hash, blockchain, block_db);
             match voter_parent {
                 BlockDataAvailability::Block(voter_block) => unimplemented!(), //content = voter_block.get_voter_content(),
                 _ => panic!("This shouldn't have happened"),

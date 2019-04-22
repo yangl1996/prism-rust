@@ -1,14 +1,13 @@
-use super::data_availability;
 use super::*;
 use crate::block::Block;
 use bigint::uint::U256;
 use std::sync::{Arc, Mutex};
 
 /// Check of a bunch of rules for every transaction in the block
-pub struct AllRules {
+pub struct TransactionBlockRule {
     Rules: TransactionRuleCollection,
 }
-impl BlockRule for AllRules {
+impl BlockRule for TransactionBlockRule {
     fn result(&self, block: &Block) -> BlockRuleResult {
         let content = block.get_transaction_content();
         if content
@@ -21,7 +20,3 @@ impl BlockRule for AllRules {
         return BlockRuleResult::False;
     }
 }
-
-// TODO: Add  tests
-#[cfg(test)]
-pub mod tests {}

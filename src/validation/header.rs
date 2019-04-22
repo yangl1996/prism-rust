@@ -1,5 +1,5 @@
 use super::super::config;
-use super::data_availability;
+use super::data_availability::*;
 use super::*;
 use crate::block::{Block, Content};
 use crate::blockchain::BlockChain;
@@ -42,7 +42,7 @@ impl BlockRule for PoWDifficultyRule {
     }
 }
 
-/// Checks if the parent proposer block is available, checks sortition proof and time
+/// Checks if the parent proposer block is available, checks correcteness of sortition.
 pub struct SortitionRule {
     blockchain: Arc<Mutex<BlockChain>>,
     block_db: Arc<BlockDatabase>,
@@ -59,11 +59,17 @@ impl BlockRule for SortitionRule {
         match proposer_parent {
             BlockDataAvailability::NotInDB => {
                 // The voter parent should be requested from the network
-                return BlockRuleResult::MissingReferencesInDBandBC(vec![proposer_parent_hash], vec![]);
+                return BlockRuleResult::MissingReferencesInDBandBC(
+                    vec![proposer_parent_hash],
+                    vec![],
+                );
             }
             BlockDataAvailability::NotInBlockchain => {
                 // The voter parent should be added to the blockchain first
-                return BlockRuleResult::MissingReferencesInDBandBC(vec![], vec![proposer_parent_hash]);
+                return BlockRuleResult::MissingReferencesInDBandBC(
+                    vec![],
+                    vec![proposer_parent_hash],
+                );
             }
             BlockDataAvailability::Block(proposer_parent_block) => {
                 // do nothing
@@ -78,7 +84,7 @@ impl BlockRule for SortitionRule {
     }
 }
 
-/// Checks if the sortition logic
+/// Checks the sortition logic
 pub fn check_sortition(block: &Block) -> bool {
     //1. First check if hash(content) =? content_root
     match &block.content {
