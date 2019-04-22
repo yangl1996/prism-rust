@@ -44,7 +44,7 @@ pub struct Input {
     /// The hash of the transaction being referred to.
     pub hash: H256,
     /// The index of the output in question in that transaction.
-    pub index: u32,
+    pub index: usize,
     /// The amount of this input, this is redundant since it is also stored in the transaction referred by hash
     pub value: u64,
     /// The hash of the public key of the recipient of this input, this is redundant since it is also stored in the transaction referred by hash
@@ -69,7 +69,7 @@ pub struct KeyAndSignature {
 
 impl std::fmt::Display for Input {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "[{0:<10} | {1:<10}]", self.hash, self.index)?;
+        write!(f, "[{0:<10} | {1:<10} | {2:<10} | {3:<10}]", self.hash, self.index, self.value, self.recipient)?;
         Ok(())
     }
 }

@@ -10,7 +10,7 @@ use std::sync::Mutex;
 
 /// Struct to display input human-readable, (hash, index)
 #[derive(Serialize)]
-pub struct DisplayInput(String, u32);
+pub struct DisplayInput(String, usize);
 
 /// Struct to display output human-readable, (value, recipient)
 #[derive(Serialize)]
@@ -40,8 +40,8 @@ impl From<&Transaction> for DisplayTransaction {
 pub struct DisplayTransactionBlock {
     /// Hash of this tx block
     pub block_hash: String,
-    /// List of transactions and their hashes
-    pub transactions: Vec<DisplayTransaction>, //TODO: Add tx validity
+    /// List of transactions
+    pub transactions: Vec<DisplayTransaction>, //TODO: Add tx validity, how to check validity?
     /// List of tx hashes and list output indices which are unspent
     pub utxos: Vec<(String, Vec<usize>)>,
     // To add more fields if required
@@ -74,14 +74,14 @@ pub fn dump_ledger(
             //Collect the indices of unspent outputs of the tx.
             let mut unspent_indices: Vec<usize> = vec![];
             // loop over the outputs to check if they are unspent
-            for (idx, _) in tx.output.iter().enumerate() {
+            for index in 0..tx.output.len() {
                 let coin_id = CoinId {
                     hash,
-                    index: idx,
+                    index,
                 };
                 if let Ok(unspent) = utxo_state.check(&coin_id) {
                     if unspent {
-                        unspent_indices.push(idx);
+                        unspent_indices.push(index);
                     }
                 }
             }

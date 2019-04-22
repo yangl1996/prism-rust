@@ -131,7 +131,7 @@ impl Wallet {
             .iter()
             .map(|c| Input {
                 hash: c.coin_id.hash,
-                index: c.coin_id.index as u32,
+                index: c.coin_id.index,
                 value: c.coin_data.value,
                 recipient: c.coin_data.recipient,
             })
@@ -189,7 +189,7 @@ pub mod tests {
     use super::Wallet;
     use crate::crypto::generator as crypto_generator;
     use crate::crypto::hash::{Hashable, H256};
-    use crate::handler::{to_rollback_utxo, to_utxo};
+    use crate::handler::{to_rollback_coinid_and_potential_utxo, to_coinid_and_potential_utxo};
     use crate::miner::memory_pool::MemoryPool;
     use crate::miner::miner::ContextUpdateSignal;
     use crate::transaction::{Output, Transaction};
@@ -228,11 +228,11 @@ pub mod tests {
         for sig in tx.key_sig.iter() {
             assert!(tx.verify(&sig.public_key, &sig.signature));
         }
-        let (to_delete, to_insert) = to_utxo(tx);
+        let (to_delete, to_insert) = to_coinid_and_potential_utxo(tx);
         w.update(&to_delete, &to_insert);
     }
     fn rollback(w: &mut Wallet, tx: &Transaction) {
-        let (to_delete, to_insert) = to_rollback_utxo(tx);
+        let (to_delete, to_insert) = to_rollback_coinid_and_potential_utxo(tx);
         w.update(&to_delete, &to_insert);
     }
     #[test]
