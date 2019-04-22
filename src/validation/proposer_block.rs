@@ -1,75 +1,62 @@
 use super::super::config;
-use super::data_availability::*;
+use super::data_availability::{self, get_block};
 use super::*;
 use crate::block::Block;
+use crate::block::Content;
 use crate::blockchain::BlockChain;
 use crate::blockchain::utils::get_proposer_genesis_hash;
 use crate::blockdb::BlockDatabase;
 use crate::crypto::hash::{Hashable, H256};
 use std::sync::{Arc, Mutex};
+use super::BlockResult;
 
-// TODO: To check more rules to detect adversarial behaviour
-/// Checks data availability.
-pub struct ProposerBlockRule {
-    blockchain: Arc<Mutex<BlockChain>>,
-    block_db: Arc<BlockDatabase>,
-}
-impl BlockRule for ProposerBlockRule {
-    fn result(&self, block: &Block) -> BlockRuleResult {
-        let content = block.get_proposer_content();
-        let mut blocks_not_in_db: Vec<H256> = vec![];
-        let mut blocks_not_in_blockchain: Vec<H256> = vec![];
+pub fn validate(block: &Block, blockchain: &Mutex<BlockChain>, blockdb: &BlockDatabase) -> BlockResult {
+    let content = match &block.content {
+        Content::Proposer(content) => content,
+        _ => panic!("Wrong type"),
+    };
 
-        // Check 1: Check data availability of tx blocks referenced
-        for tx_block_hash in content.transaction_block_hashes.iter(){
-            let tx_block =
-                get_available_block(*tx_block_hash, &self.blockchain, &self.block_db);
-            match tx_block {
-                BlockDataAvailability::NotInDB => {
-                    // The voter parent should be requested from the network
-                    blocks_not_in_db.push(*tx_block_hash);
-                }
-                BlockDataAvailability::NotInBlockchain => {
-                    // The voter parent should be added to the blockchain first
-                    blocks_not_in_blockchain.push(*tx_block_hash);
-                }
-                BlockDataAvailability::Block(_) => {
-                    // do nothing. this is the best case
-                }
+    let mut missing_blocks: Vec<H256> = vec![];
+
+    // check whether the tx block referred are present
+    for tx_block_hash in content.transaction_block_hashes.iter() {
+        let tx_block =
+            get_block(*tx_block_hash, blockchain, blockdb);
+        match tx_block {
+            Ok(_) => {
+                // good. do nothing
             }
-        }
-
-        // Check 2: Check data availability of prop blocks referenced
-        for prop_block_hash in content.proposer_block_hashes.iter(){
-            let prop_block =
-                get_available_block(*prop_block_hash, &self.blockchain, &self.block_db);
-            match prop_block {
-                BlockDataAvailability::NotInDB => {
-                    // The voter parent should be requested from the network
-                    blocks_not_in_db.push(*prop_block_hash);
-                }
-                BlockDataAvailability::NotInBlockchain => {
-                    // The voter parent should be added to the blockchain first
-                    blocks_not_in_blockchain.push(*prop_block_hash);
-                }
-                BlockDataAvailability::Block(_) => {
-                    // do nothing. this is the best case
-                }
+            Err(data_availability::Error::MissingInDB) => {
+                missing_blocks.push(*tx_block_hash);
             }
-        }
-
-        //Final result: If all the data is available then the block is valid
-        if blocks_not_in_db.len() == 0 && blocks_not_in_blockchain.len() == 0 {
-            return BlockRuleResult::True;
-        } else {
-            return BlockRuleResult::MissingReferencesInDBandBC(
-                blocks_not_in_db,
-                blocks_not_in_blockchain,
-            );
+            Err(data_availability::Error::MissingInBlockchain) => {
+                missing_blocks.push(*tx_block_hash);
+            }
         }
     }
 
-}
+    // check whether the proposer blocks referred are present
+    for prop_block_hash in content.proposer_block_hashes.iter() {
+        let prop_block =
+            get_block(*prop_block_hash, blockchain, blockdb);
+        match prop_block {
+            Ok(_) => {
+                // good. do nothing
+            }
+            Err(data_availability::Error::MissingInDB) => {
+                missing_blocks.push(*prop_block_hash);
+            }
+            Err(data_availability::Error::MissingInBlockchain) => {
+                missing_blocks.push(*prop_block_hash);
+            }
+        }
+    }
 
+    if missing_blocks.len() == 0 {
+        return BlockResult::Pass;
+    } else {
+        return BlockResult::MissingReferences(missing_blocks);
+    }
+}
 
 // TODO: Add tests

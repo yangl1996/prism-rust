@@ -61,38 +61,6 @@ impl Block {
             sortition_proof,
         }
     }
-
-    pub fn get_transaction_content(&self) -> &transaction::Content {
-        match &self.content {
-            Content::Transaction(c) => return c,
-            _ => panic!("Wrong function "),
-        }
-    }
-
-    pub fn get_proposer_content(&self) -> &proposer::Content {
-        match &self.content {
-            Content::Proposer(c) => return c,
-            _ => panic!("Wrong function "),
-        }
-    }
-
-    pub fn get_voter_content(&self) -> &voter::Content {
-        match &self.content {
-            Content::Voter(c) => return c,
-            _ => panic!("Wrong function "),
-        }
-    }
-
-    pub fn get_block_type(&self) -> Option<u32> {
-        match &self.content {
-            Content::Transaction(_) => return Some(TRANSACTION_INDEX),
-            Content::Proposer(_) => return Some(PROPOSER_INDEX),
-            Content::Voter(c) => {
-                let chain_num: u32 = FIRST_VOTER_INDEX + (c.chain_number as u32);
-                return Some(chain_num);
-            }
-        }
-    }
 }
 
 impl Hashable for Block {
