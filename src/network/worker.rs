@@ -1,12 +1,14 @@
 use super::message::{self, Message};
 use super::peer;
 use crate::blockchain::BlockChain;
+use crate::block::Block;
 use crate::blockdb::BlockDatabase;
 use crate::state::UTXODatabase;
 use crate::handler::new_validated_block;
 use crate::miner::memory_pool::MemoryPool;
 use crate::miner::miner::ContextUpdateSignal;
 use crate::network::server::Handle as ServerHandle;
+use crate::validation::{check_block, BlockResult};
 use log::{debug, info};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
@@ -21,6 +23,7 @@ pub struct Context {
     mempool: Arc<Mutex<MemoryPool>>,
     context_update_chan: mpsc::Sender<ContextUpdateSignal>,
     server: ServerHandle,
+    buffer: Arc<Mutex<Vec<Block>>>,
 }
 
 pub fn new(
@@ -42,6 +45,7 @@ pub fn new(
         mempool: Arc::clone(mempool),
         context_update_chan: ctx_update_sink,
         server: server,
+        buffer: Arc::new(Mutex::new(vec![])),
     };
     return ctx;
 }
@@ -102,17 +106,58 @@ impl Context {
                 }
                 Message::Blocks(blocks) => {
                     debug!("Blocks");
-                    // TODO: add validation and buffer logic here
                     for block in blocks {
-                        // TODO: avoid inserting the same block again here
-                        new_validated_block(
-                            block,
-                            &self.mempool,
-                            &self.blockdb,
-                            &self.chain,
-                            &self.server,
-                        );
+                        // TODO: add validation and buffer logic here
+                        let validation_result = check_block(&block, &self.chain,
+                                                            &self.blockdb, &self.utxodb);
+                        match validation_result {
+                            BlockResult::MissingParent(_) | BlockResult::MissingReferences(_) => {
+                                self.buffer.lock().unwrap().push(block);
+                            }
+                            BlockResult::Pass => {
+                                // TODO: avoid inserting the same block again here
+                                new_validated_block(
+                                    block,
+                                    &self.mempool,
+                                    &self.blockdb,
+                                    &self.chain,
+                                    &self.server,
+                                );
+                            }
+                            _ => {
+                                // pass invalid block
+                            }
+                        }
                     }
+                    
+                    let mut still_unresolved: Vec<Block> = vec![];
+                    for block in self.buffer.lock().unwrap().drain(..) {
+                        let validation_result = check_block(&block, &self.chain,
+                                                            &self.blockdb, &self.utxodb);
+                        match validation_result {
+                            BlockResult::MissingParent(_) | BlockResult::MissingReferences(_) => {
+                                still_unresolved.push(block);
+                            }
+                            BlockResult::Pass => {
+                                // TODO: avoid inserting the same block again here
+                                new_validated_block(
+                                    block,
+                                    &self.mempool,
+                                    &self.blockdb,
+                                    &self.chain,
+                                    &self.server,
+                                );
+                            }
+                            _ => {
+                                // pass invalid block
+                            }
+                        }
+                    }
+
+                    for block in still_unresolved {
+                        self.buffer.lock().unwrap().push(block);
+                    }
+
                     // tell the miner to update the context
                     self.context_update_chan
                         .send(ContextUpdateSignal::NewContent)
