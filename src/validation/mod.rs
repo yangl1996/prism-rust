@@ -10,10 +10,12 @@ use crate::crypto::hash::{Hashable, H256};
 use crate::transaction::Transaction;
 use std::sync::{Arc, Mutex};
 
+/// The common trait for transaction rules
 pub trait TransactionRule {
     fn is_satisfied(&self, transaction: &Transaction) -> bool;
 }
 
+/// Collection of transaction rules
 pub struct TransactionRuleCollection {
     list: Vec<Box<TransactionRule>>,
 }
@@ -23,22 +25,18 @@ impl TransactionRule for TransactionRuleCollection {
     }
 }
 
+/// The common trait for block rules
+pub trait BlockRule {
+    fn result(&self, block: &Block) -> BlockRuleResult;
+}
+/// Return of BlockRule result function
 pub enum BlockRuleResult {
     False,                                            // If a logical check fails
     MissingReferencesInDBandBC(Vec<H256>, Vec<H256>), // Block references are not present in DB and blockchain respectively
     True,                                             //Else: the block passes all the checks
 }
 
-pub enum BlockDataAvailability {
-    NotInDB,         // If: Block is not present in DB
-    NotInBlockchain, // Else If: Block is not present in blockchain
-    Block(Block),    // If the block passes all the data availability checks
-}
-
-pub trait BlockRule {
-    fn result(&self, block: &Block) -> BlockRuleResult;
-}
-
+/// Common Rule for every type of block
 pub struct IsNew {
     blockchain: Arc<Mutex<BlockChain>>,
     block_db: Arc<BlockDatabase>,
@@ -49,13 +47,13 @@ impl BlockRule for IsNew {
         let block_inner =
             data_availability::get_available_block(block.hash(), &self.blockchain, &self.block_db);
         match block_inner {
-            BlockDataAvailability::NotInDB => {
+            data_availability::BlockDataAvailability::NotInDB => {
                 return BlockRuleResult::True;
             }
-            BlockDataAvailability::NotInBlockchain => {
+            data_availability::BlockDataAvailability::NotInBlockchain => {
                 unimplemented!("What should we do here?");
             }
-            BlockDataAvailability::Block(_) => {
+            data_availability::BlockDataAvailability::Block(_) => {
                 return BlockRuleResult::False;
             }
         }
@@ -63,6 +61,8 @@ impl BlockRule for IsNew {
         unimplemented!();
     }
 }
+
+/// Collection of transaction rules
 #[derive(Default)]
 pub struct BlockRuleCollection {
     list: Vec<Box<BlockRule>>,
