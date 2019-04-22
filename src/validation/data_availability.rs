@@ -2,39 +2,32 @@ use crate::block::{Block, Content};
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
 use crate::crypto::hash::{Hashable, H256};
-
+use super::{Error, Result};
 use std::sync::Mutex;
 
-/// The return type for the func below
-pub enum BlockDataAvailability {
-    NotInDB,         // If: Block is not present in DB
-    NotInBlockchain, // Else If: Block is not present in blockchain
-    Block(Block),    // If the block passes all the data availability checks
-}
-
-/// Data availability: Checks if the block_hash is present in database and blockchain.
-/// This function is paramount in defending against data availability attacks
-pub fn get_available_block(
+/// Check whether a block is in the blockchain and the block database. Returns the block if yes,
+/// and returns the cause if no.
+pub fn get_block(
     block_hash: H256,
     blockchain: &Mutex<BlockChain>,
     block_db: &BlockDatabase,
-) -> BlockDataAvailability {
+) -> Result<Block> {
     match block_db.get(&block_hash) {
         Err(e) => panic!("Database error {}", e),
         Ok(b) => {
+            // check whether the block is in the database
             match b {
-                // 1. Data availability: Check if the block is in database
                 None => {
                     unimplemented!("The parent block doesnt exist in db.");
-                    return BlockDataAvailability::NotInDB;
+                    return Err(Error::MissingInDB);
                 }
                 Some(block) => {
+                    // check whether the block is in the blockchain
                     let blockchain = blockchain.lock().unwrap();
-                    // 2. Data availability: Check if the block is in the blockchain
                     if !blockchain.check_node(block_hash) {
-                        return BlockDataAvailability::NotInBlockchain;
+                        return Err(Error::MissingInBlockchain);
                     } else {
-                        return BlockDataAvailability::Block(block);
+                        return Ok(block);
                     }
                 }
             }
