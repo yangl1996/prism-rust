@@ -13,6 +13,23 @@ use super::edge::Edge;
 use super::proposer::Status as ProposerStatus;
 use super::voter::NodeStatus as VoterNodeStatus;
 
+
+// TODO: Shift to a global config file
+pub fn get_proposer_genesis_hash() -> H256 {
+    let proposer_hash_vec: [u8; 32] = [0; 32];
+    return (&proposer_hash_vec).into();
+}
+
+// TODO: move this to a global config
+pub fn get_voter_genesis_hash(chain_number: u16) -> H256 {
+    let b1 = ((chain_number + 1) >> 8) as u8;
+    let b2 = (chain_number + 1) as u8;
+    // create the hash of the genesis block i.
+    let mut voter_hash_vec: [u8; 32] = [0; 32];
+    voter_hash_vec[30] = b1;
+    voter_hash_vec[31] = b2;
+    return (&voter_hash_vec).into();
+}
 pub fn lcb_from_vote_depths(votes: Vec<u32>) -> f32 {
     let answer: f32 = votes.len() as f32;
     return answer; //todo: Apply the confirmation logic from the paper
