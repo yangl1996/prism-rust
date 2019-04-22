@@ -1,5 +1,5 @@
 pub mod data_availability;
-//pub mod header;
+pub mod header;
 pub mod transaction;
 pub mod transaction_block;
 pub mod proposer_block;
