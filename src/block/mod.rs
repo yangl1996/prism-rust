@@ -62,6 +62,27 @@ impl Block {
         }
     }
 
+    pub fn get_transaction_content(&self) -> &transaction::Content {
+        match &self.content {
+            Content::Transaction(c) => return c,
+            _ => panic!("Wrong function "),
+        }
+    }
+
+    pub fn get_proposer_content(&self) -> &proposer::Content {
+        match &self.content {
+            Content::Proposer(c) => return c,
+            _ => panic!("Wrong function "),
+        }
+    }
+
+    pub fn get_voter_content(&self) -> &voter::Content {
+        match &self.content {
+            Content::Voter(c) => return c,
+            _ => panic!("Wrong function "),
+        }
+    }
+
     pub fn get_block_type(&self) -> Option<u32> {
         match &self.content {
             Content::Transaction(_) => return Some(TRANSACTION_INDEX),
