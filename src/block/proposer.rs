@@ -1,5 +1,7 @@
 use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::merkle::MerkleTree;
+use super::Block;
+use super::Content as BlockContent;
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct Content {
@@ -28,4 +30,22 @@ impl Hashable for Content {
         // TODO: why do we calculate prop_merkle_tree when we don't use it?
         return tx_merkle_tree.root();
     }
+}
+
+pub fn genesis() -> Block {
+    let content = Content {
+        transaction_block_hashes: vec![],
+        proposer_block_hashes: vec![],
+    };
+    let all_zero: [u8; 32] = [0; 32];
+    return Block::new(
+        (&all_zero).into(),
+        0,
+        0,
+        (&all_zero).into(),
+        vec![],
+        BlockContent::Proposer(content),
+        all_zero.clone(),
+        all_zero.clone(),
+    );
 }
