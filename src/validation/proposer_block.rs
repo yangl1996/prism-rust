@@ -1,11 +1,15 @@
+use super::check_block_exist;
 use crate::block::proposer::Content;
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
 use crate::crypto::hash::H256;
 use std::sync::Mutex;
-use super::check_block_exist;
 
-pub fn get_missing_references(content: &Content, blockchain: &Mutex<BlockChain>, blockdb: &BlockDatabase) -> Vec<H256> {
+pub fn get_missing_references(
+    content: &Content,
+    blockchain: &Mutex<BlockChain>,
+    blockdb: &BlockDatabase,
+) -> Vec<H256> {
     let mut missing_blocks: Vec<H256> = vec![];
 
     // check whether the tx block referred are present

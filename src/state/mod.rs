@@ -107,7 +107,7 @@ pub mod tests {
     use super::{generator, CoinData, CoinId, UTXODatabase, UTXO};
     use crate::crypto::generator as crypto_generator;
     use crate::crypto::hash::{Hashable, H256};
-    use crate::handler::{to_rollback_coinid_and_potential_utxo, to_coinid_and_potential_utxo};
+    use crate::handler::{to_coinid_and_potential_utxo, to_rollback_coinid_and_potential_utxo};
     use crate::transaction::{generator as tx_generator, Input, Transaction};
 
     fn init_with_tx_input(state_db: &mut UTXODatabase, tx: &Transaction) {
@@ -132,8 +132,20 @@ pub mod tests {
         assert_eq!(state_db.num_utxo() as usize, tx.output.len());
         let hash = tx.hash();
         for index in 0..tx.output.len() {
-            assert_eq!(state_db.check(&CoinId { hash, index: index as u32 }), Ok(true));
-            let coin_data = state_db.get(&CoinId { hash, index: index as u32 }).unwrap().unwrap();
+            assert_eq!(
+                state_db.check(&CoinId {
+                    hash,
+                    index: index as u32
+                }),
+                Ok(true)
+            );
+            let coin_data = state_db
+                .get(&CoinId {
+                    hash,
+                    index: index as u32,
+                })
+                .unwrap()
+                .unwrap();
             assert_eq!(coin_data, tx.output[index])
         }
     }

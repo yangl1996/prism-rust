@@ -5,6 +5,7 @@ pub mod utils;
 pub mod voter;
 use super::block::{Block, Content};
 use super::crypto::hash::{Hashable, H256};
+use crate::config::*;
 use edge::Edge;
 use petgraph::graphmap::GraphMap;
 use petgraph::Directed;
@@ -17,7 +18,6 @@ use std::iter::FromIterator;
 use std::sync::mpsc::Sender;
 use transaction::Pool as TxBlkPool;
 use transaction::UpdateMessage as LedgerUpdateMessage;
-use crate::config::*;
 use utils::*;
 use voter::Chain as VoterChain;
 use voter::Fork as VoterChainFork;
@@ -63,13 +63,9 @@ impl BlockChain {
 
         // 1b. Initializing proposer tree
         proposer_tree.best_block = *PROPOSER_GENESIS;
-        proposer_tree
-            .prop_nodes
-            .push(vec![*PROPOSER_GENESIS]);
+        proposer_tree.prop_nodes.push(vec![*PROPOSER_GENESIS]);
         // Genesis proposer block is the leader block at level 0
-        proposer_tree
-            .leader_nodes
-            .insert(0, *PROPOSER_GENESIS);
+        proposer_tree.leader_nodes.insert(0, *PROPOSER_GENESIS);
 
         // 2. Voter geneses blocks
         for chain_number in 0..(num_voting_chains) {

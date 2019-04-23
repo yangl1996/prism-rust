@@ -2,10 +2,10 @@ use crate::block::{Block, Content};
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
 use crate::crypto::hash::{Hashable, H256};
+use crate::handler;
 use crate::state::CoinId;
 use crate::state::UTXODatabase;
 use crate::transaction::Transaction as RawTransaction;
-use crate::handler;
 use std::sync::Mutex;
 
 #[derive(Serialize)]
@@ -55,7 +55,8 @@ pub fn dump_ledger(
     for tx_block_hash in ordered_tx_block_hashes.iter() {
         let mut transactions = vec![];
         let mut utxos = vec![];
-        let transactions_in_block: Vec<RawTransaction> = handler::get_tx_block_content_transactions(tx_block_hash, block_db);
+        let transactions_in_block: Vec<RawTransaction> =
+            handler::get_tx_block_content_transactions(tx_block_hash, block_db);
 
         // loop over all the tx in this transaction block
         for tx in transactions_in_block {
@@ -70,7 +71,7 @@ pub fn dump_ledger(
                     if unspent {
                         utxos.push(Input {
                             hash: hash.into(),
-                            index: index as u32
+                            index: index as u32,
                         });
                     }
                 }
@@ -79,14 +80,22 @@ pub fn dump_ledger(
             // add this transaction to the list
             transactions.push(Transaction {
                 hash: hash.into(),
-                input: tx.input.iter().map(|x| Input {
-                    hash: x.hash.into(),
-                    index: x.index
-                }).collect(),
-                output: tx.output.iter().map(|x| Output {
-                    value: x.value,
-                    recipient: x.recipient.into()
-                }).collect(),
+                input: tx
+                    .input
+                    .iter()
+                    .map(|x| Input {
+                        hash: x.hash.into(),
+                        index: x.index,
+                    })
+                    .collect(),
+                output: tx
+                    .output
+                    .iter()
+                    .map(|x| Output {
+                        value: x.value,
+                        recipient: x.recipient.into(),
+                    })
+                    .collect(),
             });
         }
         transactions_blocks.push(TransactionBlock {

@@ -117,9 +117,11 @@ impl Handle {
 impl Context {
     pub fn start(mut self) {
         println!("Miner started");
-        thread::Builder::new().name("miner".to_string()).spawn(move || {
-            self.miner_loop();
-        });
+        thread::Builder::new()
+            .name("miner".to_string())
+            .spawn(move || {
+                self.miner_loop();
+            });
     }
 
     fn handle_control_signal(&mut self, signal: ControlSignal) {
@@ -195,8 +197,8 @@ impl Context {
                         if content.transactions.is_empty() {
                             continue;
                         }
-                    },
-                    _ => ()
+                    }
+                    _ => (),
                 }
                 // Release block to the network
                 new_validated_block(
@@ -258,10 +260,14 @@ impl Context {
         let blockchain = self.blockchain.lock().unwrap();
         self.proposer_parent_hash = blockchain.get_proposer_best_block();
         self.difficulty = self.get_difficulty(&self.proposer_parent_hash);
-        let transaction_block_refs = blockchain.get_unreferred_tx_blocks();//.clone();
-        let proposer_block_refs = blockchain.get_unreferred_prop_blocks().clone();// remove clone?
-        let voter_parent_hash: Vec<H256> = (0..NUM_VOTER_CHAINS).map(|i|blockchain.get_voter_best_block(i).clone()).collect();
-        let proposer_block_votes: Vec<Vec<H256>> = (0..NUM_VOTER_CHAINS).map(|i|blockchain.get_unvoted_prop_blocks(i).clone()).collect();
+        let transaction_block_refs = blockchain.get_unreferred_tx_blocks(); //.clone();
+        let proposer_block_refs = blockchain.get_unreferred_prop_blocks().clone(); // remove clone?
+        let voter_parent_hash: Vec<H256> = (0..NUM_VOTER_CHAINS)
+            .map(|i| blockchain.get_voter_best_block(i).clone())
+            .collect();
+        let proposer_block_votes: Vec<Vec<H256>> = (0..NUM_VOTER_CHAINS)
+            .map(|i| blockchain.get_unvoted_prop_blocks(i).clone())
+            .collect();
         drop(blockchain);
         // get mutex of mempool and get all required data
         let mempool = self.tx_mempool.lock().unwrap();
@@ -286,7 +292,11 @@ impl Context {
         )));
 
         // Update voter content/parents
-        for (i,(voter_parent_hash, proposer_block_votes)) in voter_parent_hash.into_iter().zip(proposer_block_votes.into_iter()).enumerate() {
+        for (i, (voter_parent_hash, proposer_block_votes)) in voter_parent_hash
+            .into_iter()
+            .zip(proposer_block_votes.into_iter())
+            .enumerate()
+        {
             content.push(Content::Voter(voter::Content::new(
                 i as u16,
                 voter_parent_hash,

@@ -17,7 +17,7 @@ pub fn check_input_unspent(transaction: &Transaction, utxodb: &UTXODatabase) -> 
                 hash: input.hash,
                 index: input.index,
             })
-        .unwrap()
+            .unwrap()
     })
 }
 

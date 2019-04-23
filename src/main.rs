@@ -4,9 +4,9 @@ extern crate clap;
 use log::{debug, error, info};
 use prism::blockchain;
 use prism::blockdb;
-use prism::state;
 use prism::config;
 use prism::miner::memory_pool;
+use prism::state;
 use std::net;
 use std::process;
 use std::sync::mpsc;
@@ -78,8 +78,15 @@ fn main() {
 
     // init server and miner
     debug!("Starting P2P server at {}", peer_socket_addr);
-    let (server, miner, _wallet) =
-        prism::start(peer_socket_addr, &blockdb, &utxodb, &blockchain, &mempool, state_update_source).unwrap();
+    let (server, miner, _wallet) = prism::start(
+        peer_socket_addr,
+        &blockdb,
+        &utxodb,
+        &blockchain,
+        &mempool,
+        state_update_source,
+    )
+    .unwrap();
 
     // connect to known peers
     if let Some(known_peers) = matches.values_of("known_peer") {

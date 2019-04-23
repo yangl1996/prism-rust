@@ -1,6 +1,6 @@
-use crate::block::Block;
 use crate::block::proposer::genesis as proposer_genesis;
 use crate::block::voter::genesis as voter_genesis;
+use crate::block::Block;
 use crate::config::*;
 use crate::crypto::hash::{Hashable, H256};
 use bincode::{deserialize, serialize};
@@ -18,11 +18,17 @@ impl BlockDatabase {
         let db_handle = rocksdb::DB::open_default(path)?;
         // insert proposer genesis
         let proposer_genesis_hash_u8: [u8; 32] = (&(*PROPOSER_GENESIS)).into();
-        db_handle.put(&proposer_genesis_hash_u8, &serialize(&proposer_genesis()).unwrap());
+        db_handle.put(
+            &proposer_genesis_hash_u8,
+            &serialize(&proposer_genesis()).unwrap(),
+        );
         // insert voter genesis blocks
         for i in 0..NUM_VOTER_CHAINS {
             let voter_genesis_hash_u8: [u8; 32] = (&VOTER_GENESIS[i as usize]).into();
-            db_handle.put(&voter_genesis_hash_u8, &serialize(&voter_genesis(i as u16)).unwrap());
+            db_handle.put(
+                &voter_genesis_hash_u8,
+                &serialize(&voter_genesis(i as u16)).unwrap(),
+            );
         }
         return Ok(BlockDatabase {
             handle: db_handle,

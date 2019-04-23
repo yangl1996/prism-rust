@@ -19,14 +19,14 @@ pub mod validation;
 pub mod visualization;
 pub mod wallet;
 
+use crate::blockchain::transaction::UpdateMessage as LedgerUpdateMessage;
+use crate::crypto::hash::H256;
+use crate::state::UTXODatabase;
 use blockchain::BlockChain;
 use blockdb::BlockDatabase;
+use config::NUM_WALLETS;
 use miner::memory_pool::MemoryPool;
 use std::sync::{mpsc, Arc, Mutex};
-use crate::state::UTXODatabase;
-use crate::crypto::hash::H256;
-use crate::blockchain::transaction::UpdateMessage as LedgerUpdateMessage;
-use config::NUM_WALLETS;
 
 pub fn start(
     addr: std::net::SocketAddr,
@@ -78,12 +78,7 @@ pub fn start(
     let wallets = Arc::new(wallets);
 
     //state_updater part
-    let ctx = state::updater::new(
-        blockdb,
-        utxodb,
-        &wallets,
-        state_update_source,
-    );
+    let ctx = state::updater::new(blockdb, utxodb, &wallets, state_update_source);
     ctx.start();
 
     return Ok((server, miner, wallets));

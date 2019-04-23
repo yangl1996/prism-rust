@@ -29,8 +29,10 @@ pub fn confirm_new_tx_block_transactions(
     //1. Loop over the tx block's transactionss
     for transactions in tx_block_transactions {
         // pre-compute the utxos to be deleted and inserted
-        let to_delete_insert: Vec<(Vec<CoinId>, Vec<UTXO>)> =
-            transactions.iter().map(|tx| to_coinid_and_potential_utxo(tx)).collect();
+        let to_delete_insert: Vec<(Vec<CoinId>, Vec<UTXO>)> = transactions
+            .iter()
+            .map(|tx| to_coinid_and_potential_utxo(tx))
+            .collect();
         //2. Loop over the transactions
         {
             for (to_delete, to_insert) in to_delete_insert.iter() {
@@ -89,8 +91,10 @@ pub fn unconfirm_old_tx_block_transactions(
     //1. Loop over the tx block's transactions (already in reverse order)
     for transactions in tx_block_transactions {
         // pre-compute the utxos to be deleted and inserted
-        let to_delete_insert: Vec<(Vec<CoinId>, Vec<UTXO>)> =
-            transactions.iter().map(|tx| to_rollback_coinid_and_potential_utxo(tx)).collect();
+        let to_delete_insert: Vec<(Vec<CoinId>, Vec<UTXO>)> = transactions
+            .iter()
+            .map(|tx| to_rollback_coinid_and_potential_utxo(tx))
+            .collect();
         //2. Loop over the transactions
         {
             for (to_delete, to_insert) in to_delete_insert.iter().rev() {
@@ -130,12 +134,10 @@ pub fn unconfirm_old_tx_block_transactions(
 
 pub fn get_tx_block_content_transactions(hash: &H256, blockdb: &BlockDatabase) -> Vec<Transaction> {
     match blockdb.get(hash) {
-        Ok(Some(block)) => {
-            match block.content {
-                Content::Transaction(content) => return content.transactions,
-                _ => panic!("Wrong block stored"),
-            }
-        }
+        Ok(Some(block)) => match block.content {
+            Content::Transaction(content) => return content.transactions,
+            _ => panic!("Wrong block stored"),
+        },
         Ok(None) => panic!("TX block not found in DB. (not db err)"),
         Err(_) => panic!("TX block not found in DB. db err"),
     }
@@ -152,7 +154,10 @@ pub fn to_coinid_and_potential_utxo(tx: &Transaction) -> (Vec<CoinId>, Vec<UTXO>
         .iter()
         .enumerate()
         .map(|(index, output)| UTXO {
-            coin_id: CoinId { hash, index: index as u32},
+            coin_id: CoinId {
+                hash,
+                index: index as u32,
+            },
             coin_data: CoinData {
                 value: output.value,
                 recipient: output.recipient,
@@ -167,7 +172,10 @@ pub fn to_rollback_coinid_and_potential_utxo(tx: &Transaction) -> (Vec<CoinId>, 
     let hash: H256 = tx.hash();
     // i) Get the input locations of the output coins and delete the output coins.
     let to_delete: Vec<CoinId> = (0..(tx.output.len()))
-        .map(|index| CoinId { hash, index: index as u32 })
+        .map(|index| CoinId {
+            hash,
+            index: index as u32,
+        })
         .collect();
     // ii) Reconstruct the input utxos
     let to_insert: Vec<UTXO> = tx
