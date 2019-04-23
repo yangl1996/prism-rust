@@ -3,6 +3,7 @@ pub mod generator;
 use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::sign;
 use bincode::serialize;
+use crate::crypto::sign::{Signable, PubKey, KeyPair, Signature};
 
 /// A Prism transaction. A transaction takes a set of existing coins and transforms them into a set
 /// of output coins.
@@ -10,13 +11,31 @@ use bincode::serialize;
 pub struct Transaction {
     pub input: Vec<Input>,
     pub output: Vec<Output>,
-    pub signatures: Vec<Signature>,
+    pub signatures: Vec<PubkeyAndSignature>,
 }
 
 impl Hashable for Transaction {
     fn hash(&self) -> H256 {
         return ring::digest::digest(&ring::digest::SHA256, &serialize(self).unwrap()).into();
     }
+}
+
+impl Signable for Transaction {
+    fn sign(&self, keypair: &KeyPair) -> Signature {
+        //only sign fields input, output. not signatures.
+        let unsigned_input = serialize(&self.input).unwrap();
+        let unsigned_output = serialize(&self.output).unwrap();
+        let unsigned = [&unsigned_input[..], &unsigned_output[..]].concat();// we can also use Vec extend, don't know which is better
+        keypair.sign(&unsigned)
+    }
+
+    fn verify(&self, public_key: &PubKey, signature: &Signature) -> bool {
+        let unsigned_input = serialize(&self.input).unwrap();
+        let unsigned_output = serialize(&self.output).unwrap();
+        let unsigned = [&unsigned_input[..], &unsigned_output[..]].concat();// we can also use Vec extend, don't know which is better
+        public_key.verify(&unsigned, signature)
+    }
+
 }
 
 /// An input of a transaction.
@@ -43,14 +62,14 @@ pub struct Output {
 }
 
 #[derive(Serialize, Deserialize, Debug, Hash, Clone, PartialEq, Eq)]
-pub struct Signature {
-    pub pubkey: sign::PubKey,
-    pub signature: sign::Signature,
+pub struct PubkeyAndSignature {
+    pub pubkey: PubKey,
+    pub signature: Signature,
 }
 
 impl std::fmt::Display for Input {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "[{0:<10} | {1:<10}]", self.hash, self.index)?;
+        write!(f, "[{0:<10} | {1:<10} | {2:<10} | {3:<10}]", self.hash, self.index, self.value, self.recipient)?;
         Ok(())
     }
 }
@@ -74,5 +93,20 @@ impl std::fmt::Display for Transaction {
             write!(f, "{} ", output)?;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+pub mod tests {
+    use super::*;
+
+    #[test]
+    pub fn sign() {
+        let unsigned = generator::random();
+        let keypair = KeyPair::new();
+        let signature = unsigned.sign(&keypair);
+        assert!(unsigned.verify(&keypair.public_key(), &signature));
+        let keypair_2 = KeyPair::new();
+        assert!(!unsigned.verify(&keypair_2.public_key(), &signature));
     }
 }

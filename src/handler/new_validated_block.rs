@@ -22,11 +22,11 @@ pub fn new_validated_block(
         Content::Transaction(content) => {
             let mut mempool = mempool.lock().unwrap();
             for tx in content.transactions.iter() {
+                mempool.remove_by_hash(&tx.hash());
                 for input in tx.input.iter() {
                     mempool.remove_by_input(input);
                 }
             }
-            drop(mempool);
         }
         _ => (),
     };

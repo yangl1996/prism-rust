@@ -4,59 +4,96 @@ use crate::blockdb::BlockDatabase;
 use crate::crypto::hash::{Hashable, H256};
 use crate::state::CoinId;
 use crate::state::UTXODatabase;
-use crate::transaction::Transaction;
-
+use crate::transaction::Transaction as RawTransaction;
+use crate::handler;
 use std::sync::Mutex;
 
-/// Struct to hold blockchain data to be dumped
 #[derive(Serialize)]
-pub struct DisplayTransactionBlock {
-    /// List of transactions and list output indices which are unspent
-    pub transactions: Vec<(Transaction, Vec<usize>)>, //TODO: Add tx validity
-                                                      // To add more fields if required
+pub struct Input {
+    hash: String,
+    index: u32,
+}
+
+#[derive(Serialize)]
+pub struct Output {
+    value: u64,
+    recipient: String,
+}
+
+#[derive(Serialize)]
+pub struct Transaction {
+    hash: String,
+    input: Vec<Input>,
+    output: Vec<Output>,
+}
+
+#[derive(Serialize)]
+pub struct TransactionBlock {
+    /// Hash of this tx block
+    pub hash: String,
+    /// List of transactions
+    pub transactions: Vec<Transaction>, //TODO: Add tx validity
+    /// List of tx hashes and list output indices which are unspent
+    pub utxos: Vec<Input>,
 }
 
 #[derive(Serialize)]
 pub struct Dump {
     /// Ordered tx blocks
-    pub transactions_blocks: Vec<DisplayTransactionBlock>,
+    pub transactions_blocks: Vec<TransactionBlock>,
 }
 
 pub fn dump_ledger(
     blockchain: &BlockChain,
     block_db: &BlockDatabase,
-    state_db: &Mutex<UTXODatabase>,
+    state_db: &UTXODatabase,
 ) -> String {
     let ordered_tx_block_hashes = blockchain.get_ordered_tx_blocks();
-    let mut transactions_blocks: Vec<DisplayTransactionBlock> = vec![];
+    let mut transactions_blocks: Vec<TransactionBlock> = vec![];
+
     // loop over all tx blocks in the ledger
-    for tx_hash in ordered_tx_block_hashes.iter() {
-        let tx_block = block_db.get(tx_hash).unwrap().unwrap(); //TODO: Handle unwrap errors
-        let mut display_transactions: Vec<(Transaction, Vec<usize>)> = vec![];
-        let transactions = match tx_block.content {
-            Content::Transaction(content) => content.transactions,
-            _ => panic!("Wrong block stored"),
-        };
-        let mut utxo_state = state_db.lock().unwrap();
-        // loop over all the tx in the tx_blocks
-        for tx in transactions {
+    for tx_block_hash in ordered_tx_block_hashes.iter() {
+        let mut transactions = vec![];
+        let mut utxos = vec![];
+        let transactions_in_block: Vec<RawTransaction> = handler::get_tx_block_content_transactions(tx_block_hash, block_db);
+
+        // loop over all the tx in this transaction block
+        for tx in transactions_in_block {
             let hash: H256 = tx.hash();
-            //Collect the indices of unspent outputs of the tx.
-            let mut unspent_indices: Vec<usize> = vec![];
             // loop over the outputs to check if they are unspent
-            for (idx, _) in tx.output.iter().enumerate() {
-                let coin_id = CoinId { hash, index: idx };
-                if utxo_state.check(&coin_id).unwrap() {
-                    //TODO: Handle unwrap error
-                    unspent_indices.push(idx);
+            for index in 0..tx.output.len() {
+                let coin_id = CoinId {
+                    hash,
+                    index: index as u32,
+                };
+                if let Ok(unspent) = state_db.check(&coin_id) {
+                    if unspent {
+                        utxos.push(Input {
+                            hash: hash.into(),
+                            index: index as u32
+                        });
+                    }
                 }
             }
-            display_transactions.push((tx, unspent_indices));
+
+            // add this transaction to the list
+            transactions.push(Transaction {
+                hash: hash.into(),
+                input: tx.input.iter().map(|x| Input {
+                    hash: x.hash.into(),
+                    index: x.index
+                }).collect(),
+                output: tx.output.iter().map(|x| Output {
+                    value: x.value,
+                    recipient: x.recipient.into()
+                }).collect(),
+            });
         }
-        transactions_blocks.push(DisplayTransactionBlock {
-            transactions: display_transactions,
+        transactions_blocks.push(TransactionBlock {
+            hash: tx_block_hash.into(),
+            transactions,
+            utxos,
         });
-        drop(utxo_state);
     }
     let dump = Dump {
         transactions_blocks,

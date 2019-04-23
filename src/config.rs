@@ -46,3 +46,7 @@ lazy_static! {
         v
     };
 }
+
+// Number of wallets
+// TODO: why is this a config?
+pub const NUM_WALLETS: usize = 3;

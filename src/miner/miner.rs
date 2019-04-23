@@ -117,7 +117,7 @@ impl Handle {
 impl Context {
     pub fn start(mut self) {
         println!("Miner started");
-        thread::spawn(move || {
+        thread::Builder::new().name("miner".to_string()).spawn(move || {
             self.miner_loop();
         });
     }
@@ -189,6 +189,15 @@ impl Context {
             if header.hash() < self.difficulty {
                 // Create a block
                 let mined_block: Block = self.assemble_block(header);
+                //if the mined block is an empty tx block, we ignore it, and go straight to next mining loop
+                match &mined_block.content {
+                    Content::Transaction(content) => {
+                        if content.transactions.is_empty() {
+                            continue;
+                        }
+                    },
+                    _ => ()
+                }
                 // Release block to the network
                 new_validated_block(
                     mined_block,
@@ -197,7 +206,6 @@ impl Context {
                     &self.blockchain,
                     &self.server,
                 );
-                // TODO: update mempool
                 info!("Mined one block");
                 // TODO: Only update block contents if relevant parent
                 self.update_context();
@@ -215,7 +223,6 @@ impl Context {
         // Get sortition ID
         let hash: [u8; 32] = (&header.hash()).into();
         let sortition_id = self.get_sortition_id(&hash);
-
         // Create a block
         // assemble the merkle tree and get the proof
         let merkle_tree = MerkleTree::new(&self.content);
@@ -247,9 +254,19 @@ impl Context {
 
     /// Update the block to be mined
     fn update_context(&mut self) {
+        // get mutex of blockchain and get all required data
         let blockchain = self.blockchain.lock().unwrap();
         self.proposer_parent_hash = blockchain.get_proposer_best_block();
         self.difficulty = self.get_difficulty(&self.proposer_parent_hash);
+        let transaction_block_refs = blockchain.get_unreferred_tx_blocks();//.clone();
+        let proposer_block_refs = blockchain.get_unreferred_prop_blocks().clone();// remove clone?
+        let voter_parent_hash: Vec<H256> = (0..NUM_VOTER_CHAINS).map(|i|blockchain.get_voter_best_block(i).clone()).collect();
+        let proposer_block_votes: Vec<Vec<H256>> = (0..NUM_VOTER_CHAINS).map(|i|blockchain.get_unvoted_prop_blocks(i).clone()).collect();
+        drop(blockchain);
+        // get mutex of mempool and get all required data
+        let mempool = self.tx_mempool.lock().unwrap();
+        let transactions = mempool.get_transactions(TX_BLOCK_SIZE);
+        drop(mempool);
 
         // update the contents and the parents based on current view
         let mut content = vec![];
@@ -259,26 +276,24 @@ impl Context {
 
         // Update proposer content
         content.push(Content::Proposer(proposer::Content::new(
-            blockchain.get_unreferred_tx_blocks().clone(),
-            blockchain.get_unreferred_prop_blocks().clone(),
+            transaction_block_refs,
+            proposer_block_refs,
         )));
 
         // Update transaction content with TX_BLOCK_SIZE mempool txs
-        let mempool = self.tx_mempool.lock().unwrap();
         content.push(Content::Transaction(transaction::Content::new(
-            mempool.get_transactions(TX_BLOCK_SIZE),
+            transactions,
         )));
-        drop(mempool);
 
         // Update voter content/parents
-        for i in 0..NUM_VOTER_CHAINS {
+        for (i,(voter_parent_hash, proposer_block_votes)) in voter_parent_hash.into_iter().zip(proposer_block_votes.into_iter()).enumerate() {
             content.push(Content::Voter(voter::Content::new(
-                i,
-                blockchain.get_voter_best_block(i as u16).clone(),
-                blockchain.get_unvoted_prop_blocks(i as u16).clone(),
+                i as u16,
+                voter_parent_hash,
+                proposer_block_votes,
             )));
         }
-        drop(blockchain);
+
         self.content = content;
         let merkle_tree = MerkleTree::new(&self.content);
         self.content_merkle_tree_root = merkle_tree.root();

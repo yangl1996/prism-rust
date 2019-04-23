@@ -1,4 +1,4 @@
-mod dump;
+mod blockchain_dump;
 mod ledger_dump;
 mod server;
 

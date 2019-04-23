@@ -15,7 +15,7 @@ pub fn check_input_unspent(transaction: &Transaction, utxodb: &UTXODatabase) -> 
         utxodb
             .check(&CoinId {
                 hash: input.hash,
-                index: input.index as usize,
+                index: input.index,
             })
         .unwrap()
     })

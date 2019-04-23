@@ -126,8 +126,9 @@ mod tests {
     use super::test_util;
     use crate::crypto::hash::Hashable;
     use rand::Rng;
-    /* TODO: commented out this test since we changed the content of the block
+
     #[test]
+    #[ignore]
     fn check_transaction_content_hash() {
         let transaction_content = test_util::sample_transaction_content();
         let transaction_content_hash_shouldbe =
@@ -137,7 +138,6 @@ mod tests {
             transaction_content_hash_shouldbe
         );
     }
-    */
 
     #[test]
     fn check_proposer_content_hash() {

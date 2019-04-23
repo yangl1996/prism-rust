@@ -1,10 +1,5 @@
-use super::{CoinId, UTXODatabase, UTXO};
-use crate::crypto::hash::Hashable;
-use crate::state::CoinData;
-use crate::transaction::generator as tx_generator;
-use crate::transaction::Transaction;
+use super::UTXODatabase;
 use rand::{Rng, RngCore};
-// tx_to_utxos moved to handler?
 
 pub fn random() -> UTXODatabase {
     //1. init database
