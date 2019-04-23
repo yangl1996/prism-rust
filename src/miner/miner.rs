@@ -61,7 +61,7 @@ pub struct Context {
     // Block contents
     content: Vec<Content>,
     content_merkle_tree_root: H256,
-    difficulty: [u8; 32],
+    difficulty: H256,
     operating_state: OperatingState,
     server: ServerHandle,
 }
@@ -88,7 +88,7 @@ pub fn new(
         proposer_parent_hash: H256::default(),
         content: vec![],
         content_merkle_tree_root: H256::default(),
-        difficulty: DEFAULT_DIFFICULTY,
+        difficulty: *DEFAULT_DIFFICULTY,
         operating_state: OperatingState::Paused,
         server: server,
     };
@@ -185,11 +185,8 @@ impl Context {
             header.nonce = rng.gen(); // random nonce TODO: rng can be slow
             header.timestamp = get_time();
 
-            // compute the hash
-            let hash: [u8; 32] = (&header.hash()).into(); // TODO: bad code
-
             // Check if we successfully mined a block
-            if hash < self.difficulty {
+            if header.hash() < self.difficulty {
                 // Create a block
                 let mined_block: Block = self.assemble_block(header);
                 // Release block to the network
@@ -244,7 +241,7 @@ impl Context {
             nonce,
             content_root,
             extra_content,
-            self.difficulty.clone(),
+            (&self.difficulty).into(),
         );
     }
 
@@ -290,7 +287,8 @@ impl Context {
     /// Calculate which chain should we attach the new block to
     fn get_sortition_id(&self, hash: &[u8; 32]) -> u32 {
         let big_hash = U256::from_big_endian(hash);
-        let big_difficulty = U256::from_big_endian(&self.difficulty);
+        let difficulty_raw: [u8; 32] = (&self.difficulty).into();
+        let big_difficulty = U256::from_big_endian(&difficulty_raw);
         let big_proposer_rate: U256 = PROPOSER_MINING_RATE.into();
         let big_transaction_rate: U256 = TRANSACTION_MINING_RATE.into();
 
@@ -317,15 +315,15 @@ impl Context {
 
     /// Calculate the difficulty for the block to be mined
     // TODO: shall we make a dedicated type for difficulty?
-    fn get_difficulty(&self, block_hash: &H256) -> [u8; 32] {
+    fn get_difficulty(&self, block_hash: &H256) -> H256 {
         // Get the header of the block corresponding to block_hash
         match self.db.get(block_hash).unwrap() {
             // extract difficulty
             Some(b) => {
-                return b.header.difficulty.clone();
+                return (&b.header.difficulty).into();
             }
             None => {
-                return DEFAULT_DIFFICULTY.clone();
+                return *DEFAULT_DIFFICULTY;
             }
         }
     }

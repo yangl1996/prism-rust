@@ -25,7 +25,7 @@ fn main() {
         *ef = true;
     })
     .expect("Error setting Ctrl-C handler");
-    stderrlog::new().verbosity(0).init().unwrap();
+    stderrlog::new().verbosity(3).init().unwrap();
 
     let mut peer_addrs = vec![];
     let mut servers = vec![];
