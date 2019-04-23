@@ -127,7 +127,7 @@ impl Context {
                                 );
                             }
                             _ => {
-                                debug!("Invalid block");
+                                debug!("Invalid block: {}", validation_result);
                                 // pass invalid block
                             }
                         }

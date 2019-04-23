@@ -29,6 +29,23 @@ pub enum BlockResult {
     WrongSignature,
 }
 
+impl std::fmt::Display for BlockResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            BlockResult::Pass => write!(f, "validation passed"),
+            BlockResult::MissingParent(_) => write!(f, "parent block not in system"),
+            BlockResult::WrongContentHash => write!(f, "content hash mismatch"),
+            BlockResult::MissingReferences(_) => write!(f, "referred blocks not in system"),
+            BlockResult::WrongChainNumber => write!(f, "chain number out of range"),
+            BlockResult::WrongVoteLevel => write!(f, "incorrent vote levels"),
+            BlockResult::EmptyTransaction => write!(f, "empty transaction input or output"),
+            BlockResult::InputAlreadySpent => write!(f, "input already spent"),
+            BlockResult::InsufficientInput => write!(f, "insufficient input"),
+            BlockResult::WrongSignature => write!(f, "signature mismatch"),
+        }
+    }
+}
+
 /// Validate a block.
 pub fn check_block(block: &Block, blockchain: &Mutex<BlockChain>, blockdb: &BlockDatabase, utxodb: &UTXODatabase) -> BlockResult {
     // TODO: check PoW. Where should we get the current difficulty ranges?
