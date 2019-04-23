@@ -241,7 +241,7 @@ impl Context {
             nonce,
             content_root,
             extra_content,
-            (&self.difficulty).into(),
+            self.difficulty,
         );
     }
 
@@ -320,7 +320,7 @@ impl Context {
         match self.db.get(block_hash).unwrap() {
             // extract difficulty
             Some(b) => {
-                return (&b.header.difficulty).into();
+                return b.header.difficulty;
             }
             None => {
                 return *DEFAULT_DIFFICULTY;

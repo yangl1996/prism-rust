@@ -38,6 +38,7 @@ pub fn sample_header() -> Header {
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         20, 10,
     ];
+    let difficulty = (&difficulty).into();
     let header = Header::new(
         parent_hash,
         timestamp,

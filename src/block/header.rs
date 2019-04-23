@@ -14,7 +14,7 @@ pub struct Header {
     /// Extra content for debugging purposes.
     pub extra_content: [u8; 32],
     /// Mining difficulty
-    pub difficulty: [u8; 32],
+    pub difficulty: H256,
 }
 
 impl Header {
@@ -25,7 +25,7 @@ impl Header {
         nonce: u32,
         content_root: H256,
         extra_content: [u8; 32],
-        difficulty: [u8; 32],
+        difficulty: H256,
     ) -> Self {
         Self {
             parent_hash,
@@ -131,7 +131,7 @@ mod tests {
             1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 1,
         ];
-        header.difficulty = fake_difficulty;
+        header.difficulty = (&fake_difficulty).into();
         assert_ne!(header.hash(), header_hash_should_be);
     }
 

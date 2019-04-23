@@ -32,7 +32,7 @@ impl Block {
         sortition_proof: Vec<H256>,
         content: Content,
         extra_content: [u8; 32],
-        difficulty: [u8; 32],
+        difficulty: H256,
     ) -> Self {
         let header = header::Header::new(
             parent,

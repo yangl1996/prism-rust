@@ -31,6 +31,7 @@ pub fn header() -> Header {
     let content_root = crypto_generator::h256();
     let extra_content = [0; 32];
     let difficulty = [0; 32];
+    let difficulty = (&difficulty).into();
     return Header::new(
         parent_hash,
         timestamp,
