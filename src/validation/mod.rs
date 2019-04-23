@@ -6,7 +6,7 @@ use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
 use crate::crypto::hash::{Hashable, H256};
 use crate::state::UTXODatabase;
-use crate::transaction::Transaction;
+
 use std::sync::Mutex;
 
 /// The result of block validation.

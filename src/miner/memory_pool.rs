@@ -132,7 +132,7 @@ impl MemoryPool {
 #[cfg(test)]
 pub mod tests {
     use super::MemoryPool;
-    use crate::crypto::generator as crypto_generator;
+    
     use crate::crypto::hash::{Hashable, H256};
     use crate::transaction::Transaction;
     use crate::transaction::{generator as tx_generator, Input};
@@ -141,7 +141,7 @@ pub mod tests {
     fn insert_remove_transactions() {
         let mut pool = MemoryPool::new();
         let tx = tx_generator::random();
-        let h = tx.hash();
+        let _h = tx.hash();
         pool.insert(tx.clone());
         assert_eq!(pool.by_hash.len(), 1);
         assert_eq!(pool.by_input.len(), tx.input.len());

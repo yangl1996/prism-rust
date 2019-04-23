@@ -1,8 +1,8 @@
-use super::*;
+
 use crate::crypto::hash::Hashable;
 use crate::state::{CoinId, UTXODatabase};
 use crate::transaction::Transaction;
-use std::sync::{Arc, Mutex};
+
 
 /// Checks that input and output are non-empty
 pub fn check_non_empty(transaction: &Transaction) -> bool {

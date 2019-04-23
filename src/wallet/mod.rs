@@ -1,11 +1,11 @@
 use crate::crypto::hash::{Hashable, H256};
-use crate::crypto::sign::{KeyPair, PubKey, Signable, Signature};
+use crate::crypto::sign::{KeyPair, PubKey, Signable};
 use crate::handler;
 use crate::miner::memory_pool::MemoryPool;
 use crate::miner::miner::ContextUpdateSignal;
 use crate::state::{CoinData, CoinId, UTXO};
 use crate::transaction::{Input, Output, PubkeyAndSignature, Transaction};
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 
@@ -183,7 +183,7 @@ impl Wallet {
             .context_update_chan
             .send(ContextUpdateSignal::NewContent)
         {
-            Err(e) => return Err(WalletError::ContextUpdateChannelError),
+            Err(_e) => return Err(WalletError::ContextUpdateChannelError),
             _ => (),
         };
         //return tx hash, later we can confirm it in ledger
@@ -200,7 +200,7 @@ impl Wallet {
 pub mod tests {
     use super::Wallet;
     use crate::crypto::generator as crypto_generator;
-    use crate::crypto::hash::{Hashable, H256};
+    use crate::crypto::hash::{H256};
     use crate::crypto::sign::Signable;
     use crate::handler::{to_coinid_and_potential_utxo, to_rollback_coinid_and_potential_utxo};
     use crate::miner::memory_pool::MemoryPool;
@@ -249,7 +249,7 @@ pub mod tests {
     }
     #[test]
     pub fn balance() {
-        let (mut w, _pool, _ctx_update_source, hash) = new_wallet_pool_receiver_keyhash();
+        let (w, _pool, _ctx_update_source, _hash) = new_wallet_pool_receiver_keyhash();
         assert_eq!(w.balance(), 0);
     }
     #[test]

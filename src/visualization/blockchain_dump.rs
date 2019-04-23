@@ -2,7 +2,7 @@ use crate::blockchain::edge::Edge as EdgeType;
 use crate::blockchain::proposer::Status as ProposerStatus;
 use crate::blockchain::voter::NodeStatus as VoterStatus;
 use crate::blockchain::BlockChain;
-use crate::crypto::hash::H256;
+
 use std::collections::HashMap;
 
 /// Struct to hold blockchain data to be dumped

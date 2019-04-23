@@ -5,7 +5,7 @@ mod test_util;
 pub mod transaction;
 pub mod voter;
 
-use crate::config::*;
+
 use crate::crypto::hash::{Hashable, H256};
 
 /// A block in the Prism blockchain.

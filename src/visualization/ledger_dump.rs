@@ -1,4 +1,4 @@
-use crate::block::{Block, Content};
+
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
 use crate::crypto::hash::{Hashable, H256};
@@ -6,7 +6,7 @@ use crate::handler;
 use crate::state::CoinId;
 use crate::state::UTXODatabase;
 use crate::transaction::Transaction as RawTransaction;
-use std::sync::Mutex;
+
 
 #[derive(Serialize)]
 pub struct Input {
