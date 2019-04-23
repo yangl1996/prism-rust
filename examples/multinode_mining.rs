@@ -4,10 +4,19 @@ use prism::visualization;
 use prism::{self, blockchain, blockdb, state, miner::memory_pool};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
+use std::process;
 
 const NUM_VOTER_CHAINS: u16 = 3;
 
 fn main() {
+    // clean up databases
+    process::Command::new("sh")
+        .arg("-c")
+        .arg("rm")
+        .arg("-rf")
+        .arg("/tmp/prism_multinode_mining*")
+        .output()
+        .expect("Failed to clean up previous databases");
     let exit_flag = Arc::new(Mutex::new(false));
     let exit_flag_dup = Arc::clone(&exit_flag);
     ctrlc::set_handler(move || {
@@ -16,7 +25,7 @@ fn main() {
         *ef = true;
     })
     .expect("Error setting Ctrl-C handler");
-    stderrlog::new().verbosity(3).init().unwrap();
+    stderrlog::new().verbosity(0).init().unwrap();
 
     let mut peer_addrs = vec![];
     let mut servers = vec![];
@@ -62,7 +71,7 @@ fn main() {
     }
 
     for i in 1..10 {
-        servers[i].connect(peer_addrs[i - 1]);
+        servers[i].connect(peer_addrs[i - 1]).unwrap();
         println!("Node {} connected to Node {}", i, i - 1);
     }
 

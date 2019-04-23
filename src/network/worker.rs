@@ -117,6 +117,7 @@ impl Context {
                             }
                             BlockResult::Pass => {
                                 // TODO: avoid inserting the same block again here
+                                debug!("Adding new block");
                                 new_validated_block(
                                     block,
                                     &self.mempool,
