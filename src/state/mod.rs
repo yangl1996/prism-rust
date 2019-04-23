@@ -1,4 +1,5 @@
 pub mod generator;
+pub mod updater;
 
 use crate::block::transaction::Content as TxContent;
 use crate::crypto::hash::{Hashable, H256};
@@ -15,14 +16,14 @@ pub struct CoinId {
     /// The hash of the transaction being referred to.
     pub hash: H256,
     /// The index of the output in question in that transaction.
-    pub index: usize,
+    pub index: u32,
 }
 
 impl From<&Input> for CoinId {
     fn from(other: &Input) -> Self {
         Self {
             hash: other.hash,
-            index: other.index as usize,
+            index: other.index,
         }
     }
 }
@@ -31,7 +32,7 @@ pub type CoinData = Output;
 
 // Bitcoin UTXO is much more complicated because they have extra seg-wit and locktime.
 pub struct UTXO {
-    pub coin_id: CoinId, // Hash of the transaction. This along with the index is the coin index is the key.
+    pub coin_id: CoinId,
     pub coin_data: CoinData,
 }
 
@@ -106,16 +107,13 @@ pub mod tests {
     use super::{generator, CoinData, CoinId, UTXODatabase, UTXO};
     use crate::crypto::generator as crypto_generator;
     use crate::crypto::hash::{Hashable, H256};
-    use crate::handler::{to_rollback_utxo, to_utxo};
+    use crate::handler::{to_rollback_coinid_and_potential_utxo, to_coinid_and_potential_utxo};
     use crate::transaction::{generator as tx_generator, Input, Transaction};
 
     fn init_with_tx_input(state_db: &mut UTXODatabase, tx: &Transaction) {
         let hash: H256 = tx.hash(); // compute hash here, and below inside Input we don't have to compute again (we just copy)
         for input in tx.input.iter() {
-            let coin_id = CoinId {
-                hash: input.hash,
-                index: input.index as usize,
-            };
+            let coin_id: CoinId = input.into();
             let coin_data = CoinData {
                 value: 1,
                 recipient: crypto_generator::h256(),
@@ -128,19 +126,19 @@ pub mod tests {
     }
 
     fn try_receive_transaction(state_db: &mut UTXODatabase, tx: &Transaction) {
-        let (to_delete, to_insert) = to_utxo(tx);
+        let (to_delete, to_insert) = to_coinid_and_potential_utxo(tx);
         assert!(state_db.update(&to_delete, &to_insert).is_ok());
         // assume this tx spends all utxo in state
         assert_eq!(state_db.num_utxo() as usize, tx.output.len());
         let hash = tx.hash();
         for index in 0..tx.output.len() {
-            assert_eq!(state_db.check(&CoinId { hash, index }), Ok(true));
-            let coin_data = state_db.get(&CoinId { hash, index }).unwrap().unwrap();
+            assert_eq!(state_db.check(&CoinId { hash, index: index as u32 }), Ok(true));
+            let coin_data = state_db.get(&CoinId { hash, index: index as u32 }).unwrap().unwrap();
             assert_eq!(coin_data, tx.output[index])
         }
     }
     fn try_rollback_transaction(state_db: &mut UTXODatabase, tx: &Transaction) {
-        let (to_delete, to_insert) = to_rollback_utxo(tx);
+        let (to_delete, to_insert) = to_rollback_coinid_and_potential_utxo(tx);
         assert!(state_db.update(&to_delete, &to_insert).is_ok());
     }
     #[test]

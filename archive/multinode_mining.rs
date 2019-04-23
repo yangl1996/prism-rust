@@ -1,7 +1,12 @@
 use prism::crypto::hash::H256;
 use prism::transaction::{Output, Transaction};
+<<<<<<< HEAD
 use prism::visualization;
 use prism::{self, blockchain, blockdb, state, miner::memory_pool};
+=======
+use prism::{visualization, state};
+use prism::{self, blockchain, blockdb, miner::memory_pool};
+>>>>>>> gerui-dev
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::process;
@@ -30,7 +35,7 @@ fn main() {
     let mut peer_addrs = vec![];
     let mut servers = vec![];
     let mut miners = vec![];
-    let mut channels = vec![];
+//    let mut channels = vec![];
 
     for i in 0..10 {
         let blockdb_path_string = format!("/tmp/prism_multinode_mining_{}_blocks.rocksdb", i);
@@ -38,15 +43,22 @@ fn main() {
         let blockdb = blockdb::BlockDatabase::new(blockdb_path).unwrap();
         let blockdb = Arc::new(blockdb);
 
+<<<<<<< HEAD
         let utxodb_path_string = format!("/tmp/prism_multinode_mining_{}_utxo.rocksdb", i);
         let utxo_path = std::path::Path::new(&utxodb_path_string);
         let utxodb = state::UTXODatabase::new(utxo_path).unwrap();
         let utxodb = Arc::new(utxodb);
+=======
+        let utxodb_path_string = format!("/tmp/prism_multinode_mining_utxo_{}.rocksdb",i);
+        let utxodb_path = std::path::Path::new(&utxodb_path_string);
+        let utxodb = state::UTXODatabase::new(utxodb_path).unwrap();
+        let utxodb = Arc::new(Mutex::new(utxodb));
+>>>>>>> gerui-dev
 
         let (state_update_sink, state_update_source) = mpsc::channel();
         let blockchain = blockchain::BlockChain::new(NUM_VOTER_CHAINS, state_update_sink);
         let blockchain = Arc::new(Mutex::new(blockchain));
-        channels.push(state_update_source);
+        //channels.push(state_update_source);
 
         let mempool = memory_pool::MemoryPool::new();
         let mempool = Arc::new(Mutex::new(mempool));
@@ -56,13 +68,17 @@ fn main() {
         let peer_addr = std::net::SocketAddr::new(peer_ip, peer_port);
 
         let (server, miner, _wallet) =
+<<<<<<< HEAD
             prism::start(peer_addr, &blockdb, &utxodb, &blockchain, &mempool).unwrap();
+=======
+            prism::start(peer_addr, &blockdb, &blockchain, &utxodb, &mempool, state_update_source).unwrap();
+>>>>>>> gerui-dev
         println!("Node {} live at localhost:{}", i, peer_port);
 
         let vis_ip = "127.0.0.1".parse::<std::net::IpAddr>().unwrap();
         let vis_port = 8000 + i;
         let vis_addr = std::net::SocketAddr::new(vis_ip, vis_port);
-        visualization::Server::start(vis_addr, Arc::clone(&blockchain));
+        visualization::Server::start(vis_addr, Arc::clone(&blockchain), Arc::clone(&blockdb), Arc::clone(&utxodb));
         println!("Node {} visualization live at localhost:{}", i, vis_port);
 
         peer_addrs.push(peer_addr);

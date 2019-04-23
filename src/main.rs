@@ -4,7 +4,7 @@ extern crate clap;
 use log::{debug, error, info};
 use prism::blockchain;
 use prism::blockdb;
-use prism::state::UTXODatabase;
+use prism::state;
 use prism::config;
 use prism::miner::memory_pool;
 use std::net;
@@ -47,7 +47,7 @@ fn main() {
         Some(path) => std::path::Path::new(path),
         None => std::path::Path::new(&DEFAULT_UTXODB),
     };
-    let utxodb = UTXODatabase::new(utxodb_path).unwrap();
+    let utxodb = state::UTXODatabase::new(utxodb_path).unwrap();
     let utxodb = std::sync::Arc::new(utxodb);
 
     // init blockchain
@@ -79,7 +79,7 @@ fn main() {
     // init server and miner
     debug!("Starting P2P server at {}", peer_socket_addr);
     let (server, miner, _wallet) =
-        prism::start(peer_socket_addr, &blockdb, &utxodb, &blockchain, &mempool).unwrap();
+        prism::start(peer_socket_addr, &blockdb, &utxodb, &blockchain, &mempool, state_update_source).unwrap();
 
     // connect to known peers
     if let Some(known_peers) = matches.values_of("known_peer") {

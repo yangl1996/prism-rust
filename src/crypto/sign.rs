@@ -5,6 +5,13 @@ use ring::signature::KeyPair as KeyPairTrait;
 use ring::signature::{self, Ed25519KeyPair};
 use untrusted;
 
+/// An object that can be meaningfully signed and verified.
+pub trait Signable {
+    fn sign(&self, keypair: &KeyPair) -> Signature;
+
+    fn verify(&self, public_key: &PubKey, signature: &Signature) -> bool;
+}
+
 /// An Ed25519 signature.
 #[derive(Serialize, Deserialize, Hash, Clone, Default, PartialEq, Eq, Copy)]
 pub struct Signature([u128; 4]); // big endian u512

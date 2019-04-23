@@ -1,13 +1,18 @@
-use super::dump::dump_blockchain;
+use super::blockchain_dump::dump_blockchain;
+use super::ledger_dump::dump_ledger;
 use crate::blockchain::BlockChain;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use tiny_http::Header;
 use tiny_http::Response;
 use tiny_http::Server as HTTPServer;
+use crate::blockdb::BlockDatabase;
+use crate::state::UTXODatabase;
 
 pub struct Server {
-    chain: Arc<Mutex<BlockChain>>,
+    blockchain: Arc<Mutex<BlockChain>>,
+    blockdb: Arc<BlockDatabase>,
+    utxodb: Arc<UTXODatabase>,
     handle: HTTPServer,
 }
 
@@ -46,19 +51,34 @@ macro_rules! serve_dynamic_file {
 }
 
 impl Server {
-    pub fn start(addr: std::net::SocketAddr, chain: Arc<Mutex<BlockChain>>) {
+    pub fn start(
+        addr: std::net::SocketAddr,
+        blockchain: Arc<Mutex<BlockChain>>,
+        blockdb: Arc<BlockDatabase>,
+        utxodb: Arc<UTXODatabase>
+    ) {
         let handle = HTTPServer::http(&addr).unwrap();
         let server = Self {
-            chain: chain,
-            handle: handle,
+            blockchain,
+            blockdb,
+            utxodb,
+            handle,
         };
         thread::spawn(move || {
             for req in server.handle.incoming_requests() {
-                let chain = Arc::clone(&server.chain);
+                let blockchain = Arc::clone(&server.blockchain);
+                let blockdb = Arc::clone(&server.blockdb);
+                let utxodb = Arc::clone(&server.utxodb);
                 thread::spawn(move || match req.url().trim_start_matches("/") {
                     "blockchain.json" => serve_dynamic_file!(
                         req,
-                        dump_blockchain(&chain.lock().unwrap()),
+                        dump_blockchain(&blockchain.lock().unwrap()),
+                        "application/json",
+                        addr
+                    ),
+                    "ledger.json" => serve_dynamic_file!(
+                        req,
+                        dump_ledger(&blockchain.lock().unwrap(), &blockdb, &utxodb),
                         "application/json",
                         addr
                     ),
@@ -81,6 +101,18 @@ impl Server {
                     "visualize-blockchain" => serve_dynamic_file!(
                         req,
                         include_str!("blockchain_vis.html"),
+                        "text/html",
+                        addr
+                    ),
+                    "ledger_vis.js" => serve_dynamic_file!(
+                        req,
+                        include_str!("ledger_vis.js"),
+                        "application/javascript",
+                        addr
+                    ),
+                    "visualize-ledger" => serve_dynamic_file!(
+                        req,
+                        include_str!("ledger_vis.html"),
                         "text/html",
                         addr
                     ),
