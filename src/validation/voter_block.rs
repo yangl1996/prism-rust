@@ -4,10 +4,10 @@ use crate::block::voter::Content;
 use crate::block::Content as BlockContent;
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
-use crate::blockchain::utils::get_voter_genesis_hash;
 use crate::crypto::hash::{Hashable, H256};
 use std::sync::Mutex;
 use super::check_block_exist;
+use crate::config::*;
 
 pub fn get_missing_references(content: &Content, blockchain: &Mutex<BlockChain>, blockdb: &BlockDatabase) -> Vec<H256> {
     let mut missing_blocks = vec![];
@@ -66,7 +66,7 @@ fn latest_level_voted_on_chain(
         _ => panic!("Wrong type"),
     };
 
-    let voter_genesis_hash = get_voter_genesis_hash(content.chain_number);
+    let voter_genesis_hash = VOTER_GENESIS[content.chain_number as usize];
     
     if voter_block.hash() == voter_genesis_hash {
         // if the voter block is the genesis block
