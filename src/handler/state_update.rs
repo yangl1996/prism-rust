@@ -132,6 +132,7 @@ pub fn unconfirm_old_tx_block_transactions(
     }
 }
 
+/// This function gets the transactions of a tx block hash from the blockdb.
 pub fn get_tx_block_content_transactions(hash: &H256, blockdb: &BlockDatabase) -> Vec<Transaction> {
     match blockdb.get(hash) {
         Ok(Some(block)) => match block.content {
@@ -145,8 +146,8 @@ pub fn get_tx_block_content_transactions(hash: &H256, blockdb: &BlockDatabase) -
 
 /// convert a transaction to two vectors of coinid/utxos, first is to be deleted from state, second is to be inserted
 pub fn to_coinid_and_potential_utxo(tx: &Transaction) -> (Vec<CoinId>, Vec<UTXO>) {
-    let hash: H256 = tx.hash(); // compute hash here, and below inside Input we don't have to compute again (we just copy)
-                                // i) delete all the input coins
+    let hash: H256 = tx.hash();
+    // i) delete all the input coins
     let to_delete: Vec<CoinId> = tx.input.iter().map(|input| input.into()).collect();
     // ii) add all output coins to the state
     let to_insert: Vec<UTXO> = tx
@@ -170,17 +171,17 @@ pub fn to_coinid_and_potential_utxo(tx: &Transaction) -> (Vec<CoinId>, Vec<UTXO>
 /// Reverse version of to_utxo. When rollback, convert a transaction to two vectors of coinid/utxos, first is to be deleted from state, second is to be inserted
 pub fn to_rollback_coinid_and_potential_utxo(tx: &Transaction) -> (Vec<CoinId>, Vec<UTXO>) {
     let hash: H256 = tx.hash();
-    // i) Get the input locations of the output coins and delete the output coins.
-    let to_delete: Vec<CoinId> = (0..(tx.output.len()))
+    // i) Get the input locations of the output coins and delete the output coins in reverse order.
+    let to_delete: Vec<CoinId> = (0..(tx.output.len())).rev()
         .map(|index| CoinId {
             hash,
             index: index as u32,
         })
         .collect();
-    // ii) Reconstruct the input utxos
+    // ii) Reconstruct the input utxos in reverse order.
     let to_insert: Vec<UTXO> = tx
         .input
-        .iter()
+        .iter().rev()
         .map(|input| UTXO {
             coin_id: input.into(),
             coin_data: CoinData {
@@ -191,5 +192,3 @@ pub fn to_rollback_coinid_and_potential_utxo(tx: &Transaction) -> (Vec<CoinId>, 
         .collect();
     (to_delete, to_insert)
 }
-
-// Tests are in tests/state_update.rs

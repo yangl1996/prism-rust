@@ -90,7 +90,7 @@ impl UTXODatabase {
     }
 
     /// Update the state.
-    /// Can serve as receive(transaction) or rollback, based on arguments to_delete and to_insert.
+    /// Can serve as add or rollback, based on arguments to_delete and to_insert.
     pub fn update(&self, to_delete: &Vec<CoinId>, to_insert: &Vec<UTXO>) -> Result<()> {
         for coin_id in to_delete {
             self.delete(coin_id)?;
