@@ -1,9 +1,9 @@
 pub mod generator;
 pub mod updater;
 
-use crate::block::transaction::Content as TxContent;
+
 use crate::crypto::hash::{Hashable, H256};
-use crate::transaction::{Input, Output, Transaction};
+use crate::transaction::{Input, Output};
 
 use bincode::{deserialize, serialize};
 use std::sync::Mutex;
@@ -80,7 +80,7 @@ impl UTXODatabase {
         let serialized = self.handle.get(&key)?;
         match serialized {
             None => return Ok(false),
-            Some(s) => return Ok(true),
+            Some(_s) => return Ok(true),
         }
     }
 
@@ -111,7 +111,7 @@ pub mod tests {
     use crate::transaction::{generator as tx_generator, Input, Transaction};
 
     fn init_with_tx_input(state_db: &mut UTXODatabase, tx: &Transaction) {
-        let hash: H256 = tx.hash(); // compute hash here, and below inside Input we don't have to compute again (we just copy)
+        let _hash: H256 = tx.hash(); // compute hash here, and below inside Input we don't have to compute again (we just copy)
         for input in tx.input.iter() {
             let coin_id: CoinId = input.into();
             let coin_data = CoinData {

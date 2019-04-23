@@ -78,7 +78,7 @@ impl Pool {
         // Get the start index of transaction blocks confirmed by leader block at 'level'
         let rollback_start = self.confirmation_boundary[level];
         // Move the tx blocks from the ledger to the unconfirmed set.
-        let mut to_remove_tx_blocks: Vec<H256> = self.ledger.split_off(rollback_start);
+        let to_remove_tx_blocks: Vec<H256> = self.ledger.split_off(rollback_start);
         for tx_block in to_remove_tx_blocks.iter() {
             self.insert_not_in_ledger(*tx_block);
         }

@@ -7,11 +7,11 @@ use crate::crypto::hash::H256;
 
 use std::cmp;
 use std::cmp::Ordering;
-use std::collections::{HashMap, HashSet};
 
-use super::edge::Edge;
-use super::proposer::Status as ProposerStatus;
-use super::voter::NodeStatus as VoterNodeStatus;
+
+
+
+
 
 pub fn lcb_from_vote_depths(votes: Vec<u32>) -> f32 {
     let answer: f32 = votes.len() as f32;

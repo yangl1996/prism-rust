@@ -395,7 +395,7 @@ impl BlockChain {
         let mut right_end: H256 = right_leaf;
 
         //1. Construct right segment until the level of right_end is same as left_end
-        for level in left_leaf_level..right_leaf_level {
+        for _level in left_leaf_level..right_leaf_level {
             right_segment.push(right_end);
             right_end = self.get_voter_parent(right_end);
         }
@@ -517,7 +517,7 @@ impl BlockChain {
             return; // Return if less than half the votes are be caste. This is only for efficiency
         }
 
-        let mut leader_block;
+        let leader_block;
         match self.compute_leader_block_at_level(level) {
             Some(x) => leader_block = x,
             None => return,
@@ -877,9 +877,9 @@ mod tests {
     #[test]
     fn blockchain_initialization() {
         // Initialize a blockchain with 10  voter chains.
-        let (state_update_sink, state_update_source) = mpsc::channel();
+        let (state_update_sink, _state_update_source) = mpsc::channel();
 
-        let mut blockchain = BlockChain::new(NUM_VOTER_CHAINS, state_update_sink);
+        let blockchain = BlockChain::new(NUM_VOTER_CHAINS, state_update_sink);
 
         // Checking proposer tree's genesis block hash
         let proposer_genesis_hash_shouldbe: [u8; 32] = [
@@ -914,7 +914,7 @@ mod tests {
     fn blockchain_growing() {
         let _rng = rand::thread_rng();
         // Initialize a blockchain with 10 voter chains.
-        let (state_update_sink, state_update_source) = mpsc::channel();
+        let (state_update_sink, _state_update_source) = mpsc::channel();
         let mut blockchain = BlockChain::new(NUM_VOTER_CHAINS, state_update_sink);
 
         // Store the parent blocks to mine on voter trees.
@@ -1540,7 +1540,7 @@ mod tests {
         pub const NUM_VOTER_CHAINS: u16 = 10;
         let _rng = rand::thread_rng();
         // Initialize a blockchain with 10 voter chains.
-        let (state_update_sink, state_update_source) = mpsc::channel();
+        let (state_update_sink, _state_update_source) = mpsc::channel();
         let mut blockchain = BlockChain::new(NUM_VOTER_CHAINS, state_update_sink);
 
         // Store the parent blocks to mine on voter trees.

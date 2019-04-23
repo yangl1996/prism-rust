@@ -29,11 +29,11 @@ pub fn new(
         state_update_source: state_update_source,
     };
 
-    return (ctx);
+    return ctx;
 }
 
 impl Context {
-    pub fn start(mut self) {
+    pub fn start(self) {
         println!("State updater started");
         thread::Builder::new()
             .name("state updater".to_string())

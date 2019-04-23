@@ -1,11 +1,11 @@
-use crate::block::transaction::Content as TxContent;
-use crate::block::{Block, Content};
+
+use crate::block::{Content};
 use crate::blockdb::BlockDatabase;
 use crate::crypto::hash::{Hashable, H256};
 use crate::state::{CoinData, CoinId, UTXODatabase, UTXO};
-use crate::transaction::{generator as tx_generator, Transaction};
+use crate::transaction::{Transaction};
 use crate::wallet::Wallet;
-use std::sync::{Arc, Mutex};
+use std::sync::{Mutex};
 
 /// This function changes the ledger to incorporate txs from last 'tx_block_hashes'.
 pub fn confirm_new_tx_block_hashes(
