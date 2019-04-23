@@ -17,6 +17,7 @@ use std::iter::FromIterator;
 use std::sync::mpsc::Sender;
 use transaction::Pool as TxBlkPool;
 use transaction::UpdateMessage as LedgerUpdateMessage;
+use crate::config::*;
 use utils::*;
 use voter::Chain as VoterChain;
 use voter::Fork as VoterChainFork;
@@ -56,26 +57,25 @@ impl BlockChain {
         // 1. Proposer genesis block
         // 1a. Add proposer genesis block in the graph
         let proposer_genesis_node = ProposerNodeData::genesis(num_voting_chains);
-        let proposer_genesis_hash = get_proposer_genesis_hash();
-        graph.add_node(proposer_genesis_hash);
+        graph.add_node(*PROPOSER_GENESIS);
         // Add metadata of the proposer genesis block to the hashmap
-        proposer_node_data.insert(proposer_genesis_hash, proposer_genesis_node);
+        proposer_node_data.insert(*PROPOSER_GENESIS, proposer_genesis_node);
 
         // 1b. Initializing proposer tree
-        proposer_tree.best_block = proposer_genesis_hash;
+        proposer_tree.best_block = *PROPOSER_GENESIS;
         proposer_tree
             .prop_nodes
-            .push(vec![proposer_genesis_hash]);
+            .push(vec![*PROPOSER_GENESIS]);
         // Genesis proposer block is the leader block at level 0
         proposer_tree
             .leader_nodes
-            .insert(0, proposer_genesis_hash);
+            .insert(0, *PROPOSER_GENESIS);
 
         // 2. Voter geneses blocks
         for chain_number in 0..(num_voting_chains) {
             // 2a. Add voter chain i genesis block in the graph
             let voter_genesis_node = VoterNodeData::genesis(chain_number as u16);
-            let voter_genesis_hash = get_voter_genesis_hash(chain_number as u16);
+            let voter_genesis_hash = VOTER_GENESIS[chain_number as usize];
             graph.add_node(voter_genesis_hash);
             // Add voter genesis node data to the hashmap
             voter_node_data.insert(voter_genesis_hash, voter_genesis_node);

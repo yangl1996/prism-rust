@@ -2,6 +2,8 @@
 extern crate serde_derive;
 #[macro_use]
 extern crate hex_literal;
+#[macro_use]
+extern crate lazy_static;
 
 pub mod block;
 pub mod blockchain;
