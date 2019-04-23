@@ -8,17 +8,19 @@ use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
-// do we need a handler?
+/// A state updater data struct holding blockdb, utxodb, wallets and a receiver.
+/// When receiving state update message from ledger, which is the tx block hashes to be updated, it reads these blocks
+/// from blockdb, extract the transactions, do the sanity check for them, then update the utxodb and wallets.
 pub struct Context {
     blockdb: Arc<BlockDatabase>,
-    utxodb: Arc<UTXODatabase>, //do we need a mutex here?
+    utxodb: Arc<UTXODatabase>,
     wallets: Arc<Vec<Mutex<Wallet>>>,
     state_update_source: Receiver<(LedgerUpdateMessage, Vec<H256>)>,
 }
 
 pub fn new(
     blockdb: &Arc<BlockDatabase>,
-    utxodb: &Arc<UTXODatabase>, //do we need a mutex here?
+    utxodb: &Arc<UTXODatabase>,
     wallets: &Arc<Vec<Mutex<Wallet>>>,
     state_update_source: Receiver<(LedgerUpdateMessage, Vec<H256>)>,
 ) -> (Context) {
@@ -33,6 +35,7 @@ pub fn new(
 }
 
 impl Context {
+    /// Start a new thread that runs the loop keeping receiving state update message from ledger.
     pub fn start(self) {
         println!("State updater started");
         thread::Builder::new()
@@ -40,9 +43,10 @@ impl Context {
             .spawn(move || {
                 self.updater_loop();
             })
-            .unwrap(); // do we need this unwrap?
+            .unwrap();
     }
 
+    /// The loop keeping receiving state update message from ledger.
     fn updater_loop(&self) {
         loop {
             if let Ok((signal, hashes)) = self.state_update_source.recv() {

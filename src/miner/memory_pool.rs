@@ -14,9 +14,9 @@ pub struct MemoryPool {
     /// Transactions by previous output, formatted as Input
     by_input: HashMap<Input, H256>,
     /// Storage for order by storage index, it is equivalent to FIFO
-    by_storage_index: BTreeMap<u64, H256>, // consider BTreeSet, why BTreeSet?
-                                           // TODO: pending storage: txs whose input is in pool (or in pending?)
-                                           // TODO: orphan storage: txs whose input can't be found in utxo or pool
+    by_storage_index: BTreeMap<u64, H256>,
+    // future: pending storage: txs whose input is in pool (or in pending?)
+    // future: orphan storage: txs whose input can't be found in utxo or pool
 }
 
 #[derive(Debug, Clone)]
@@ -37,6 +37,7 @@ impl MemoryPool {
         }
     }
 
+    /// Insert a tx into memory pool. The input of it will also be recorded.
     pub fn insert(&mut self, tx: Transaction) {
         // assumes no duplicates nor double spends
         let hash = tx.hash();
@@ -63,36 +64,34 @@ impl MemoryPool {
         return Some(entry);
     }
 
-    // for test
+    /// Check whether a tx hash is in memory pool
+    /// When adding tx into mempool, should check this.
     pub fn contains(&self, h: &H256) -> bool {
         self.by_hash.contains_key(h)
     }
 
-    // when adding tx into mempool, should check this
+    /// Check whether the input of a tx is already recorded. If so, this tx is a double spend.
+    /// When adding tx into mempool, should check this.
     pub fn is_double_spend(&self, inputs: &Vec<Input>) -> bool {
-        for input in inputs {
-            if self.by_input.contains_key(input) {
-                return true;
-            }
-        }
-        return false;
+        inputs.iter().any(|input|self.by_input.contains_key(input))
     }
 
     fn remove_and_get(&mut self, hash: &H256) -> Option<Entry> {
         let entry = self.by_hash.remove(hash)?;
         for input in &entry.transaction.input {
-            self.by_input.remove(&input.clone());
+            self.by_input.remove(&input);
         }
         self.by_storage_index.remove(&entry.storage_index);
         return Some(entry);
     }
 
-    /// Remove a tx by its hash
+    /// Remove a tx by its hash, also remove its recorded inputs
     pub fn remove_by_hash(&mut self, hash: &H256) {
         self.remove_and_get(hash);
     }
 
     /// Remove potential tx that use this input.
+    /// This function runs recursively, so it may remove more transactions.
     pub fn remove_by_input(&mut self, prevout: &Input) {
         //use a deque to recursively remove, in case there are multi level dependency between txs.
         let mut queue: VecDeque<Input> = VecDeque::new();

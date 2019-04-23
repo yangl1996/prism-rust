@@ -11,10 +11,6 @@ use std::sync::{Arc, Mutex};
 
 pub type Result<T> = std::result::Result<T, WalletError>;
 
-// one potential problem: if another program has the same keypair, then he may spend a coin, but this wallet don't know it's spend.
-// another problem is concurrency, it seems this wallet can only be run single-threaded.
-// so this wallet should just be used in experiment to generate transactions single-threaded.
-// otherwise we may want a mutex
 /// A data structure to maintain key pairs and their coins, and to generate transactions.
 pub struct Wallet {
     /// List of coins which can be spent
@@ -23,7 +19,7 @@ pub struct Wallet {
     keypairs: HashMap<H256, KeyPair>,
     /// Channel to notify the miner about context update
     context_update_chan: mpsc::Sender<ContextUpdateSignal>,
-    /// Pool of unmined transactions
+    /// Pool of unmined transactions, will add generated transactions to it.
     mempool: Arc<Mutex<MemoryPool>>,
 }
 
@@ -32,6 +28,7 @@ pub enum WalletError {
     InsufficientMoney,
     MissingKey,
     ContextUpdateChannelError, //this may due to the miner is down
+    MemoryPoolCheckFailure,
 }
 
 impl Wallet {
@@ -84,7 +81,7 @@ impl Wallet {
     }
 
     /// Update the wallet.
-    /// Can serve as receive(transaction) or rollback, based on arguments to_delete and to_insert.
+    /// Can serve as add or rollback, based on arguments to_delete and to_insert.
     pub fn update(&mut self, to_delete: &Vec<CoinId>, to_insert: &Vec<UTXO>) {
         for coin_id in to_delete {
             self.delete_coin(coin_id);
@@ -104,7 +101,7 @@ impl Wallet {
             .sum::<u64>()
     }
 
-    /// create a transaction using the wallet coins
+    /// Create a transaction using the wallet coins
     fn create_transaction(&mut self, recipient: H256, value: u64) -> Result<Transaction> {
         let mut coins_to_use: Vec<UTXO> = vec![];
         let mut value_sum = 0u64;
@@ -160,7 +157,7 @@ impl Wallet {
         let mut signatures = vec![];
         for keypair in coins_to_use
             .iter()
-            .map(|utxo| self.keypairs.get(&utxo.coin_data.recipient).unwrap())
+            .map(|coin| self.keypairs.get(&coin.coin_data.recipient).unwrap())
         {
             signatures.push(PubkeyAndSignature {
                 pubkey: keypair.public_key(),
@@ -174,11 +171,12 @@ impl Wallet {
         })
     }
 
-    /// pay to a recipient some value of money, note that the resulting transaction may not be confirmed
+    /// Pay to a recipient some value of money, the resulting transaction is just added to memory pool, and may not be confirmed
     pub fn pay(&mut self, recipient: H256, value: u64) -> Result<H256> {
         let tx = self.create_transaction(recipient, value)?;
         let hash = tx.hash();
         handler::new_transaction(tx, &self.mempool);
+        // TODO: process the memory pool check
         match self
             .context_update_chan
             .send(ContextUpdateSignal::NewContent)
