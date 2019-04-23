@@ -104,6 +104,18 @@ impl Server {
                         "text/html",
                         addr
                     ),
+                    "ledger_vis.js" => serve_dynamic_file!(
+                        req,
+                        include_str!("ledger_vis.js"),
+                        "application/javascript",
+                        addr
+                    ),
+                    "visualize-ledger" => serve_dynamic_file!(
+                        req,
+                        include_str!("ledger_vis.html"),
+                        "text/html",
+                        addr
+                    ),
                     "" => serve_dynamic_file!(req, include_str!("index.html"), "text/html", addr),
                     _ => {
                         let content_type = "Content-Type: text/html".parse::<Header>().unwrap();
