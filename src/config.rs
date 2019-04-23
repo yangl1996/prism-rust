@@ -21,10 +21,13 @@ pub const PROPOSER_MINING_RATE: u32 = 20;
 // Transaction blocks
 pub const TRANSACTION_MINING_RATE: u32 = 100 - PROPOSER_MINING_RATE - VOTER_MINING_RATE;
 
-pub const DEFAULT_DIFFICULTY: [u8; 32] = [255; 32];
-
-// Genesis Hashes
 lazy_static! {
+    pub static ref DEFAULT_DIFFICULTY: H256 = {
+        let raw: [u8; 32] = [255; 32];
+        (&raw).into()
+    };
+
+    // Genesis Hashes
     pub static ref PROPOSER_GENESIS: H256 = {
         let raw: [u8; 32] = [0; 32];
         (&raw).into()
