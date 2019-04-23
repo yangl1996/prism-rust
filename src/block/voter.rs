@@ -1,5 +1,7 @@
 use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::merkle::MerkleTree;
+use super::Block;
+use super::Content as BlockContent;
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct Content {
@@ -32,4 +34,23 @@ impl Hashable for Content {
         // TODO: Add chain number and voter_parent_hash in the hash
         return merkle_tree.root();
     }
+}
+
+pub fn genesis(chain_num: u16) -> Block {
+    let all_zero: [u8; 32] = [0; 32];
+    let content = Content {
+        chain_number: chain_num,
+        voter_parent_hash: (&all_zero).into(),
+        proposer_block_votes: vec![],
+    };
+    return Block::new(
+        (&all_zero).into(),
+        0,
+        0,
+        (&all_zero).into(),
+        vec![],
+        BlockContent::Voter(content),
+        all_zero.clone(),
+        all_zero.clone(),
+    );
 }
