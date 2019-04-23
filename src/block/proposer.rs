@@ -1,8 +1,8 @@
-use crate::crypto::hash::{Hashable, H256};
-use crate::crypto::merkle::MerkleTree;
 use super::Block;
 use super::Content as BlockContent;
 use crate::config::*;
+use crate::crypto::hash::{Hashable, H256};
+use crate::crypto::merkle::MerkleTree;
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct Content {
@@ -47,6 +47,6 @@ pub fn genesis() -> Block {
         vec![],
         BlockContent::Proposer(content),
         all_zero.clone(),
-        *DEFAULT_DIFFICULTY
+        *DEFAULT_DIFFICULTY,
     );
 }

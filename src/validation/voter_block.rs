@@ -1,15 +1,19 @@
 use super::super::config;
-use crate::block::Block;
+use super::check_block_exist;
 use crate::block::voter::Content;
+use crate::block::Block;
 use crate::block::Content as BlockContent;
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
+use crate::config::*;
 use crate::crypto::hash::{Hashable, H256};
 use std::sync::Mutex;
-use super::check_block_exist;
-use crate::config::*;
 
-pub fn get_missing_references(content: &Content, blockchain: &Mutex<BlockChain>, blockdb: &BlockDatabase) -> Vec<H256> {
+pub fn get_missing_references(
+    content: &Content,
+    blockchain: &Mutex<BlockChain>,
+    blockdb: &BlockDatabase,
+) -> Vec<H256> {
     let mut missing_blocks = vec![];
 
     // check the voter parent
@@ -38,7 +42,11 @@ pub fn check_chain_number(content: &Content) -> bool {
     }
 }
 
-pub fn check_levels_voted(content: &Content, blockchain: &Mutex<BlockChain>, blockdb: &BlockDatabase) -> bool {
+pub fn check_levels_voted(
+    content: &Content,
+    blockchain: &Mutex<BlockChain>,
+    blockdb: &BlockDatabase,
+) -> bool {
     // get the deepest block voted by our parent
     let parent_block = blockdb.get(&content.voter_parent_hash).unwrap().unwrap();
     let mut last_voted_level = latest_level_voted_on_chain(&parent_block, blockchain, blockdb);
@@ -46,9 +54,13 @@ pub fn check_levels_voted(content: &Content, blockchain: &Mutex<BlockChain>, blo
     // check whether the votes are continuous, and starts at the next unvoted level
     for (index, proposer_vote) in content.proposer_block_votes.iter().enumerate() {
         let voted = blockdb.get(proposer_vote).unwrap().unwrap();
-        let level = blockchain.lock().unwrap().prop_node_data(&voted.hash()).level as usize;
+        let level = blockchain
+            .lock()
+            .unwrap()
+            .prop_node_data(&voted.hash())
+            .level as usize;
         if level != index + 1 + last_voted_level {
-            return false
+            return false;
         }
     }
 
@@ -67,14 +79,18 @@ fn latest_level_voted_on_chain(
     };
 
     let voter_genesis_hash = VOTER_GENESIS[content.chain_number as usize];
-    
+
     if voter_block.hash() == voter_genesis_hash {
         // if the voter block is the genesis block
         return 0;
     } else if content.proposer_block_votes.len() > 0 {
         // if this block voted for some blocks, then just return the deepest level among them
         let latest_prop_voted = content.proposer_block_votes.last().unwrap();
-        return blockchain.lock().unwrap().prop_node_data(latest_prop_voted).level as usize;
+        return blockchain
+            .lock()
+            .unwrap()
+            .prop_node_data(latest_prop_voted)
+            .level as usize;
     } else {
         // if this block voted for zero block, then look for its parent
         let parent = blockdb.get(&content.voter_parent_hash).unwrap().unwrap();

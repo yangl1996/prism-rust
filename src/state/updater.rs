@@ -1,11 +1,11 @@
-use std::sync::mpsc::{Receiver};
-use crate::crypto::hash::H256;
 use crate::blockchain::transaction::UpdateMessage as LedgerUpdateMessage;
 use crate::blockdb::BlockDatabase;
-use std::sync::{Mutex, Arc};
+use crate::crypto::hash::H256;
+use crate::handler;
 use crate::state::UTXODatabase;
 use crate::wallet::Wallet;
-use crate::handler;
+use std::sync::mpsc::Receiver;
+use std::sync::{Arc, Mutex};
 use std::thread;
 
 // do we need a handler?
@@ -35,9 +35,12 @@ pub fn new(
 impl Context {
     pub fn start(mut self) {
         println!("State updater started");
-        thread::Builder::new().name("state updater".to_string()).spawn(move || {
-            self.updater_loop();
-        }).unwrap();// do we need this unwrap?
+        thread::Builder::new()
+            .name("state updater".to_string())
+            .spawn(move || {
+                self.updater_loop();
+            })
+            .unwrap(); // do we need this unwrap?
     }
 
     fn updater_loop(&self) {
@@ -45,11 +48,21 @@ impl Context {
             if let Ok((signal, hashes)) = self.state_update_source.recv() {
                 match signal {
                     LedgerUpdateMessage::Add => {
-                        handler::confirm_new_tx_block_hashes(hashes, &self.blockdb, &self.utxodb, &self.wallets);
-                    },
+                        handler::confirm_new_tx_block_hashes(
+                            hashes,
+                            &self.blockdb,
+                            &self.utxodb,
+                            &self.wallets,
+                        );
+                    }
                     LedgerUpdateMessage::Rollback => {
-                        handler::unconfirm_old_tx_block_hashes(hashes, &self.blockdb, &self.utxodb, &self.wallets);
-                    },
+                        handler::unconfirm_old_tx_block_hashes(
+                            hashes,
+                            &self.blockdb,
+                            &self.utxodb,
+                            &self.wallets,
+                        );
+                    }
                 }
             }
         }

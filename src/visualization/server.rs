@@ -1,13 +1,13 @@
 use super::blockchain_dump::dump_blockchain;
 use super::ledger_dump::dump_ledger;
 use crate::blockchain::BlockChain;
+use crate::blockdb::BlockDatabase;
+use crate::state::UTXODatabase;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use tiny_http::Header;
 use tiny_http::Response;
 use tiny_http::Server as HTTPServer;
-use crate::blockdb::BlockDatabase;
-use crate::state::UTXODatabase;
 
 pub struct Server {
     blockchain: Arc<Mutex<BlockChain>>,
@@ -55,7 +55,7 @@ impl Server {
         addr: std::net::SocketAddr,
         blockchain: Arc<Mutex<BlockChain>>,
         blockdb: Arc<BlockDatabase>,
-        utxodb: Arc<UTXODatabase>
+        utxodb: Arc<UTXODatabase>,
     ) {
         let handle = HTTPServer::http(&addr).unwrap();
         let server = Self {
@@ -110,12 +110,9 @@ impl Server {
                         "application/javascript",
                         addr
                     ),
-                    "visualize-ledger" => serve_dynamic_file!(
-                        req,
-                        include_str!("ledger_vis.html"),
-                        "text/html",
-                        addr
-                    ),
+                    "visualize-ledger" => {
+                        serve_dynamic_file!(req, include_str!("ledger_vis.html"), "text/html", addr)
+                    }
                     "" => serve_dynamic_file!(req, include_str!("index.html"), "text/html", addr),
                     _ => {
                         let content_type = "Content-Type: text/html".parse::<Header>().unwrap();

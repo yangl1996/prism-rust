@@ -1,13 +1,13 @@
 use super::message::{self, Message};
 use super::peer;
-use crate::blockchain::BlockChain;
 use crate::block::Block;
+use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
-use crate::state::UTXODatabase;
 use crate::handler::new_validated_block;
 use crate::miner::memory_pool::MemoryPool;
 use crate::miner::miner::ContextUpdateSignal;
 use crate::network::server::Handle as ServerHandle;
+use crate::state::UTXODatabase;
 use crate::validation::{check_block, BlockResult};
 use log::{debug, info};
 use std::sync::{mpsc, Arc, Mutex};
@@ -108,8 +108,8 @@ impl Context {
                     debug!("Blocks");
                     for block in blocks {
                         // TODO: add validation and buffer logic here
-                        let validation_result = check_block(&block, &self.chain,
-                                                            &self.blockdb, &self.utxodb);
+                        let validation_result =
+                            check_block(&block, &self.chain, &self.blockdb, &self.utxodb);
                         match validation_result {
                             BlockResult::MissingParent(_) | BlockResult::MissingReferences(_) => {
                                 debug!("Missing parent/references");
@@ -132,11 +132,11 @@ impl Context {
                             }
                         }
                     }
-                    
+
                     let mut still_unresolved: Vec<Block> = vec![];
                     for block in self.buffer.lock().unwrap().drain(..) {
-                        let validation_result = check_block(&block, &self.chain,
-                                                            &self.blockdb, &self.utxodb);
+                        let validation_result =
+                            check_block(&block, &self.chain, &self.blockdb, &self.utxodb);
                         match validation_result {
                             BlockResult::MissingParent(_) | BlockResult::MissingReferences(_) => {
                                 still_unresolved.push(block);

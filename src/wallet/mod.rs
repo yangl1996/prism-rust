@@ -1,10 +1,10 @@
 use crate::crypto::hash::{Hashable, H256};
-use crate::crypto::sign::{KeyPair, PubKey, Signature, Signable};
+use crate::crypto::sign::{KeyPair, PubKey, Signable, Signature};
 use crate::handler;
 use crate::miner::memory_pool::MemoryPool;
 use crate::miner::miner::ContextUpdateSignal;
 use crate::state::{CoinData, CoinId, UTXO};
-use crate::transaction::{Output, PubkeyAndSignature, Transaction, Input};
+use crate::transaction::{Input, Output, PubkeyAndSignature, Transaction};
 use std::collections::{HashMap, HashSet};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
@@ -31,7 +31,7 @@ pub struct Wallet {
 pub enum WalletError {
     InsufficientMoney,
     MissingKey,
-    ContextUpdateChannelError,//this may due to the miner is down
+    ContextUpdateChannelError, //this may due to the miner is down
 }
 
 impl Wallet {
@@ -158,11 +158,20 @@ impl Wallet {
             signatures: vec![],
         };
         let mut signatures = vec![];
-        for keypair in coins_to_use.iter().map(|utxo|self.keypairs.get(&utxo.coin_data.recipient).unwrap()) {
-            signatures.push(PubkeyAndSignature{ pubkey: keypair.public_key(), signature: unsigned.sign(keypair)});
+        for keypair in coins_to_use
+            .iter()
+            .map(|utxo| self.keypairs.get(&utxo.coin_data.recipient).unwrap())
+        {
+            signatures.push(PubkeyAndSignature {
+                pubkey: keypair.public_key(),
+                signature: unsigned.sign(keypair),
+            });
         }
 
-        Ok(Transaction{ signatures, ..unsigned })
+        Ok(Transaction {
+            signatures,
+            ..unsigned
+        })
     }
 
     /// pay to a recipient some value of money, note that the resulting transaction may not be confirmed
@@ -170,9 +179,12 @@ impl Wallet {
         let tx = self.create_transaction(recipient, value)?;
         let hash = tx.hash();
         handler::new_transaction(tx, &self.mempool);
-        match self.context_update_chan.send(ContextUpdateSignal::NewContent) {
+        match self
+            .context_update_chan
+            .send(ContextUpdateSignal::NewContent)
+        {
             Err(e) => return Err(WalletError::ContextUpdateChannelError),
-            _ => ()
+            _ => (),
         };
         //return tx hash, later we can confirm it in ledger
         Ok(hash)
@@ -189,12 +201,12 @@ pub mod tests {
     use super::Wallet;
     use crate::crypto::generator as crypto_generator;
     use crate::crypto::hash::{Hashable, H256};
-    use crate::handler::{to_rollback_coinid_and_potential_utxo, to_coinid_and_potential_utxo};
+    use crate::crypto::sign::Signable;
+    use crate::handler::{to_coinid_and_potential_utxo, to_rollback_coinid_and_potential_utxo};
     use crate::miner::memory_pool::MemoryPool;
     use crate::miner::miner::ContextUpdateSignal;
     use crate::transaction::{Output, Transaction};
     use std::sync::{mpsc, Arc, Mutex};
-    use crate::crypto::sign::Signable;
 
     fn new_wallet_pool_receiver_keyhash() -> (
         Wallet,

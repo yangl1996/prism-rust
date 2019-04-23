@@ -13,7 +13,6 @@ use super::edge::Edge;
 use super::proposer::Status as ProposerStatus;
 use super::voter::NodeStatus as VoterNodeStatus;
 
-
 pub fn lcb_from_vote_depths(votes: Vec<u32>) -> f32 {
     let answer: f32 = votes.len() as f32;
     return answer; //todo: Apply the confirmation logic from the paper
