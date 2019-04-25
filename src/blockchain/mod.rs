@@ -57,21 +57,21 @@ impl BlockChain {
         // 1. Proposer genesis block
         // 1a. Add proposer genesis block in the graph
         let proposer_genesis_node = ProposerNodeData::genesis(num_voting_chains);
-        graph.add_node(*PROPOSER_GENESIS);
+        graph.add_node(*PROPOSER_GENESIS_HASH);
         // Add metadata of the proposer genesis block to the hashmap
-        proposer_node_data.insert(*PROPOSER_GENESIS, proposer_genesis_node);
+        proposer_node_data.insert(*PROPOSER_GENESIS_HASH, proposer_genesis_node);
 
         // 1b. Initializing proposer tree
-        proposer_tree.best_block = *PROPOSER_GENESIS;
-        proposer_tree.prop_nodes.push(vec![*PROPOSER_GENESIS]);
+        proposer_tree.best_block = *PROPOSER_GENESIS_HASH;
+        proposer_tree.prop_nodes.push(vec![*PROPOSER_GENESIS_HASH]);
         // Genesis proposer block is the leader block at level 0
-        proposer_tree.leader_nodes.insert(0, *PROPOSER_GENESIS);
+        proposer_tree.leader_nodes.insert(0, *PROPOSER_GENESIS_HASH);
 
         // 2. Voter geneses blocks
         for chain_number in 0..(num_voting_chains) {
             // 2a. Add voter chain i genesis block in the graph
             let voter_genesis_node = VoterNodeData::genesis(chain_number as u16);
-            let voter_genesis_hash = VOTER_GENESIS[chain_number as usize];
+            let voter_genesis_hash = VOTER_GENESIS_HASHES[chain_number as usize];
             graph.add_node(voter_genesis_hash);
             // Add voter genesis node data to the hashmap
             voter_node_data.insert(voter_genesis_hash, voter_genesis_node);
@@ -107,7 +107,7 @@ impl BlockChain {
     // already exist in the blockgraph.
     pub fn insert_node(&mut self, block: &Block) {
         let block_hash = block.hash();
-        let parent_proposer_block_hash = block.header.parent_hash;
+        let parent_proposer_block_hash = block.header.parent;
         // Add the node corresponding to the block in the graph field
         self.graph.add_node(block_hash);
 
@@ -141,7 +141,7 @@ impl BlockChain {
                 self.proposer_tree.insert_unreferred(block_hash);
 
                 // 2. Iterate through the list of proposer blocks referred by this new block
-                for (position, prop_hash) in content.proposer_block_hashes.iter().enumerate() {
+                for (position, prop_hash) in content.proposer_refs.iter().enumerate() {
                     self.insert_edge(
                         block_hash,
                         *prop_hash,
@@ -151,7 +151,7 @@ impl BlockChain {
                 }
 
                 // 3. Iterate through the list of transaction blocks referred by this new block and add an edge
-                for (position, tx_hash) in content.transaction_block_hashes.iter().enumerate() {
+                for (position, tx_hash) in content.transaction_refs.iter().enumerate() {
                     self.insert_edge(
                         block_hash,
                         *tx_hash,
@@ -195,12 +195,12 @@ impl BlockChain {
                 // 2. Add edge from voter block to its voter parent
                 self.insert_edge(
                     block_hash,
-                    content.voter_parent_hash,
+                    content.voter_parent,
                     Edge::VoterToVoterParent,
                 );
 
                 // 3. Add edge from voter block to proposer block it voted.
-                for prop_block_hash in content.proposer_block_votes.iter() {
+                for prop_block_hash in content.votes.iter() {
                     // if the votee is the same as the parent
                     if *prop_block_hash == parent_proposer_block_hash {
                         self.insert_edge(
@@ -222,13 +222,13 @@ impl BlockChain {
 
                 // 4. Updating the voter chain.
                 let parent_voter_node_data: VoterNodeData =
-                    self.voter_node_data[&content.voter_parent_hash];
+                    self.voter_node_data[&content.voter_parent];
                 // The update status is used to create the voter node data
                 let voter_node_update = self.voter_chains
                     [parent_voter_node_data.chain_number as usize]
                     .add_voter_block(
                         block_hash,
-                        content.voter_parent_hash,
+                        content.voter_parent,
                         parent_voter_node_data.level + 1,
                     );
 
@@ -250,7 +250,7 @@ impl BlockChain {
                             .make_on_main_chain();
 
                         // Remove the prop block levels voted by this block from list of unvoted levels of this chain.
-                        for prop_block_hash in content.proposer_block_votes.iter() {
+                        for prop_block_hash in content.votes.iter() {
                             let proposer_level = self.prop_node_data(&prop_block_hash).level;
                             self.voter_chains
                                 .get_mut(voter_node_data.chain_number as usize)

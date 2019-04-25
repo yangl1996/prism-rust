@@ -1,8 +1,6 @@
-use crate::block::generator as block_generator;
 use crate::block::proposer::Content as Proposer_Content;
 use crate::block::voter::Content as Voter_Content;
 use crate::block::{Block, Content};
-use crate::crypto::generator as crypto_generator;
 use crate::crypto::hash::H256;
 
 use std::cmp;
@@ -60,6 +58,7 @@ impl PropOrderingHelper {
     }
 }
 
+/*
 /*
  Test utilities
 */
@@ -122,3 +121,4 @@ pub fn test_voter_block(
         sortition_proof,
     };
 }
+*/
