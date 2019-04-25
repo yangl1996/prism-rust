@@ -10,23 +10,6 @@ use std::sync::Mutex;
 
 pub type Result<T> = std::result::Result<T, rocksdb::Error>;
 
-/// The struct that identifies an UTXO, it contains two fields of Input
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
-pub struct CoinId {
-    /// The hash of the transaction being referred to.
-    pub hash: H256,
-    /// The index of the output in question in that transaction.
-    pub index: u32,
-}
-
-impl From<&Input> for CoinId {
-    fn from(other: &Input) -> Self {
-        Self {
-            hash: other.hash,
-            index: other.index,
-        }
-    }
-}
 
 pub type CoinData = Output;
 

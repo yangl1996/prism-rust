@@ -1,29 +1,25 @@
-pub mod generator;
 pub mod header;
 pub mod proposer;
-mod test_util;
 pub mod transaction;
 pub mod voter;
-
 
 use crate::crypto::hash::{Hashable, H256};
 
 /// A block in the Prism blockchain.
 #[derive(Serialize, Deserialize, Debug, Clone)]
-// TODO: discuss. I removed Default trait. It seems that the only place that it will be needed is in tests, to
-// quickly generate some fake blocks. PartialEq is also removed for now
 pub struct Block {
     /// The header of the block.
     pub header: header::Header,
     /// The content of the block. It could contain transactions, references, or votes, depending on
     /// the block type.
     pub content: Content,
-    /// The sortition proof of the content.  This 'connects' the content to the content root in the header.
+    /// The sortition proof of the content. In addition to the content root in block header, we are
+    /// able to verify that the block is mined on a set of content candidates.
     pub sortition_proof: Vec<H256>,
 }
 
 impl Block {
-    /// Create a new block from scratch.
+    /// Create a new block.
     pub fn new(
         parent: H256,
         timestamp: u64,
@@ -49,6 +45,7 @@ impl Block {
         }
     }
 
+    // TODO: use another name
     /// Create a new block from header.
     pub fn from_header(
         header: header::Header,
@@ -65,28 +62,23 @@ impl Block {
 
 impl Hashable for Block {
     fn hash(&self) -> H256 {
-        // hash of the header seals the block content and the sortition proof
+        // TODO: we are only hashing the header here.
         return self.header.hash();
     }
 }
 
-impl std::fmt::Display for Block {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "hash: {}; type: {}", self.header.hash(), self.content)?; // Ignoring status for now
-        Ok(())
-    }
-}
-
-/// The content of a block. It could contain transactions, references, or votes, depending on the
-/// type of the block.
+/// The content of a block. It could be transaction content, proposer content, or voter content,
+/// depending on the type of the block.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Content {
+    /// Transaction block content.
     Transaction(transaction::Content),
+    /// Proposer block content.
     Proposer(proposer::Content),
+    /// Voter block content.
     Voter(voter::Content),
 }
 
-// todo: This is a bad coding.
 impl Hashable for Content {
     fn hash(&self) -> H256 {
         match self {
@@ -97,36 +89,13 @@ impl Hashable for Content {
     }
 }
 
-impl std::fmt::Display for Content {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            Content::Transaction(_c) => {
-                write!(f, "Transaction block")?;
-                Ok(())
-            }
-            Content::Proposer(_c) => {
-                write!(f, "Proposer block")?;
-                Ok(())
-            }
-            Content::Voter(c) => {
-                write!(f, "Voter block @ ({})", c.chain_number)?;
-                Ok(())
-            }
-        }
-    }
-}
-impl Default for Content {
-    fn default() -> Self {
-        Content::Transaction(transaction::Content::default())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::test_util;
     use crate::crypto::hash::Hashable;
     use rand::Rng;
 
+    /*
     #[test]
     #[ignore]
     fn check_transaction_content_hash() {
@@ -167,5 +136,6 @@ mod tests {
         let _block = test_util::sample_mined_block(5);
         // todo: Verify the sortition proof.
     }
+    */
 
 }
