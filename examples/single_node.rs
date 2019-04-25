@@ -17,7 +17,7 @@ fn main() {
 
     let utxodb_path = std::path::Path::new("/tmp/prism_test_state.rocksdb");
     let utxodb = state::UTXODatabase::new(utxodb_path).unwrap();
-    let utxodb = Arc::new(Mutex::new(utxodb));
+    let utxodb = Arc::new(utxodb);
 
     let (state_update_sink, state_update_source) = mpsc::channel();
     let blockchain = blockchain::BlockChain::new(NUM_VOTER_CHAINS, state_update_sink);
@@ -31,7 +31,7 @@ fn main() {
     let peer_addr = std::net::SocketAddr::new(peer_ip, peer_port);
 
     let (_server, miner, wallets) =
-        prism::start(peer_addr, &blockdb, &blockchain, &utxodb, &mempool, state_update_source).unwrap();
+        prism::start(peer_addr, &blockdb, &utxodb, &blockchain, &mempool, state_update_source).unwrap();
 
     let vis_ip = "127.0.0.1".parse::<std::net::IpAddr>().unwrap();
     let vis_port = 8888;
@@ -54,7 +54,7 @@ fn main() {
             })
             .flatten()
             .collect(),
-        key_sig: vec![],
+        authorization: vec![],
     };
     handler::new_transaction(funding, &mempool);
 
@@ -126,7 +126,7 @@ fn main() {
         let mut balance_in_state = 0u64;
         let w = w.lock().unwrap();
         for coin_id in w.get_coin_id().iter() {
-            let coin_data = utxodb.lock().unwrap().get(coin_id).unwrap().unwrap();
+            let coin_data = utxodb.get(coin_id).unwrap().unwrap();
             balance_in_state += coin_data.value;
         }
         assert_eq!(
