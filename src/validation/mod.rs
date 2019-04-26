@@ -71,10 +71,12 @@ pub fn check_block(
     // TODO: check timestamp
     // TODO: check sortition proof
 
+    /*
     // check the content hash
     if block.content.hash() != block.header.content_root {
         return BlockResult::WrongContentHash;
     }
+    */
 
     // match the block type and check content
     match &block.content {
@@ -82,6 +84,7 @@ pub fn check_block(
             // check each transaction
             /*
             for transaction in content.transactions.iter() {
+                /*
                 if !transaction::check_non_empty(&transaction) {
                     return BlockResult::EmptyTransaction;
                 }
@@ -97,6 +100,7 @@ pub fn check_block(
                 if !transaction::check_signature(&transaction) {
                     return BlockResult::WrongSignature;
                 }
+                */
             }
             */
             return BlockResult::Pass;
@@ -117,6 +121,7 @@ pub fn check_block(
             if missing_refs.len() != 0 {
                 return BlockResult::MissingReferences(missing_refs);
             }
+            // TODO: if those two checks are not disabled, stack overflow.
             /*
             // check chain number
             if !voter_block::check_chain_number(&content) {
