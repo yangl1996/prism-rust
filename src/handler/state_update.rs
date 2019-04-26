@@ -2,8 +2,8 @@
 use crate::block::{Content};
 use crate::blockdb::BlockDatabase;
 use crate::crypto::hash::{Hashable, H256};
-use crate::state::{CoinData, CoinId, UTXODatabase, UTXO};
-use crate::transaction::{Transaction};
+use crate::state::{CoinData, UTXODatabase, UTXO};
+use crate::transaction::{Transaction, CoinId};
 use crate::wallet::Wallet;
 use std::sync::{Mutex};
 
@@ -134,7 +134,7 @@ pub fn unconfirm_old_tx_block_transactions(
 
 /// This function gets the transactions of a tx block hash from the blockdb.
 pub fn get_tx_block_content_transactions(hash: &H256, blockdb: &BlockDatabase) -> Vec<Transaction> {
-    match blockdb.get(hash) {
+    match blockdb.get(*hash) {
         Ok(Some(block)) => match block.content {
             Content::Transaction(content) => return content.transactions,
             _ => panic!("Wrong block stored"),
@@ -148,7 +148,7 @@ pub fn get_tx_block_content_transactions(hash: &H256, blockdb: &BlockDatabase) -
 pub fn to_coinid_and_potential_utxo(tx: &Transaction) -> (Vec<CoinId>, Vec<UTXO>) {
     let hash: H256 = tx.hash();
     // i) delete all the input coins
-    let to_delete: Vec<CoinId> = tx.input.iter().map(|input| input.into()).collect();
+    let to_delete: Vec<CoinId> = tx.input.iter().map(|input| input.coin).collect();
     // ii) add all output coins to the state
     let to_insert: Vec<UTXO> = tx
         .output
@@ -183,10 +183,10 @@ pub fn to_rollback_coinid_and_potential_utxo(tx: &Transaction) -> (Vec<CoinId>, 
         .input
         .iter().rev()
         .map(|input| UTXO {
-            coin_id: input.into(),
+            coin_id: input.coin,
             coin_data: CoinData {
                 value: input.value,
-                recipient: input.recipient,
+                recipient: input.owner,
             },
         })
         .collect();

@@ -1,5 +1,5 @@
 use crate::crypto::hash::{Hashable, H256};
-use crate::transaction::{Input, Transaction};
+use crate::transaction::{Input, Transaction, CoinId};
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::VecDeque;
@@ -103,10 +103,12 @@ impl MemoryPool {
                 let entry = self.remove_and_get(&entry_hash).unwrap();
                 for (index, output) in entry.transaction.output.iter().enumerate() {
                     queue.push_back(Input {
-                        hash: entry_hash,
-                        index: index as u32,
+                        coin: CoinId {
+                            hash: entry_hash,
+                            index: index as u32,
+                        },
                         value: output.value,
-                        recipient: output.recipient,
+                        owner: output.recipient,
                     });
                 }
             }

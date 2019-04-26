@@ -80,7 +80,7 @@ impl Context {
                     let mut hashes_to_request = vec![];
                     for hash in hashes {
                         // TODO: add a method to blockdb to quickly check whether a block exists
-                        match self.blockdb.get(&hash).unwrap() {
+                        match self.blockdb.get(hash).unwrap() {
                             None => {
                                 hashes_to_request.push(hash);
                             }
@@ -95,7 +95,7 @@ impl Context {
                     debug!("GetBlocks");
                     let mut blocks = vec![];
                     for hash in hashes {
-                        match self.blockdb.get(&hash).unwrap() {
+                        match self.blockdb.get(hash).unwrap() {
                             None => {}
                             Some(block) => {
                                 blocks.push(block);

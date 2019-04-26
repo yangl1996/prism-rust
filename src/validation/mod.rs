@@ -56,7 +56,7 @@ pub fn check_block(
     // TODO: check PoW. Where should we get the current difficulty ranges?
 
     // check whether the parent exists
-    let parent = block.header.parent_hash;
+    let parent = block.header.parent;
     let parent_availability = check_block_exist(parent, blockchain, blockdb);
     if !(parent_availability.0 && parent_availability.1) {
         return BlockResult::MissingParent(parent);
@@ -133,7 +133,7 @@ fn check_block_exist(
     blockchain: &Mutex<BlockChain>,
     blockdb: &BlockDatabase,
 ) -> (bool, bool) {
-    let in_db = match blockdb.get(&hash) {
+    let in_db = match blockdb.get(hash) {
         Err(e) => panic!("Database error {}", e),
         Ok(b) => match b {
             None => false,

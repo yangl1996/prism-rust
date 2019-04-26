@@ -342,7 +342,7 @@ impl Context {
     // TODO: shall we make a dedicated type for difficulty?
     fn get_difficulty(&self, block_hash: &H256) -> H256 {
         // Get the header of the block corresponding to block_hash
-        match self.db.get(block_hash).unwrap() {
+        match self.db.get(*block_hash).unwrap() {
             // extract difficulty
             Some(b) => {
                 return b.header.difficulty;

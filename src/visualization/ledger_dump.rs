@@ -3,7 +3,7 @@ use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
 use crate::crypto::hash::{Hashable, H256};
 use crate::handler;
-use crate::state::CoinId;
+use crate::transaction::CoinId;
 use crate::state::UTXODatabase;
 use crate::transaction::Transaction as RawTransaction;
 
@@ -70,7 +70,7 @@ pub fn dump_ledger(
                 if let Ok(unspent) = state_db.check(&coin_id) {
                     if unspent {
                         utxos.push(Input {
-                            hash: hash.into(),
+                            hash: hash.to_string(),
                             index: index as u32,
                         });
                     }
@@ -79,13 +79,13 @@ pub fn dump_ledger(
 
             // add this transaction to the list
             transactions.push(Transaction {
-                hash: hash.into(),
+                hash: hash.to_string(),
                 input: tx
                     .input
                     .iter()
                     .map(|x| Input {
-                        hash: x.hash.into(),
-                        index: x.index,
+                        hash: x.coin.hash.to_string(),
+                        index: x.coin.index,
                     })
                     .collect(),
                 output: tx
@@ -93,13 +93,13 @@ pub fn dump_ledger(
                     .iter()
                     .map(|x| Output {
                         value: x.value,
-                        recipient: x.recipient.into(),
+                        recipient: x.recipient.to_string(),
                     })
                     .collect(),
             });
         }
         transactions_blocks.push(TransactionBlock {
-            hash: tx_block_hash.into(),
+            hash: tx_block_hash.to_string(),
             transactions,
             utxos,
         });

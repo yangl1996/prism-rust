@@ -45,8 +45,8 @@ pub fn dump_blockchain(chain: &BlockChain) -> String {
         .graph
         .all_edges()
         .map(|e| Edge {
-            from: e.0.into(),
-            to: e.1.into(),
+            from: e.0.to_string(),
+            to: e.1.to_string(),
             edgetype: e.2.to_owned(),
         })
         .collect();
@@ -55,44 +55,44 @@ pub fn dump_blockchain(chain: &BlockChain) -> String {
         .prop_nodes
         .to_owned()
         .iter()
-        .map(|v| v.iter().map(|h| h.into()).collect())
+        .map(|v| v.iter().map(|h| h.to_string()).collect())
         .collect();
     let proposer_leaders = chain
         .proposer_tree
         .leader_nodes
         .iter()
-        .map(|(l, h)| (l.to_owned(), h.into()))
+        .map(|(l, h)| (l.to_owned(), h.to_string()))
         .collect();
     let voter_chain_best_blocks: Vec<String> = chain
         .voter_chains
         .iter()
-        .map(|c| c.best_block.into())
+        .map(|c| c.best_block.to_string())
         .collect();
     let transaction_unconfirmed: Vec<String> = chain
         .tx_blocks
         .not_in_ledger
         .iter()
-        .map(|b| b.into())
+        .map(|b| b.to_string())
         .collect();
     let transaction_ordered = chain
         .tx_blocks
         .ledger
         .to_owned()
         .iter()
-        .map(|v| v.into())
+        .map(|v| v.to_string())
         .collect();
     let transaction_unreferred: Vec<String> = chain
         .tx_blocks
         .unreferred
         .iter()
-        .map(|b| b.into())
+        .map(|b| b.to_string())
         .collect();
     let proposer_nodes: HashMap<String, Proposer> = chain
         .proposer_node_data
         .iter()
         .map(|(h, n)| {
             (
-                h.into(),
+                h.to_string(),
                 Proposer {
                     level: n.level,
                     status: n.leadership_status.to_owned(),
@@ -106,7 +106,7 @@ pub fn dump_blockchain(chain: &BlockChain) -> String {
         .iter()
         .map(|(h, n)| {
             (
-                h.into(),
+                h.to_string(),
                 Voter {
                     chain: n.chain_number,
                     level: n.level,

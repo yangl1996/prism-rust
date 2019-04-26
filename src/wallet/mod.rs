@@ -3,8 +3,8 @@ use crate::crypto::sign::{KeyPair, PubKey, Signable};
 use crate::handler;
 use crate::miner::memory_pool::MemoryPool;
 use crate::miner::miner::ContextUpdateSignal;
-use crate::state::{CoinData, CoinId, UTXO};
-use crate::transaction::{Input, Output, PubkeyAndSignature, Transaction};
+use crate::state::{CoinData, UTXO};
+use crate::transaction::{Input, Output, Authorization, Transaction, CoinId};
 use std::collections::{HashMap};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
@@ -47,7 +47,7 @@ impl Wallet {
     // someone pay to public key A first, then I coincidentally generate A, I will NOT receive the payment
     /// Generate a new key pair
     pub fn generate_keypair(&mut self) {
-        let keypair = KeyPair::new();
+        let keypair = KeyPair::random();
         self.keypairs.insert(keypair.public_key().hash(), keypair);
     }
 
@@ -127,10 +127,12 @@ impl Wallet {
         let input: Vec<Input> = coins_to_use
             .iter()
             .map(|c| Input {
-                hash: c.coin_id.hash,
-                index: c.coin_id.index,
+                coin: CoinId {
+                    hash: c.coin_id.hash,
+                    index: c.coin_id.index,
+                },
                 value: c.coin_data.value,
-                recipient: c.coin_data.recipient,
+                owner: c.coin_data.recipient,
             })
             .collect();
         // create the output
@@ -152,21 +154,21 @@ impl Wallet {
         let unsigned = Transaction {
             input,
             output,
-            signatures: vec![],
+            authorization: vec![],
         };
         let mut signatures = vec![];
         for keypair in coins_to_use
             .iter()
             .map(|coin| self.keypairs.get(&coin.coin_data.recipient).unwrap())
         {
-            signatures.push(PubkeyAndSignature {
+            signatures.push(Authorization {
                 pubkey: keypair.public_key(),
                 signature: unsigned.sign(keypair),
             });
         }
 
         Ok(Transaction {
-            signatures,
+            authorization: signatures,
             ..unsigned
         })
     }

@@ -1,7 +1,7 @@
 pub mod generator;
 pub mod updater;
 
-
+use crate::transaction::CoinId;
 use crate::crypto::hash::{Hashable, H256};
 use crate::transaction::{Input, Output};
 
