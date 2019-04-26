@@ -4,6 +4,7 @@ use crate::block::Block;
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
 use crate::handler::new_validated_block;
+use crate::handler::new_transaction;
 use crate::miner::memory_pool::MemoryPool;
 use crate::miner::ContextUpdateSignal;
 use crate::network::server::Handle as ServerHandle;
@@ -78,6 +79,37 @@ impl Context {
                 }
                 Message::Pong(nonce) => {
                     info!("Pong: {}", nonce);
+                }
+                Message::NewTransactionHashes(hashes) => {
+                    debug!("NewTransactionHashes");
+                    let mut hashes_to_request = vec![];
+                    for hash in hashes {
+                        if !self.mempool.lock().unwrap().contains(&hash) {
+                            hashes_to_request.push(hash);
+                        }
+                    }
+                    if hashes_to_request.len() != 0 {
+                        peer.write(Message::GetTransactions(hashes_to_request));
+                    }
+                }
+                Message::GetTransactions(hashes) => {
+                    debug!("GetTransactions");
+                    let mut transactions = vec![];
+                    for hash in hashes {
+                        match self.mempool.lock().unwrap().get(&hash) {
+                            None => {}
+                            Some(entry) => {
+                                transactions.push(entry.transaction.clone());
+                            }
+                        }
+                    }
+                    peer.write(Message::Transactions(transactions));
+                }
+                Message::Transactions(transactions) => {
+                    debug!("Transactions");
+                    for transaction in transactions {
+                        new_transaction(transaction, &self.mempool, &self.server);
+                    }
                 }
                 Message::NewBlockHashes(hashes) => {
                     debug!("NewBlockHashes");

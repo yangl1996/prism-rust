@@ -1,7 +1,6 @@
 use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::sign::{KeyPair, PubKey, Signable};
 use crate::handler;
-use crate::miner::memory_pool::MemoryPool;
 use crate::transaction::{Authorization, CoinId, Input, Output, Transaction, Address};
 use std::sync::{Arc, Mutex};
 use std::{fmt, error};
@@ -16,8 +15,6 @@ pub type Result<T> = std::result::Result<T, WalletError>;
 pub struct Wallet {
     /// The underlying RocksDB handle.
     handle: rocksdb::DB,
-    /// Pool of unmined transactions, will add generated transactions to it.
-    mempool: Arc<Mutex<MemoryPool>>,
 }
 
 #[derive(Debug)]
@@ -57,7 +54,7 @@ impl From<rocksdb::Error> for WalletError {
 }
 
 impl Wallet {
-    fn open<P: AsRef<std::path::Path>>(path: P, mempool: &Arc<Mutex<MemoryPool>>) -> Result<Self> {
+    fn open<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
         let coin_cf = rocksdb::ColumnFamilyDescriptor::new(COIN_CF, rocksdb::Options::default());
         let keypair_cf = rocksdb::ColumnFamilyDescriptor::new(KEYPAIR_CF, rocksdb::Options::default());
         let mut db_opts = rocksdb::Options::default();
@@ -66,13 +63,12 @@ impl Wallet {
         let handle = rocksdb::DB::open_cf_descriptors(&db_opts, path, vec![coin_cf, keypair_cf])?;
         return Ok(Self {
             handle,
-            mempool: Arc::clone(mempool),
         });
     }
 
-    pub fn new<P: AsRef<std::path::Path>>(path: P, mempool: &Arc<Mutex<MemoryPool>>) -> Result<Self> {
+    pub fn new<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
         rocksdb::DB::destroy(&rocksdb::Options::default(), &path)?;
-        return Self::open(path, mempool);
+        return Self::open(path);
     }
 
     // someone pay to public key A first, then I coincidentally generate A, I will NOT receive the payment
@@ -192,7 +188,7 @@ impl Wallet {
     }
 
     /// Create a transaction using the wallet coins
-    fn create_transaction(&self, recipient: Address, value: u64) -> Result<Transaction> {
+    pub fn create_transaction(&self, recipient: Address, value: u64) -> Result<Transaction> {
         let mut coins_to_use: Vec<Input> = vec![];
         let mut value_sum = 0u64;
         let cf = self.handle.cf_handle(COIN_CF).unwrap();
@@ -265,17 +261,8 @@ impl Wallet {
         })
     }
 
-    /// Pay to a recipient some value of money, the resulting transaction is just added to memory pool, and may not be confirmed
-    pub fn pay(&self, recipient: Address, value: u64) -> Result<H256> {
-        let tx = self.create_transaction(recipient, value)?;
-        let hash = tx.hash();
-        handler::new_transaction(tx, &self.mempool);
-        //return tx hash, later we can confirm it in ledger
-        Ok(hash)
-    }
-
     // only for test, how to set pub functions just for test?
-    pub fn get_coin_id(&self) -> Vec<CoinId> {
+    fn get_coin_id(&self) -> Vec<CoinId> {
         let cf = self.handle.cf_handle(COIN_CF).unwrap();
         let iter = self.handle.iterator_cf(cf,rocksdb::IteratorMode::Start).unwrap();
         // iterate thru our wallet

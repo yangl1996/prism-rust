@@ -68,8 +68,8 @@ fn main() {
 
     // init wallet database 
     let wallet = match matches.value_of("wallet_db") {
-        Some(path) => Wallet::new(&path, &mempool).unwrap(),
-        None => Wallet::new(&DEFAULT_WALLET, &mempool).unwrap(),
+        Some(path) => Wallet::new(&path).unwrap(),
+        None => Wallet::new(&DEFAULT_WALLET).unwrap(),
     };
     let wallet = Arc::new(wallet);
 
