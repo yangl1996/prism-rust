@@ -1,4 +1,3 @@
-pub mod generator;
 pub mod updater;
 
 use crate::crypto::hash::{Hashable, H256};
@@ -86,7 +85,8 @@ impl UTXODatabase {
 
 //#[cfg(test)]
 //pub mod tests {
-//    use super::{generator, CoinData, CoinId, UTXODatabase, UTXO};
+//    use super::{CoinData, CoinId, UTXODatabase, UTXO};
+//    use crate::generator::state as state_generator;
 //    use crate::crypto::generator as crypto_generator;
 //    use crate::crypto::hash::{Hashable, H256};
 //    use crate::handler::{to_coinid_and_potential_utxo, to_rollback_coinid_and_potential_utxo};
@@ -137,7 +137,7 @@ impl UTXODatabase {
 //    }
 //    #[test]
 //    pub fn create_receive_rollback() {
-//        let mut state_db = generator::random();
+//        let mut state_db = state_generator::random();
 //        let tx = tx_generator::random();
 //        // we have to init with the inputs, otherwise we cannot receive a tx
 //        init_with_tx_input(&mut state_db, &tx);
@@ -152,7 +152,7 @@ impl UTXODatabase {
 //
 //    #[test]
 //    pub fn rollback_at_fork() {
-//        let mut state_db = generator::random();
+//        let mut state_db = state_generator::random();
 //        let tx0 = tx_generator::random();
 //        let input1: Vec<Input> = (0..tx0.output.len())
 //            .map(|i| Input {

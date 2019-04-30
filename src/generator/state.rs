@@ -1,4 +1,4 @@
-use super::UTXODatabase;
+use crate::state::UTXODatabase;
 use rand::RngCore;
 
 pub fn random() -> UTXODatabase {
