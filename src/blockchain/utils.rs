@@ -3,8 +3,8 @@ use crate::block::voter::Content as Voter_Content;
 use crate::block::{Block, Content};
 use crate::crypto::hash::H256;
 
-use crate::block::generator as block_generator;
-use crate::crypto::generator as crypto_generator;
+use crate::generator::block as block_generator;
+use crate::generator::crypto as crypto_generator;
 use std::cmp;
 use std::cmp::Ordering;
 

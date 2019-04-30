@@ -2,7 +2,6 @@ pub mod header;
 pub mod proposer;
 pub mod transaction;
 pub mod voter;
-pub mod generator;
 use crate::crypto::hash::{Hashable, H256};
 
 /// A block in the Prism blockchain.

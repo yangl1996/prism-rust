@@ -1,4 +1,3 @@
-pub mod generator;
 use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::sign::{KeyPair, PubKey, Signable, Signature};
 use bincode::serialize;

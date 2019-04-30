@@ -2,16 +2,16 @@
 It randomly generates objects of the given class
 */
 
-use super::header::Header;
-use super::proposer::Content as Proposer_Content;
-use super::transaction::Content as Tx_Content;
-use super::voter::Content as Voter_Content;
-use super::{Block, Content};
+use crate::block::header::Header;
+use crate::block::proposer::Content as Proposer_Content;
+use crate::block::transaction::Content as Tx_Content;
+use crate::block::voter::Content as Voter_Content;
+use crate::block::{Block, Content};
 use crate::crypto::hash::{Hashable, H256};
 use crate::transaction::Transaction;
 
-use crate::crypto::generator as crypto_generator;
-use crate::transaction::generator as tx_generator;
+use super::crypto as crypto_generator;
+use super::transaction as tx_generator;
 
 /// To shift the constants to separate file
 const SORTITION_PROOF_SIZE: u16 = 10;
