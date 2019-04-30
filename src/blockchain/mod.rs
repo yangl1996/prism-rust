@@ -29,6 +29,7 @@ use voter::NodeData as VoterNodeData;
 use voter::NodeUpdateStatus as VoterNodeUpdateStatus;
 
 pub struct BlockChain {
+    /// Database to store all the other fields.
     pub db: Arc<Mutex<database::BlockChainDatabase>>,
     /// Graph structure of the blockchain/graph
     pub graph: GraphMap<H256, Edge, Directed>,
@@ -54,8 +55,8 @@ impl BlockChain {
         let mut graph = GraphMap::<H256, Edge, Directed>::new();
         let mut proposer_tree = ProposerTree::default();
         let mut voter_chains: Vec<VoterChain> = vec![];
-        let tx_blocks: TxBlkPool = TxBlkPool::new(utxo_update);
 
+        let tx_blocks: TxBlkPool = TxBlkPool::new(Arc::clone(&db), utxo_update);
         let mut node_data = NodeDataMap {
             db: Arc::clone(&db),
         };
@@ -654,7 +655,7 @@ impl BlockChain {
             self.get_unconfirmed_notleader_referred_proposer_blocks(leader_block);
 
         //2. Add the transactions blocks referred by these proposer blocks to the ledger.
-        self.tx_blocks.mark_confirmation_boundary(level);
+        self.tx_blocks.update_last_prop_confirmed_level(level);
         for proposer_block in to_confirm_proposer_blocks.iter() {
             // Get all the tx blocks referred.
             for tx_block in self.get_referred_tx_blocks_ordered(proposer_block) {
@@ -663,7 +664,7 @@ impl BlockChain {
                 if !self.tx_blocks.is_in_ledger(&tx_block) {
                     tx_blocks_to_add.push(tx_block);
                 }
-                self.tx_blocks.add_to_ledger(tx_blocks_to_add);
+                self.tx_blocks.add_to_ledger(level, tx_blocks_to_add);
             }
             // Changing the status of these prop blocks to 'not leader but confirmed'.
             // Reason: This is done to prevent these prop blocks from getting confirmed again.

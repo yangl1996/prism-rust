@@ -8,6 +8,7 @@ use std::sync::Mutex;
 /// Column family names
 pub const PROPOSER_NODE_DATA_CF: &str = "PND";
 pub const VOTER_NODE_DATA_CF: &str = "VND";
+pub const LEDGER_CF: &str = "LED";
 
 /// Database that stores blockchain.
 pub struct BlockChainDatabase {
@@ -51,17 +52,6 @@ impl BlockChainDatabase {
         let serialized_data = serialize(&data).unwrap();
         return self.handle.put_cf(cf, &hash_u8, &serialized_data);
     }
-
-    //    /// Get data from the database.
-    //    pub fn get<D: Deserialize>(&self, cf_name: &str, hash: &H256) -> Result<Option<D>, rocksdb::Error> {
-    //        let hash_u8: [u8; 32] = hash.into();
-    //        let cf = self.handle.cf_handle(cf_name).unwrap();
-    //        let serialized = self.handle.get_cf(cf, &hash_u8)?;
-    //        match serialized {
-    //            None => return Ok(None),
-    //            Some(s) => return Ok(Some(deserialize(&s).unwrap())),
-    //        }
-    //    }
 
     //TODO: Check the key without getting the value (Use Bloom filters maybe?)
     pub fn check(&self, cf_name: &str, hash: &H256) -> Result<bool, rocksdb::Error> {

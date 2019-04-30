@@ -2,6 +2,9 @@
 use crate::crypto::hash::H256;
 use std::collections::HashSet;
 use std::sync::mpsc::Sender;
+use std::sync::{Arc, Mutex};
+use super::database::{BlockChainDatabase, LEDGER_CF};
+use bincode::{deserialize, serialize};
 
 /// Message metadata to communicate between blockchain and utxo state
 #[derive(PartialEq)]
@@ -14,12 +17,11 @@ pub enum UpdateMessage {
 
 /// A pool of transaction blocks.
 pub struct Pool {
-    /// A pool of transaction blocks which are not in the ledger (unconfirmed).
+    pub db: Arc<Mutex<BlockChainDatabase>>,
+    /// The last level of prop block which is confirmed
+    pub last_prop_confirmed_level: u32,
+    /// A pool of unconfirmed transaction blocks which are not in the ledger.
     pub not_in_ledger: HashSet<H256>,
-    /// The ordered sequence of confirmed transaction blocks.
-    pub ledger: Vec<H256>,
-    /// The start index of the blocks confirmed by the leader proposer block at each level.
-    pub confirmation_boundary: Vec<usize>,
     /// A pool of unreferred transaction blocks. This is for mining.
     pub unreferred: HashSet<H256>,
     /// Channel to update the utxo state
@@ -28,15 +30,15 @@ pub struct Pool {
 
 impl Pool {
     /// Create a new transaction block pool.
-    pub fn new(utxo_update: Sender<(UpdateMessage, Vec<H256>)>) -> Self {
+    pub fn new(db: Arc<Mutex<BlockChainDatabase>>, utxo_update: Sender<(UpdateMessage, Vec<H256>)>) -> Self {
         let not_in_ledger: HashSet<H256> = HashSet::new();
         let ledger: Vec<H256> = vec![];
         let unreferred: HashSet<H256> = HashSet::new();
-        let confirmation_boundary: Vec<usize> = vec![];
+        let last_prop_confirmed_level: u32 = 0;
         return Self {
+            db,
+            last_prop_confirmed_level,
             not_in_ledger,
-            ledger,
-            confirmation_boundary,
             unreferred,
             utxo_update,
         };
@@ -53,28 +55,43 @@ impl Pool {
     }
 
     /// Mark the confirmation boundary of the given proposer level.
-    pub fn mark_confirmation_boundary(&mut self, level: u32) {
-        if self.confirmation_boundary.len() + 1 != level as usize {
-            panic!("Trying to set the confirmation boundary of a level that has been set, or whose previous level has not been set");
-        }
-        self.confirmation_boundary.push(self.ledger.len());
+    pub fn update_last_prop_confirmed_level(&mut self, level: u32) {
+        if self.last_prop_confirmed_level = level;
     }
 
-    /// Add a transaction block to the ordered ledger, and remove it from the unconfirmed set.
-    pub fn add_to_ledger(&mut self, to_add_tx_blocks: Vec<H256>) {
-        for tx_block in to_add_tx_blocks.iter() {
-            self.ledger.push(*tx_block);
-            self.not_in_ledger.remove(tx_block);
+    /// Adds transactions block to the database cf which are confirmed by a leader block at level 'level'.
+    pub fn add_to_ledger(&mut self, level: u32, to_add_tx_blocks: Vec<H256>) {
+        let key = serialize(&level).unwrap();
+        let value = serialize(&to_add_tx_blocks).unwrap();
+        let cf = self.handle.cf_handle(LEDGER_CF).unwrap();
+        match self.handle.put(cf, &key, &value) {
+            Ok(_) => {
+                for tx_block in to_add_tx_blocks.iter() {
+                    self.not_in_ledger.remove(tx_block);
+                }
+                self.utxo_update
+                    .send((UpdateMessage::Add, to_add_tx_blocks))
+                    .unwrap();
+            }
+            Err(e) => {
+                panic!("Tx blocks not added to the ledger in the db");
+            }
         }
-        // Ask the utxo state thread to extend its state based on to_add_tx_blocks
-        self.utxo_update
-            .send((UpdateMessage::Add, to_add_tx_blocks))
-            .unwrap();
+
+
+
     }
 
     /// Roll back the transaction blocks in the ledger confirmed by the leader proposer blocks at
     /// the given level and beyond.
-    pub fn rollback_ledger(&mut self, level: usize) {
+    pub fn rollback_ledger(&mut self, rollback_start_level: usize) {
+        let cf = self.handle.cf_handle(LEDGER_CF).unwrap();
+        for level in rollback_start_level..self.last_prop_confirmed_level{
+            let key = serialize(&level).unwrap();
+
+            self.handle.delete_cf(cf, &key);
+        }
+        self.last_prop_confirmed_level = rollback_start_level - 1;
         // Get the start index of transaction blocks confirmed by leader block at 'level'
         let rollback_start = self.confirmation_boundary[level];
         // Move the tx blocks from the ledger to the unconfirmed set.
