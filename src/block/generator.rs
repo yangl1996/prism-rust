@@ -7,7 +7,6 @@ use super::proposer::Content as Proposer_Content;
 use super::transaction::Content as Tx_Content;
 use super::voter::Content as Voter_Content;
 use super::{Block, Content};
-
 use crate::crypto::hash::{Hashable, H256};
 use crate::transaction::Transaction;
 
@@ -73,12 +72,12 @@ pub fn tx_block() -> Block {
 fn proposer_content1() -> Proposer_Content {
     let mut rng = rand::thread_rng();
     let tx_block_number = rng.gen_range(PROP_BLOCK_SIZE - 20, PROP_BLOCK_SIZE + 20);
-    let transaction_block_hashes: Vec<H256> =
+    let transaction_refs: Vec<H256> =
         (0..tx_block_number).map(|_| tx_block().hash()).collect();
-    let proposer_block_hashes: Vec<H256> = vec![];
+    let proposer_refs: Vec<H256> = vec![];
     return Proposer_Content {
-        transaction_block_hashes,
-        proposer_block_hashes,
+        transaction_refs,
+        proposer_refs,
     };
 }
 
@@ -98,15 +97,15 @@ pub fn prop_block1() -> Block {
 fn proposer_content2() -> Proposer_Content {
     let mut rng = rand::thread_rng();
     let tx_block_number = rng.gen_range(PROP_BLOCK_SIZE - 20, PROP_BLOCK_SIZE + 20);
-    let transaction_block_hashes: Vec<H256> =
+    let transaction_refs: Vec<H256> =
         (0..tx_block_number).map(|_| tx_block().hash()).collect();
     let prop_block_number = rng.gen_range(1, 2);
-    let proposer_block_hashes: Vec<H256> = (0..prop_block_number)
+    let proposer_refs: Vec<H256> = (0..prop_block_number)
         .map(|_| prop_block1().hash())
         .collect();
     return Proposer_Content {
-        transaction_block_hashes,
-        proposer_block_hashes,
+        transaction_refs,
+        proposer_refs,
     };
 }
 
@@ -124,15 +123,15 @@ pub fn prop_block2() -> Block {
 
 fn voter_content(chain_number: u16) -> Voter_Content {
     let mut rng = rand::thread_rng();
-    let voter_parent_hash = crypto_generator::h256();
+    let voter_parent = crypto_generator::h256();
     let prop_block_number = rng.gen_range(0, 3); // One average 1 prop block
-    let proposer_block_votes: Vec<H256> = (0..prop_block_number)
+    let votes: Vec<H256> = (0..prop_block_number)
         .map(|_| prop_block1().hash())
         .collect();
     return Voter_Content {
         chain_number,
-        voter_parent_hash,
-        proposer_block_votes,
+        voter_parent,
+        votes,
     };
 }
 pub fn voter_block(chain_number: u16) -> Block {

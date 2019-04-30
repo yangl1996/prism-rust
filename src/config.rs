@@ -34,7 +34,7 @@ lazy_static! {
     };
     pub static ref VOTER_GENESIS_HASHES: Vec<H256> = {
         let mut v: Vec<H256> = vec![];
-        for chain_num in 0..NUM_VOTER_CHAINS {
+        for chain_num in 0..30 { //TODO:
             let chain_num = chain_num as u16;
             let b1 = ((chain_num + 1) >> 8) as u8;
             let b2 = (chain_num + 1) as u8;

@@ -2,7 +2,7 @@ pub mod header;
 pub mod proposer;
 pub mod transaction;
 pub mod voter;
-
+pub mod generator;
 use crate::crypto::hash::{Hashable, H256};
 
 /// A block in the Prism blockchain.
@@ -91,7 +91,7 @@ impl Hashable for Content {
 
 #[cfg(test)]
 mod tests {
-    use super::test_util;
+//    use super::test_util;
     use crate::crypto::hash::Hashable;
     use rand::Rng;
 

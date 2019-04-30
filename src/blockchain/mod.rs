@@ -224,7 +224,6 @@ impl BlockChain {
 
                     // Incrementing the votes of the proposer block being voted
                     let ref proposer_node_data = self.node_data.get_proposer(&prop_block_hash);
-                    //                    proposer_node_data.votes += 1;
                     self.proposer_tree
                         .increment_vote_at_level(proposer_node_data.level);
                 }
@@ -268,7 +267,10 @@ impl BlockChain {
                                 .get_mut(voter_node_data.chain_number as usize)
                                 .unwrap()
                                 .remove_unvoted(proposer_level);
+                            //                    proposer_node_data.votes += 1;
+                            self.node_data.proposer_increment_vote(&prop_block_hash);
                         }
+
                     }
                     // Case: New block is part of a side fork which is longer fork than the main chain.
                     // This is a bad (and complex) situation.
@@ -300,6 +302,8 @@ impl BlockChain {
                             for proposer_block in proposer_blocks {
                                 let level = self.prop_node_data(&proposer_block).level;
                                 votes_on_proposers_left.push((proposer_block, level));
+                                //                    proposer_node_data.votes -= 1;
+                                self.node_data.proposer_decrement_vote(&proposer_block);
                             }
                             votes_on_proposers_left.sort_by_key(|k| k.1);
                         }
@@ -319,6 +323,8 @@ impl BlockChain {
                             for proposer_block in proposer_blocks {
                                 let level = self.prop_node_data(&proposer_block).level;
                                 votes_on_proposers_right.push((proposer_block, level));
+                                //                    proposer_node_data.votes += 1;
+                                self.node_data.proposer_increment_vote(&proposer_block);
                             }
                             votes_on_proposers_right.sort_by_key(|k| k.1);
                         }
@@ -900,10 +906,15 @@ mod tests {
     // because we have designed the genesis blocks themselves.
     #[test]
     fn blockchain_initialization() {
+
+        let blockchain_db_path = std::path::Path::new("/tmp/blockchain_test1.rocksdb");
+        let blockchain_db = database::BlockChainDatabase::new(blockchain_db_path).unwrap();
+        let blockchain_db = Arc::new(Mutex::new(blockchain_db));
+        
         // Initialize a blockchain with 10  voter chains.
         let (state_update_sink, _state_update_source) = mpsc::channel();
 
-        let blockchain = BlockChain::new(NUM_VOTER_CHAINS, state_update_sink);
+        let mut blockchain = BlockChain::new(blockchain_db, NUM_VOTER_CHAINS, state_update_sink);
 
         // Checking proposer tree's genesis block hash
         let proposer_genesis_hash_shouldbe: [u8; 32] = [
@@ -938,8 +949,21 @@ mod tests {
     fn blockchain_growing() {
         let _rng = rand::thread_rng();
         // Initialize a blockchain with 10 voter chains.
+
+        let blockchain_db_path = std::path::Path::new("/tmp/blockchain_test2.rocksdb");
+        let blockchain_db1 = database::BlockChainDatabase::new(blockchain_db_path);
+        let blockchain_db: database::BlockChainDatabase;
+        match blockchain_db1{
+            Err(e) => panic!("Error {}", e),
+            Ok(s) => blockchain_db = s
+        }
+        let blockchain_db = Arc::new(Mutex::new(blockchain_db));
+
+        // Initialize a blockchain with 10  voter chains.
         let (state_update_sink, _state_update_source) = mpsc::channel();
-        let mut blockchain = BlockChain::new(NUM_VOTER_CHAINS, state_update_sink);
+
+        println!("Database created");
+        let mut blockchain = BlockChain::new(blockchain_db, NUM_VOTER_CHAINS, state_update_sink);
 
         // Store the parent blocks to mine on voter trees.
         let mut voter_best_blocks: Vec<H256> = (0..NUM_VOTER_CHAINS)
@@ -963,7 +987,7 @@ mod tests {
         println!("Test 2:   Added 5 tx blocks on prop genesis");
         // Mine 5 tx block's with prop_best_block as the parent
         let tx_block_5: Vec<Block> =
-            utils::test_tx_blocks_with_parent_hash(5, blockchain.proposer_tree.best_block);
+            utils::test_tx_blocks_with_parent(5, blockchain.proposer_tree.best_block);
         tx_block_vec.extend(tx_block_5.iter().cloned());
         // Add the tx blocks to blockchain
         for i in 0..5 {
@@ -1014,14 +1038,14 @@ mod tests {
             blockchain.insert_node(&voter_block);
         }
         assert_eq!(27, blockchain.graph.node_count());
-        let prop_block1a_votes = blockchain.proposer_node_data[&prop_block1a.hash()].votes;
+        let prop_block1a_votes = blockchain.node_data.get_proposer(&prop_block1a.hash()).votes;
         assert_eq!(41, blockchain.graph.edge_count());
         assert_eq!(10, prop_block1a_votes, "prop block 1 should have 10 votes");
 
         println!("Test 5:   Mining 5 tx blocks, 2 prop blocks at level 2 with 3, 5 tx refs");
         unreferred_tx_block_index += 5;
         let tx_block_5: Vec<Block> =
-            utils::test_tx_blocks_with_parent_hash(5, blockchain.proposer_tree.best_block);
+            utils::test_tx_blocks_with_parent(5, blockchain.proposer_tree.best_block);
         tx_block_vec.extend(tx_block_5.iter().cloned());
         // Add the tx blocks to blockchain
         for i in 0..5 {
@@ -1095,8 +1119,8 @@ mod tests {
             );
             blockchain.insert_node(&voter_block);
         }
-        let prop_block2a_votes = blockchain.proposer_node_data[&prop_block2a.hash()].votes;
-        let prop_block2b_votes = blockchain.proposer_node_data[&prop_block2b.hash()].votes;
+        let prop_block2a_votes = blockchain.node_data.get_proposer(&prop_block2a.hash()).votes;
+        let prop_block2b_votes = blockchain.node_data.get_proposer(&prop_block2b.hash()).votes;
         assert_eq!(7, prop_block2a_votes, "prop block 2a should have 7 votes");
         assert_eq!(3, prop_block2b_votes, "prop block 2b should have 3 votes");
         assert_eq!(
@@ -1111,7 +1135,7 @@ mod tests {
         );
         unreferred_tx_block_index += 5;
         let tx_block_4: Vec<Block> =
-            utils::test_tx_blocks_with_parent_hash(4, blockchain.proposer_tree.best_block);
+            utils::test_tx_blocks_with_parent(4, blockchain.proposer_tree.best_block);
         tx_block_vec.extend(tx_block_4.iter().cloned());
         // Add the tx blocks to blockchain
         for i in 0..4 {
@@ -1176,7 +1200,7 @@ mod tests {
         println!("Test 9:  Mining 2 tx block and 1 prop block referring the 2 tx blocks");
         unreferred_tx_block_index += 4;
         let tx_block_2: Vec<Block> =
-            utils::test_tx_blocks_with_parent_hash(2, blockchain.proposer_tree.best_block);
+            utils::test_tx_blocks_with_parent(2, blockchain.proposer_tree.best_block);
         tx_block_vec.extend(tx_block_2.iter().cloned());
         // Add the tx blocks to blockchain
         for i in 0..2 {
@@ -1415,23 +1439,23 @@ mod tests {
         assert_eq!(prop_block3.hash(), leader_block_sequence[2]);
         assert_eq!(prop_block4.hash(), leader_block_sequence[3]);
         assert_eq!(
-            blockchain.proposer_node_data[&prop_block1a.hash()].leadership_status,
+            blockchain.node_data.get_proposer(&prop_block1a.hash()).leadership_status,
             ProposerStatus::Leader
         );
         assert_eq!(
-            blockchain.proposer_node_data[&prop_block2a.hash()].leadership_status,
+            blockchain.node_data.get_proposer(&prop_block2a.hash()).leadership_status,
             ProposerStatus::Leader
         );
         assert_eq!(
-            blockchain.proposer_node_data[&prop_block2b.hash()].leadership_status,
+            blockchain.node_data.get_proposer(&prop_block2b.hash()).leadership_status,
             ProposerStatus::NotLeaderAndConfirmed
         );
         assert_eq!(
-            blockchain.proposer_node_data[&prop_block3.hash()].leadership_status,
+            blockchain.node_data.get_proposer(&prop_block3.hash()).leadership_status,
             ProposerStatus::Leader
         );
         assert_eq!(
-            blockchain.proposer_node_data[&prop_block4.hash()].leadership_status,
+            blockchain.node_data.get_proposer(&prop_block4.hash()).leadership_status,
             ProposerStatus::Leader
         );
 
@@ -1465,7 +1489,7 @@ mod tests {
         println!("Test 20: Mining 2 tx block and 1 prop block referring the 2 tx blocks");
         unreferred_tx_block_index += 2;
         let tx_block_2: Vec<Block> =
-            utils::test_tx_blocks_with_parent_hash(2, blockchain.proposer_tree.best_block);
+            utils::test_tx_blocks_with_parent(2, blockchain.proposer_tree.best_block);
         tx_block_vec.extend(tx_block_2.iter().cloned());
         // Add the tx blocks to blockchain
         for i in 0..2 {
@@ -1564,9 +1588,14 @@ mod tests {
         pub const NUM_VOTER_CHAINS: u16 = 10;
         let _rng = rand::thread_rng();
         // Initialize a blockchain with 10 voter chains.
-        let (state_update_sink, _state_update_source) = mpsc::channel();
-        let mut blockchain = BlockChain::new(NUM_VOTER_CHAINS, state_update_sink);
+        let blockchain_db_path = std::path::Path::new("/tmp/blockchain_test3.rocksdb");
+        let blockchain_db = database::BlockChainDatabase::new(blockchain_db_path).unwrap();
+        let blockchain_db = Arc::new(Mutex::new(blockchain_db));
 
+        // Initialize a blockchain with 10  voter chains.
+        let (state_update_sink, _state_update_source) = mpsc::channel();
+
+        let mut blockchain = BlockChain::new(blockchain_db, NUM_VOTER_CHAINS, state_update_sink);
         // Store the parent blocks to mine on voter trees.
         let _voter_best_blocks: Vec<H256> = (0..NUM_VOTER_CHAINS)
             .map(|i| blockchain.voter_chains[i as usize].best_block)
@@ -1659,51 +1688,16 @@ mod tests {
         */
 
         // Changing it to notleader status ONLY for testing
-        blockchain
-            .proposer_node_data
-            .get_mut(&prop_block1a.hash())
-            .unwrap()
-            .give_not_leader_status();
-        blockchain
-            .proposer_node_data
-            .get_mut(&prop_block2a.hash())
-            .unwrap()
-            .give_not_leader_status();
-        blockchain
-            .proposer_node_data
-            .get_mut(&prop_block2b.hash())
-            .unwrap()
-            .give_not_leader_status();
-        blockchain
-            .proposer_node_data
-            .get_mut(&prop_block2c.hash())
-            .unwrap()
-            .give_not_leader_status();
-        blockchain
-            .proposer_node_data
-            .get_mut(&prop_block3a.hash())
-            .unwrap()
-            .give_not_leader_status();
-        blockchain
-            .proposer_node_data
-            .get_mut(&prop_block3b.hash())
-            .unwrap()
-            .give_not_leader_status();
-        blockchain
-            .proposer_node_data
-            .get_mut(&prop_block4a.hash())
-            .unwrap()
-            .give_not_leader_status();
-        blockchain
-            .proposer_node_data
-            .get_mut(&prop_block4b.hash())
-            .unwrap()
-            .give_not_leader_status();
-        blockchain
-            .proposer_node_data
-            .get_mut(&prop_block5a.hash())
-            .unwrap()
-            .give_not_leader_status();
+        blockchain.node_data.give_proposer_not_leader_status(&prop_block1a.hash());
+        blockchain.node_data.give_proposer_not_leader_status(&prop_block2a.hash());
+        blockchain.node_data.give_proposer_not_leader_status(&prop_block2b.hash());
+        blockchain.node_data.give_proposer_not_leader_status(&prop_block2c.hash());
+        blockchain.node_data.give_proposer_not_leader_status(&prop_block3a.hash());
+        blockchain.node_data.give_proposer_not_leader_status(&prop_block3b.hash());
+        blockchain.node_data.give_proposer_not_leader_status(&prop_block4a.hash());
+        blockchain.node_data.give_proposer_not_leader_status(&prop_block4b.hash());
+        blockchain.node_data.give_proposer_not_leader_status(&prop_block5a.hash());
+
 
         println!("Test 2:   Checking the order of get_unconfirmed_notleader_referred_proposer_blocks_prev_level()");
         let prop_block_2a_ref = blockchain
@@ -1772,16 +1766,8 @@ mod tests {
         assert_eq!(prop_block5a.hash(), prop_block_5a_ref[8], "8");
 
         // Making 1, 2a leaders
-        blockchain
-            .proposer_node_data
-            .get_mut(&prop_block1a.hash())
-            .unwrap()
-            .give_leader_status();
-        blockchain
-            .proposer_node_data
-            .get_mut(&prop_block2a.hash())
-            .unwrap()
-            .give_leader_status();
+        blockchain.node_data.give_proposer_leader_status(&prop_block1a.hash());
+        blockchain.node_data.give_proposer_leader_status(&prop_block2a.hash());
         let prop_block_5a_ref =
             blockchain.get_unconfirmed_notleader_referred_proposer_blocks(prop_block5a.hash());
         assert_eq!(prop_block2b.hash(), prop_block_5a_ref[0], "1");

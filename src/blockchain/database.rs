@@ -1,8 +1,15 @@
 use crate::crypto::hash::{Hashable, H256};
 use bincode::{deserialize, serialize};
-use rocksdb::ColumnFamily;
+use rocksdb::{ColumnFamily, Options};
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
+use std::collections::{HashMap};
+
+
+/// Column family names
+pub const PROPOSER_NODE_DATA_CF: &str = "PND";
+pub const VOTER_NODE_DATA_CF: &str = "VND";
+
 
 /// Database that stores blockchain.
 pub struct BlockChainDatabase {
@@ -14,6 +21,23 @@ impl BlockChainDatabase {
     /// Create a new database at the given path.
     pub fn new<P: AsRef<std::path::Path>>(path: P) -> Result<Self, rocksdb::Error> {
         let db_handle = rocksdb::DB::open_default(path)?;
+        // Creating family names. TODO:: Clean this
+        let opts = Options::default(); // We can tune this for performance
+
+        match db_handle.create_cf(PROPOSER_NODE_DATA_CF, &opts) {
+            Ok(_db) => {},//println!("{} created successfully", PROPOSER_NODE_DATA_CF),
+            Err(e) => {
+                panic!("could not create column family: {}", e);
+            }
+        }
+
+        match db_handle.create_cf(VOTER_NODE_DATA_CF, &opts) {
+            Ok(_db) => {},//println!("{} created successfully", VOTER_NODE_DATA_CF),
+            Err(e) => {
+                panic!("could not create column family: {}", e);
+            }
+        }
+
         return Ok(BlockChainDatabase { handle: db_handle });
     }
 

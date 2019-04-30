@@ -112,6 +112,7 @@ impl PartialEq for H256 {
 pub mod tests {
     use super::Hashable;
     use super::H256;
+    use rand::Rng;
 
     pub fn generate_random_hash() -> H256 {
         let mut rng = rand::thread_rng();
