@@ -20,15 +20,17 @@ impl BlockChainDatabase {
     }
 
     /// Insert into the database.
-    pub fn insert<D: Serialize>(&self, cf: ColumnFamily, hash: &H256, data: D) -> Result<(), rocksdb::Error> {
+    pub fn insert<D: Serialize>(&self, cf_name: &str, hash: &H256, data: D) -> Result<(), rocksdb::Error> {
         let hash_u8: [u8; 32] = hash.into();
+        let cf = self.handle.cf_handle(cf_name).unwrap();
         let serialized_data = serialize(&data).unwrap();
         return self.handle.put_cf(cf, &hash_u8, &serialized_data);
     }
 
     /// Get data from the database.
-    pub fn get<D: Deserialize>(&self, cf: ColumnFamily, hash: H256) -> Result<Option<D>, rocksdb::Error> {
+    pub fn get<D: Deserialize>(&self, cf_name: &str, hash: H256) -> Result<Option<D>, rocksdb::Error> {
         let hash_u8: [u8; 32] = hash.into();
+        let cf = self.handle.cf_handle(cf_name).unwrap();
         let serialized = self.handle.get_cf(cf, &hash_u8)?;
         match serialized {
             None => return Ok(None),
@@ -36,8 +38,9 @@ impl BlockChainDatabase {
         }
     }
 
-    pub fn delete(&self, cf: ColumnFamily, hash: H256) -> Result<(), rocksdb::Error> {
+    pub fn delete(&self, cf_name: &str, hash: H256) -> Result<(), rocksdb::Error> {
         let hash_u8: [u8; 32] = hash.into();
+        let cf = self.handle.cf_handle(cf_name).unwrap();
         return self.handle.delete_cf(cf, &hash_u8);
     }
 }
