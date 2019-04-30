@@ -1,10 +1,11 @@
 // TODO: Txblock currently has no metadata. It future it could have epsilon.
+use super::database::{BlockChainDatabase, LEDGER_CF};
 use crate::crypto::hash::H256;
+use bincode::{deserialize, serialize};
+use rocksdb::WriteBatch;
 use std::collections::HashSet;
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
-use super::database::{BlockChainDatabase, LEDGER_CF};
-use bincode::{deserialize, serialize};
 
 /// Message metadata to communicate between blockchain and utxo state
 #[derive(PartialEq)]
@@ -30,7 +31,10 @@ pub struct Pool {
 
 impl Pool {
     /// Create a new transaction block pool.
-    pub fn new(db: Arc<Mutex<BlockChainDatabase>>, utxo_update: Sender<(UpdateMessage, Vec<H256>)>) -> Self {
+    pub fn new(
+        db: Arc<Mutex<BlockChainDatabase>>,
+        utxo_update: Sender<(UpdateMessage, Vec<H256>)>,
+    ) -> Self {
         let not_in_ledger: HashSet<H256> = HashSet::new();
         let ledger: Vec<H256> = vec![];
         let unreferred: HashSet<H256> = HashSet::new();
@@ -54,60 +58,6 @@ impl Pool {
         return !self.not_in_ledger.contains(hash);
     }
 
-    /// Mark the confirmation boundary of the given proposer level.
-    pub fn update_last_prop_confirmed_level(&mut self, level: u32) {
-        if self.last_prop_confirmed_level = level;
-    }
-
-    /// Adds transactions block to the database cf which are confirmed by a leader block at level 'level'.
-    pub fn add_to_ledger(&mut self, level: u32, to_add_tx_blocks: Vec<H256>) {
-        let key = serialize(&level).unwrap();
-        let value = serialize(&to_add_tx_blocks).unwrap();
-        let cf = self.handle.cf_handle(LEDGER_CF).unwrap();
-        match self.handle.put(cf, &key, &value) {
-            Ok(_) => {
-                for tx_block in to_add_tx_blocks.iter() {
-                    self.not_in_ledger.remove(tx_block);
-                }
-                self.utxo_update
-                    .send((UpdateMessage::Add, to_add_tx_blocks))
-                    .unwrap();
-            }
-            Err(e) => {
-                panic!("Tx blocks not added to the ledger in the db");
-            }
-        }
-
-
-
-    }
-
-    /// Roll back the transaction blocks in the ledger confirmed by the leader proposer blocks at
-    /// the given level and beyond.
-    pub fn rollback_ledger(&mut self, rollback_start_level: usize) {
-        let cf = self.handle.cf_handle(LEDGER_CF).unwrap();
-        for level in rollback_start_level..self.last_prop_confirmed_level{
-            let key = serialize(&level).unwrap();
-
-            self.handle.delete_cf(cf, &key);
-        }
-        self.last_prop_confirmed_level = rollback_start_level - 1;
-        // Get the start index of transaction blocks confirmed by leader block at 'level'
-        let rollback_start = self.confirmation_boundary[level];
-        // Move the tx blocks from the ledger to the unconfirmed set.
-        let to_remove_tx_blocks: Vec<H256> = self.ledger.split_off(rollback_start);
-        for tx_block in to_remove_tx_blocks.iter() {
-            self.insert_not_in_ledger(*tx_block);
-        }
-        // Ask the utxo state thread to rollback its state for the 'to_remove_tx_blocks'
-        self.utxo_update
-            .send((UpdateMessage::Rollback, to_remove_tx_blocks))
-            .unwrap();
-
-        // Drain confirmation_boundary vector
-        self.confirmation_boundary.drain(level - 1..); // TODO: why -1?
-    }
-
     /// Insert a block to the unreferred transaction block set.
     pub fn insert_unreferred(&mut self, hash: H256) {
         self.unreferred.insert(hash);
@@ -117,4 +67,96 @@ impl Pool {
     pub fn remove_unreferred(&mut self, hash: &H256) {
         self.unreferred.remove(hash);
     }
+
+    /// Adds transactions block to the ledger (stored in database) which are confirmed by a leader block at level 'level'.
+    pub fn add_to_ledger(&mut self, level: u32, to_add_tx_blocks: Vec<H256>) {
+        if level <= self.last_prop_confirmed_level {
+            panic!("Tx blocks added for level {}", level);
+        }
+        let db = self.db.lock().unwrap();
+        let key = serialize(&level).unwrap();
+        let value = serialize(&to_add_tx_blocks).unwrap();
+        let cf = db.handle.cf_handle(LEDGER_CF).unwrap();
+        match db.handle.put_cf(cf, &key, &value) {
+            Ok(_) => {
+                for tx_block in to_add_tx_blocks.iter() {
+                    self.not_in_ledger.remove(tx_block);
+                }
+                self.last_prop_confirmed_level = level;
+                self.utxo_update
+                    .send((UpdateMessage::Add, to_add_tx_blocks))
+                    .unwrap();
+            }
+            Err(e) => {
+                panic!("Tx blocks not added to the ledger in the db,  Error {}", e);
+            }
+        }
+    }
+
+    /// Roll back the transaction blocks in the ledger confirmed by the leader proposer blocks at
+    /// the given level and beyond.
+    pub fn rollback_ledger(&mut self, rollback_start_level: u32) {
+
+        // 1. Get all the tx blocks confirmed between levels =rollback_start_level and self.last_prop_confirmed_level
+        let mut removed_tx_blocks: Vec<H256> = vec![]; //stores the tx blocks which are removed from the ledger due  to rollback
+        for level in rollback_start_level..self.last_prop_confirmed_level {
+            let key = serialize(&level).unwrap();
+            let confirmed_blocks_level = self.get_blocks_at_level(level);
+            removed_tx_blocks.extend(confirmed_blocks_level);
+        }
+
+        //2. Atomic delete tx blocks from level rollback_start_level to self.last_prop_confirmed_level.
+        let db = self.db.lock().unwrap();
+        let cf = db.handle.cf_handle(LEDGER_CF).unwrap();
+        let mut batch = WriteBatch::default();
+        for level in rollback_start_level..self.last_prop_confirmed_level {
+            let key = serialize(&level).unwrap();
+            batch.delete_cf(cf, &key);
+        }
+        match db.handle.write(batch) {
+            Ok(_) => {
+                // If the blocks are deleted,
+                drop(db);
+                // 2b.1
+                self.last_prop_confirmed_level = rollback_start_level - 1;
+                // 2b.2 Add the removed tx blocks back to the unconfirmed set.
+                for tx_block in removed_tx_blocks.iter() {
+                    self.insert_not_in_ledger(*tx_block);
+                }
+                //2b.3 Ask the utxo state thread to rollback its state for the 'to_remove_tx_blocks'
+                self.utxo_update
+                    .send((UpdateMessage::Rollback, removed_tx_blocks))
+                    .unwrap();
+            }
+            Err(e) => {
+                panic!("DB error {}", e);
+            }
+        }
+    }
+
+    pub fn get_ledger(&mut self) ->Vec<H256> {
+        let mut  ledger: Vec<H256> = vec![];
+        for level in 1..=self.last_prop_confirmed_level {
+            let confirmed_blocks_level = self.get_blocks_at_level(level);
+            ledger.extend(confirmed_blocks_level);
+        }
+        return ledger;
+    }
+
+    // Returns the tx blocks confirmed because of a leader block at level 'level'
+    fn get_blocks_at_level(&mut self, level: u32) -> Vec<H256> {
+        let db = self.db.lock().unwrap();
+        let key = serialize(&level).unwrap();
+        let cf = db.handle.cf_handle(LEDGER_CF).unwrap();
+        let serialized_result = db.handle.get_cf(cf, &key);
+        match serialized_result {
+            Err(e) => panic!("Database error"),
+            Ok(serialized_option) => match serialized_option {
+                None => panic!("Node data not present at level {}", level),
+                Some(s) => return deserialize(&s).unwrap(),
+            },
+        }
+    }
+
+
 }

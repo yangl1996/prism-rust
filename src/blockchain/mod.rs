@@ -384,7 +384,7 @@ impl BlockChain {
                                 self.proposer_tree.leader_nodes.remove(&level);
                             }
                             //5c. Rollback ledger from 'roll_back_level' level onwards.
-                            self.tx_blocks.rollback_ledger(roll_back_level as usize);
+                            self.tx_blocks.rollback_ledger(roll_back_level);
                             self.proposer_tree.min_unconfirmed_level = roll_back_level as u32;
                         }
                     }
@@ -519,8 +519,8 @@ impl BlockChain {
 // Functions to generate the ledger. This uses the confirmation logic of Prism.
 impl BlockChain {
     /// Returns the list of ordered tx blocks. This is the initial step of creating the full ledger.
-    pub fn get_ordered_tx_blocks(&self) -> &Vec<H256> {
-        return &self.tx_blocks.ledger;
+    pub fn get_ledger(&mut self) -> Vec<H256> {
+        return self.tx_blocks.get_ledger();
     }
 
     /// Checks if there are sufficient votes to confirm leader block at the level.
@@ -655,16 +655,14 @@ impl BlockChain {
             self.get_unconfirmed_notleader_referred_proposer_blocks(leader_block);
 
         //2. Add the transactions blocks referred by these proposer blocks to the ledger.
-        self.tx_blocks.update_last_prop_confirmed_level(level);
+        let mut tx_blocks_to_add: Vec<H256> = vec![];
         for proposer_block in to_confirm_proposer_blocks.iter() {
             // Get all the tx blocks referred.
             for tx_block in self.get_referred_tx_blocks_ordered(proposer_block) {
                 // Add the tx block to the ledger if not already in the ledger
-                let mut tx_blocks_to_add: Vec<H256> = vec![];
                 if !self.tx_blocks.is_in_ledger(&tx_block) {
                     tx_blocks_to_add.push(tx_block);
                 }
-                self.tx_blocks.add_to_ledger(level, tx_blocks_to_add);
             }
             // Changing the status of these prop blocks to 'not leader but confirmed'.
             // Reason: This is done to prevent these prop blocks from getting confirmed again.
@@ -677,6 +675,8 @@ impl BlockChain {
                     .give_proposer_not_leader_confirmed_status(proposer_block);
             }
         }
+        self.tx_blocks.add_to_ledger(level, tx_blocks_to_add);
+
     }
 
     /// Idea: When a new leader block, B, is confirmed, it also confirms
@@ -953,15 +953,13 @@ mod tests {
         let blockchain_db1 = database::BlockChainDatabase::new(blockchain_db_path);
         let blockchain_db: database::BlockChainDatabase;
         match blockchain_db1 {
-            Err(e) => panic!("Error {}", e),
+            Err(e) => panic!("Did  you delete db from /tmp?. Error {}", e),
             Ok(s) => blockchain_db = s,
         }
         let blockchain_db = Arc::new(Mutex::new(blockchain_db));
 
         // Initialize a blockchain with 10  voter chains.
         let (state_update_sink, _state_update_source) = mpsc::channel();
-
-        println!("Database created");
         let mut blockchain = BlockChain::new(blockchain_db, NUM_VOTER_CHAINS, state_update_sink);
 
         // Store the parent blocks to mine on voter trees.
@@ -1503,8 +1501,8 @@ mod tests {
         );
 
         println!("Test 19:  The ledger tx blocks");
-        assert_eq!(16, blockchain.tx_blocks.ledger.len());
-        let ordered_tx_blocks = blockchain.get_ordered_tx_blocks();
+        assert_eq!(16, blockchain.tx_blocks.get_ledger().len());
+        let ordered_tx_blocks = blockchain.get_ledger();
         for i in 0..16 {
             assert_eq!(ordered_tx_blocks[i], tx_block_vec[i].hash());
         }

@@ -37,6 +37,13 @@ impl BlockChainDatabase {
             }
         }
 
+        match db_handle.create_cf(LEDGER_CF, &opts) {
+            Ok(_db) => {} //println!("{} created successfully", LEDGER_CF),
+            Err(e) => {
+                panic!("could not create column family: {}", e);
+            }
+        }
+
         return Ok(BlockChainDatabase { handle: db_handle });
     }
 

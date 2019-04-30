@@ -80,7 +80,7 @@ impl BlockDatabase {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::block::generator;
+    use crate::generator::block as block_generator;
     use crate::crypto::hash::Hashable;
 
     /*
@@ -90,7 +90,7 @@ mod tests {
                 "/tmp/blockdb_tests_insert_get_and_delete.rocksdb",
             ))
             .unwrap();
-            let test_block = generator::tx_block();
+            let test_block = block_generator::tx_block();
             db.insert(&test_block).unwrap();
             let got = db.get(&test_block.hash()).unwrap().unwrap();
             let num_block = db.num_blocks();
