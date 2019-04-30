@@ -27,16 +27,16 @@ impl BlockChainDatabase {
         return self.handle.put_cf(cf, &hash_u8, &serialized_data);
     }
 
-    /// Get data from the database.
-    pub fn get<D: Deserialize>(&self, cf_name: &str, hash: H256) -> Result<Option<D>, rocksdb::Error> {
-        let hash_u8: [u8; 32] = hash.into();
-        let cf = self.handle.cf_handle(cf_name).unwrap();
-        let serialized = self.handle.get_cf(cf, &hash_u8)?;
-        match serialized {
-            None => return Ok(None),
-            Some(s) => return Ok(Some(deserialize(&s).unwrap())),
-        }
-    }
+//    /// Get data from the database.
+//    pub fn get<D: Deserialize>(&self, cf_name: &str, hash: H256) -> Result<Option<D>, rocksdb::Error> {
+//        let hash_u8: [u8; 32] = hash.into();
+//        let cf = self.handle.cf_handle(cf_name).unwrap();
+//        let serialized = self.handle.get_cf(cf, &hash_u8)?;
+//        match serialized {
+//            None => return Ok(None),
+//            Some(s) => return Ok(Some(deserialize(&s).unwrap())),
+//        }
+//    }
 
     pub fn delete(&self, cf_name: &str, hash: H256) -> Result<(), rocksdb::Error> {
         let hash_u8: [u8; 32] = hash.into();
@@ -44,6 +44,7 @@ impl BlockChainDatabase {
         return self.handle.delete_cf(cf, &hash_u8);
     }
 }
+
 
 #[cfg(test)]
 mod tests {

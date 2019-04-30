@@ -4,6 +4,7 @@ pub mod transaction;
 pub mod utils;
 pub mod voter;
 pub mod database;
+pub mod node_data_map;
 use super::block::{Block, Content};
 use super::crypto::hash::{Hashable, H256};
 use crate::config::*;
