@@ -12,8 +12,17 @@ pub struct H256([u128; 2]); // big endian u256
 
 impl std::fmt::Display for H256 {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let start = if let Some(precision) = f.precision() {
+            if precision >= 64 {
+                0
+            } else {
+                32 - precision / 2
+            }
+        } else {
+            0
+        };
         let buffer: [u8; 32] = self.into();
-        for byte_idx in 0..32 {
+        for byte_idx in start..32 {
             write!(f, "{:>02x}", &buffer[byte_idx])?;
         }
         Ok(())
@@ -121,7 +130,7 @@ pub mod tests {
         raw_bytes.copy_from_slice(&random_bytes);
         return (&raw_bytes).into();
     }
-    /*
+
     #[test]
     fn ordering() {
         let bigger_hash: H256 =
@@ -173,5 +182,4 @@ pub mod tests {
         let should_be: H256 = (&should_be).into();
         assert_eq!(hashed_hash, should_be);
     }
-    */
 }

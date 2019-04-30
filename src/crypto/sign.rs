@@ -1,7 +1,7 @@
 use crate::crypto::hash::{Hashable, H256};
 use byteorder::{BigEndian, ByteOrder};
 use ring::rand;
-use ring::signature::KeyPair as KeyPairTrait;
+use ring::signature::KeyPair as _;
 use ring::signature::{self, Ed25519KeyPair};
 use untrusted;
 
@@ -62,8 +62,17 @@ impl std::convert::From<Signature> for [u8; 64] {
 
 impl std::fmt::Display for Signature {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let start = if let Some(precision) = f.precision() {
+            if precision >= 128 {
+                0
+            } else {
+                64 - precision / 2
+            }
+        } else {
+            0
+        };
         let buffer: [u8; 64] = self.into();
-        for byte_idx in 0..64 {
+        for byte_idx in start..64 {
             write!(f, "{:>02x}", &buffer[byte_idx])?;
         }
         Ok(())
@@ -73,10 +82,11 @@ impl std::fmt::Display for Signature {
 impl std::fmt::Debug for Signature {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let buffer: [u8; 64] = self.into();
-        for byte_idx in 0..64 {
-            write!(f, "{:>02x}", &buffer[byte_idx])?;
-        }
-        Ok(())
+        write!(
+            f,
+            "{:>02x}{:>02x}..{:>02x}{:>02x}",
+            &buffer[0], &buffer[1], &buffer[62], &buffer[63]
+        )
     }
 }
 
@@ -120,8 +130,17 @@ impl std::convert::From<PubKey> for [u8; 32] {
 
 impl std::fmt::Display for PubKey {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let start = if let Some(precision) = f.precision() {
+            if precision >= 64 {
+                0
+            } else {
+                32 - precision / 2
+            }
+        } else {
+            0
+        };
         let buffer: [u8; 32] = self.into();
-        for byte_idx in 0..32 {
+        for byte_idx in start..32 {
             write!(f, "{:>02x}", &buffer[byte_idx])?;
         }
         Ok(())
@@ -131,10 +150,11 @@ impl std::fmt::Display for PubKey {
 impl std::fmt::Debug for PubKey {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let buffer: [u8; 32] = self.into();
-        for byte_idx in 0..32 {
-            write!(f, "{:>02x}", &buffer[byte_idx])?;
-        }
-        Ok(())
+        write!(
+            f,
+            "{:>02x}{:>02x}..{:>02x}{:>02x}",
+            &buffer[0], &buffer[1], &buffer[30], &buffer[31]
+        )
     }
 }
 
@@ -203,15 +223,13 @@ impl KeyPair {
 mod tests {
     use super::*;
 
-    /*
     #[test]
     fn sign_and_verify() {
-        let keypair = KeyPair::new();
+        let keypair = KeyPair::random();
         let message: [u8; 5] = [0, 1, 2, 3, 4];
         let public_key = keypair.public_key();
         let signature = keypair.sign(&message);
         let result = public_key.verify(&message, &signature);
         assert!(result);
     }
-    */
 }
