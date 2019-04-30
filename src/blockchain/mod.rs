@@ -270,7 +270,6 @@ impl BlockChain {
                             //                    proposer_node_data.votes += 1;
                             self.node_data.proposer_increment_vote(&prop_block_hash);
                         }
-
                     }
                     // Case: New block is part of a side fork which is longer fork than the main chain.
                     // This is a bad (and complex) situation.
@@ -906,11 +905,10 @@ mod tests {
     // because we have designed the genesis blocks themselves.
     #[test]
     fn blockchain_initialization() {
-
         let blockchain_db_path = std::path::Path::new("/tmp/blockchain_test1.rocksdb");
         let blockchain_db = database::BlockChainDatabase::new(blockchain_db_path).unwrap();
         let blockchain_db = Arc::new(Mutex::new(blockchain_db));
-        
+
         // Initialize a blockchain with 10  voter chains.
         let (state_update_sink, _state_update_source) = mpsc::channel();
 
@@ -953,9 +951,9 @@ mod tests {
         let blockchain_db_path = std::path::Path::new("/tmp/blockchain_test2.rocksdb");
         let blockchain_db1 = database::BlockChainDatabase::new(blockchain_db_path);
         let blockchain_db: database::BlockChainDatabase;
-        match blockchain_db1{
+        match blockchain_db1 {
             Err(e) => panic!("Error {}", e),
-            Ok(s) => blockchain_db = s
+            Ok(s) => blockchain_db = s,
         }
         let blockchain_db = Arc::new(Mutex::new(blockchain_db));
 
@@ -1038,7 +1036,10 @@ mod tests {
             blockchain.insert_node(&voter_block);
         }
         assert_eq!(27, blockchain.graph.node_count());
-        let prop_block1a_votes = blockchain.node_data.get_proposer(&prop_block1a.hash()).votes;
+        let prop_block1a_votes = blockchain
+            .node_data
+            .get_proposer(&prop_block1a.hash())
+            .votes;
         assert_eq!(41, blockchain.graph.edge_count());
         assert_eq!(10, prop_block1a_votes, "prop block 1 should have 10 votes");
 
@@ -1119,8 +1120,14 @@ mod tests {
             );
             blockchain.insert_node(&voter_block);
         }
-        let prop_block2a_votes = blockchain.node_data.get_proposer(&prop_block2a.hash()).votes;
-        let prop_block2b_votes = blockchain.node_data.get_proposer(&prop_block2b.hash()).votes;
+        let prop_block2a_votes = blockchain
+            .node_data
+            .get_proposer(&prop_block2a.hash())
+            .votes;
+        let prop_block2b_votes = blockchain
+            .node_data
+            .get_proposer(&prop_block2b.hash())
+            .votes;
         assert_eq!(7, prop_block2a_votes, "prop block 2a should have 7 votes");
         assert_eq!(3, prop_block2b_votes, "prop block 2b should have 3 votes");
         assert_eq!(
@@ -1439,23 +1446,38 @@ mod tests {
         assert_eq!(prop_block3.hash(), leader_block_sequence[2]);
         assert_eq!(prop_block4.hash(), leader_block_sequence[3]);
         assert_eq!(
-            blockchain.node_data.get_proposer(&prop_block1a.hash()).leadership_status,
+            blockchain
+                .node_data
+                .get_proposer(&prop_block1a.hash())
+                .leadership_status,
             ProposerStatus::Leader
         );
         assert_eq!(
-            blockchain.node_data.get_proposer(&prop_block2a.hash()).leadership_status,
+            blockchain
+                .node_data
+                .get_proposer(&prop_block2a.hash())
+                .leadership_status,
             ProposerStatus::Leader
         );
         assert_eq!(
-            blockchain.node_data.get_proposer(&prop_block2b.hash()).leadership_status,
+            blockchain
+                .node_data
+                .get_proposer(&prop_block2b.hash())
+                .leadership_status,
             ProposerStatus::NotLeaderAndConfirmed
         );
         assert_eq!(
-            blockchain.node_data.get_proposer(&prop_block3.hash()).leadership_status,
+            blockchain
+                .node_data
+                .get_proposer(&prop_block3.hash())
+                .leadership_status,
             ProposerStatus::Leader
         );
         assert_eq!(
-            blockchain.node_data.get_proposer(&prop_block4.hash()).leadership_status,
+            blockchain
+                .node_data
+                .get_proposer(&prop_block4.hash())
+                .leadership_status,
             ProposerStatus::Leader
         );
 
@@ -1688,16 +1710,33 @@ mod tests {
         */
 
         // Changing it to notleader status ONLY for testing
-        blockchain.node_data.give_proposer_not_leader_status(&prop_block1a.hash());
-        blockchain.node_data.give_proposer_not_leader_status(&prop_block2a.hash());
-        blockchain.node_data.give_proposer_not_leader_status(&prop_block2b.hash());
-        blockchain.node_data.give_proposer_not_leader_status(&prop_block2c.hash());
-        blockchain.node_data.give_proposer_not_leader_status(&prop_block3a.hash());
-        blockchain.node_data.give_proposer_not_leader_status(&prop_block3b.hash());
-        blockchain.node_data.give_proposer_not_leader_status(&prop_block4a.hash());
-        blockchain.node_data.give_proposer_not_leader_status(&prop_block4b.hash());
-        blockchain.node_data.give_proposer_not_leader_status(&prop_block5a.hash());
-
+        blockchain
+            .node_data
+            .give_proposer_not_leader_status(&prop_block1a.hash());
+        blockchain
+            .node_data
+            .give_proposer_not_leader_status(&prop_block2a.hash());
+        blockchain
+            .node_data
+            .give_proposer_not_leader_status(&prop_block2b.hash());
+        blockchain
+            .node_data
+            .give_proposer_not_leader_status(&prop_block2c.hash());
+        blockchain
+            .node_data
+            .give_proposer_not_leader_status(&prop_block3a.hash());
+        blockchain
+            .node_data
+            .give_proposer_not_leader_status(&prop_block3b.hash());
+        blockchain
+            .node_data
+            .give_proposer_not_leader_status(&prop_block4a.hash());
+        blockchain
+            .node_data
+            .give_proposer_not_leader_status(&prop_block4b.hash());
+        blockchain
+            .node_data
+            .give_proposer_not_leader_status(&prop_block5a.hash());
 
         println!("Test 2:   Checking the order of get_unconfirmed_notleader_referred_proposer_blocks_prev_level()");
         let prop_block_2a_ref = blockchain
@@ -1766,8 +1805,12 @@ mod tests {
         assert_eq!(prop_block5a.hash(), prop_block_5a_ref[8], "8");
 
         // Making 1, 2a leaders
-        blockchain.node_data.give_proposer_leader_status(&prop_block1a.hash());
-        blockchain.node_data.give_proposer_leader_status(&prop_block2a.hash());
+        blockchain
+            .node_data
+            .give_proposer_leader_status(&prop_block1a.hash());
+        blockchain
+            .node_data
+            .give_proposer_leader_status(&prop_block2a.hash());
         let prop_block_5a_ref =
             blockchain.get_unconfirmed_notleader_referred_proposer_blocks(prop_block5a.hash());
         assert_eq!(prop_block2b.hash(), prop_block_5a_ref[0], "1");

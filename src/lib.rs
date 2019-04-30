@@ -17,8 +17,8 @@ pub mod state;
 pub mod transaction;
 pub mod validation;
 //pub mod visualization;
-pub mod wallet;
 pub mod generator;
+pub mod wallet;
 
 use crate::blockchain::transaction::UpdateMessage as LedgerUpdateMessage;
 use crate::crypto::hash::H256;

@@ -55,7 +55,6 @@ impl PropOrderingHelper {
     }
 }
 
-
 /*
  Test utilities
 */
@@ -118,4 +117,3 @@ pub fn test_voter_block(
         sortition_proof,
     };
 }
-

@@ -49,8 +49,8 @@ impl Hashable for Header {
 
 #[cfg(test)]
 mod tests {
-//    use super::super::test_util;
-//    use crate::crypto::hash::{Hashable, H256};
+    //    use super::super::test_util;
+    //    use crate::crypto::hash::{Hashable, H256};
 
     /*
     ///The hash should match

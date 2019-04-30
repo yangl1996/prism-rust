@@ -72,8 +72,7 @@ pub fn tx_block() -> Block {
 fn proposer_content1() -> Proposer_Content {
     let mut rng = rand::thread_rng();
     let tx_block_number = rng.gen_range(PROP_BLOCK_SIZE - 20, PROP_BLOCK_SIZE + 20);
-    let transaction_refs: Vec<H256> =
-        (0..tx_block_number).map(|_| tx_block().hash()).collect();
+    let transaction_refs: Vec<H256> = (0..tx_block_number).map(|_| tx_block().hash()).collect();
     let proposer_refs: Vec<H256> = vec![];
     return Proposer_Content {
         transaction_refs,
@@ -97,8 +96,7 @@ pub fn prop_block1() -> Block {
 fn proposer_content2() -> Proposer_Content {
     let mut rng = rand::thread_rng();
     let tx_block_number = rng.gen_range(PROP_BLOCK_SIZE - 20, PROP_BLOCK_SIZE + 20);
-    let transaction_refs: Vec<H256> =
-        (0..tx_block_number).map(|_| tx_block().hash()).collect();
+    let transaction_refs: Vec<H256> = (0..tx_block_number).map(|_| tx_block().hash()).collect();
     let prop_block_number = rng.gen_range(1, 2);
     let proposer_refs: Vec<H256> = (0..prop_block_number)
         .map(|_| prop_block1().hash())

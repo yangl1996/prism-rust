@@ -1,8 +1,8 @@
 // Randomly generates objects of the given class
 
-use crate::transaction::{CoinId, Input, Output, Authorization, Transaction};
-use crate::crypto;
 use super::crypto as crypto_generator;
+use crate::crypto;
+use crate::transaction::{Authorization, CoinId, Input, Output, Transaction};
 use rand::{Rng, RngCore};
 
 pub fn random() -> Transaction {
@@ -15,7 +15,7 @@ pub fn random() -> Transaction {
     return Transaction {
         input,
         output,
-        authorization
+        authorization,
     };
 }
 
@@ -25,12 +25,8 @@ fn tx_input() -> Input {
     let index = rng.next_u32();
     let value = rng.next_u64();
     let owner = crypto_generator::h256();
-    let coin = CoinId{hash, index};
-    return Input {
-        coin,
-        value,
-        owner,
-    };
+    let coin = CoinId { hash, index };
+    return Input { coin, value, owner };
 }
 
 fn tx_output() -> Output {

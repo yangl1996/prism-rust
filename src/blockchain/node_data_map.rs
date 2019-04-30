@@ -3,13 +3,12 @@ use super::proposer::NodeData as ProposerNodeData;
 use super::proposer::Status as ProposerStatus;
 use super::voter::NodeData as VoterNodeData;
 use super::voter::NodeStatus as VoterNodeUpdateStatus;
-use bincode::{serialize, deserialize};
+use bincode::{deserialize, serialize};
 use rocksdb::WriteBatch;
 use serde::{Deserialize, Serialize};
 
 use crate::crypto::hash::{Hashable, H256};
 use std::sync::{Arc, Mutex};
-
 
 pub struct NodeDataMap {
     pub db: Arc<Mutex<BlockChainDatabase>>,
@@ -70,7 +69,6 @@ impl NodeDataMap {
         }
     }
 
-
     fn edit<D: Serialize>(&self, cf_name: &str, hash: &H256, data: D) {
         let db = self.db.lock().unwrap();
         let hash_u8: [u8; 32] = hash.into();
@@ -120,7 +118,6 @@ impl NodeDataMap {
         prop_node_data.votes -= 1;
         self.edit(PROPOSER_NODE_DATA_CF, hash, prop_node_data);
     }
-
 }
 
 // Voter Node Data edits
@@ -137,8 +134,5 @@ impl NodeDataMap {
         let mut voter_node_data = self.get_voter(hash);
         voter_node_data.status = VoterNodeUpdateStatus::OnMainChain;
         self.edit(VOTER_NODE_DATA_CF, hash, voter_node_data);
-
     }
-
-
 }
