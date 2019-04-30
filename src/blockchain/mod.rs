@@ -39,7 +39,7 @@ pub struct BlockChain {
     /// Metadata of the transaction blocks
     pub tx_blocks: TxBlkPool,
     /// Metadata of blocks
-    pub node_data: NodeDataMap
+    pub node_data: NodeDataMap,
 }
 
 // Functions to edit the blockchain
@@ -50,7 +50,6 @@ impl BlockChain {
         num_voting_chains: u16,
         utxo_update: Sender<(LedgerUpdateMessage, Vec<H256>)>, //Sends updates to utxo state thread
     ) -> Self {
-
         // Initializing an empty object
         let mut graph = GraphMap::<H256, Edge, Directed>::new();
         let mut proposer_tree = ProposerTree::default();
@@ -171,8 +170,12 @@ impl BlockChain {
                 }
 
                 // 4. Add the proposer block to the list of unvoted blocks on all the voter chains.
-//                let self_level = self.proposer_node_data[&parent_proposer_block_hash].level + 1;
-                let self_level =  self.node_data.get_proposer(&parent_proposer_block_hash).level + 1;
+                //                let self_level = self.proposer_node_data[&parent_proposer_block_hash].level + 1;
+                let self_level = self
+                    .node_data
+                    .get_proposer(&parent_proposer_block_hash)
+                    .level
+                    + 1;
                 for i in 0..self.voter_chains.len() {
                     self.voter_chains
                         .get_mut(i as usize)
@@ -186,8 +189,9 @@ impl BlockChain {
                 proposer_node_data.level = self_level;
 
                 // 6. Add node data in the map
-//                self.proposer_node_data.insert(block_hash, proposer_node_data);
-                self.node_data.insert_proposer(&block_hash, proposer_node_data);
+                //                self.proposer_node_data.insert(block_hash, proposer_node_data);
+                self.node_data
+                    .insert_proposer(&block_hash, proposer_node_data);
 
                 // 7. Add the block in the proposer_tree field at self_level.
                 self.proposer_tree
@@ -219,16 +223,15 @@ impl BlockChain {
                     }
 
                     // Incrementing the votes of the proposer block being voted
-                    let ref proposer_node_data =
-                        self.node_data.get_proposer(&prop_block_hash);
-//                    proposer_node_data.votes += 1;
+                    let ref proposer_node_data = self.node_data.get_proposer(&prop_block_hash);
+                    //                    proposer_node_data.votes += 1;
                     self.proposer_tree
                         .increment_vote_at_level(proposer_node_data.level);
                 }
 
                 // 4. Updating the voter chain.
-//                let parent_voter_node_data: VoterNodeData =
-//                    self.voter_node_data[&content.voter_parent];
+                //                let parent_voter_node_data: VoterNodeData =
+                //                    self.voter_node_data[&content.voter_parent];
                 let parent_voter_node_data = self.node_data.get_voter(&content.voter_parent);
                 // The update status is used to create the voter node data
                 let voter_node_update = self.voter_chains
@@ -245,7 +248,7 @@ impl BlockChain {
                 let mut voter_node_data = VoterNodeData::default();
                 voter_node_data.level = parent_voter_node_data.level + 1;
                 voter_node_data.chain_number = parent_voter_node_data.chain_number;
-//                self.voter_node_data.insert(block_hash, voter_node_data);
+                //                self.voter_node_data.insert(block_hash, voter_node_data);
                 self.node_data.insert_voter(&block_hash, voter_node_data);
 
                 match voter_node_update {
@@ -253,10 +256,10 @@ impl BlockChain {
                     VoterNodeUpdateStatus::ExtendedMainChain => {
                         // change the status of the new voter block
                         self.node_data.voter_make_on_main_chain(&block_hash);
-//                        self.voter_node_data
-//                            .get_mut(&block_hash)
-//                            .unwrap()
-//                            .make_on_main_chain();
+                        //                        self.voter_node_data
+                        //                            .get_mut(&block_hash)
+                        //                            .unwrap()
+                        //                            .make_on_main_chain();
 
                         // Remove the prop block levels voted by this block from list of unvoted levels of this chain.
                         for prop_block_hash in content.votes.iter() {
@@ -287,12 +290,11 @@ impl BlockChain {
                         //3a. Change the status of left_segment voter blocks to Orphan and get the votes by this segment.
                         let mut votes_on_proposers_left: Vec<(H256, u32)> = vec![];
                         for voter_block in fork.left_segment.iter() {
-//                            self.voter_node_data
-//                                .get_mut(voter_block)
-//                                .unwrap()
-//                                .make_orphan(); //change status
+                            //                            self.voter_node_data
+                            //                                .get_mut(voter_block)
+                            //                                .unwrap()
+                            //                                .make_orphan(); //change status
                             self.node_data.voter_make_orphan(voter_block);
-
 
                             let proposer_blocks = self.get_votes_by_voter(voter_block);
                             for proposer_block in proposer_blocks {
@@ -307,10 +309,10 @@ impl BlockChain {
                         //3b. Change the status of right_segment voter blocks to OnMainChain and get the votes by this segment.
                         let mut votes_on_proposers_right: Vec<(H256, u32)> = vec![];
                         for voter_block in fork.right_segment.iter() {
-//                            self.voter_node_data
-//                                .get_mut(voter_block)
-//                                .unwrap()
-//                                .make_on_main_chain(); //change status
+                            //                            self.voter_node_data
+                            //                                .get_mut(voter_block)
+                            //                                .unwrap()
+                            //                                .make_on_main_chain(); //change status
                             self.node_data.voter_make_on_main_chain(voter_block);
 
                             let proposer_blocks = self.get_votes_by_voter(voter_block);
@@ -364,12 +366,13 @@ impl BlockChain {
                                 for proposer_block in
                                     self.proposer_tree.prop_nodes[level as usize].iter()
                                 {
-//                                    self.proposer_node_data
-//                                        .get_mut(proposer_block)
-//                                        .unwrap()
-//                                        .give_potential_leader_status();
-//
-                                    self.node_data.give_proposer_potential_leader_status(proposer_block);
+                                    //                                    self.proposer_node_data
+                                    //                                        .get_mut(proposer_block)
+                                    //                                        .unwrap()
+                                    //                                        .give_potential_leader_status();
+                                    //
+                                    self.node_data
+                                        .give_proposer_potential_leader_status(proposer_block);
                                 }
 
                                 self.proposer_tree.leader_nodes.remove(&level);
@@ -544,19 +547,18 @@ impl BlockChain {
         self.proposer_tree.min_unconfirmed_level = level + 1;
 
         // 2b. Giving leader status to leader_block
-//        let ref mut leader_node_data = self.proposer_node_data.get_mut(&leader_block).unwrap();
-//        leader_node_data.give_leader_status();
+        //        let ref mut leader_node_data = self.proposer_node_data.get_mut(&leader_block).unwrap();
+        //        leader_node_data.give_leader_status();
         self.node_data.give_proposer_leader_status(&leader_block);
-
 
         // 2c. Giving NotLeaderUnconfirmed status to all blocks at 'level' except the leader_block
         for proposer_block in self.proposer_tree.prop_nodes[level as usize].iter() {
             if *proposer_block != leader_block {
-//                let ref mut proposer_node_data =
-//                    self.proposer_node_data.get_mut(proposer_block).unwrap();
-//                proposer_node_data.give_not_leader_status();
-                self.node_data.give_proposer_not_leader_status(proposer_block);
-
+                //                let ref mut proposer_node_data =
+                //                    self.proposer_node_data.get_mut(proposer_block).unwrap();
+                //                proposer_node_data.give_not_leader_status();
+                self.node_data
+                    .give_proposer_not_leader_status(proposer_block);
             }
         }
 
@@ -661,12 +663,12 @@ impl BlockChain {
             // Changing the status of these prop blocks to 'not leader but confirmed'.
             // Reason: This is done to prevent these prop blocks from getting confirmed again.
             if *proposer_block != leader_block {
-//                self.proposer_node_data
-//                    .get_mut(proposer_block)
-//                    .unwrap()
-//                    .give_not_leader_confirmed_status();
-                self.node_data.give_proposer_not_leader_confirmed_status(proposer_block);
-
+                //                self.proposer_node_data
+                //                    .get_mut(proposer_block)
+                //                    .unwrap()
+                //                    .give_not_leader_confirmed_status();
+                self.node_data
+                    .give_proposer_not_leader_confirmed_status(proposer_block);
             }
         }
     }

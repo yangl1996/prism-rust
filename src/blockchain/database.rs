@@ -52,6 +52,7 @@ impl BlockChainDatabase {
         }
     }
 
+
     pub fn delete(&self, cf_name: &str, hash: &H256) -> Result<(), rocksdb::Error> {
         let hash_u8: [u8; 32] = hash.into();
         let cf = self.handle.cf_handle(cf_name).unwrap();
