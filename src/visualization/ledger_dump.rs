@@ -1,12 +1,10 @@
-
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
 use crate::crypto::hash::{Hashable, H256};
 use crate::handler;
-use crate::transaction::CoinId;
 use crate::state::UTXODatabase;
+use crate::transaction::CoinId;
 use crate::transaction::Transaction as RawTransaction;
-
 
 #[derive(Serialize)]
 pub struct Input {

@@ -1,7 +1,7 @@
+use crate::crypto::hash::Hashable;
 use crate::miner::memory_pool::MemoryPool;
 use crate::transaction::Transaction;
 use std::sync::Mutex;
-use crate::crypto::hash::Hashable;
 
 /// Handler for new transaction
 // We may want to add the result of memory pool check

@@ -83,23 +83,23 @@ mod tests {
     use crate::block::generator;
     use crate::crypto::hash::Hashable;
 
-/*
-    #[test]
-    fn insert_get_and_delete() {
-        let db = BlockDatabase::new(&std::path::Path::new(
-            "/tmp/blockdb_tests_insert_get_and_delete.rocksdb",
-        ))
-        .unwrap();
-        let test_block = generator::tx_block();
-        db.insert(&test_block).unwrap();
-        let got = db.get(&test_block.hash()).unwrap().unwrap();
-        let num_block = db.num_blocks();
-        assert_eq!(got.hash(), test_block.hash());
-        assert_eq!(num_block, 1);
-        db.delete(&test_block.hash()).unwrap();
-        let num_block = db.num_blocks();
-        assert_eq!(db.get(&test_block.hash()).unwrap().is_none(), true);
-        assert_eq!(num_block, 0);
-    }
-*/
+    /*
+        #[test]
+        fn insert_get_and_delete() {
+            let db = BlockDatabase::new(&std::path::Path::new(
+                "/tmp/blockdb_tests_insert_get_and_delete.rocksdb",
+            ))
+            .unwrap();
+            let test_block = generator::tx_block();
+            db.insert(&test_block).unwrap();
+            let got = db.get(&test_block.hash()).unwrap().unwrap();
+            let num_block = db.num_blocks();
+            assert_eq!(got.hash(), test_block.hash());
+            assert_eq!(num_block, 1);
+            db.delete(&test_block.hash()).unwrap();
+            let num_block = db.num_blocks();
+            assert_eq!(db.get(&test_block.hash()).unwrap().is_none(), true);
+            assert_eq!(num_block, 0);
+        }
+    */
 }

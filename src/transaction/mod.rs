@@ -14,7 +14,7 @@ pub struct CoinId {
 /// An address of a user. It is the SHA256 hash of the user's public key.
 pub type Address = H256;
 
-/// An input of a transaction. 
+/// An input of a transaction.
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Input {
     /// The identifier of the input coin.
@@ -87,8 +87,8 @@ pub struct Authorization {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use rand::{Rng, RngCore};
     use crate::crypto::hash::tests::generate_random_hash;
+    use rand::{Rng, RngCore};
 
     pub fn generate_random_coinid() -> CoinId {
         let mut rng = rand::thread_rng();
@@ -113,6 +113,5 @@ pub mod tests {
             value: rng.next_u64(),
             recipient: generate_random_hash(),
         }
-
     }
 }

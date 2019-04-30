@@ -18,7 +18,6 @@ pub trait Signable {
 #[derive(Serialize, Deserialize, Hash, Clone, Default, PartialEq, Eq, Copy)]
 pub struct Signature([u128; 4]); // big endian u512
 
-
 impl std::convert::From<&[u8; 64]> for Signature {
     fn from(input: &[u8; 64]) -> Signature {
         let u1 = BigEndian::read_u128(&input[0..16]);
@@ -216,4 +215,3 @@ mod tests {
     }
     */
 }
-

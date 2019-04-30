@@ -1,7 +1,6 @@
 use crate::crypto::hash::Hashable;
-use crate::state::{UTXODatabase};
-use crate::transaction::{Transaction, CoinId};
-
+use crate::state::UTXODatabase;
+use crate::transaction::{CoinId, Transaction};
 
 /// Checks that input and output are non-empty
 pub fn check_non_empty(transaction: &Transaction) -> bool {
@@ -50,7 +49,7 @@ pub fn check_signature(transaction: &Transaction) -> bool {
     for index in 0..transaction.input.len() {
         let input = &transaction.input[index];
         let signature = &transaction.authorization[index];
-        if input.owner!= signature.pubkey.hash() {
+        if input.owner != signature.pubkey.hash() {
             return false;
         }
     }

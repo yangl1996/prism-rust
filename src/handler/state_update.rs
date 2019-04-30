@@ -1,11 +1,10 @@
-
-use crate::block::{Content};
+use crate::block::Content;
 use crate::blockdb::BlockDatabase;
 use crate::crypto::hash::{Hashable, H256};
 use crate::state::{CoinData, UTXODatabase, UTXO};
-use crate::transaction::{Transaction, CoinId};
+use crate::transaction::{CoinId, Transaction};
 use crate::wallet::Wallet;
-use std::sync::{Mutex};
+use std::sync::Mutex;
 
 /// This function changes the ledger to incorporate txs from last 'tx_block_hashes'.
 pub fn confirm_new_tx_block_hashes(
@@ -172,7 +171,8 @@ pub fn to_coinid_and_potential_utxo(tx: &Transaction) -> (Vec<CoinId>, Vec<UTXO>
 pub fn to_rollback_coinid_and_potential_utxo(tx: &Transaction) -> (Vec<CoinId>, Vec<UTXO>) {
     let hash: H256 = tx.hash();
     // i) Get the input locations of the output coins and delete the output coins in reverse order.
-    let to_delete: Vec<CoinId> = (0..(tx.output.len())).rev()
+    let to_delete: Vec<CoinId> = (0..(tx.output.len()))
+        .rev()
         .map(|index| CoinId {
             hash,
             index: index as u32,
@@ -181,7 +181,8 @@ pub fn to_rollback_coinid_and_potential_utxo(tx: &Transaction) -> (Vec<CoinId>, 
     // ii) Reconstruct the input utxos in reverse order.
     let to_insert: Vec<UTXO> = tx
         .input
-        .iter().rev()
+        .iter()
+        .rev()
         .map(|input| UTXO {
             coin_id: input.coin,
             coin_data: CoinData {

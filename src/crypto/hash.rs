@@ -108,7 +108,6 @@ impl PartialEq for H256 {
     }
 }
 
-
 #[cfg(test)]
 pub mod tests {
     use super::Hashable;
@@ -121,7 +120,7 @@ pub mod tests {
         raw_bytes.copy_from_slice(&random_bytes);
         return (&raw_bytes).into();
     }
-/*
+    /*
     #[test]
     fn ordering() {
         let bigger_hash: H256 =

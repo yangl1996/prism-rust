@@ -17,11 +17,7 @@ pub struct Content {
 
 impl Content {
     /// Create new voter block content.
-    pub fn new(
-        chain_number: u16,
-        voter_parent: H256,
-        votes: Vec<H256>,
-    ) -> Self {
+    pub fn new(chain_number: u16, voter_parent: H256, votes: Vec<H256>) -> Self {
         Self {
             chain_number,
             voter_parent,

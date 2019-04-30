@@ -6,11 +6,6 @@ use crate::crypto::hash::H256;
 use std::cmp;
 use std::cmp::Ordering;
 
-
-
-
-
-
 pub fn lcb_from_vote_depths(votes: Vec<u32>) -> f32 {
     let answer: f32 = votes.len() as f32;
     return answer; //todo: Apply the confirmation logic from the paper

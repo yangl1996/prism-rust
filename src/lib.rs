@@ -16,7 +16,7 @@ pub mod network;
 pub mod state;
 pub mod transaction;
 pub mod validation;
-pub mod visualization;
+//pub mod visualization;
 pub mod wallet;
 
 use crate::blockchain::transaction::UpdateMessage as LedgerUpdateMessage;

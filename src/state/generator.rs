@@ -1,5 +1,5 @@
 use super::UTXODatabase;
-use rand::{RngCore};
+use rand::RngCore;
 
 pub fn random() -> UTXODatabase {
     //1. init database
