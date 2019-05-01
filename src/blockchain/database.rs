@@ -13,7 +13,7 @@ pub const LEDGER_CF: &str = "LED";
 pub const PROP_TREE_LEADER_VEC_CF: &str = "PTLV";
 pub const PROP_TREE_PROP_BLOCKS_CF: &str = "PTPB";
 
-// edges with no value
+// edges with no edge weight
 lazy_static! {
     pub static ref EDGE_TYPE_1_CFS: HashMap<Edge, String> = {
         let mut hm: HashMap<Edge, String> = HashMap::new();
@@ -27,10 +27,8 @@ lazy_static! {
         hm.insert(Edge::VoterFromProposerParentAndVote, "VfPPnV".to_string());
         return hm;
     };
-}
 
-// edges with value
-lazy_static! {
+    // edges with edge weight
     pub static ref EDGE_TYPE_2_CFS: HashMap<Edge, String> = {
         let mut hm: HashMap<Edge, String> = HashMap::new();
         hm.insert(Edge::ProposerToProposerReference, "P2PR".to_string());

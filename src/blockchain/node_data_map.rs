@@ -107,17 +107,6 @@ impl NodeDataMap {
         self.edit(PROPOSER_NODE_DATA_CF, hash, prop_node_data);
     }
 
-    pub fn proposer_increment_vote(&self, hash: &H256) {
-        let mut prop_node_data = self.get_proposer(hash);
-        prop_node_data.votes += 1;
-        self.edit(PROPOSER_NODE_DATA_CF, hash, prop_node_data);
-    }
-
-    pub fn proposer_decrement_vote(&self, hash: &H256) {
-        let mut prop_node_data = self.get_proposer(hash);
-        prop_node_data.votes -= 1;
-        self.edit(PROPOSER_NODE_DATA_CF, hash, prop_node_data);
-    }
 }
 
 // Voter Node Data edits

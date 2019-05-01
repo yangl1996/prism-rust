@@ -12,10 +12,7 @@ pub struct NodeData {
     /// Level of the proposer node.
     pub level: u32,
     /// Leadership Status.
-    pub leadership_status: Status,
-    /// Number of votes from voter blocks on the main chains (longest chains).
-    pub votes: u16,
-}
+    pub leadership_status: Status,}
 
 // TODO: remove it and replace with a new() function
 impl Default for NodeData {
@@ -25,26 +22,19 @@ impl Default for NodeData {
         return Self {
             level,
             leadership_status,
-            votes: 0,
         };
     }
 }
 
 impl std::fmt::Display for NodeData {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "level: {}; #votes: {}", self.level, self.votes)?; // Ignoring status for now
+        write!(f, "level: {}", self.level)?; // Ignoring status for now
         Ok(())
     }
 }
 
 impl NodeData {
     // TODO: either make `votes` and `leadership_status` private, or remove those functions
-    pub fn increment_vote(&mut self) {
-        self.votes += 1;
-    }
-    pub fn decrement_vote(&mut self) {
-        self.votes -= 1;
-    }
     pub fn give_leader_status(&mut self) {
         self.leadership_status = Status::Leader
     }
@@ -78,7 +68,6 @@ impl NodeData {
     pub fn genesis(number_of_voter_chains: u16) -> Self {
         let mut genesis = NodeData::default();
         genesis.leadership_status = Status::Leader;
-        genesis.votes = number_of_voter_chains;
         return genesis;
     }
 }

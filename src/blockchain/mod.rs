@@ -284,11 +284,6 @@ impl BlockChain {
                     VoterNodeUpdateStatus::ExtendedMainChain => {
                         // change the status of the new voter block
                         self.node_data.voter_make_on_main_chain(&block_hash);
-                        //                        self.voter_node_data
-                        //                            .get_mut(&block_hash)
-                        //                            .unwrap()
-                        //                            .make_on_main_chain();
-
                         // Remove the prop block levels voted by this block from list of unvoted levels of this chain.
                         for prop_block_hash in content.votes.iter() {
                             let proposer_level = self.prop_node_data(&prop_block_hash).level;
@@ -296,8 +291,7 @@ impl BlockChain {
                                 .get_mut(voter_node_data.chain_number as usize)
                                 .unwrap()
                                 .remove_unvoted(proposer_level);
-                            //                    proposer_node_data.votes += 1;
-                            self.node_data.proposer_increment_vote(&prop_block_hash);
+
                         }
                     }
                     // Case: New block is part of a side fork which is longer fork than the main chain.
@@ -320,18 +314,12 @@ impl BlockChain {
                         //3a. Change the status of left_segment voter blocks to Orphan and get the votes by this segment.
                         let mut votes_on_proposers_left: Vec<(H256, u32)> = vec![];
                         for voter_block in fork.left_segment.iter() {
-                            //                            self.voter_node_data
-                            //                                .get_mut(voter_block)
-                            //                                .unwrap()
-                            //                                .make_orphan(); //change status
                             self.node_data.voter_make_orphan(voter_block);
 
                             let proposer_blocks = self.get_votes_by_voter(voter_block);
                             for proposer_block in proposer_blocks {
                                 let level = self.prop_node_data(&proposer_block).level;
                                 votes_on_proposers_left.push((proposer_block, level));
-                                //                    proposer_node_data.votes -= 1;
-                                self.node_data.proposer_decrement_vote(&proposer_block);
                             }
                             votes_on_proposers_left.sort_by_key(|k| k.1);
                         }
@@ -341,18 +329,12 @@ impl BlockChain {
                         //3b. Change the status of right_segment voter blocks to OnMainChain and get the votes by this segment.
                         let mut votes_on_proposers_right: Vec<(H256, u32)> = vec![];
                         for voter_block in fork.right_segment.iter() {
-                            //                            self.voter_node_data
-                            //                                .get_mut(voter_block)
-                            //                                .unwrap()
-                            //                                .make_on_main_chain(); //change status
                             self.node_data.voter_make_on_main_chain(voter_block);
 
                             let proposer_blocks = self.get_votes_by_voter(voter_block);
                             for proposer_block in proposer_blocks {
                                 let level = self.prop_node_data(&proposer_block).level;
                                 votes_on_proposers_right.push((proposer_block, level));
-                                //                    proposer_node_data.votes += 1;
-                                self.node_data.proposer_increment_vote(&proposer_block);
                             }
                             votes_on_proposers_right.sort_by_key(|k| k.1);
                         }
@@ -400,11 +382,6 @@ impl BlockChain {
                                 for proposer_block in
                                     self.proposer_tree.get_blocks_at_level(level).iter()
                                 {
-                                    //                                    self.proposer_node_data
-                                    //                                        .get_mut(proposer_block)
-                                    //                                        .unwrap()
-                                    //                                        .give_potential_leader_status();
-                                    //
                                     self.node_data
                                         .give_proposer_potential_leader_status(proposer_block);
                                 }
@@ -511,7 +488,7 @@ impl BlockChain {
         if !self.node_data.contains_voter(&block_hash) {
             panic!("The voter block with hash {} doesn't exist", block_hash);
         }
-        let voter_ref_nodes = self.graph.get_edges_type_1(
+        let voter_ref_nodes = self.graph.get_neighbours_type_1(
             *block_hash,
             vec![
                 Edge::VoterToProposerVote,
@@ -533,7 +510,7 @@ impl BlockChain {
         //        let voter_parent_nodes: Vec<H256> = voter_parent_edges.map(|x| x.1).collect();
         let voter_parent_nodes: Vec<H256> = self
             .graph
-            .get_edges_type_1(block_hash, vec![Edge::VoterToVoterParent]);
+            .get_neighbours_type_1(block_hash, vec![Edge::VoterToVoterParent]);
         if voter_parent_nodes.len() == 1 {
             return voter_parent_nodes[0];
         } else {
@@ -584,16 +561,11 @@ impl BlockChain {
         self.proposer_tree.max_confirmed_level = level + 1;
 
         // 2b. Giving leader status to leader_block
-        //        let ref mut leader_node_data = self.proposer_node_data.get_mut(&leader_block).unwrap();
-        //        leader_node_data.give_leader_status();
         self.node_data.give_proposer_leader_status(&leader_block);
 
         // 2c. Giving NotLeaderUnconfirmed status to all blocks at 'level' except the leader_block
         for proposer_block in self.proposer_tree.get_blocks_at_level(level).iter() {
             if *proposer_block != leader_block {
-                //                let ref mut proposer_node_data =
-                //                    self.proposer_node_data.get_mut(proposer_block).unwrap();
-                //                proposer_node_data.give_not_leader_status();
                 self.node_data
                     .give_proposer_not_leader_status(proposer_block);
             }
@@ -655,7 +627,7 @@ impl BlockChain {
             panic!("The proposer block with hash {} doesn't exist", block_hash);
         }
         //1. Extracting the voter blocks which have voted on this proposer block
-        let voter_nodes = self.graph.get_edges_type_1(
+        let voter_nodes = self.graph.get_neighbours_type_1(
             *block_hash,
             vec![
                 Edge::VoterFromProposerVote,
@@ -702,10 +674,6 @@ impl BlockChain {
             // Changing the status of these prop blocks to 'not leader but confirmed'.
             // Reason: This is done to prevent these prop blocks from getting confirmed again.
             if *proposer_block != leader_block {
-                //                self.proposer_node_data
-                //                    .get_mut(proposer_block)
-                //                    .unwrap()
-                //                    .give_not_leader_confirmed_status();
                 self.node_data
                     .give_proposer_not_leader_confirmed_status(proposer_block);
             }
@@ -783,7 +751,7 @@ impl BlockChain {
         }
         let mut referred_tx_blocks_nodes = self
             .graph
-            .get_edges_type_2(*block_hash, Edge::ProposerToTransactionReference);
+            .get_neighbours_type_2(*block_hash, Edge::ProposerToTransactionReference);
         referred_tx_blocks_nodes.sort_by_key(|k| k.1);
         // returning the hashes only
         return referred_tx_blocks_nodes
@@ -817,7 +785,7 @@ impl BlockChain {
 
     /// Return the proposer parent of the block
     pub fn get_proposer_parent(&mut self, block_hash: H256) -> H256 {
-        let proposer_parent_nodes = self.graph.get_edges_type_1(
+        let proposer_parent_nodes = self.graph.get_neighbours_type_1(
             block_hash,
             vec![
                 Edge::TransactionToProposerParent,
@@ -843,7 +811,7 @@ impl BlockChain {
         }
         let mut referred_prop_blocks_nodes: Vec<(H256, u32)> = self
             .graph
-            .get_edges_type_2(block_hash, Edge::ProposerToProposerReference);
+            .get_neighbours_type_2(block_hash, Edge::ProposerToProposerReference);
 
         return referred_prop_blocks_nodes;
     }
@@ -921,7 +889,7 @@ impl BlockChain {
         let prop_blocks_at_level = self.proposer_tree.get_blocks_at_level(level);
         let mut total_votes: u32 = 0;
         for prop_block in prop_blocks_at_level.iter() {
-            total_votes += self.prop_node_data(prop_block).votes as u32;
+            total_votes += self.get_vote_depths_on_proposer(prop_block).len() as u32;
         }
         return total_votes;
     }
@@ -1060,9 +1028,8 @@ mod tests {
             blockchain.insert_node(&voter_block);
         }
         let prop_block1a_votes = blockchain
-            .node_data
-            .get_proposer(&prop_block1a.hash())
-            .votes;
+            .get_vote_depths_on_proposer(&prop_block1a.hash())
+            .len();
         assert_eq!(51, blockchain.graph.edge_count);
         assert_eq!(10, prop_block1a_votes, "prop block 1 should have 10 votes");
 
@@ -1142,13 +1109,11 @@ mod tests {
             blockchain.insert_node(&voter_block);
         }
         let prop_block2a_votes = blockchain
-            .node_data
-            .get_proposer(&prop_block2a.hash())
-            .votes;
+            .get_vote_depths_on_proposer(&prop_block2a.hash())
+            .len();
         let prop_block2b_votes = blockchain
-            .node_data
-            .get_proposer(&prop_block2b.hash())
-            .votes;
+            .get_vote_depths_on_proposer(&prop_block2b.hash())
+            .len();
         assert_eq!(7, prop_block2a_votes, "prop block 2a should have 7 votes");
         assert_eq!(3, prop_block2b_votes, "prop block 2b should have 3 votes");
         assert_eq!(
