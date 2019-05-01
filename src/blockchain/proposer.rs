@@ -1,6 +1,9 @@
 use crate::crypto::hash::H256;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use super::database::{BlockChainDatabase, PROP_TREE_LEADER_VEC_CF};
+use std::sync::{Arc, Mutex};
+use bincode::{deserialize, serialize};
 
 #[derive(Serialize, Deserialize, Clone, Copy, Ord, Eq, PartialEq, PartialOrd, Hash)]
 /// The metadata of a proposer block.
@@ -79,9 +82,10 @@ impl NodeData {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
+//#[derive(Clone, Eq, PartialEq)]
 /// The metadata of a proposer block tree.
 pub struct Tree {
+    pub db: Arc<Mutex<BlockChainDatabase>>,
     /// The best proposer node on the tree (the node with the deepest level). This info is for mining.
     pub best_block: H256,
     /// The deepest level. This is for mining.
@@ -90,34 +94,28 @@ pub struct Tree {
     pub prop_nodes: Vec<Vec<H256>>,
     /// The number of votes at each level.
     pub number_of_votes: HashMap<u32, u32>, // TODO: why are we using hashmap here?
-    /// The hashes of leader blocks of each level.
-    pub leader_nodes: HashMap<u32, H256>, // Using hashmap because leader nodes might not be confirmed sequentially
     /// The level upto which all levels have a leader.
     pub min_unconfirmed_level: u32,
     /// The pool of unreferred proposer blocks. This is for mining.
     pub unreferred: HashSet<H256>,
 }
 
-impl Default for Tree {
-    fn default() -> Self {
+impl Tree {
+    pub fn new(db: Arc<Mutex<BlockChainDatabase>>) -> Self {
         let best_block = H256::default();
         let prop_nodes: Vec<Vec<H256>> = vec![];
         let all_votes: HashMap<u32, u32> = HashMap::<u32, u32>::new();
-        let leader_nodes: HashMap<u32, H256> = HashMap::new();
         let unreferred: HashSet<H256> = HashSet::new();
         return Self {
+            db,
             best_block,
             best_level: 0,
             prop_nodes,
             number_of_votes: all_votes,
-            leader_nodes,
             min_unconfirmed_level: 1,
             unreferred,
         };
     }
-}
-
-impl Tree {
     /// Adds a proposer block at the given level.
     pub fn add_block_at_level(&mut self, block: H256, level: u32) {
         if self.best_level >= level {
@@ -145,6 +143,59 @@ impl Tree {
     pub fn remove_unreferred(&mut self, hash: &H256) {
         self.unreferred.remove(hash);
     }
+
+    /// Adds a leader at level 'level'
+    pub fn insert_leader_block(&mut self, level: u32, hash: H256) {
+        let db = self.db.lock().unwrap();
+        let key = serialize(&level).unwrap();
+        let value = serialize(&hash).unwrap();
+        let cf = db.handle.cf_handle(PROP_TREE_LEADER_VEC_CF).unwrap();
+        let serialized = db.handle.get_cf(cf, &key).unwrap();
+        match serialized {
+            Some(_) => {panic!("The leader the level {} exists", level)},
+            None => {
+                db.handle.put_cf(cf, &key, &value);
+            },
+        }
+    }
+
+    /// Deletes the leader block at level 'level'
+    pub fn remove_leader_block(&mut self, level: u32) {
+        let db = self.db.lock().unwrap();
+        let key = serialize(&level).unwrap();
+        let cf = db.handle.cf_handle(PROP_TREE_LEADER_VEC_CF).unwrap();
+        match db.handle.delete_cf(cf, &key) {
+            Ok(_) => {},
+            Err(e) => {  panic!("Database error {}", e)
+            },
+        }
+    }
+
+    /// Get the leader block at level 'level'
+    pub fn get_leader_block_at(&mut self, level: u32) -> H256 {
+        let db = self.db.lock().unwrap();
+        let key = serialize(&level).unwrap();
+        let cf = db.handle.cf_handle(PROP_TREE_LEADER_VEC_CF).unwrap();
+        let serialized_option = db.handle.get_cf(cf, &key).unwrap();
+        match serialized_option {
+            Some(serialized) => {return deserialize(&serialized).unwrap()},
+            None => { panic!("No leader block at level {}", level)},
+        }
+    }
+
+    /// Checks if level 'level' contains a leader block
+    pub fn contains_leader_block_at(&mut self, level: u32) -> bool {
+        let db = self.db.lock().unwrap();
+        let key = serialize(&level).unwrap();
+        let cf = db.handle.cf_handle(PROP_TREE_LEADER_VEC_CF).unwrap();
+        let serialized_option = db.handle.get_cf(cf, &key).unwrap();
+        match serialized_option {
+            Some(_) => {return true},
+            None => { return false},
+        }
+    }
+
+
 }
 
 impl std::fmt::Display for Tree {

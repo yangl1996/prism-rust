@@ -53,7 +53,7 @@ impl BlockChain {
     ) -> Self {
         // Initializing an empty object
         let mut graph = GraphMap::<H256, Edge, Directed>::new();
-        let mut proposer_tree = ProposerTree::default();
+        let mut proposer_tree = ProposerTree::new(Arc::clone(&db));
         let mut voter_chains: Vec<VoterChain> = vec![];
 
         let tx_blocks: TxBlkPool = TxBlkPool::new(Arc::clone(&db), utxo_update);
@@ -73,7 +73,7 @@ impl BlockChain {
         proposer_tree.best_block = *PROPOSER_GENESIS_HASH;
         proposer_tree.prop_nodes.push(vec![*PROPOSER_GENESIS_HASH]);
         // Genesis proposer block is the leader block at level 0
-        proposer_tree.leader_nodes.insert(0, *PROPOSER_GENESIS_HASH);
+        proposer_tree.insert_leader_block(0, *PROPOSER_GENESIS_HASH);
 
         // 2. Voter geneses blocks
         for chain_number in 0..(num_voting_chains) {
@@ -357,7 +357,7 @@ impl BlockChain {
                                 }
                                 None => {
                                     // level leader block is not the leader block and infact level has not leader block
-                                    self.proposer_tree.leader_nodes.remove(&level);
+                                    self.proposer_tree.remove_leader_block(level);
                                     roll_back_required = true;
                                     roll_back_level = level;
                                     break;
@@ -381,7 +381,7 @@ impl BlockChain {
                                         .give_proposer_potential_leader_status(proposer_block);
                                 }
 
-                                self.proposer_tree.leader_nodes.remove(&level);
+                                self.proposer_tree.remove_leader_block(level);
                             }
                             //5c. Rollback ledger from 'roll_back_level' level onwards.
                             self.tx_blocks.rollback_ledger(roll_back_level);
@@ -527,7 +527,7 @@ impl BlockChain {
     /// If yes it confirms the leader block at the level and updates the ledger. Else it does nothing.
     // TODO: This function should be called when the voter chain has collected sufficient votes on level.
     pub fn try_confirm_leader_block_at_level(&mut self, level: u32) {
-        if self.proposer_tree.leader_nodes.contains_key(&level) {
+        if self.proposer_tree.contains_leader_block_at(level) {
             return; // Return if the level already has a confirmed leader block.
         }
 
@@ -549,7 +549,7 @@ impl BlockChain {
         }
 
         // 2a. Adding the leader block for the level
-        self.proposer_tree.leader_nodes.insert(level, leader_block);
+        self.proposer_tree.insert_leader_block(level, leader_block);
         self.proposer_tree.min_unconfirmed_level = level + 1;
 
         // 2b. Giving leader status to leader_block
@@ -646,7 +646,7 @@ impl BlockChain {
 
     /// Called when a new leader block is confirmed at some level.
     fn update_ledger(&mut self, level: u32) {
-        let leader_block = self.proposer_tree.leader_nodes[&level];
+        let leader_block = self.proposer_tree.get_leader_block_at(level);
 
         //1. Get all the proposer blocks referred by this leader block which are not confirmed and
         // aren't themselves leader blocks on their level. We need an *ordered* list here.
@@ -823,9 +823,9 @@ impl BlockChain {
     }
 
     /// Return a single leader block at the given level
-    fn get_leader_block_at_level(&self, level: u32) -> Option<H256> {
-        if self.proposer_tree.leader_nodes.contains_key(&level) {
-            return Some(self.proposer_tree.leader_nodes[&level]);
+    fn get_leader_block_at_level(&mut self, level: u32) -> Option<H256> {
+        if self.proposer_tree.contains_leader_block_at(level) {
+            return Some(self.proposer_tree.get_leader_block_at(level));
         }
         return None;
     }

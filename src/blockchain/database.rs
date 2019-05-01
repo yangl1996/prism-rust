@@ -9,6 +9,7 @@ use std::sync::Mutex;
 pub const PROPOSER_NODE_DATA_CF: &str = "PND";
 pub const VOTER_NODE_DATA_CF: &str = "VND";
 pub const LEDGER_CF: &str = "LED";
+pub const PROP_TREE_LEADER_VEC_CF: &str = "PTLV";
 
 /// Database that stores blockchain.
 pub struct BlockChainDatabase {
@@ -39,6 +40,13 @@ impl BlockChainDatabase {
 
         match db_handle.create_cf(LEDGER_CF, &opts) {
             Ok(_db) => {} //println!("{} created successfully", LEDGER_CF),
+            Err(e) => {
+                panic!("could not create column family: {}", e);
+            }
+        }
+
+        match db_handle.create_cf(PROP_TREE_LEADER_VEC_CF, &opts) {
+            Ok(_db) => {} //println!("{} created successfully", PROP_TREE_LEADER_VEC_CF),
             Err(e) => {
                 panic!("could not create column family: {}", e);
             }
