@@ -91,8 +91,6 @@ pub struct Tree {
     pub best_block: H256,
     /// The deepest level. This is for mining.
     pub best_level: u32,
-    /// The number of votes at each level.
-    pub number_of_votes: HashMap<u32, u32>, // TODO: why are we using hashmap here?
     /// The level upto which all levels have a leader.
     pub max_confirmed_level: u32,
     /// The pool of unreferred proposer blocks. This is for mining.
@@ -109,7 +107,6 @@ impl Tree {
             db,
             best_block,
             best_level: 0,
-            number_of_votes: all_votes,
             max_confirmed_level: 1,
             unreferred,
         };
@@ -152,16 +149,7 @@ impl Tree {
             panic!("No prop blocks at level {}", level);
         }
     }
-
-
-
-
-
-    /// Adds a vote to the given level.
-    pub fn increment_vote_at_level(&mut self, level: u32) {
-        *self.number_of_votes.entry(level).or_insert(0) += 1;
-    }
-
+    
     /// Inserts an entry to the unreferred proposer block list.
     pub fn insert_unreferred(&mut self, hash: H256) {
         self.unreferred.insert(hash);

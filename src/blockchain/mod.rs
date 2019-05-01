@@ -87,7 +87,6 @@ impl BlockChain {
             // 2b. Initializing a Voter chain
             let voter_chain = VoterChain::new(voter_genesis_hash);
             voter_chains.push(voter_chain);
-            proposer_tree.increment_vote_at_level(0);
         }
 
         return Self {
@@ -225,8 +224,6 @@ impl BlockChain {
 
                     // Incrementing the votes of the proposer block being voted
                     let ref proposer_node_data = self.node_data.get_proposer(&prop_block_hash);
-                    self.proposer_tree
-                        .increment_vote_at_level(proposer_node_data.level);
                 }
 
                 // 4. Updating the voter chain.
@@ -535,10 +532,7 @@ impl BlockChain {
             return; // Return if the level has no proposer blocks.
         }
 
-        if !self.proposer_tree.number_of_votes.contains_key(&level) {
-            return; // Return if no votes are cast on the level
-        }
-        if self.proposer_tree.number_of_votes[&level] < self.number_of_voting_chains() / 2 {
+        if self.get_total_votes_at_level(level) < self.number_of_voting_chains() / 2 {
             return; // Return if less than half the votes are be caste. This is only for efficiency
         }
 
@@ -881,7 +875,7 @@ impl BlockChain {
     }
 }
 
-/// Helper functions: Get proposer and node data
+/// Helper functions
 impl BlockChain {
     pub fn prop_node_data(&self, hash: &H256) -> ProposerNodeData {
         return self.node_data.get_proposer(hash);
@@ -889,6 +883,15 @@ impl BlockChain {
 
     pub fn voter_node_data(&self, hash: &H256) -> VoterNodeData {
         return self.node_data.get_voter(hash);
+    }
+
+    pub fn get_total_votes_at_level(&mut self, level: u32) -> u32 {
+        let prop_blocks_at_level = self.proposer_tree.get_block_at_level(level);
+        let mut total_votes :u32 = 0;
+        for prop_block in prop_blocks_at_level.iter(){
+            total_votes += self.prop_node_data(prop_block).votes as u32;
+        }
+        return total_votes
     }
 }
 
@@ -1130,7 +1133,7 @@ mod tests {
         assert_eq!(7, prop_block2a_votes, "prop block 2a should have 7 votes");
         assert_eq!(3, prop_block2b_votes, "prop block 2b should have 3 votes");
         assert_eq!(
-            10, blockchain.proposer_tree.number_of_votes[&1],
+            10, blockchain.get_total_votes_at_level(1),
             "Level 2 total votes should have 10",
         );
         assert_eq!(44, blockchain.graph.node_count(), "Expecting 44 nodes");
