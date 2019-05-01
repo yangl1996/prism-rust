@@ -1,9 +1,10 @@
 use crate::crypto::hash::H256;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use super::database::{BlockChainDatabase, PROP_TREE_LEADER_VEC_CF};
+use super::database::{BlockChainDatabase, PROP_TREE_LEADER_VEC_CF, PROP_TREE_PROP_BLOCKS_CF};
 use std::sync::{Arc, Mutex};
 use bincode::{deserialize, serialize};
+use rocksdb::WriteBatch;
 
 #[derive(Serialize, Deserialize, Clone, Copy, Ord, Eq, PartialEq, PartialOrd, Hash)]
 /// The metadata of a proposer block.
@@ -90,12 +91,10 @@ pub struct Tree {
     pub best_block: H256,
     /// The deepest level. This is for mining.
     pub best_level: u32,
-    /// The hashes of proposer blocks, stored by level.
-    pub prop_nodes: Vec<Vec<H256>>,
     /// The number of votes at each level.
     pub number_of_votes: HashMap<u32, u32>, // TODO: why are we using hashmap here?
     /// The level upto which all levels have a leader.
-    pub min_unconfirmed_level: u32,
+    pub max_confirmed_level: u32,
     /// The pool of unreferred proposer blocks. This is for mining.
     pub unreferred: HashSet<H256>,
 }
@@ -110,24 +109,53 @@ impl Tree {
             db,
             best_block,
             best_level: 0,
-            prop_nodes,
             number_of_votes: all_votes,
-            min_unconfirmed_level: 1,
+            max_confirmed_level: 1,
             unreferred,
         };
     }
     /// Adds a proposer block at the given level.
     pub fn add_block_at_level(&mut self, block: H256, level: u32) {
-        if self.best_level >= level {
-            self.prop_nodes[level as usize].push(block);
-        } else if self.best_level == level - 1 {
-            self.prop_nodes.push(vec![block]); // start a new level
+        let db = self.db.lock().unwrap();
+        let key = serialize(&level).unwrap();
+        let cf = db.handle.cf_handle(PROP_TREE_PROP_BLOCKS_CF).unwrap();
+        if level == 0 ||  self.best_level + 1 == level {
+            let value = vec![block];
+            let serialized_data= serialize(&value).unwrap();
+            db.handle.put_cf(cf, &key, &serialized_data);
             self.best_block = block;
             self.best_level = level;
-        } else {
+        } else if self.best_level >= level { // a prop block already exists at level
+            let serialized = db.handle.get_cf(cf, &key).unwrap().unwrap();
+            let mut value: Vec<H256> = deserialize(&serialized).unwrap();
+            value.push(block);
+            let mut batch = WriteBatch::default();
+            batch.delete_cf(cf, &key);
+            batch.put_cf(cf, &key, serialize(&value).unwrap());
+            db.handle.write(batch);
+        }else {
             panic!("Trying to insert a new proposer block at level greater than best level + 1.")
         }
     }
+
+    /// Adds a proposer block at the given level.
+    pub fn get_block_at_level(&mut self, level: u32) -> Vec<H256> {
+        let db = self.db.lock().unwrap();
+        let key = serialize(&level).unwrap();
+        let cf = db.handle.cf_handle(PROP_TREE_PROP_BLOCKS_CF).unwrap();
+        if self.best_level >= level { // a prop block already exists at level
+            let serialized_value = db.handle.get_cf(cf, &key).unwrap().unwrap();
+            let value: Vec<H256> = deserialize(&serialized_value).unwrap();
+            return value;
+        }
+        else{
+            panic!("No prop blocks at level {}", level);
+        }
+    }
+
+
+
+
 
     /// Adds a vote to the given level.
     pub fn increment_vote_at_level(&mut self, level: u32) {

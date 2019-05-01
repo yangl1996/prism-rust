@@ -71,7 +71,7 @@ impl BlockChain {
 
         // 1b. Initializing proposer tree
         proposer_tree.best_block = *PROPOSER_GENESIS_HASH;
-        proposer_tree.prop_nodes.push(vec![*PROPOSER_GENESIS_HASH]);
+        proposer_tree.add_block_at_level(*PROPOSER_GENESIS_HASH, 0);
         // Genesis proposer block is the leader block at level 0
         proposer_tree.insert_leader_block(0, *PROPOSER_GENESIS_HASH);
 
@@ -339,11 +339,11 @@ impl BlockChain {
 
                         //5 Rollback the ledger if required.
 
-                        //5a. Check if the leader blocks have changed between first_left_segment_vote_level and min_unconfirmed_level.
+                        //5a. Check if the leader blocks have changed between first_left_segment_vote_level and max_confirmed_level.
                         let mut roll_back_level = 0;
                         let mut roll_back_required = false;
                         for level in
-                            first_left_segment_vote_level..self.proposer_tree.min_unconfirmed_level
+                            first_left_segment_vote_level..self.proposer_tree.max_confirmed_level
                         {
                             let old_leader_block = self.get_leader_block_at_level(level).unwrap();
                             match self.compute_leader_block_at_level(level) {
@@ -368,9 +368,9 @@ impl BlockChain {
                         if roll_back_required {
                             println!("51% attack, roll back at level {}", roll_back_level);
                             //5b. Change status of all the proposer blocks from level roll_back_level onwards to Potential Leader
-                            for level in roll_back_level..self.proposer_tree.min_unconfirmed_level {
+                            for level in roll_back_level..self.proposer_tree.max_confirmed_level {
                                 for proposer_block in
-                                    self.proposer_tree.prop_nodes[level as usize].iter()
+                                    self.proposer_tree.get_block_at_level(level).iter()
                                 {
                                     //                                    self.proposer_node_data
                                     //                                        .get_mut(proposer_block)
@@ -385,7 +385,7 @@ impl BlockChain {
                             }
                             //5c. Rollback ledger from 'roll_back_level' level onwards.
                             self.tx_blocks.rollback_ledger(roll_back_level);
-                            self.proposer_tree.min_unconfirmed_level = roll_back_level as u32;
+                            self.proposer_tree.max_confirmed_level = roll_back_level as u32;
                         }
                     }
                     // Case: A orphan voter block. Do nothing.
@@ -393,10 +393,10 @@ impl BlockChain {
                 }
                 // Try confirming levels from the min unconfirmed proposer level.
                 loop {
-                    let level = self.proposer_tree.min_unconfirmed_level;
+                    let level = self.proposer_tree.max_confirmed_level;
                     self.try_confirm_leader_block_at_level(level);
-                    // Exit the loop if previous step did not increase "self.proposer_tree.min_unconfirmed_level"
-                    if level == self.proposer_tree.min_unconfirmed_level {
+                    // Exit the loop if previous step did not increase "self.proposer_tree.max_confirmed_level"
+                    if level == self.proposer_tree.max_confirmed_level {
                         break;
                     }
                 }
@@ -531,7 +531,7 @@ impl BlockChain {
             return; // Return if the level already has a confirmed leader block.
         }
 
-        if self.proposer_tree.prop_nodes.len() <= level as usize {
+        if self.proposer_tree.best_level < level {
             return; // Return if the level has no proposer blocks.
         }
 
@@ -550,7 +550,7 @@ impl BlockChain {
 
         // 2a. Adding the leader block for the level
         self.proposer_tree.insert_leader_block(level, leader_block);
-        self.proposer_tree.min_unconfirmed_level = level + 1;
+        self.proposer_tree.max_confirmed_level = level + 1;
 
         // 2b. Giving leader status to leader_block
         //        let ref mut leader_node_data = self.proposer_node_data.get_mut(&leader_block).unwrap();
@@ -558,7 +558,7 @@ impl BlockChain {
         self.node_data.give_proposer_leader_status(&leader_block);
 
         // 2c. Giving NotLeaderUnconfirmed status to all blocks at 'level' except the leader_block
-        for proposer_block in self.proposer_tree.prop_nodes[level as usize].iter() {
+        for proposer_block in self.proposer_tree.get_block_at_level(level).iter() {
             if *proposer_block != leader_block {
                 //                let ref mut proposer_node_data =
                 //                    self.proposer_node_data.get_mut(proposer_block).unwrap();
@@ -573,9 +573,9 @@ impl BlockChain {
     }
 
     /// Computes the leader block at the level using the  voter chains
-    pub fn compute_leader_block_at_level(&self, level: u32) -> Option<H256> {
+    pub fn compute_leader_block_at_level(&mut self, level: u32) -> Option<H256> {
         //0. Get the list of proposer blocks at the level.
-        let proposers_blocks: &Vec<H256> = &self.proposer_tree.prop_nodes[level as usize];
+        let proposers_blocks: &Vec<H256> = &self.proposer_tree.get_block_at_level(level);
 
         // 1. Getting the lcb of votes on each proposer block and  the block with max_lcb votes.
         let mut lcb_proposer_votes: HashMap<H256, f32> = HashMap::<H256, f32>::new();
@@ -832,7 +832,7 @@ impl BlockChain {
 
     /// Returns the leader blocks from 0 to best level of the proposer tree
     pub fn get_leader_block_sequence(&mut self) -> Vec<H256> {
-        let leader_blocks: Vec<H256> = (1..self.proposer_tree.min_unconfirmed_level)
+        let leader_blocks: Vec<H256> = (1..self.proposer_tree.max_confirmed_level)
             .map(|level| self.get_leader_block_at_level(level).unwrap())
             .collect();
         return leader_blocks;
