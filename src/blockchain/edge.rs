@@ -7,17 +7,6 @@ pub enum Edge {
     // Prop edge types
     /// From a proposer block to the proposer block parent on which it is mined
     ProposerToProposerParent,
-    /// From a proposer block to another proposer block it refers to. The `u32` content
-    /// is used for ordering among all types of reference links.
-    ProposerToProposerReference(u32),
-    /// From a proposer block to a transaction block it refers to. The `u32` content is used for
-    /// ordering among all types of reference links.
-    ProposerToTransactionReference(u32),
-    /// From a leader proposer block to the transaction blocks it includes in the ledger.
-    // TODO: does not seem to be used anywhere
-    ProposerToTransactionLeaderReference(u32),
-    /// Acts both as `ProposerToTransactionReference` and `ProposerToTransactionLeaderReference`.
-    ProposerToTransactionReferenceAndLeaderReference(u32),
     // Voter edge types
     /// From a voter block to the proposer block parent on which it is mined.
     VoterToProposerParent,
@@ -28,27 +17,22 @@ pub enum Edge {
     /// From a voter block to the voter block parent on which it is mined.
     VoterToVoterParent,
 
-    /// The reverse of `TransactionToProposerParent`.
-    TransactionFromProposerParent,
-    /// The reverse of `ProposerToProposerParent`.
-    ProposerFromProposerParent,
-    /// The reverse of `ProposerToProposerReference`.
-    ProposerFromProposerReference(u32),
-    /// The reverse of `ProposerToTransactionReference`.
-    ProposerFromTransactionReference(u32),
-    /// The reverse of `ProposerToTransactionLeaderReference`.
-    ProposerFromTransactionLeaderReference(u32),
-    /// The reverse of `ProposerToTransactionReferenceAndLeaderReference`.
-    ProposerFromTransactionReferenceAndLeaderReference(u32),
-    // Voter edge types
-    /// The reverse of `VoterToProposerParent`.
-    VoterFromProposerParent,
-    /// The reverse of `VoterToProposerVote`.
+    /// FEW REVERSE EDGES
     VoterFromProposerVote,
     /// The reverse of `VoterToProposerParentAndVote`.
     VoterFromProposerParentAndVote,
-    /// The reverse of `VoterToVoterParent`.
-    VoterFromVoterParent,
+
+    /// EDGES which have an edge weight with it
+    /// From a proposer block to another proposer block it refers to.
+    ProposerToProposerReference,
+    /// From a proposer block to a transaction block it refers to. The `u32` content is used for
+    /// ordering among all types of reference links.
+    ProposerToTransactionReference,
+    /// From a leader proposer block to the transaction blocks it includes in the ledger.
+    // TODO: does not seem to be used anywhere
+    ProposerToTransactionLeaderReference,
+    /// Acts both as `ProposerToTransactionReference` and `ProposerToTransactionLeaderReference`.
+    ProposerToTransactionReferenceAndLeaderReference,
 }
 
 impl std::fmt::Display for Edge {
@@ -56,10 +40,10 @@ impl std::fmt::Display for Edge {
         match self {
             Edge::TransactionToProposerParent => write!(f, "Tx2PropParent"),
             Edge::ProposerToProposerParent => write!(f, "Prop2PropParent"),
-            Edge::ProposerToProposerReference(_position) => write!(f, "Prop2PropRef"),
-            Edge::ProposerToTransactionReference(_position) => write!(f, "Prop2TxRef"),
-            Edge::ProposerToTransactionLeaderReference(_position) => write!(f, "Prop2TxLeaderRef"),
-            Edge::ProposerToTransactionReferenceAndLeaderReference(_position) => {
+            Edge::ProposerToProposerReference => write!(f, "Prop2PropRef"),
+            Edge::ProposerToTransactionReference => write!(f, "Prop2TxRef"),
+            Edge::ProposerToTransactionLeaderReference => write!(f, "Prop2TxLeaderRef"),
+            Edge::ProposerToTransactionReferenceAndLeaderReference => {
                 write!(f, "Prop2TxRefAndLeaderRef")
             }
             Edge::VoterToProposerParent => write!(f, "V2PropParent"),
@@ -67,20 +51,9 @@ impl std::fmt::Display for Edge {
             Edge::VoterToProposerVote => write!(f, "V2PropVote"),
             Edge::VoterToProposerParentAndVote => write!(f, "V2PropParent_and_Vote"),
             // Reverse Edges
-            Edge::TransactionFromProposerParent => write!(f, "TxFromPropParent"),
-            Edge::ProposerFromProposerParent => write!(f, "PropFromPropParent"),
-            Edge::ProposerFromProposerReference(_position) => write!(f, "PropFromPropRef"),
-            Edge::ProposerFromTransactionReference(_position) => write!(f, "PropFromTxRef"),
-            Edge::ProposerFromTransactionLeaderReference(_position) => {
-                write!(f, "PropFromTxLeaderRef")
-            }
-            Edge::ProposerFromTransactionReferenceAndLeaderReference(_position) => {
-                write!(f, "Prop2TxRefAndLeaderRef")
-            }
-            Edge::VoterFromProposerParent => write!(f, "VFromPropParent"),
-            Edge::VoterFromVoterParent => write!(f, "VFromVParent"),
             Edge::VoterFromProposerVote => write!(f, "VFromPropVote"),
             Edge::VoterFromProposerParentAndVote => write!(f, "VFromPropParent_and_Vote"),
+            _ => write!(f, "Not supported!"),
         }
     }
 }
@@ -89,43 +62,12 @@ impl Edge {
     /// Returns the variant of the reversed edge.
     pub fn reverse_edge(&self) -> Edge {
         match self {
-            Edge::TransactionToProposerParent => Edge::TransactionFromProposerParent,
-            Edge::ProposerToProposerParent => Edge::ProposerFromProposerParent,
-            Edge::ProposerToProposerReference(position) => {
-                Edge::ProposerFromProposerReference(*position)
-            }
-            Edge::ProposerToTransactionReference(position) => {
-                Edge::ProposerFromTransactionReference(*position)
-            }
-            Edge::ProposerToTransactionLeaderReference(position) => {
-                Edge::ProposerFromTransactionLeaderReference(*position)
-            }
-            Edge::ProposerToTransactionReferenceAndLeaderReference(position) => {
-                Edge::ProposerFromTransactionReferenceAndLeaderReference(*position)
-            }
-            Edge::VoterToProposerParent => Edge::VoterFromProposerParent,
-            Edge::VoterToVoterParent => Edge::VoterFromVoterParent,
             Edge::VoterToProposerVote => Edge::VoterFromProposerVote,
             Edge::VoterToProposerParentAndVote => Edge::VoterFromProposerParentAndVote,
             // Reverse Edges
-            Edge::TransactionFromProposerParent => Edge::TransactionToProposerParent,
-            Edge::ProposerFromProposerParent => Edge::ProposerToProposerParent,
-            Edge::ProposerFromProposerReference(position) => {
-                Edge::ProposerToProposerReference(*position)
-            }
-            Edge::ProposerFromTransactionReference(position) => {
-                Edge::ProposerToTransactionReference(*position)
-            }
-            Edge::ProposerFromTransactionLeaderReference(position) => {
-                Edge::ProposerToTransactionLeaderReference(*position)
-            }
-            Edge::ProposerFromTransactionReferenceAndLeaderReference(position) => {
-                Edge::ProposerToTransactionReferenceAndLeaderReference(*position)
-            }
-            Edge::VoterFromProposerParent => Edge::VoterToProposerParent,
-            Edge::VoterFromVoterParent => Edge::VoterToVoterParent,
             Edge::VoterFromProposerVote => Edge::VoterToProposerVote,
             Edge::VoterFromProposerParentAndVote => Edge::VoterToProposerParentAndVote,
+            _ => panic!("Reverse fot this edge type is not supported"),
         }
     }
 }

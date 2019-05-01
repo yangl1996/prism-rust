@@ -96,7 +96,6 @@ impl Pool {
     /// Roll back the transaction blocks in the ledger confirmed by the leader proposer blocks at
     /// the given level and beyond.
     pub fn rollback_ledger(&mut self, rollback_start_level: u32) {
-
         // 1. Get all the tx blocks confirmed between levels =rollback_start_level and self.last_prop_confirmed_level
         let mut removed_tx_blocks: Vec<H256> = vec![]; //stores the tx blocks which are removed from the ledger due  to rollback
         for level in rollback_start_level..self.last_prop_confirmed_level {
@@ -134,8 +133,8 @@ impl Pool {
         }
     }
 
-    pub fn get_ledger(&mut self) ->Vec<H256> {
-        let mut  ledger: Vec<H256> = vec![];
+    pub fn get_ledger(&mut self) -> Vec<H256> {
+        let mut ledger: Vec<H256> = vec![];
         for level in 1..=self.last_prop_confirmed_level {
             let confirmed_blocks_level = self.get_blocks_at_level(level);
             ledger.extend(confirmed_blocks_level);
@@ -157,6 +156,4 @@ impl Pool {
             },
         }
     }
-
-
 }
