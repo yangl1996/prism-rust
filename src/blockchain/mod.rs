@@ -53,7 +53,7 @@ impl BlockChain {
     ) -> Self {
         // Initializing an empty object
         let mut graph = GraphMap::<H256, Edge, Directed>::new();
-        let mut proposer_tree = ProposerTree::default();
+        let mut proposer_tree = ProposerTree::new(Arc::clone(&db));
         let mut voter_chains: Vec<VoterChain> = vec![];
 
         let tx_blocks: TxBlkPool = TxBlkPool::new(Arc::clone(&db), utxo_update);
@@ -71,9 +71,9 @@ impl BlockChain {
 
         // 1b. Initializing proposer tree
         proposer_tree.best_block = *PROPOSER_GENESIS_HASH;
-        proposer_tree.prop_nodes.push(vec![*PROPOSER_GENESIS_HASH]);
+        proposer_tree.add_block_at_level(*PROPOSER_GENESIS_HASH, 0);
         // Genesis proposer block is the leader block at level 0
-        proposer_tree.leader_nodes.insert(0, *PROPOSER_GENESIS_HASH);
+        proposer_tree.insert_leader_block(0, *PROPOSER_GENESIS_HASH);
 
         // 2. Voter geneses blocks
         for chain_number in 0..(num_voting_chains) {
@@ -87,7 +87,6 @@ impl BlockChain {
             // 2b. Initializing a Voter chain
             let voter_chain = VoterChain::new(voter_genesis_hash);
             voter_chains.push(voter_chain);
-            proposer_tree.increment_vote_at_level(0);
         }
 
         return Self {
@@ -225,8 +224,6 @@ impl BlockChain {
 
                     // Incrementing the votes of the proposer block being voted
                     let ref proposer_node_data = self.node_data.get_proposer(&prop_block_hash);
-                    self.proposer_tree
-                        .increment_vote_at_level(proposer_node_data.level);
                 }
 
                 // 4. Updating the voter chain.
@@ -339,11 +336,11 @@ impl BlockChain {
 
                         //5 Rollback the ledger if required.
 
-                        //5a. Check if the leader blocks have changed between first_left_segment_vote_level and min_unconfirmed_level.
+                        //5a. Check if the leader blocks have changed between first_left_segment_vote_level and max_confirmed_level.
                         let mut roll_back_level = 0;
                         let mut roll_back_required = false;
                         for level in
-                            first_left_segment_vote_level..self.proposer_tree.min_unconfirmed_level
+                            first_left_segment_vote_level..self.proposer_tree.max_confirmed_level
                         {
                             let old_leader_block = self.get_leader_block_at_level(level).unwrap();
                             match self.compute_leader_block_at_level(level) {
@@ -357,7 +354,7 @@ impl BlockChain {
                                 }
                                 None => {
                                     // level leader block is not the leader block and infact level has not leader block
-                                    self.proposer_tree.leader_nodes.remove(&level);
+                                    self.proposer_tree.remove_leader_block(level);
                                     roll_back_required = true;
                                     roll_back_level = level;
                                     break;
@@ -368,9 +365,9 @@ impl BlockChain {
                         if roll_back_required {
                             println!("51% attack, roll back at level {}", roll_back_level);
                             //5b. Change status of all the proposer blocks from level roll_back_level onwards to Potential Leader
-                            for level in roll_back_level..self.proposer_tree.min_unconfirmed_level {
+                            for level in roll_back_level..self.proposer_tree.max_confirmed_level {
                                 for proposer_block in
-                                    self.proposer_tree.prop_nodes[level as usize].iter()
+                                    self.proposer_tree.get_block_at_level(level).iter()
                                 {
                                     //                                    self.proposer_node_data
                                     //                                        .get_mut(proposer_block)
@@ -381,11 +378,11 @@ impl BlockChain {
                                         .give_proposer_potential_leader_status(proposer_block);
                                 }
 
-                                self.proposer_tree.leader_nodes.remove(&level);
+                                self.proposer_tree.remove_leader_block(level);
                             }
                             //5c. Rollback ledger from 'roll_back_level' level onwards.
                             self.tx_blocks.rollback_ledger(roll_back_level);
-                            self.proposer_tree.min_unconfirmed_level = roll_back_level as u32;
+                            self.proposer_tree.max_confirmed_level = roll_back_level as u32;
                         }
                     }
                     // Case: A orphan voter block. Do nothing.
@@ -393,10 +390,10 @@ impl BlockChain {
                 }
                 // Try confirming levels from the min unconfirmed proposer level.
                 loop {
-                    let level = self.proposer_tree.min_unconfirmed_level;
+                    let level = self.proposer_tree.max_confirmed_level;
                     self.try_confirm_leader_block_at_level(level);
-                    // Exit the loop if previous step did not increase "self.proposer_tree.min_unconfirmed_level"
-                    if level == self.proposer_tree.min_unconfirmed_level {
+                    // Exit the loop if previous step did not increase "self.proposer_tree.max_confirmed_level"
+                    if level == self.proposer_tree.max_confirmed_level {
                         break;
                     }
                 }
@@ -527,18 +524,15 @@ impl BlockChain {
     /// If yes it confirms the leader block at the level and updates the ledger. Else it does nothing.
     // TODO: This function should be called when the voter chain has collected sufficient votes on level.
     pub fn try_confirm_leader_block_at_level(&mut self, level: u32) {
-        if self.proposer_tree.leader_nodes.contains_key(&level) {
+        if self.proposer_tree.contains_leader_block_at(level) {
             return; // Return if the level already has a confirmed leader block.
         }
 
-        if self.proposer_tree.prop_nodes.len() <= level as usize {
+        if self.proposer_tree.best_level < level {
             return; // Return if the level has no proposer blocks.
         }
 
-        if !self.proposer_tree.number_of_votes.contains_key(&level) {
-            return; // Return if no votes are cast on the level
-        }
-        if self.proposer_tree.number_of_votes[&level] < self.number_of_voting_chains() / 2 {
+        if self.get_total_votes_at_level(level) < self.number_of_voting_chains() / 2 {
             return; // Return if less than half the votes are be caste. This is only for efficiency
         }
 
@@ -549,8 +543,8 @@ impl BlockChain {
         }
 
         // 2a. Adding the leader block for the level
-        self.proposer_tree.leader_nodes.insert(level, leader_block);
-        self.proposer_tree.min_unconfirmed_level = level + 1;
+        self.proposer_tree.insert_leader_block(level, leader_block);
+        self.proposer_tree.max_confirmed_level = level + 1;
 
         // 2b. Giving leader status to leader_block
         //        let ref mut leader_node_data = self.proposer_node_data.get_mut(&leader_block).unwrap();
@@ -558,7 +552,7 @@ impl BlockChain {
         self.node_data.give_proposer_leader_status(&leader_block);
 
         // 2c. Giving NotLeaderUnconfirmed status to all blocks at 'level' except the leader_block
-        for proposer_block in self.proposer_tree.prop_nodes[level as usize].iter() {
+        for proposer_block in self.proposer_tree.get_block_at_level(level).iter() {
             if *proposer_block != leader_block {
                 //                let ref mut proposer_node_data =
                 //                    self.proposer_node_data.get_mut(proposer_block).unwrap();
@@ -573,9 +567,9 @@ impl BlockChain {
     }
 
     /// Computes the leader block at the level using the  voter chains
-    pub fn compute_leader_block_at_level(&self, level: u32) -> Option<H256> {
+    pub fn compute_leader_block_at_level(&mut self, level: u32) -> Option<H256> {
         //0. Get the list of proposer blocks at the level.
-        let proposers_blocks: &Vec<H256> = &self.proposer_tree.prop_nodes[level as usize];
+        let proposers_blocks: &Vec<H256> = &self.proposer_tree.get_block_at_level(level);
 
         // 1. Getting the lcb of votes on each proposer block and  the block with max_lcb votes.
         let mut lcb_proposer_votes: HashMap<H256, f32> = HashMap::<H256, f32>::new();
@@ -646,7 +640,7 @@ impl BlockChain {
 
     /// Called when a new leader block is confirmed at some level.
     fn update_ledger(&mut self, level: u32) {
-        let leader_block = self.proposer_tree.leader_nodes[&level];
+        let leader_block = self.proposer_tree.get_leader_block_at(level);
 
         //1. Get all the proposer blocks referred by this leader block which are not confirmed and
         // aren't themselves leader blocks on their level. We need an *ordered* list here.
@@ -823,16 +817,16 @@ impl BlockChain {
     }
 
     /// Return a single leader block at the given level
-    fn get_leader_block_at_level(&self, level: u32) -> Option<H256> {
-        if self.proposer_tree.leader_nodes.contains_key(&level) {
-            return Some(self.proposer_tree.leader_nodes[&level]);
+    fn get_leader_block_at_level(&mut self, level: u32) -> Option<H256> {
+        if self.proposer_tree.contains_leader_block_at(level) {
+            return Some(self.proposer_tree.get_leader_block_at(level));
         }
         return None;
     }
 
     /// Returns the leader blocks from 0 to best level of the proposer tree
     pub fn get_leader_block_sequence(&mut self) -> Vec<H256> {
-        let leader_blocks: Vec<H256> = (1..self.proposer_tree.min_unconfirmed_level)
+        let leader_blocks: Vec<H256> = (1..self.proposer_tree.max_confirmed_level)
             .map(|level| self.get_leader_block_at_level(level).unwrap())
             .collect();
         return leader_blocks;
@@ -881,7 +875,7 @@ impl BlockChain {
     }
 }
 
-/// Helper functions: Get proposer and node data
+/// Helper functions
 impl BlockChain {
     pub fn prop_node_data(&self, hash: &H256) -> ProposerNodeData {
         return self.node_data.get_proposer(hash);
@@ -889,6 +883,15 @@ impl BlockChain {
 
     pub fn voter_node_data(&self, hash: &H256) -> VoterNodeData {
         return self.node_data.get_voter(hash);
+    }
+
+    pub fn get_total_votes_at_level(&mut self, level: u32) -> u32 {
+        let prop_blocks_at_level = self.proposer_tree.get_block_at_level(level);
+        let mut total_votes :u32 = 0;
+        for prop_block in prop_blocks_at_level.iter(){
+            total_votes += self.prop_node_data(prop_block).votes as u32;
+        }
+        return total_votes
     }
 }
 
@@ -1130,7 +1133,7 @@ mod tests {
         assert_eq!(7, prop_block2a_votes, "prop block 2a should have 7 votes");
         assert_eq!(3, prop_block2b_votes, "prop block 2b should have 3 votes");
         assert_eq!(
-            10, blockchain.proposer_tree.number_of_votes[&1],
+            10, blockchain.get_total_votes_at_level(1),
             "Level 2 total votes should have 10",
         );
         assert_eq!(44, blockchain.graph.node_count(), "Expecting 44 nodes");
