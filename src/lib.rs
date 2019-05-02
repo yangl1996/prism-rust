@@ -70,11 +70,10 @@ pub fn start(
     ctx.start();
 
     let mut wallets = vec![];
-    for _ in 0..1 {// for now, just use one wallet, but still use a vec of wallet
-        let mut w = wallet::Wallet::new(std::path::Path::new("/tmp/walletdb.rocksdb"), &mempool, ctx_update_sink_wallet.clone()).unwrap();
-        w.generate_keypair();
-        wallets.push(Mutex::new(w));
-    }
+    // for now, just use one wallet, but still use a vec of wallet
+    let mut w = wallet::Wallet::new(std::path::Path::new("/tmp/walletdb.rocksdb"), &mempool, ctx_update_sink_wallet.clone()).unwrap();
+    w.generate_keypair().unwrap();
+    wallets.push(Mutex::new(w));
     let wallets = Arc::new(wallets);
 
     //state_updater part

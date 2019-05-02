@@ -128,9 +128,9 @@ impl Wallet {
     }
 
     /// Get a public key by its Address
-    fn get_keypair(&self, hash: &Address) -> Result<KeyPair> {
+    fn get_keypair(&self, addr: &Address) -> Result<KeyPair> {
         let cf = self.handle.cf_handle(KEYPAIR_CF).unwrap();
-        let k = serialize(hash).unwrap();
+        let k = serialize(addr).unwrap();
         if let Some(v) = self.handle.get_cf(cf, &k)? {
             let keypair = KeyPair::from_pkcs8(v.to_vec());
             return Ok(keypair);
@@ -139,9 +139,9 @@ impl Wallet {
     }
 
     /// Check if a pubkey's Address belongs to this wallet
-    fn contains_address(&self, hash: &Address) -> Result<bool> {
+    fn contains_address(&self, addr: &Address) -> Result<bool> {
         let cf = self.handle.cf_handle(KEYPAIR_CF).unwrap();
-        let k = serialize(hash).unwrap();
+        let k = serialize(addr).unwrap();
         if let Some(_) = self.handle.get_cf(cf, &k)? {
             return Ok(true);
         }
@@ -149,11 +149,12 @@ impl Wallet {
     }
 
     /// Add coin to wallet
-    fn insert_coin(&mut self, coin: &UTXO) -> Result<()>{
+    /// Use write batch to keep atomicity
+    fn insert_coin_batch(&mut self, coin: &UTXO, batch: &mut rocksdb::WriteBatch) -> Result<()>{
         let cf = self.handle.cf_handle(COIN_CF).unwrap();
         let k = serialize(&coin.coin_id).unwrap();
         let v = serialize(&coin.coin_data).unwrap();
-        self.handle.put_cf(cf,&k, &v)?;
+        batch.put_cf(cf,&k, &v)?;
         Ok(())
     }
 
@@ -166,17 +167,29 @@ impl Wallet {
         Ok(())
     }
 
-    /// Update the wallet.
+    /// Removes coin from the wallet. Will be used after the tx is confirmed and the coin is spent. Also used in rollback
+    /// If the coin was in, it is removed. If not, this fn does NOT panic/error.
+    /// Use write batch to keep atomicity
+    fn delete_coin_batch(&mut self, coin_id: &CoinId, batch: &mut rocksdb::WriteBatch) -> Result<()> {
+        let cf = self.handle.cf_handle(COIN_CF).unwrap();
+        let k = serialize(coin_id).unwrap();
+        batch.delete_cf(cf, &k)?;
+        Ok(())
+    }
+
+    /// Update the wallet atomically using a write batch.
     /// Can serve as add or rollback, based on arguments to_delete and to_insert.
     pub fn update(&mut self, to_delete: &Vec<CoinId>, to_insert: &Vec<UTXO>) -> Result<()> {
+        let mut batch = rocksdb::WriteBatch::default();
         for coin_id in to_delete {
-            self.delete_coin(coin_id)?;
+            self.delete_coin_batch(coin_id, &mut batch)?;
         }
         for utxo in to_insert {
             if let Ok(true) = self.contains_address(&utxo.coin_data.recipient) {
-                self.insert_coin(utxo)?;
+                self.insert_coin_batch(utxo, &mut batch)?;
             }
         }
+        self.handle.write(batch)?;
         Ok(())
     }
 
@@ -324,8 +337,8 @@ pub mod tests {
     }
     fn receive(w: &mut Wallet, tx: &Transaction) {
         // test verify of signature before receive
-        for sig in tx.authorization.iter() {
-            assert!(tx.verify(&sig.pubkey, &sig.signature));
+        for auth in tx.authorization.iter() {
+            assert!(tx.verify(&auth.pubkey, &auth.signature));
         }
         let (to_delete, to_insert) = to_coinid_and_potential_utxo(tx);
         assert!(w.update(&to_delete, &to_insert).is_ok());
