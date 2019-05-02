@@ -1,3 +1,4 @@
+use super::edge::Edge;
 use crate::crypto::hash::{Hashable, H256};
 use bincode::{deserialize, serialize};
 use rocksdb::{ColumnFamily, Options};
@@ -11,6 +12,38 @@ pub const VOTER_NODE_DATA_CF: &str = "VND";
 pub const LEDGER_CF: &str = "LED";
 pub const PROP_TREE_LEADER_VEC_CF: &str = "PTLV";
 pub const PROP_TREE_PROP_BLOCKS_CF: &str = "PTPB";
+
+// edges with no edge weight
+lazy_static! {
+    pub static ref EDGE_TYPE_1_CFS: HashMap<Edge, String> = {
+        let mut hm: HashMap<Edge, String> = HashMap::new();
+        hm.insert(Edge::TransactionToProposerParent, "T2PP".to_string());
+        hm.insert(Edge::ProposerToProposerParent, "P2PP".to_string());
+        hm.insert(Edge::VoterToProposerParent, "V2PP".to_string());
+        hm.insert(Edge::VoterToProposerVote, "V2PV".to_string());
+        hm.insert(Edge::VoterToProposerParentAndVote, "V2PPnV".to_string());
+        hm.insert(Edge::VoterToVoterParent, "V2VP".to_string());
+        hm.insert(Edge::VoterFromProposerVote, "VfPV".to_string());
+        hm.insert(Edge::VoterFromProposerParentAndVote, "VfPPnV".to_string());
+        return hm;
+    };
+
+    // edges with edge weight
+    pub static ref EDGE_TYPE_2_CFS: HashMap<Edge, String> = {
+        let mut hm: HashMap<Edge, String> = HashMap::new();
+        hm.insert(Edge::ProposerToProposerReference, "P2PR".to_string());
+        hm.insert(Edge::ProposerToTransactionReference, "P2TP".to_string());
+        hm.insert(
+            Edge::ProposerToTransactionLeaderReference,
+            "P2TLR".to_string(),
+        );
+        hm.insert(
+            Edge::ProposerToTransactionReferenceAndLeaderReference,
+            "P2TRnLR".to_string(),
+        );
+        return hm;
+    };
+}
 
 /// Database that stores blockchain.
 pub struct BlockChainDatabase {
@@ -56,6 +89,24 @@ impl BlockChainDatabase {
             Ok(_db) => {} //println!("{} created successfully", PROP_TREE_PROP_BLOCKS_CF),
             Err(e) => {
                 panic!("could not create column family: {}", e);
+            }
+        }
+
+        for (_, cf) in EDGE_TYPE_1_CFS.iter() {
+            match db_handle.create_cf(cf, &opts) {
+                Ok(_db) => {} //println!("{} created successfully", cf),
+                Err(e) => {
+                    panic!("could not create column family: {}", e);
+                }
+            }
+        }
+
+        for (_, cf) in EDGE_TYPE_2_CFS.iter() {
+            match db_handle.create_cf(cf, &opts) {
+                Ok(_db) => {} //println!("{} created successfully", cf),
+                Err(e) => {
+                    panic!("could not create column family: {}", e);
+                }
             }
         }
 

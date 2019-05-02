@@ -80,8 +80,8 @@ impl BlockDatabase {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::generator::block as block_generator;
     use crate::crypto::hash::Hashable;
+    use crate::generator::block as block_generator;
 
     /*
         #[test]
