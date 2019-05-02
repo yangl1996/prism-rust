@@ -152,7 +152,7 @@ impl Chain {
             self.unvoted_proposer_blocks.insert(level, hash);
             self.max_level_unvoted_proposer_block += 1;
         } else if level > self.max_level_unvoted_proposer_block + 1 {
-            panic!("Trying to mark the proposer block to vote for at level geater than the deepest unvoted level + 1");
+            panic!("Trying to mark the proposer block to vote for at level greater than the deepest unvoted level + 1");
         } else {
             // Ignore. This happens when we get another proposer block at level which we have
             // marked a proposer block to vote for.
