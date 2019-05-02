@@ -4,6 +4,7 @@ use ring::rand;
 use ring::signature::KeyPair as _;
 use ring::signature::{self, Ed25519KeyPair};
 use untrusted;
+use serde::ser::Serialize;
 
 /// An object that can be meaningfully signed and verified.
 pub trait Signable {
@@ -188,7 +189,7 @@ pub struct KeyPair {
     /// The underlying key pair readable by the crypto library.
     ring_keypair: Ed25519KeyPair,
     /// The key pair in PKCS8 format.
-    pkcs8_bytes: Vec<u8>,
+    pub pkcs8_bytes: Vec<u8>,
 }
 
 impl KeyPair {
@@ -217,6 +218,16 @@ impl KeyPair {
         raw_sig[0..64].copy_from_slice(self.ring_keypair.sign(msg).as_ref());
         return raw_sig.into();
     }
+
+    /// Generate a key pair from pkcs8
+    pub fn from_pkcs8(pkcs8_bytes: Vec<u8>) -> Self {
+        let key_pair =
+            Ed25519KeyPair::from_pkcs8(untrusted::Input::from(pkcs8_bytes.as_ref())).unwrap();
+        return Self {
+            ring_keypair: key_pair,
+            pkcs8_bytes,
+        };
+    }
 }
 
 #[cfg(test)]
@@ -231,5 +242,15 @@ mod tests {
         let signature = keypair.sign(&message);
         let result = public_key.verify(&message, &signature);
         assert!(result);
+    }
+
+    #[test]
+    fn serde() {
+        let keypair = KeyPair::random();
+        let pkcs8 = keypair.pkcs8_bytes.clone();
+        let de_keypair = KeyPair::from_pkcs8(pkcs8);
+        assert_eq!(keypair.public_key(), de_keypair.public_key());
+        let message: [u8; 5] = [0, 1, 2, 3, 4];
+        assert_eq!(keypair.sign(&message), de_keypair.sign(&message));
     }
 }
