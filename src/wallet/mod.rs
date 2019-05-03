@@ -21,8 +21,6 @@ pub type Result<T> = std::result::Result<T, WalletError>;
 pub struct Wallet {
     /// The underlying RocksDB handle.
     handle: rocksdb::DB,
-    /// List of coins which can be spent
-    coins: HashMap<CoinId, CoinData>,
     /// Channel to notify the miner about context update
     context_update_chan: mpsc::Sender<ContextUpdateSignal>,
     /// Pool of unmined transactions, will add generated transactions to it.
@@ -88,7 +86,6 @@ impl Wallet {
         let handle = rocksdb::DB::open_cf_descriptors(&db_opts, path, vec![coin_cf, keypair_cf])?;
         return Ok(Self {
             handle,
-            coins: HashMap::new(),
             context_update_chan: ctx_update_sink,
             mempool: Arc::clone(mempool),
         });
