@@ -32,6 +32,7 @@ pub struct Wallet {
 #[derive(Debug)]
 pub enum WalletError {
     InsufficientMoney,
+    ZeroKey,
     MissingKey,
     MemoryPoolCheckFailure,
     ContextUpdateChannelError(mpsc::SendError<ContextUpdateSignal>),
@@ -42,7 +43,8 @@ impl fmt::Display for WalletError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             WalletError::InsufficientMoney => write!(f, "Insufficient Money"),
-            WalletError::MissingKey => write!(f, "No Key Pair correspond to the Address, either you have 0 key pairs or you don't have that Address"),
+            WalletError::ZeroKey => write!(f, "You have 0 key pair"),
+            WalletError::MissingKey => write!(f, "No Key Pair correspond to the Address"),
             WalletError::ContextUpdateChannelError(ref _e) => write!(f, "Perhaps the miner is down"),
             WalletError::MemoryPoolCheckFailure => write!(f, "Your transaction has conflict with some tx in memory pool"),
             WalletError::DBError(ref e) => e.fmt(f),
@@ -112,7 +114,7 @@ impl Wallet {
             let keypair = KeyPair::from_pkcs8(v.to_vec());
             return Ok(keypair.public_key());
         }
-        Err(WalletError::MissingKey)
+        Err(WalletError::ZeroKey)
     }
 
     // this method doesn't compute hash again. we could get pubkey then compute the hash but that compute hash again!
@@ -124,7 +126,7 @@ impl Wallet {
             let hash: Address = deserialize(k.as_ref()).unwrap();
             return Ok(hash);
         }
-        Err(WalletError::MissingKey)
+        Err(WalletError::ZeroKey)
     }
 
     /// Get a public key by its Address
@@ -229,6 +231,11 @@ impl Wallet {
             return Err(WalletError::InsufficientMoney);
         }
         // if we have enough money in our wallet, create tx
+        // remove used coin from wallet
+        for c in coins_to_use.iter() {
+            self.delete_coin(&c.coin_id)?;
+        }
+
         // create transaction inputs
         let input: Vec<Input> = coins_to_use
             .iter()
@@ -250,11 +257,6 @@ impl Wallet {
                 recipient,
                 value: value_sum - value,
             });
-        }
-
-        // remove used coin from wallet
-        for c in coins_to_use.iter() {
-            self.delete_coin(&c.coin_id)?;
         }
 
         let unsigned = Transaction {
@@ -284,14 +286,19 @@ impl Wallet {
         handler::new_transaction(tx, &self.mempool);
         // TODO: process the memory pool check
         self.context_update_chan.send(ContextUpdateSignal::NewContent)?;
-
         //return tx hash, later we can confirm it in ledger
         Ok(hash)
     }
 
     // only for test, how to set pub functions just for test?
     pub fn get_coin_id(&self) -> Vec<CoinId> {
-        self.coins.keys().cloned().collect()
+        let cf = self.handle.cf_handle(COIN_CF).unwrap();
+        let mut iter = self.handle.iterator_cf(cf,rocksdb::IteratorMode::Start).unwrap();
+        // iterate thru our wallet
+        iter.map(|(k,_v)| {
+            let coin_id: CoinId = bincode::deserialize(k.as_ref()).unwrap();
+            coin_id
+        }).collect()
     }
 }
 
@@ -306,7 +313,7 @@ pub mod tests {
     use crate::miner::miner::ContextUpdateSignal;
     use crate::transaction::{Output, Transaction};
     use std::sync::{mpsc, Arc, Mutex};
-    use rand::{Rng, RngCore};
+    use rand::RngCore;
 
     fn new_wallet_pool_receiver_keyhash() -> (
         Wallet,
