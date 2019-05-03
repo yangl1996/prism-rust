@@ -12,41 +12,7 @@ pub struct NodeData {
     /// Level of the proposer node.
     pub level: u32,
     /// Leadership Status.
-    pub leadership_status: Status,}
-
-// TODO: remove it and replace with a new() function
-impl Default for NodeData {
-    fn default() -> Self {
-        let level = 0;
-        let leadership_status = Status::PotentialLeader;
-        return Self {
-            level,
-            leadership_status,
-        };
-    }
-}
-
-impl std::fmt::Display for NodeData {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "level: {}", self.level)?; // Ignoring status for now
-        Ok(())
-    }
-}
-
-impl NodeData {
-    // TODO: either make `votes` and `leadership_status` private, or remove those functions
-    pub fn give_leader_status(&mut self) {
-        self.leadership_status = Status::Leader
-    }
-    pub fn give_potential_leader_status(&mut self) {
-        self.leadership_status = Status::PotentialLeader
-    }
-    pub fn give_not_leader_status(&mut self) {
-        self.leadership_status = Status::NotLeaderUnconfirmed
-    }
-    pub fn give_not_leader_confirmed_status(&mut self) {
-        self.leadership_status = Status::NotLeaderAndConfirmed
-    }
+    pub status: Status,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Ord, Eq, PartialEq, PartialOrd, Hash, Debug)]
@@ -60,7 +26,7 @@ pub enum Status {
     NotLeaderUnconfirmed,
     /// When a proposer block is not a leader, and has been confirmed by any of the child
     /// leader blocks.
-    NotLeaderAndConfirmed,
+    NotLeaderConfirmed,
 }
 
 impl NodeData {

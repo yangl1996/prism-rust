@@ -1,351 +1,469 @@
-pub mod blockgraph;
-pub mod database;
-pub mod edge;
-pub mod node_data_map;
 pub mod proposer;
 pub mod transaction;
-pub mod utils;
 pub mod voter;
-use super::block::{Block, Content};
-use super::crypto::hash::{Hashable, H256};
+pub mod utils;
+use crate::crypto::hash::{Hashable, H256};
+use crate::block::{Block, Content};
 use crate::config::*;
-use blockgraph::BlockGraph;
-use edge::Edge;
-use node_data_map::NodeDataMap;
+
 use proposer::NodeData as ProposerNodeData;
 use proposer::Status as ProposerStatus;
-use proposer::Tree as ProposerTree;
-use std::collections::VecDeque;
-use std::collections::{BTreeMap, HashMap};
-use std::iter::FromIterator;
-use std::sync::mpsc::Sender;
-use std::sync::{Arc, Mutex};
-use transaction::Pool as TxBlkPool;
-use transaction::UpdateMessage as LedgerUpdateMessage;
-use utils::*;
-use voter::Chain as VoterChain;
-use voter::Fork as VoterChainFork;
 use voter::NodeData as VoterNodeData;
 use voter::NodeUpdateStatus as VoterNodeUpdateStatus;
 
+use std::sync::Mutex;
+use bincode::{deserialize, serialize};
+use rocksdb::{ColumnFamily, Options, ColumnFamilyDescriptor, DB, WriteBatch};
+use std::collections::{HashMap, HashSet, BTreeMap};
+
+use std::collections::VecDeque;
+use std::iter::FromIterator;
+
+use utils::*;
+
+// Column family names for node/chain metadata
+const PROPOSER_NODE_DATA_CF: &str = "PROPOSER_NODE_DATA";
+const VOTER_NODE_DATA_CF: &str = "VOTER_NODE_DATA";
+const LEDGER_CF: &str = "LEDGER";
+const PROPOSER_TREE_LEADER_CF: &str = "PROPOSER_TREE_LEADER";
+const PROPOSER_TREE_LEVEL_CF: &str = "PROPOSER_TREE_LEVEL";
+
+// Column family names for graph neighbors
+const PARENT_NEIGHBOR_CF: &str = "GRAPH_PARENT_NEIGHBOR";   // the proposer parent of a block
+const VOTE_NEIGHBOR_CF: &str = "GRAPH_VOTE_NEIGHBOR";       // neighbors associated by a vote
+const VOTER_PARENT_NEIGHBOR_CF: &str = "GRAPH_VOTER_PARENT_NEIGHBOR";   // the voter parent of a block
+const TRANSACTION_REF_NEIGHBOR_CF: &str = "GRAPH_TRANSACTION_REF_NEIGHBOR";
+const PROPOSER_REF_NEIGHBOR_CF: &str = "GRAPH_PROPOSER_REF_NEIGHBOR";
+
+pub type Result<T> = std::result::Result<T, rocksdb::Error>;
+
+// TODO: to maintain consistency within the blockchain db, we don't create a hierarchy of strcuts.
+// Instead, the BlockChain struct has every cf handle and db handle, and batch writes into big ops,
+// such as "add a new block"
 pub struct BlockChain {
     /// Database to store all the other fields.
-    pub db: Arc<Mutex<database::BlockChainDatabase>>,
-    /// Graph structure of the blockchain/graph
-    pub graph: BlockGraph,
-    /// Metadata of the proposer tree
-    pub proposer_tree: ProposerTree,
-    /// Metadata of the voter chains
-    pub voter_chains: Vec<VoterChain>,
-    /// Metadata of the transaction blocks
-    pub tx_blocks: TxBlkPool,
-    /// Metadata of blocks
-    pub node_data: NodeDataMap,
+    db: DB,
+    graph: Graph,
+    proposer_node: ColumnFamily,
+    voter_node: ColumnFamily,
+    ledger: ColumnFamily,
+    proposer_tree: ProposerTree,
+    voter_chains: Vec<VoterChain>,
+    transaction_pool: TransactionPool,
+}
+
+struct Graph {
+    parent: ColumnFamily,
+    vote: ColumnFamily,
+    voter_parnet: ColumnFamily,
+    transaction_ref: ColumnFamily,
+    proposer_ref: ColumnFamily,
+}
+
+struct ProposerTree {
+    leader: ColumnFamily,
+    level: ColumnFamily,
+    best_block: Mutex<H256>,
+    best_level: Mutex<u32>,
+    max_confirmed_level: Mutex<u32>,
+    unreferred: Mutex<HashSet<H256>>,
+}
+
+struct VoterChain {
+    best_block: Mutex<H256>,
+    best_level: Mutex<u32>,
+    unvoted_proposer: Mutex<BTreeMap<H256>>,
+}
+
+struct TransactionPool {
+    unreferred: Mutex<HashSet<H256>>,
 }
 
 // Functions to edit the blockchain
 impl BlockChain {
-    /// Initializing blockchain graph with genesis blocks.
-    pub fn new(
-        db: Arc<Mutex<database::BlockChainDatabase>>,
-        num_voting_chains: u16,
-        utxo_update: Sender<(LedgerUpdateMessage, Vec<H256>)>, //Sends updates to utxo state thread
-    ) -> Self {
-        // Initializing an empty object
-        let mut graph = BlockGraph {
-            db: Arc::clone(&db),
-            edge_count: 0,
+    /// Open the blockchain database at the given path, and create missing column families.
+    /// This function also populates the metadata fields with default values, and those
+    /// fields must be initialized later.
+    fn open<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
+        let cfs = vec![
+            ColumnFamilyDescriptor::new(PROPOSER_NODE_DATA_CF, Options::default()),
+            ColumnFamilyDescriptor::new(VOTER_NODE_DATA_CF, Options::default()),
+            ColumnFamilyDescriptor::new(LEDGER_CF, Options::default()),
+            ColumnFamilyDescriptor::new(PROPOSER_TREE_LEADER_CF, Options::default()),
+            ColumnFamilyDescriptor::new(PROPOSER_TREE_LEVEL_CF, Options::default()),
+            ColumnFamilyDescriptor::new(PARENT_NEIGHBOR_CF, Options::default()),
+            ColumnFamilyDescriptor::new(VOTE_NEIGHBOR_CF, Options::default()),
+            ColumnFamilyDescriptor::new(VOTER_PARENT_NEIGHBOR_CF, Options::default()),
+            ColumnFamilyDescriptor::new(TRANSACTION_REF_NEIGHBOR_CF, Options::default()),
+            ColumnFamilyDescriptor::new(PROPOSER_REF_NEIGHBOR_CF, Options::default()),
+        ];
+        let opts = Options::default();
+        let db = DB::open_cf_descriptors(&opts, path, cfs)?;
+        
+        let graph = Graph {
+            parent: db.cf_handle(PARENT_NEIGHBOR_CF).unwrap(),
+            vote: db.cf_handle(VOTE_NEIGHBOR_CF).unwrap(),
+            voter_parent: db.cf_handle(VOTER_PARENT_NEIGHBOR_CF).unwrap(),
+            transaction_ref: db.cf_handle(TRANSACTION_REF_NEIGHBOR_CF).unwrap(),
+            proposer_ref: db.cf_handle(PROPOSER_REF_NEIGHBOR_CF).unwrap(),
         };
-        let mut proposer_tree = ProposerTree::new(Arc::clone(&db));
-        let mut voter_chains: Vec<VoterChain> = vec![];
-
-        let tx_blocks: TxBlkPool = TxBlkPool::new(Arc::clone(&db), utxo_update);
-
-        let mut node_data = NodeDataMap {
-            db: Arc::clone(&db),
+        
+        let proposer_tree = ProposerTree {
+            leader: db.cf_handle(PROPOSER_TREE_LEADER_CF).unwrap(),
+            level: db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap(),
+            best_block: Mutex::new(H256::default()),
+            best_level: Mutex::new(0),
+            max_confirmed_level: Mutex::new(0),
+            unreferred: Mutex::new(HashSet::new()),
         };
-        let mut voter_node_data = HashMap::<H256, VoterNodeData>::new();
-
-        // 1. Proposer genesis block
-        // 1a. Add proposer genesis block in the graph
-        let proposer_genesis_node = ProposerNodeData::genesis(num_voting_chains);
-        // Add metadata of the proposer genesis block to the hashmap
-        node_data.insert_proposer(&PROPOSER_GENESIS_HASH, proposer_genesis_node);
-
-        // 1b. Initializing proposer tree
-        proposer_tree.best_block = *PROPOSER_GENESIS_HASH;
-        proposer_tree.add_block_at_level(*PROPOSER_GENESIS_HASH, 0);
-        // Genesis proposer block is the leader block at level 0
-        proposer_tree.insert_leader_block(0, *PROPOSER_GENESIS_HASH);
-
-        // 2. Voter geneses blocks
-        for chain_number in 0..(num_voting_chains) {
-            // 2a. Add voter chain i genesis block in the graph
-            let voter_genesis_node = VoterNodeData::genesis(chain_number as u16);
-            let voter_genesis_hash = VOTER_GENESIS_HASHES[chain_number as usize];
-            // Add voter genesis node data to the hashmap
-            node_data.insert_voter(&voter_genesis_hash, voter_genesis_node);
-
-            // 2b. Initializing a Voter chain
-            let voter_chain = VoterChain::new(voter_genesis_hash);
-            voter_chains.push(voter_chain);
+        
+        let mut voter_chains = vec![];
+        for _ in 0..NUM_VOTER_CHAINS {
+            let chain = VoterChain {
+                best_block: Mutex::new(H256::default()),
+                best_level: Mutex::new(0),
+                unvoted_proposer: Mutex::new(BTreeMap::new()),
+            }
+            voter_chains.push(chain);
         }
-
-        return Self {
-            db,
-            graph,
-            proposer_tree,
-            voter_chains,
-            tx_blocks,
-            node_data,
+        
+        let transaction_pool = TransactionPool {
+            unreferred: Mutex::new(HashSet::new()),
         };
+        
+        let proposer_node = db.cf_handle(PROPOSER_NODE_DATA_CF).unwrap();
+        let voter_node = db.cf_handle(VOTER_NODE_DATA_CF).unwrap();
+        let ledger = db.cf_handle(LEDGER_CF).unwrap();
+        
+        let blockchain_db = Self {
+            db: db,
+            graph: graph,
+            proposer_node: proposer_node,
+            voter_node: voter_node,
+            ledger: ledger,
+            proposer_tree: proposer_tree,
+            voter_chains: voter_chains,
+            transaction_pool: transaction_pool,
+        };
+        
+        return Ok(blockchain_db);
     }
-
-    // TODO: add a function to restore BlockChain from BlockDatabase
-
-    // Add edges from `from` to `to` with type `edge_type`, and edge from `to` to `from` with the
-    // corresponding reversed type.
-    fn insert_edge(&mut self, from: H256, to: H256, edge_type: Edge, value: Option<u32>) {
-        match edge_type {
-            Edge::TransactionToProposerParent
-            | Edge::ProposerToProposerParent
-            | Edge::VoterToProposerParent
-            | Edge::VoterToVoterParent => {
-                self.graph.add_edge_type_1(from, to, edge_type);
-            }
-            Edge::VoterToProposerVote | Edge::VoterToProposerParentAndVote => {
-                self.graph.add_edge_type_1(from, to, edge_type);
-                self.graph
-                    .add_edge_type_1(to, from, edge_type.reverse_edge());
-            }
-            Edge::ProposerToProposerReference
-            | Edge::ProposerToTransactionReference
-            | Edge::ProposerToTransactionLeaderReference
-            | Edge::ProposerToTransactionReferenceAndLeaderReference => {
-                self.graph
-                    .add_edge_type_2(from, to, edge_type, value.unwrap());
-            }
-            _ => panic!("The reverse edges should never be added directly"),
+    
+    /// Destroy the existing database at the given path, create a new one, and initialize the content.
+    pub fn new<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
+        DB::destroy(P); // TODO: handle error
+        let db = Self::open(P)?;
+        
+        // insert proposer genesis block and set metadata
+        // insert into proposer node table
+        let proposer_genesis = ProposerNodeData::genesis(NUM_VOTER_CHAINS);
+        db.db.put_cf(db.proposer_node,
+                     serialize(&(*PROPOSER_GENESIS_HASH)).unwrap(),
+                     serialize(&proposer_genesis).unwrap())?;
+        // insert into proposer level node list
+        db.db.put_cf(db.proposer_tree.level,
+                     serialize(&0).unwrap(),
+                     serialize(&vec![*PROPOSER_GENESIS_HASH]).unwrap())?;
+        // insert into proposer leader list
+        db.db.put_cf(db.proposer_tree.leader,
+                     serialize(&0).unwrap(),
+                     serialize(&(*PROPOSER_GENESIS_HASH)).unwrap())?;
+        // mark proposer tree best block
+        db.proposer_tree.best_block.lock().unwrap() = *PROPOSER_GENESIS_HASH;
+        
+        // insert voter genesis blocks and set metadata
+        for chain_num in 0..NUM_VOTER_CHAINS {
+            // insert into voter node table
+            let voter_genesis = VoterNodeData::genesis(chain_num as u16);
+            let voter_genesis_hash = VOTER_GENESIS_HASHES[chain_num as usize];
+            db.db.put_cf(db.voter_node,
+                         serialize(&voter_genesis_hash).unwrap(),
+                         serialize(&voter_genesis).unwrap())?;
+            // mark voter best block
+            db.voter_chains[chain_num].best_block.lock().unwrap() = voter_genesis_hash;
         }
+        
+        return Ok(db);
     }
-
-    // Add a new block to the blockgraph. Note that all blocks referred by the new block must
-    // already exist in the blockgraph.
-    pub fn insert_node(&mut self, block: &Block) {
+    // TODO: add a function to restore BlockChain state
+    
+    pub fn insert_node(&self, block: &Block) -> Result<()> {
         let block_hash = block.hash();
-        let parent_proposer_block_hash = block.header.parent;
-        // Parse the block content and add the edges according to Prism logic.
+        let parent_hash = block.header.parent;
         let content: &Content = &block.content;
+        
+        // common routine for all types of blocks
+        // mark the proposer parent neighbor
+        self.db.put_cf(self.graph.parent, 
+                       serialize(&block_hash).unwrap(),
+                       serialize(&parent_hash).unwrap())?;
         match content {
             Content::Transaction(_) => {
-                // add edge from tx block to its proposer parent
-                self.insert_edge(
-                    block_hash,
-                    parent_proposer_block_hash,
-                    Edge::TransactionToProposerParent,
-                    None,
-                );
-
-                // mark this new tx block as not in ledger and as unreferred
-                self.tx_blocks.insert_not_in_ledger(block_hash);
-                self.tx_blocks.insert_unreferred(block_hash);
+                // mark as unreferred
+                self.transaction_pool.unreferred.lock().unwrap().insert(block_hash);
             }
-
             Content::Proposer(content) => {
-                // 1. Add edge from prop block to its proposer parent
-                self.insert_edge(
-                    block_hash,
-                    parent_proposer_block_hash,
-                    Edge::ProposerToProposerParent,
-                    None,
-                );
-                // Since the parent proposer block is now referred, remove it from the unreferred proposer pool
-                self.proposer_tree
-                    .remove_unreferred(&parent_proposer_block_hash);
-                // Mark the new block we just got as unreferred
-                self.proposer_tree.insert_unreferred(block_hash);
-
-                // 2. Iterate through the list of proposer blocks referred by this new block
-                for (position, prop_hash) in content.proposer_refs.iter().enumerate() {
-                    self.insert_edge(
-                        block_hash,
-                        *prop_hash,
-                        Edge::ProposerToProposerReference,
-                        Some((1 + position) as u32),
-                    ); // The parent prop block has the first position
-                    self.proposer_tree.remove_unreferred(prop_hash);
+                // process referred proposer blocks
+                let mut unreferred_set = self.proposer_tree.unreferred.lock().unwrap();
+                let mut referred: Vec<H256> = vec![];
+                // mark itself as unreferred
+                unreferred_set.insert(block_hash);
+                // unmark parent as unreferred, add to referred list of this block
+                unreferred_set.remove(parent_hash);
+                referred.push(parent_hash);
+                // deal with all referred proposer blocks
+                for ref_hash in content.proposer_refs.iter() {
+                    unreferred_set.remove(ref_hash);
+                    referred.push(ref_hash);
                 }
-
-                // 3. Iterate through the list of transaction blocks referred by this new block and add an edge
-                for (position, tx_hash) in content.transaction_refs.iter().enumerate() {
-                    self.insert_edge(
-                        block_hash,
-                        *tx_hash,
-                        Edge::ProposerToTransactionReference,
-                        Some(position as u32),
-                    );
-                    // Since the tx proposer block is now referred, remove it from the unreferred tx pool
-                    self.tx_blocks.remove_unreferred(tx_hash);
+                self.db.put_cf(self.graph.proposer_ref,
+                               serialize(&block_hash).unwrap(),
+                               serialize(&referred).unwrap())?;
+                drop(unreferred_set);
+                
+                // process referred transaction blocks
+                let mut unreferred_set = self.transaction_pool.unreferred.lock().unwrap();
+                let mut referred: Vec<H256> = vec![];
+                for ref_hash in content.transaction_refs.iter() {
+                    unreferred_set.remove(ref_hash);
+                    referred.push(ref_hash);
                 }
-
-                // 4. Add the proposer block to the list of unvoted blocks on all the voter chains.
-                //                let self_level = self.proposer_node_data[&parent_proposer_block_hash].level + 1;
-                let self_level = self
-                    .node_data
-                    .get_proposer(&parent_proposer_block_hash)
-                    .level
-                    + 1;
-                for i in 0..self.voter_chains.len() {
-                    self.voter_chains
-                        .get_mut(i as usize)
-                        .unwrap()
-                        .insert_unvoted(self_level, block_hash);
+                self.db.put_cf(self.graph.transaction_ref,
+                               serialize(&block_hash).unwrap(),
+                               serialize(&referred).unwrap())?;
+                drop(unreferred_set);
+                
+                // mark this block as unvoted in all voter chains
+                let self_level = self.db.get_cf(self.proposer_node,
+                                                serialize(&block_hash).unwrap())?;
+                let self_level = deserialize(&self_level.unwrap()).unwrap().level + 1;
+                for chain_num in 0..NUM_VOTER_CHAINS {
+                    let mut unvoted = self.voter_chains[chain_num].unvoted_proposer.lock().unwrap();
+                    // TODO: we don't do any check here
+                    // don't overwrite existing entry
+                    if !unvoted.contains_key(&self_level) {
+                        unvoted.insert(self_level, block_hash);
+                    }
+                    drop(unvoted);
                 }
-
-                // 5. Creating proposer node data.
-                // TODO: replace default with new
-                let mut proposer_node_data = ProposerNodeData::default();
-                proposer_node_data.level = self_level;
-
-                // 6. Add node data in the map
-                //                self.proposer_node_data.insert(block_hash, proposer_node_data);
-                self.node_data
-                    .insert_proposer(&block_hash, proposer_node_data);
-
-                // 7. Add the block in the proposer_tree field at self_level.
-                self.proposer_tree
-                    .add_block_at_level(block_hash, self_level);
+                
+                // insert the new block into proposer tree level
+                let level_block_list = self.db.get_cf(self.proposer_tree.level,
+                                                      serialize(&self_level).unwrap())?;
+                let mut level_block_list = match level_block_list {
+                    None => vec![],
+                    Some(d) => deserialize(&d).unwrap(),
+                }
+                level_block_list.push(block_hash);
+                self.db.put_cf(self.proposer_tree.level,
+                               serialize(&self_level).unwrap(),
+                               serialize(&level_block_list).unwrap())?;
+                
+                // create proposer node data and insert
+                let new_node = ProposerNodeData {
+                    level: self_level,
+                    status: ProposerStatus::PotentialLeader,
+                };
+                self.db.put_cf(self.proposer_node,
+                               serialize(&block_hash).unwrap(),
+                               serialize(&new_node).unwrap())?;
             }
+            Content::Voter(content) => {
+                // mark the voter parent neighbor
+                let voter_parent_hash = content.voter_parent;
+                self.db.put_cf(self.graph.voter_parent, 
+                               serialize(&block_hash).unwrap(),
+                               serialize(&voter_parent_hash).unwrap())?;
+                               
+                // mark the vote neighboars: this is bidirectional
+                let mut voted: Vec<H256> = vec![];
+                for voted_hash in content.votes.iter() {
+                    // insert the voted proposer block to the list of blocks that we voted
+                    voted.push(voted_hash);
+                    // update the list of voter blocks that voted for the proposer block
+                    let voter_block_list = self.db.get_cf(self.graph.vote,
+                                                          serialize(&voted_hash).unwrap())?;
+                    let mut voter_block_list = match voter_block_list {
+                        None => vec![],
+                        Some(d) => deserialize(&d).unwrap(),
+                    }
+                    voter_block_list.push(block_hash);
+                    self.db.put_cf(self.graph.vote,
+                                   serialize(&voted_hash).unwrap(),
+                                   serialize(&voter_block_list).unwrap())?;
+                }
+                self.db.put_cf(self.graph.vote,
+                    serialize(&block_hash).unwrap(),
+                    serialize(&voted).unwrap())?;
+                // TODO: we are not increasing the votes counter in the proposer block data
+                
+                // update voter chain metadata
+                let voter_parent = self.db.get_cf(self.voter_node,
+                                                  serialize(&voter_parent_hash).unwrap())?;
+                let voter_parent = deserialize(&voter_parent.unwrap()).unwrap();
+                let chain_num = voter_parent.chain_number;
+                let mut best_block = self.voter_chains[chain_num as usize].best_block.lock().unwrap();
+                let mut best_level = self.voter_chains[chain_num as usize].best_level.lock().unwrap();
+                // see whether we attach to a side chain or main chain
+                if *best_block == voter_parent_hash {
+                    // it's a main chain block
+                    // update chain metadata
+                    *best_block = block_hash;
+                    *best_level += 1;
+                    
+                    // insert new voter node
+                    let new_node = VoterNodeData {
+                        chain_number: voter_parent.chain_number;
+                        level: voter_parent.level + 1,
+                        status: VoterStatus::OnMainChain,
+                    };
+                    self.db.put_cf(self.voter_node,
+                        serialize(&block_hash).unwrap(),
+                        serialize(&new_node).unwrap())?;
+                    
+                    // unmark the proposer block levels voted by this block as unvoted
+                    let mut unvoted = self.voter_chains[chain_num as usize].unvoted_proposer.lock().unwrap();
+                    for voted_hash in content.votes.iter() {
+                        // get the level of the voted proposer block
+                        let voted_level = self.db.get_cf(self.proposer_node,
+                            serialize(&voted_hash).unwrap())?;
+                        let voted_level = deserialize(&voted_level.unwrap()).unwrap().level;
+                        unvoted.remove(&voted_level);
+                    }
+                    drop(unvoted);                    
+                } else if {
+                    // we did not attach to the current best block, it's on a side chain
+                    let self_level = voter_parent.level + 1;
+                    if self_level <= best_level {
+                        // we attached to a shorter chain
+                        // insert new voter node
+                        let new_node = VoterNodeData {
+                            chain_number: voter_parent.chain_number;
+                            level: self_level,
+                            status: VoterStatus::Orphan,
+                        };
+                        self.db.put_cf(self.voter_node,
+                            serialize(&block_hash).unwrap(),
+                            serialize(&new_node).unwrap())?;
+                    }
+                    else {
+                        // our side chain now becomes the main chain
+                        
+                        // TODO: here we assume that the voter parent is on the same level
+                        // as the previous best block. i.e. we follow the parent link the
+                        // same number of times for voter parent and current best block, and
+                        // expect to reach a common ancestor
+                        let mut fork_tip = voter_parent_hash;
+                        let mut main_tip = *best_block;
+                        let mut fork_votes = vec![];
+                        let mut main_votes = vec![];
+                        while fork_tip != main_tip {
+                            // change the fork tip to main chain, and main tip to orphan
+                            let fork_tip_data = self.db.get_cf(self.voter_node,
+                                serialize(&fork_tip).unwrap())?;
+                            let mut fork_tip_data = deserialize(&fork_tip_data.unwrap()).unwrap();
+                            let main_tip_data = self.db.get_cf(self.voter_node,
+                                serialize(&main_tip).unwrap())?;
+                            let mut main_tip_data = deserialize(&main_tip_data.unwrap()).unwrap();
+                            fork_tip_data.status = VoterStatus::OnMainChain;
+                            main_tip_data.status = VoterStatus::Orphan;
+                            self.db.put_cf(self.voter_node,
+                                serialize(&main_tip).unwrap(),
+                                serialize(&main_tip_data).unwrap())?;
+                            self.db.put_cf(self.voter_node,
+                                serialize(&fork_tip).unwrap(),
+                                serialize(&fork_tip_data).unwrap())?;
+                            
+                            // TODO: we are trusting data from the network
+                            // mark the proposer blocks voted by the main chain block as unvoted
+                            let voted_by_main = self.db.get_cf(self.graph.vote,
+                                serialize(&main_tip).unwrap())?;
+                            let voted_by_main = deserialize(&voted_by_main.unwrap()).unwrap();
+                            for voted_hash in voted_by_main {
+                                // get the level of the proposer block
+                                let voted_level = self.db.get_cf(self.proposer_node,
+                                    serialize(&voted_hash).unwrap())?;
+                                let voted_level = deserialize(&voted_level.unwrap()).unwrap().level;
+                                main_votes.push((voted_level, voted_hash));
+                            }
+                            
+                            // unmark the proposer blocks voted by the fork block as unvoted
+                            let voted_by_fork = self.db.get_cf(self.graph.vote,
+                                serialize(&fork_tip).unwrap())?;
+                            let voted_by_fork = deserialize(&voted_by_fork.unwrap()).unwrap();
+                            for voted_hash in voted_by_fork {
+                                // get the level of the proposer block
+                                let voted_level = self.db.get_cf(self.proposer_node,
+                                    serialize(&voted_hash).unwrap())?;
+                                let voted_level = deserialize(&voted_level.unwrap()).unwrap().level;
+                                fork_votes.push((voted_level, voted_hash));
+                            }
+                            
+                            // trace back to the parent 
+                            let fork_parent = self.db.get_cf(self.graph.voter_parent, 
+                               serialize(&fork_tip).unwrap())?;
+                            let fork_parent = deserialize(&fork_parent.unwrap()).unwrap();
+                            let main_parent = self.db.get_cf(self.graph.voter_parent, 
+                               serialize(&main_tip).unwrap())?;
+                            let main_parent = deserialize(&main_parent.unwrap()).unwrap();
+                            fork_tip = fork_parent;
+                            main_tip = main_parent;
+                        }
+                        
+                        // first readd votes by main chain, and remove votes by fork chain 
+                        let mut unvoted = self.voter_chains[chain_num as usize].unvoted_proposer.lock().unwrap();
+                        for (level, hash) in main_votes {
+                            unvoted.insert(level, hash);
+                        }
+                        for (level, hash) in fork_votes {
+                            unvoted.remove(level);
+                        }
+                        drop(unvoted);
+                        
+                        // update chain metadata
+                        *best_block = block_hash;
+                        *best_level = self_level;
+                    
+                        // insert new voter node
+                        let new_node = VoterNodeData {
+                            chain_number: voter_parent.chain_number;
+                            level: self_level,
+                            status: VoterStatus::OnMainChain,
+                        };
+                        self.db.put_cf(self.voter_node,
+                            serialize(&block_hash).unwrap(),
+                            serialize(&new_node).unwrap())?;
+                    
+                        // unmark the proposer block levels voted by this block as unvoted
+                        let mut unvoted = self.voter_chains[chain_num as usize].unvoted_proposer.lock().unwrap();
+                        for voted_hash in content.votes.iter() {
+                            // get the level of the voted proposer block
+                            let voted_level = self.db.get_cf(self.proposer_node,
+                                serialize(&voted_hash).unwrap())?;
+                            let voted_level = deserialize(&voted_level.unwrap()).unwrap().level;
+                            unvoted.remove(&voted_level);
+                        }
+                        drop(unvoted);
+                    }
+                }
+                drop(best_block);
+                drop(best_level);
+                
+            }
+        }
+    }
+    
+        match content {
 
             Content::Voter(content) => {
-                // 1, Add edge from voter block to its proposer parent
-                self.insert_edge(
-                    block_hash,
-                    parent_proposer_block_hash,
-                    Edge::VoterToProposerParent,
-                    None,
-                );
-
-                // 2. Add edge from voter block to its voter parent
-                self.insert_edge(
-                    block_hash,
-                    content.voter_parent,
-                    Edge::VoterToVoterParent,
-                    None,
-                );
-
-                // 3. Add edge from voter block to proposer block it voted.
-                for prop_block_hash in content.votes.iter() {
-                    // if the votee is the same as the parent
-                    if *prop_block_hash == parent_proposer_block_hash {
-                        self.insert_edge(
-                            block_hash,
-                            *prop_block_hash,
-                            Edge::VoterToProposerParentAndVote,
-                            None,
-                        );
-                    } else {
-                        self.insert_edge(
-                            block_hash,
-                            *prop_block_hash,
-                            Edge::VoterToProposerVote,
-                            None,
-                        );
-                    }
-
-                    // Incrementing the votes of the proposer block being voted
-                    let ref proposer_node_data = self.node_data.get_proposer(&prop_block_hash);
-                }
-
-                // 4. Updating the voter chain.
-                //                let parent_voter_node_data: VoterNodeData =
-                //                    self.voter_node_data[&content.voter_parent];
-                let parent_voter_node_data = self.node_data.get_voter(&content.voter_parent);
-                // The update status is used to create the voter node data
-                let voter_node_update = self.voter_chains
-                    [parent_voter_node_data.chain_number as usize]
-                    .add_voter_block(
-                        block_hash,
-                        content.voter_parent,
-                        parent_voter_node_data.level + 1,
-                    );
-
-                // 5. Create voter node data.
-                // Also update the unvoted_levels on the voter chain. For mining.
-                // TODO: replace default with new
-                let mut voter_node_data = VoterNodeData::default();
-                voter_node_data.level = parent_voter_node_data.level + 1;
-                voter_node_data.chain_number = parent_voter_node_data.chain_number;
-                //                self.voter_node_data.insert(block_hash, voter_node_data);
-                self.node_data.insert_voter(&block_hash, voter_node_data);
+             
 
                 match voter_node_update {
-                    // Case: New block extends the main chain. Good situation.
-                    VoterNodeUpdateStatus::ExtendedMainChain => {
-                        // change the status of the new voter block
-                        self.node_data.voter_make_on_main_chain(&block_hash);
-                        // Remove the prop block levels voted by this block from list of unvoted levels of this chain.
-                        for prop_block_hash in content.votes.iter() {
-                            let proposer_level = self.prop_node_data(&prop_block_hash).level;
-                            self.voter_chains
-                                .get_mut(voter_node_data.chain_number as usize)
-                                .unwrap()
-                                .remove_unvoted(proposer_level);
 
-                        }
-                    }
                     // Case: New block is part of a side fork which is longer fork than the main chain.
                     // This is a bad (and complex) situation.
                     VoterNodeUpdateStatus::LongerFork => {
-                        //1. Construct the Fork  object
-                        let chain_number = voter_node_data.chain_number as usize;
-                        let left_leaf = self.voter_chains[chain_number].best_block;
-                        let left_leaf_level = self.voter_chains[chain_number].best_level;
-                        let right_leaf = block_hash;
-                        let right_leaf_level = voter_node_data.level;
-                        let fork =
-                            self.get_fork(left_leaf, right_leaf, left_leaf_level, right_leaf_level);
-                        //2. Switch the main chain to the right segment of the fork
-                        let new_best_block = fork.right_segment.last().unwrap();
-                        let new_best_level = self.node_data.get_voter(new_best_block).level;
-                        self.voter_chains[chain_number]
-                            .switch_the_main_chain(*new_best_block, new_best_level);
-
-                        //3a. Change the status of left_segment voter blocks to Orphan and get the votes by this segment.
-                        let mut votes_on_proposers_left: Vec<(H256, u32)> = vec![];
-                        for voter_block in fork.left_segment.iter() {
-                            self.node_data.voter_make_orphan(voter_block);
-
-                            let proposer_blocks = self.get_votes_by_voter(voter_block);
-                            for proposer_block in proposer_blocks {
-                                let level = self.prop_node_data(&proposer_block).level;
-                                votes_on_proposers_left.push((proposer_block, level));
-                            }
-                            votes_on_proposers_left.sort_by_key(|k| k.1);
-                        }
-
                         let first_left_segment_vote_level = votes_on_proposers_left[0].1; // This will be used for rollback
-
-                        //3b. Change the status of right_segment voter blocks to OnMainChain and get the votes by this segment.
-                        let mut votes_on_proposers_right: Vec<(H256, u32)> = vec![];
-                        for voter_block in fork.right_segment.iter() {
-                            self.node_data.voter_make_on_main_chain(voter_block);
-
-                            let proposer_blocks = self.get_votes_by_voter(voter_block);
-                            for proposer_block in proposer_blocks {
-                                let level = self.prop_node_data(&proposer_block).level;
-                                votes_on_proposers_right.push((proposer_block, level));
-                            }
-                            votes_on_proposers_right.sort_by_key(|k| k.1);
-                        }
-
-                        //4a. Add votes_on_proposers_left to unvoted_proposer_blocks in voter chain. For mining.
-                        self.voter_chains[chain_number]
-                            .add_unvoted_while_switching(votes_on_proposers_left);
-
-                        //4b. Remove the votes_on_proposers_left to unvoted_proposer_blocks in voter chain. For mining.
-                        self.voter_chains[chain_number]
-                            .remove_unvoted_while_switching(votes_on_proposers_right);
 
                         //5 Rollback the ledger if required.
 
@@ -393,8 +511,7 @@ impl BlockChain {
                             self.proposer_tree.max_confirmed_level = roll_back_level as u32;
                         }
                     }
-                    // Case: A orphan voter block. Do nothing.
-                    VoterNodeUpdateStatus::SideChain => {}
+                
                 }
                 // Try confirming levels from the min unconfirmed proposer level.
                 loop {
