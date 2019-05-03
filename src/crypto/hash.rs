@@ -117,7 +117,7 @@ impl PartialEq for H256 {
     }
 }
 
-#[cfg(test)]
+//#[cfg(test)]
 pub mod tests {
     use super::Hashable;
     use super::H256;
