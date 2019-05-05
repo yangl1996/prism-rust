@@ -20,6 +20,7 @@ pub mod transaction;
 //pub mod generator;
 //pub mod wallet;
 
+/*
 use crate::blockchain::transaction::UpdateMessage as LedgerUpdateMessage;
 use crate::crypto::hash::H256;
 use crate::state::UTXODatabase;
@@ -84,3 +85,4 @@ pub fn start(
 
     return Ok((server, miner, wallets));
 }
+*/
