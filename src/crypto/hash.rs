@@ -1,4 +1,4 @@
-use byteorder::{BigEndian, ByteOrder};
+use std::convert::TryInto;
 
 /// An object that can be meaningfully hashed.
 pub trait Hashable {
@@ -88,10 +88,10 @@ impl std::convert::From<ring::digest::Digest> for H256 {
 
 impl Ord for H256 {
     fn cmp(&self, other: &H256) -> std::cmp::Ordering {
-        let self_higher = BigEndian::read_u128(&self.0[0..16]);
-        let self_lower = BigEndian::read_u128(&self.0[16..32]);
-        let other_higher = BigEndian::read_u128(&other.0[0..16]);
-        let other_lower = BigEndian::read_u128(&other.0[16..32]);
+        let self_higher = u128::from_be_bytes(self.0[0..16].try_into().unwrap());
+        let self_lower = u128::from_be_bytes(self.0[16..32].try_into().unwrap());
+        let other_higher = u128::from_be_bytes(other.0[0..16].try_into().unwrap());
+        let other_lower = u128::from_be_bytes(other.0[16..32].try_into().unwrap());
         let higher = self_higher.cmp(&other_higher);
         match higher {
             std::cmp::Ordering::Equal => return self_lower.cmp(&other_lower),
@@ -110,10 +110,10 @@ impl PartialOrd for H256 {
 
 impl PartialEq for H256 {
     fn eq(&self, other: &H256) -> bool {
-        let self_higher = BigEndian::read_u128(&self.0[0..16]);
-        let self_lower = BigEndian::read_u128(&self.0[16..32]);
-        let other_higher = BigEndian::read_u128(&other.0[0..16]);
-        let other_lower = BigEndian::read_u128(&other.0[16..32]);
+        let self_higher = u128::from_be_bytes(self.0[0..16].try_into().unwrap());
+        let self_lower = u128::from_be_bytes(self.0[16..32].try_into().unwrap());
+        let other_higher = u128::from_be_bytes(other.0[0..16].try_into().unwrap());
+        let other_lower = u128::from_be_bytes(other.0[16..32].try_into().unwrap());
         if (self_higher == other_higher) && (self_lower == other_lower) {
             return true;
         } else {
