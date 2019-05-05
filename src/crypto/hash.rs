@@ -8,7 +8,7 @@ pub trait Hashable {
 
 /// A SHA256 hash.
 #[derive(Eq, Serialize, Deserialize, Clone, Hash, Default, Copy)]
-pub struct H256([u128; 2]); // big endian u256
+pub struct H256([u8; 32]); // big endian u256
 
 impl std::fmt::Display for H256 {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -21,9 +21,8 @@ impl std::fmt::Display for H256 {
         } else {
             0
         };
-        let buffer: [u8; 32] = self.into();
         for byte_idx in start..32 {
-            write!(f, "{:>02x}", &buffer[byte_idx])?;
+            write!(f, "{:>02x}", &self.0[byte_idx])?;
         }
         Ok(())
     }
@@ -31,53 +30,51 @@ impl std::fmt::Display for H256 {
 
 impl std::fmt::Debug for H256 {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let buffer: [u8; 32] = self.into();
         write!(
             f,
             "{:>02x}{:>02x}..{:>02x}{:>02x}",
-            &buffer[0], &buffer[1], &buffer[30], &buffer[31]
+            &self.0[0], &self.0[1], &self.0[30], &self.0[31]
         )
     }
 }
 
 impl Hashable for H256 {
     fn hash(&self) -> H256 {
-        let buffer: [u8; 32] = self.into();
-        return ring::digest::digest(&ring::digest::SHA256, &buffer).into();
+        return ring::digest::digest(&ring::digest::SHA256, &self.0).into();
+    }
+}
+
+impl std::convert::AsRef<[u8]> for H256 {
+    fn as_ref(&self) -> &[u8] {
+        return &self.0;
     }
 }
 
 impl std::convert::From<&[u8; 32]> for H256 {
     fn from(input: &[u8; 32]) -> H256 {
-        let higher = BigEndian::read_u128(&input[0..16]);
-        let lower = BigEndian::read_u128(&input[16..32]);
-        return H256([higher, lower]);
+        let mut buffer: [u8; 32] = [0; 32];
+        buffer[..].copy_from_slice(input);
+        return H256(buffer);
     }
 }
 
 impl std::convert::From<&H256> for [u8; 32] {
     fn from(input: &H256) -> [u8; 32] {
         let mut buffer: [u8; 32] = [0; 32];
-        BigEndian::write_u128(&mut buffer[0..16], input.0[0]);
-        BigEndian::write_u128(&mut buffer[16..32], input.0[1]);
+        buffer[..].copy_from_slice(&input.0);
         return buffer;
     }
 }
 
 impl std::convert::From<[u8; 32]> for H256 {
     fn from(input: [u8; 32]) -> H256 {
-        let higher = BigEndian::read_u128(&input[0..16]);
-        let lower = BigEndian::read_u128(&input[16..32]);
-        return H256([higher, lower]);
+        return H256(input);
     }
 }
 
 impl std::convert::From<H256> for [u8; 32] {
     fn from(input: H256) -> [u8; 32] {
-        let mut buffer: [u8; 32] = [0; 32];
-        BigEndian::write_u128(&mut buffer[0..16], input.0[0]);
-        BigEndian::write_u128(&mut buffer[16..32], input.0[1]);
-        return buffer;
+        return input.0;
     }
 }
 
@@ -85,15 +82,19 @@ impl std::convert::From<ring::digest::Digest> for H256 {
     fn from(input: ring::digest::Digest) -> H256 {
         let mut raw_hash: [u8; 32] = [0; 32];
         raw_hash[0..32].copy_from_slice(input.as_ref());
-        return (&raw_hash).into();
+        return H256(raw_hash);
     }
 }
 
 impl Ord for H256 {
     fn cmp(&self, other: &H256) -> std::cmp::Ordering {
-        let higher = self.0[0].cmp(&other.0[0]);
+        let self_higher = BigEndian::read_u128(&self.0[0..16]);
+        let self_lower = BigEndian::read_u128(&self.0[16..32]);
+        let other_higher = BigEndian::read_u128(&other.0[0..16]);
+        let other_lower = BigEndian::read_u128(&other.0[16..32]);
+        let higher = self_higher.cmp(&other_higher);
         match higher {
-            std::cmp::Ordering::Equal => return self.0[1].cmp(&other.0[1]),
+            std::cmp::Ordering::Equal => return self_lower.cmp(&other_lower),
             _ => {
                 return higher;
             }
@@ -109,7 +110,11 @@ impl PartialOrd for H256 {
 
 impl PartialEq for H256 {
     fn eq(&self, other: &H256) -> bool {
-        if (self.0[0] == other.0[0]) && (self.0[1] == other.0[1]) {
+        let self_higher = BigEndian::read_u128(&self.0[0..16]);
+        let self_lower = BigEndian::read_u128(&self.0[16..32]);
+        let other_higher = BigEndian::read_u128(&other.0[0..16]);
+        let other_lower = BigEndian::read_u128(&other.0[16..32]);
+        if (self_higher == other_higher) && (self_lower == other_lower) {
             return true;
         } else {
             return false;
@@ -155,7 +160,7 @@ pub mod tests {
     }
 
     #[test]
-    fn from_u8() {
+    fn convert_u8() {
         let source = hex!("0101010102020202010101010202020201010101020202020101010102020202");
         let should_be: H256 =
             (&hex!("0101010102020202010101010202020201010101020202020101010102020202")).into();
@@ -164,12 +169,13 @@ pub mod tests {
     }
 
     #[test]
-    fn into_u8() {
-        let should_be = hex!("0101010102020202010101010202020201010101020202020101010102020202");
+    fn asref_u8() {
         let source: H256 =
             (&hex!("0101010102020202010101010202020201010101020202020101010102020202")).into();
-        let result: [u8; 32] = (&source).into();
-        assert_eq!(result, should_be);
+        assert_eq!(
+            source.as_ref(),
+            &hex!("0101010102020202010101010202020201010101020202020101010102020202")
+        );
     }
 
     #[test]
