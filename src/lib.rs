@@ -17,7 +17,6 @@ pub mod crypto;
 pub mod transaction;
 //pub mod validation;
 //pub mod visualization;
-//pub mod generator;
 //pub mod wallet;
 
 /*
