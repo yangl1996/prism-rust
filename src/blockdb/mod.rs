@@ -4,24 +4,37 @@ use crate::block::Block;
 use crate::config::*;
 use crate::crypto::hash::{Hashable, H256};
 use bincode::{deserialize, serialize};
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use rocksdb::{self, DB, Options};
 
 /// Database that stores blocks.
 pub struct BlockDatabase {
     /// The underlying RocksDB handle.
     handle: rocksdb::DB,
     /// The number of blocks in this database.
-    count: Mutex<u64>,
+    count: AtomicUsize,
 }
 
 impl BlockDatabase {
-    /// Create a new database at the given path.
+    /// Open the database at the given path, and create a new one if missing.
+    fn open<P: AsRef<std::path::Path>>(path: P) -> Result<Self, rocksdb::Error> {
+        let mut opts = Options::default();
+        opts.create_if_missing(true);
+        let db = DB::open(&opts, path)?;
+        return Ok(BlockDatabase {
+            handle: db,
+            count: AtomicUsize::new(0),
+        });
+    }
+
+    /// Create a new database at the given path, and initialize the content.
     pub fn new<P: AsRef<std::path::Path>>(path: P) -> Result<Self, rocksdb::Error> {
-        let db_handle = rocksdb::DB::open_default(path)?;
+        DB::destroy(&Options::default(), &path)?;
+        let db = Self::open(&path)?;
 
         // insert proposer genesis block
         let proposer_genesis_hash_u8: [u8; 32] = (*PROPOSER_GENESIS_HASH).into();
-        db_handle.put(
+        db.handle.put(
             &proposer_genesis_hash_u8,
             &serialize(&proposer_genesis()).unwrap(),
         )?;
@@ -29,32 +42,27 @@ impl BlockDatabase {
         // insert voter genesis blocks
         for i in 0..NUM_VOTER_CHAINS {
             let voter_genesis_hash_u8: [u8; 32] = VOTER_GENESIS_HASHES[i as usize].into();
-            db_handle.put(
+            db.handle.put(
                 &voter_genesis_hash_u8,
                 &serialize(&voter_genesis(i as u16)).unwrap(),
             )?;
         }
 
-        return Ok(BlockDatabase {
-            handle: db_handle,
-            // TODO: what about the genesis blocks we just inserted?
-            count: Mutex::new(0),
-        });
+        db.count.store(1 + NUM_VOTER_CHAINS as usize, Ordering::Relaxed);
+        return Ok(db);
     }
 
     /// Insert a new block to the database.
     pub fn insert(&self, block: &Block) -> Result<(), rocksdb::Error> {
-        let hash_u8: [u8; 32] = block.hash().into();
+        let hash: H256 = block.hash();
         let serialized = serialize(block).unwrap();
-        let mut count = self.count.lock().unwrap();
-        *count += 1;
-        return self.handle.put(&hash_u8, &serialized);
+        self.count.fetch_add(1, Ordering::Relaxed);
+        return self.handle.put(&hash, &serialized);
     }
 
     /// Get a block from the database.
-    pub fn get(&self, hash: H256) -> Result<Option<Block>, rocksdb::Error> {
-        let hash_u8: [u8; 32] = hash.into();
-        let serialized = self.handle.get(&hash_u8)?;
+    pub fn get(&self, hash: &H256) -> Result<Option<Block>, rocksdb::Error> {
+        let serialized = self.handle.get(hash)?;
         match serialized {
             None => return Ok(None),
             Some(s) => return Ok(Some(deserialize(&s).unwrap())),
@@ -63,17 +71,15 @@ impl BlockDatabase {
 
     /// Delete a block from the database
     // TODO: what if the block does not exist?
-    pub fn delete(&self, hash: H256) -> Result<(), rocksdb::Error> {
-        let hash_u8: [u8; 32] = hash.into();
-        let mut count = self.count.lock().unwrap();
-        *count -= 1;
-        return self.handle.delete(&hash_u8);
+    pub fn delete(&self, hash: &H256) -> Result<(), rocksdb::Error> {
+        self.count.fetch_sub(1, Ordering::Relaxed);
+        return self.handle.delete(hash);
     }
 
     /// Get the number of blocks in the database.
-    pub fn num_blocks(&self) -> u64 {
-        let count = self.count.lock().unwrap();
-        return *count;
+    pub fn num_blocks(&self) -> usize {
+        let count = self.count.load(Ordering::Relaxed);
+        return count;
     }
 }
 
@@ -81,25 +87,22 @@ impl BlockDatabase {
 mod tests {
     use super::*;
     use crate::crypto::hash::Hashable;
-    use crate::generator::block as block_generator;
 
-    /*
-        #[test]
-        fn insert_get_and_delete() {
-            let db = BlockDatabase::new(&std::path::Path::new(
-                "/tmp/blockdb_tests_insert_get_and_delete.rocksdb",
-            ))
-            .unwrap();
-            let test_block = block_generator::tx_block();
-            db.insert(&test_block).unwrap();
-            let got = db.get(&test_block.hash()).unwrap().unwrap();
-            let num_block = db.num_blocks();
-            assert_eq!(got.hash(), test_block.hash());
-            assert_eq!(num_block, 1);
-            db.delete(&test_block.hash()).unwrap();
-            let num_block = db.num_blocks();
-            assert_eq!(db.get(&test_block.hash()).unwrap().is_none(), true);
-            assert_eq!(num_block, 0);
-        }
-    */
+    #[test]
+    fn insert_get_and_delete() {
+        let db = BlockDatabase::new(&std::path::Path::new(
+            "/tmp/blockdb_tests_insert_get_and_delete.rocksdb",
+        ))
+        .unwrap();
+        let block = proposer_genesis();
+        db.insert(&block).unwrap();
+        let got = db.get(&block.hash()).unwrap().unwrap();
+        let num_block = db.num_blocks();
+        assert_eq!(got.hash(), block.hash());
+        assert_eq!(num_block, 1 + NUM_VOTER_CHAINS as usize + 1);
+        db.delete(&block.hash()).unwrap();
+        let num_block = db.num_blocks();
+        assert_eq!(db.get(&block.hash()).unwrap().is_none(), true);
+        assert_eq!(num_block, 1 + NUM_VOTER_CHAINS as usize);
+    }
 }

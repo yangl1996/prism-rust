@@ -7,7 +7,7 @@ extern crate lazy_static;
 
 pub mod block;
 pub mod blockchain;
-//pub mod blockdb;
+pub mod blockdb;
 pub mod config;
 pub mod crypto;
 //pub mod handler;
