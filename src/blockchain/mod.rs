@@ -4,8 +4,8 @@ use crate::config::*;
 
 use std::sync::Mutex;
 use bincode::{deserialize, serialize};
-use rocksdb::{ColumnFamily, Options, ColumnFamilyDescriptor, DB, WriteBatch};
-use std::collections::{HashMap, HashSet, BTreeMap};
+use rocksdb::{Options, ColumnFamilyDescriptor, DB, WriteBatch};
+use std::collections::HashSet;
 
 // Column family names for node/chain metadata
 const PROPOSER_NODE_LEVEL_CF: &str = "PROPOSER_NODE_LEVEL";
@@ -279,6 +279,20 @@ impl BlockChain {
         self.db.write(wb)?;
         return Ok(());
     }
+
+    pub fn best_proposer(&self) -> H256 {
+        let proposer_best = self.proposer_best.lock().unwrap();
+        let hash = proposer_best.0;
+        drop(proposer_best);
+        return hash;
+    }
+
+    pub fn best_voter(&self, chain_num: usize) -> H256 {
+        let voter_best = self.voter_best[chain_num].lock().unwrap();
+        let hash = voter_best.0;
+        drop(voter_best);
+        return hash;
+    }
 }
 
 fn h256_vec_append_merge(_: &[u8], existing_val: Option<&[u8]>, operands: &mut rocksdb::merge_operator::MergeOperands) -> Option<Vec<u8>> {
@@ -455,18 +469,52 @@ mod tests {
     }
 
     #[test]
+    fn best_proposer_and_voter() {
+        let db = BlockChain::new("/tmp/prism_test_blockchain_best_proposer_and_voter.rocksdb").unwrap();
+        assert_eq!(db.best_proposer(), *PROPOSER_GENESIS_HASH);
+        assert_eq!(db.best_voter(0), VOTER_GENESIS_HASHES[0]);
+
+        let new_proposer_content = Content::Proposer(proposer::Content::new(vec![], vec![]));
+        let new_proposer_block = Block::new(
+            *PROPOSER_GENESIS_HASH,
+            0,
+            0,
+            H256::default(),
+            vec![],
+            new_proposer_content,
+            [0; 32],
+            H256::default()
+        );
+        db.insert_block(&new_proposer_block).unwrap();
+        let new_voter_content = Content::Voter(voter::Content::new(1, VOTER_GENESIS_HASHES[0], vec![new_proposer_block.hash()]));
+        let new_voter_block = Block::new(
+            new_proposer_block.hash(),
+            0,
+            0,
+            H256::default(),
+            vec![],
+            new_voter_content,
+            [0; 32],
+            H256::default()
+        );
+        db.insert_block(&new_voter_block).unwrap();
+        assert_eq!(db.best_proposer(), new_proposer_block.hash());
+        assert_eq!(db.best_voter(0), new_voter_block.hash());
+    }
+
+    #[test]
     fn merge_operator_counter() {
         let db = BlockChain::new("/tmp/prism_test_blockchain_merge_op_counter.rocksdb").unwrap();
         let cf = db.db.cf_handle(PARENT_NEIGHBOR_CF).unwrap();
 
         // merge with an nonexistent entry
-        db.db.merge_cf(cf, b"testkey", serialize(&H256::default()).unwrap());
+        db.db.merge_cf(cf, b"testkey", serialize(&H256::default()).unwrap()).unwrap();
         let result: Vec<H256> = deserialize(&db.db.get_cf(cf, b"testkey").unwrap().unwrap()).unwrap();
         assert_eq!(result, vec![H256::default()]);
 
         // merge with an existing entry
-        db.db.merge_cf(cf, b"testkey", serialize(&H256::default()).unwrap());
-        db.db.merge_cf(cf, b"testkey", serialize(&H256::default()).unwrap());
+        db.db.merge_cf(cf, b"testkey", serialize(&H256::default()).unwrap()).unwrap();
+        db.db.merge_cf(cf, b"testkey", serialize(&H256::default()).unwrap()).unwrap();
         let result: Vec<H256> = deserialize(&db.db.get_cf(cf, b"testkey").unwrap().unwrap()).unwrap();
         assert_eq!(result, vec![H256::default(), H256::default(), H256::default()]);
     }
