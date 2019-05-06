@@ -31,6 +31,8 @@ pub struct BlockChain {
     db: DB,
     proposer_best: Mutex<(H256, u64)>,
     voter_best: Vec<Mutex<(H256, u64)>>,
+    unreferred_transaction: Mutex<HashSet<H256>>,
+    unreferred_proposer: Mutex<HashSet<H256>>,
 }
 
 // Functions to edit the blockchain
@@ -97,6 +99,8 @@ impl BlockChain {
             db: db,
             proposer_best: Mutex::new((H256::default(), 0)),
             voter_best: voter_best,
+            unreferred_transaction: Mutex::new(HashSet::new()),
+            unreferred_proposer: Mutex::new(HashSet::new()),
         };
         
         return Ok(blockchain_db);
@@ -131,6 +135,9 @@ impl BlockChain {
         let mut proposer_best = db.proposer_best.lock().unwrap();
         proposer_best.0 = *PROPOSER_GENESIS_HASH;
         drop(proposer_best);
+        let mut unreferred_proposer = db.unreferred_proposer.lock().unwrap();
+        unreferred_proposer.insert(*PROPOSER_GENESIS_HASH);
+        drop(unreferred_proposer);
 
         // voter genesis blocks
         for chain_num in 0..NUM_VOTER_CHAINS {
@@ -180,9 +187,25 @@ impl BlockChain {
 
         match &block.content {
             Content::Proposer(content) => {
+                // remove ref'ed blocks from unreferred list, mark itself as unreferred
+                let mut unreferred_proposer = self.unreferred_proposer.lock().unwrap();
+                for ref_hash in &content.proposer_refs {
+                    unreferred_proposer.remove(&ref_hash);
+                }
+                unreferred_proposer.remove(&parent_hash);
+                unreferred_proposer.insert(block_hash);
+                drop(unreferred_proposer);
+                let mut unreferred_transaction = self.unreferred_transaction.lock().unwrap();
+                for ref_hash in &content.transaction_refs {
+                    unreferred_transaction.remove(&ref_hash);
+                }
+                drop(unreferred_transaction);
                 // add ref'ed blocks
+                // note that the parent is the first proposer block that we refer
+                let mut refed_proposer: Vec<H256> = vec![parent_hash];
+                refed_proposer.extend(&content.proposer_refs);
                 wb.put_cf(proposer_ref_neighbor_cf, serialize(&block_hash).unwrap(),
-                          serialize(&content.proposer_refs).unwrap())?;
+                          serialize(&refed_proposer).unwrap())?;
                 wb.put_cf(transaction_ref_neighbor_cf, serialize(&block_hash).unwrap(),
                           serialize(&content.transaction_refs).unwrap())?;
                 // get current block level
@@ -247,6 +270,10 @@ impl BlockChain {
                 drop(voter_best);
             }
             Content::Transaction(_) => {
+                // mark itself as unreferred
+                let mut unreferred_transaction = self.unreferred_transaction.lock().unwrap();
+                unreferred_transaction.insert(block_hash);
+                drop(unreferred_transaction);
             }
         }
         self.db.write(wb)?;
@@ -296,6 +323,8 @@ mod tests {
         let level_0_blocks: Vec<H256> = deserialize(&db.db.get_cf(proposer_tree_level_cf, serialize(&(0 as u64)).unwrap()).unwrap().unwrap()).unwrap();
         assert_eq!(level_0_blocks, vec![*PROPOSER_GENESIS_HASH]);
         assert_eq!(*db.proposer_best.lock().unwrap(), (*PROPOSER_GENESIS_HASH, 0));
+        assert_eq!(db.unreferred_proposer.lock().unwrap().len(), 1);
+        assert_eq!(db.unreferred_proposer.lock().unwrap().contains(&(PROPOSER_GENESIS_HASH)), true);
 
         // validate voter genesis
         for chain_num in 0..NUM_VOTER_CHAINS {
@@ -348,9 +377,12 @@ mod tests {
 
         let parent: H256 = deserialize(&db.db.get_cf(parent_neighbor_cf, serialize(&new_transaction_block.hash()).unwrap()).unwrap().unwrap()).unwrap();
         assert_eq!(parent, *PROPOSER_GENESIS_HASH);
+        assert_eq!(db.unreferred_transaction.lock().unwrap().len(), 1);
+        assert_eq!(db.unreferred_transaction.lock().unwrap().contains(&new_transaction_block.hash()), true);
 
         // Create two proposer blocks, both attached to the genesis proposer block. The first one
-        // refers to nothing, and the second one refers to the first one and the transaction block
+        // refers to nothing (except the parent), and the second one refers to the first one and
+        // the transaction block
         let new_proposer_content = Content::Proposer(proposer::Content::new(vec![], vec![]));
         let new_proposer_block_1 = Block::new(
             *PROPOSER_GENESIS_HASH,
@@ -384,10 +416,13 @@ mod tests {
         let level_1_blocks: Vec<H256> = deserialize(&db.db.get_cf(proposer_tree_level_cf, serialize(&(1 as u64)).unwrap()).unwrap().unwrap()).unwrap();
         assert_eq!(level_1_blocks, vec![new_proposer_block_1.hash(), new_proposer_block_2.hash()]);
         let proposer_ref: Vec<H256> = deserialize(&db.db.get_cf(proposer_ref_neighbor_cf, serialize(&new_proposer_block_2.hash()).unwrap()).unwrap().unwrap()).unwrap();
-        assert_eq!(proposer_ref, vec![new_proposer_block_1.hash()]);
+        assert_eq!(proposer_ref, vec![*PROPOSER_GENESIS_HASH, new_proposer_block_1.hash()]);
         let transaction_ref: Vec<H256> = deserialize(&db.db.get_cf(transaction_ref_neighbor_cf, serialize(&new_proposer_block_2.hash()).unwrap()).unwrap().unwrap()).unwrap();
         assert_eq!(transaction_ref, vec![new_transaction_block.hash()]);
         assert_eq!(*db.proposer_best.lock().unwrap(), (new_proposer_block_1.hash(), 1));
+        assert_eq!(db.unreferred_proposer.lock().unwrap().len(), 1);
+        assert_eq!(db.unreferred_proposer.lock().unwrap().contains(&new_proposer_block_2.hash()), true);
+        assert_eq!(db.unreferred_transaction.lock().unwrap().len(), 0);
 
         // Create a voter block attached to proposer block 2 and the first voter chain, and vote for proposer block 1.
         let new_voter_content = Content::Voter(voter::Content::new(1, VOTER_GENESIS_HASHES[0], vec![new_proposer_block_1.hash()]));
