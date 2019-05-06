@@ -293,6 +293,23 @@ impl BlockChain {
         drop(voter_best);
         return hash;
     }
+
+    pub fn unreferred_proposer(&self) -> Vec<H256> {
+        // TODO: does ordering matter?
+        // TODO: should remove the parent block when mining
+        let unreferred_proposer = self.unreferred_proposer.lock().unwrap();
+        let list: Vec<H256> = unreferred_proposer.iter().cloned().collect();
+        drop(unreferred_proposer);
+        return list;
+    }
+
+    pub fn unreferred_transaction(&self) -> Vec<H256> {
+        // TODO: does ordering matter?
+        let unreferred_transaction = self.unreferred_transaction.lock().unwrap();
+        let list: Vec<H256> = unreferred_transaction.iter().cloned().collect();
+        drop(unreferred_transaction);
+        return list;
+    }
 }
 
 fn h256_vec_append_merge(_: &[u8], existing_val: Option<&[u8]>, operands: &mut rocksdb::merge_operator::MergeOperands) -> Option<Vec<u8>> {
@@ -500,6 +517,56 @@ mod tests {
         db.insert_block(&new_voter_block).unwrap();
         assert_eq!(db.best_proposer(), new_proposer_block.hash());
         assert_eq!(db.best_voter(0), new_voter_block.hash());
+    }
+
+    #[test]
+    fn unreferred_transaction_and_proposer() {
+        let db = BlockChain::new("/tmp/prism_test_blockchain_unreferred_transaction_proposer.rocksdb").unwrap();
+        
+        let new_transaction_content = Content::Transaction(transaction::Content::new(vec![]));
+        let new_transaction_block = Block::new(
+            *PROPOSER_GENESIS_HASH,
+            0,
+            0,
+            H256::default(),
+            vec![],
+            new_transaction_content,
+            [0; 32],
+            H256::default()
+        );
+        db.insert_block(&new_transaction_block).unwrap();
+        assert_eq!(db.unreferred_transaction(), vec![new_transaction_block.hash()]);
+        assert_eq!(db.unreferred_proposer(), vec![*PROPOSER_GENESIS_HASH]);
+
+        let new_proposer_content = Content::Proposer(proposer::Content::new(vec![], vec![]));
+        let new_proposer_block_1 = Block::new(
+            *PROPOSER_GENESIS_HASH,
+            0,
+            0,
+            H256::default(),
+            vec![],
+            new_proposer_content,
+            [0; 32],
+            H256::default()
+        );
+        db.insert_block(&new_proposer_block_1).unwrap();
+        assert_eq!(db.unreferred_transaction(), vec![new_transaction_block.hash()]);
+        assert_eq!(db.unreferred_proposer(), vec![new_proposer_block_1.hash()]);
+
+        let new_proposer_content = Content::Proposer(proposer::Content::new(vec![new_transaction_block.hash()], vec![new_proposer_block_1.hash()]));
+        let new_proposer_block_2 = Block::new(
+            *PROPOSER_GENESIS_HASH,
+            0,
+            0,
+            H256::default(),
+            vec![],
+            new_proposer_content,
+            [0; 32],
+            H256::default()
+        );
+        db.insert_block(&new_proposer_block_2).unwrap();
+        assert_eq!(db.unreferred_transaction(), vec![]);
+        assert_eq!(db.unreferred_proposer(), vec![new_proposer_block_2.hash()]);
     }
 
     #[test]
