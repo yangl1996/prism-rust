@@ -14,6 +14,7 @@ const PROPOSER_NODE_LEVEL_CF: &str = "PROPOSER_NODE_LEVEL";
 const PROPOSER_NODE_STATUS_CF: &str = "PROPOSER_NODE_STATUS";
 const VOTER_NODE_STATUS_CF: &str = "VOTER_NODE_STATUS";
 const VOTER_NODE_LEVEL_CF: &str = "VOTER_NODE_LEVEL";
+const VOTER_NODE_CHAIN_CF: &str = "VOTER_NODE_CHAIN";
 const PROPOSER_TREE_LEVEL_CF: &str = "PROPOSER_TREE_LEVEL";
 
 // Column family names for graph neighbors
@@ -25,9 +26,8 @@ const PROPOSER_REF_NEIGHBOR_CF: &str = "GRAPH_PROPOSER_REF_NEIGHBOR";
 
 pub type Result<T> = std::result::Result<T, rocksdb::Error>;
 
-// TODO: to maintain consistency within the blockchain db, we don't create a hierarchy of strcuts.
-// Instead, the BlockChain struct has every cf handle and db handle, and batch writes into big ops,
-// such as "add a new block"
+// cf_handle is a lightweight operation, it takes 44000 micro seconds to get 100000 cf handles
+
 pub struct BlockChain {
     db: DB,
 }
@@ -42,7 +42,11 @@ impl BlockChain {
         let proposer_node_status_cf = ColumnFamilyDescriptor::new(PROPOSER_NODE_STATUS_CF, Options::default());
         let voter_node_level_cf = ColumnFamilyDescriptor::new(VOTER_NODE_LEVEL_CF, Options::default());
         let voter_node_status_cf = ColumnFamilyDescriptor::new(VOTER_NODE_STATUS_CF, Options::default());
-        let proposer_tree_level_cf = ColumnFamilyDescriptor::new(PROPOSER_TREE_LEVEL_CF, Options::default());
+        let voter_node_chain_cf = ColumnFamilyDescriptor::new(VOTER_NODE_CHAIN_CF, Options::default());
+
+        let mut proposer_tree_level_option = Options::default();
+        proposer_tree_level_option.set_merge_operator("append H256 vec", h256_vec_append_merge, None);
+        let proposer_tree_level_cf = ColumnFamilyDescriptor::new(PROPOSER_TREE_LEVEL_CF, proposer_tree_level_option);
 
         let mut parent_neighbor_option = Options::default();
         parent_neighbor_option.set_merge_operator("append H256 vec", h256_vec_append_merge, None);
@@ -64,12 +68,12 @@ impl BlockChain {
         proposer_ref_neighbor_option.set_merge_operator("append H256 vec", h256_vec_append_merge, None);
         let proposer_ref_neighbor_cf = ColumnFamilyDescriptor::new(PROPOSER_REF_NEIGHBOR_CF, proposer_ref_neighbor_option);
 
-
         let cfs = vec![
             proposer_node_level_cf,
             proposer_node_status_cf,
             voter_node_level_cf,
             voter_node_status_cf,
+            voter_node_chain_cf,
             proposer_tree_level_cf,
             parent_neighbor_cf,
             vote_neighbor_cf,
@@ -91,9 +95,118 @@ impl BlockChain {
     
     /// Destroy the existing database at the given path, create a new one, and initialize the content.
     pub fn new<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
-        DB::destroy(&Options::default(), &path)?; // TODO: handle error
+        DB::destroy(&Options::default(), &path)?;
         let db = Self::open(&path)?;
+        // get cf handles
+        let proposer_node_level_cf = db.db.cf_handle(PROPOSER_NODE_LEVEL_CF).unwrap();
+        let proposer_node_status_cf = db.db.cf_handle(PROPOSER_NODE_STATUS_CF).unwrap();
+        let voter_node_level_cf = db.db.cf_handle(VOTER_NODE_LEVEL_CF).unwrap();
+        let voter_node_status_cf = db.db.cf_handle(VOTER_NODE_STATUS_CF).unwrap();
+        let voter_node_chain_cf = db.db.cf_handle(VOTER_NODE_CHAIN_CF).unwrap();
+        let proposer_tree_level_cf = db.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
+        let parent_neighbor_cf = db.db.cf_handle(PARENT_NEIGHBOR_CF).unwrap();
+        let vote_neighbor_cf = db.db.cf_handle(VOTE_NEIGHBOR_CF).unwrap();
+        let voter_parent_neighbor_cf = db.db.cf_handle(VOTER_PARENT_NEIGHBOR_CF).unwrap();
+        let transaction_ref_neighbor_cf = db.db.cf_handle(TRANSACTION_REF_NEIGHBOR_CF).unwrap();
+        let proposer_ref_neighbor_cf = db.db.cf_handle(PROPOSER_REF_NEIGHBOR_CF).unwrap();
+
+        // insert genesis blocks
+        let mut wb = WriteBatch::default();
+        // proposer genesis block
+        wb.put_cf(proposer_node_level_cf, serialize(&(*PROPOSER_GENESIS_HASH)).unwrap(), 
+                  serialize(&(0 as u64)).unwrap())?;
+        wb.merge_cf(proposer_tree_level_cf, serialize(&(0 as u64)).unwrap(),
+                    serialize(&(*PROPOSER_GENESIS_HASH)).unwrap())?;
+        // voter genesis blocks
+        for chain_num in 0..NUM_VOTER_CHAINS {
+            wb.put_cf(parent_neighbor_cf, serialize(&VOTER_GENESIS_HASHES[chain_num as usize]).unwrap(), 
+                      serialize(&(*PROPOSER_GENESIS_HASH)).unwrap())?;
+            wb.merge_cf(vote_neighbor_cf, serialize(&VOTER_GENESIS_HASHES[chain_num as usize]).unwrap(), 
+                      serialize(&(*PROPOSER_GENESIS_HASH)).unwrap())?;
+            wb.merge_cf(vote_neighbor_cf, serialize(&(*PROPOSER_GENESIS_HASH)).unwrap(), 
+                      serialize(&VOTER_GENESIS_HASHES[chain_num as usize]).unwrap())?;
+            wb.put_cf(voter_node_level_cf, serialize(&VOTER_GENESIS_HASHES[chain_num as usize]).unwrap(), 
+                      serialize(&(0 as u64)).unwrap())?;
+            wb.put_cf(voter_node_chain_cf, serialize(&VOTER_GENESIS_HASHES[chain_num as usize]).unwrap(), 
+                      serialize(&(chain_num as u16)).unwrap())?;
+        }
+        db.db.write(wb)?;
+
         return Ok(db);
+    }
+
+    pub fn insert_block(&self, block: &Block) -> Result<()> {
+        // get cf handles
+        let proposer_node_level_cf = self.db.cf_handle(PROPOSER_NODE_LEVEL_CF).unwrap();
+        let proposer_node_status_cf = self.db.cf_handle(PROPOSER_NODE_STATUS_CF).unwrap();
+        let voter_node_level_cf = self.db.cf_handle(VOTER_NODE_LEVEL_CF).unwrap();
+        let voter_node_status_cf = self.db.cf_handle(VOTER_NODE_STATUS_CF).unwrap();
+        let voter_node_chain_cf = self.db.cf_handle(VOTER_NODE_CHAIN_CF).unwrap();
+        let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
+        let parent_neighbor_cf = self.db.cf_handle(PARENT_NEIGHBOR_CF).unwrap();
+        let vote_neighbor_cf = self.db.cf_handle(VOTE_NEIGHBOR_CF).unwrap();
+        let voter_parent_neighbor_cf = self.db.cf_handle(VOTER_PARENT_NEIGHBOR_CF).unwrap();
+        let transaction_ref_neighbor_cf = self.db.cf_handle(TRANSACTION_REF_NEIGHBOR_CF).unwrap();
+        let proposer_ref_neighbor_cf = self.db.cf_handle(PROPOSER_REF_NEIGHBOR_CF).unwrap();
+
+        let mut wb = WriteBatch::default();
+
+        // insert parent link
+        let block_hash = block.hash();
+        let parent_hash = block.header.parent;
+        wb.put_cf(parent_neighbor_cf, serialize(&block_hash).unwrap(), 
+                  serialize(&parent_hash).unwrap())?;
+
+        match &block.content {
+            Content::Proposer(content) => {
+                // add ref'ed blocks
+                wb.put_cf(proposer_ref_neighbor_cf, serialize(&block_hash).unwrap(),
+                          serialize(&content.proposer_refs).unwrap())?;
+                wb.put_cf(transaction_ref_neighbor_cf, serialize(&block_hash).unwrap(),
+                          serialize(&content.transaction_refs).unwrap())?;
+                // get current block level
+                let parent_level: u64 = deserialize(&self.db.get_cf(proposer_node_level_cf,
+                                                                   serialize(&parent_hash).unwrap())?
+                                                    .unwrap()).unwrap();
+                let self_level = parent_level + 1;
+                // set current block level
+                wb.put_cf(proposer_node_level_cf, serialize(&block_hash).unwrap(),
+                          serialize(&self_level).unwrap())?;
+                wb.merge_cf(proposer_tree_level_cf, serialize(&self_level).unwrap(),
+                            serialize(&block_hash).unwrap())?;
+            }
+            Content::Voter(content) => {
+                // add voter parent
+                let voter_parent_hash = content.voter_parent;
+                wb.put_cf(voter_parent_neighbor_cf, serialize(&block_hash).unwrap(),
+                          serialize(&content.voter_parent).unwrap())?;
+                // get current block level and chain number
+                let voter_parent_level: u64 = deserialize(&self.db.get_cf(voter_node_level_cf,
+                                                          serialize(&voter_parent_hash).unwrap())?
+                                              .unwrap()).unwrap();
+                let voter_parent_chain: u16 = deserialize(&self.db.get_cf(voter_node_chain_cf,
+                                                          serialize(&voter_parent_hash).unwrap())?
+                                              .unwrap()).unwrap();
+                let self_level = voter_parent_level + 1;
+                let self_chain = voter_parent_chain;
+                // set current block level and chain number
+                wb.put_cf(voter_node_level_cf, serialize(&block_hash).unwrap(), 
+                          serialize(&self_level).unwrap())?;
+                wb.put_cf(voter_node_chain_cf, serialize(&block_hash).unwrap(), 
+                          serialize(&self_chain).unwrap())?;
+                // add voted blocks
+                wb.put_cf(vote_neighbor_cf, serialize(&block_hash).unwrap(), 
+                          serialize(&content.votes).unwrap())?;
+                for vote_hash in &content.votes {
+                    wb.merge_cf(vote_neighbor_cf, serialize(&vote_hash).unwrap(), 
+                                serialize(&block_hash).unwrap())?;
+                }
+            }
+            Content::Transaction(_) => {
+            }
+        }
+        self.db.write(wb)?;
+        return Ok(());
     }
 }
 
@@ -112,13 +225,144 @@ fn h256_vec_append_merge(_: &[u8], existing_val: Option<&[u8]>, operands: &mut r
 
 #[cfg(test)]
 mod tests {
-    use crate::block::Block;
+    use crate::block::{Block, Content, transaction, proposer, voter};
     use crate::crypto::hash::H256;
     use super::*;
     
     #[test]
     fn initialize_new() {
         let db = BlockChain::new("/tmp/prism_test_blockchain_new.rocksdb").unwrap();
+        // get cf handles
+        let proposer_node_level_cf = db.db.cf_handle(PROPOSER_NODE_LEVEL_CF).unwrap();
+        let proposer_node_status_cf = db.db.cf_handle(PROPOSER_NODE_STATUS_CF).unwrap();
+        let voter_node_level_cf = db.db.cf_handle(VOTER_NODE_LEVEL_CF).unwrap();
+        let voter_node_status_cf = db.db.cf_handle(VOTER_NODE_STATUS_CF).unwrap();
+        let voter_node_chain_cf = db.db.cf_handle(VOTER_NODE_CHAIN_CF).unwrap();
+        let proposer_tree_level_cf = db.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
+        let parent_neighbor_cf = db.db.cf_handle(PARENT_NEIGHBOR_CF).unwrap();
+        let vote_neighbor_cf = db.db.cf_handle(VOTE_NEIGHBOR_CF).unwrap();
+        let voter_parent_neighbor_cf = db.db.cf_handle(VOTER_PARENT_NEIGHBOR_CF).unwrap();
+        let transaction_ref_neighbor_cf = db.db.cf_handle(TRANSACTION_REF_NEIGHBOR_CF).unwrap();
+        let proposer_ref_neighbor_cf = db.db.cf_handle(PROPOSER_REF_NEIGHBOR_CF).unwrap();
+
+        // validate proposer genesis
+        let genesis_level: u64 = deserialize(&db.db.get_cf(proposer_node_level_cf, serialize(&(*PROPOSER_GENESIS_HASH)).unwrap()).unwrap().unwrap()).unwrap();
+        assert_eq!(genesis_level, 0);
+        let level_0_blocks: Vec<H256> = deserialize(&db.db.get_cf(proposer_tree_level_cf, serialize(&(0 as u64)).unwrap()).unwrap().unwrap()).unwrap();
+        assert_eq!(level_0_blocks, vec![*PROPOSER_GENESIS_HASH]);
+
+        // validate voter genesis
+        for chain_num in 0..NUM_VOTER_CHAINS {
+            let genesis_level: u64 = deserialize(&db.db.get_cf(voter_node_level_cf, serialize(&VOTER_GENESIS_HASHES[chain_num as usize]).unwrap()).unwrap().unwrap()).unwrap();
+            assert_eq!(genesis_level, 0);
+            let genesis_chain: u16 = deserialize(&db.db.get_cf(voter_node_chain_cf, serialize(&VOTER_GENESIS_HASHES[chain_num as usize]).unwrap()).unwrap().unwrap()).unwrap();
+            assert_eq!(genesis_chain, chain_num as u16);
+            let parent: H256 = deserialize(&db.db.get_cf(parent_neighbor_cf, serialize(&VOTER_GENESIS_HASHES[chain_num as usize]).unwrap()).unwrap().unwrap()).unwrap();
+            assert_eq!(parent, *PROPOSER_GENESIS_HASH);
+            let voted_proposer: Vec<H256> = deserialize(&db.db.get_cf(vote_neighbor_cf, serialize(&VOTER_GENESIS_HASHES[chain_num as usize]).unwrap()).unwrap().unwrap()).unwrap();
+            assert_eq!(voted_proposer, vec![*PROPOSER_GENESIS_HASH]);
+        }
+        let voters: Vec<H256> = deserialize(&db.db.get_cf(vote_neighbor_cf, serialize(&(*PROPOSER_GENESIS_HASH)).unwrap()).unwrap().unwrap()).unwrap();
+        assert_eq!(voters, *VOTER_GENESIS_HASHES);
+    }
+
+    #[test]
+    fn insert_block() {
+        let db = BlockChain::new("/tmp/prism_test_blockchain_insert_block.rocksdb").unwrap();
+        // get cf handles
+        let proposer_node_level_cf = db.db.cf_handle(PROPOSER_NODE_LEVEL_CF).unwrap();
+        let proposer_node_status_cf = db.db.cf_handle(PROPOSER_NODE_STATUS_CF).unwrap();
+        let voter_node_level_cf = db.db.cf_handle(VOTER_NODE_LEVEL_CF).unwrap();
+        let voter_node_status_cf = db.db.cf_handle(VOTER_NODE_STATUS_CF).unwrap();
+        let voter_node_chain_cf = db.db.cf_handle(VOTER_NODE_CHAIN_CF).unwrap();
+        let proposer_tree_level_cf = db.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
+        let parent_neighbor_cf = db.db.cf_handle(PARENT_NEIGHBOR_CF).unwrap();
+        let vote_neighbor_cf = db.db.cf_handle(VOTE_NEIGHBOR_CF).unwrap();
+        let voter_parent_neighbor_cf = db.db.cf_handle(VOTER_PARENT_NEIGHBOR_CF).unwrap();
+        let transaction_ref_neighbor_cf = db.db.cf_handle(TRANSACTION_REF_NEIGHBOR_CF).unwrap();
+        let proposer_ref_neighbor_cf = db.db.cf_handle(PROPOSER_REF_NEIGHBOR_CF).unwrap();
+
+        // Create a transaction block on the proposer genesis.
+        let new_transaction_content = Content::Transaction(transaction::Content::new(vec![]));
+        let new_transaction_block = Block::new(
+            *PROPOSER_GENESIS_HASH,
+            0,
+            0,
+            H256::default(),
+            vec![],
+            new_transaction_content,
+            [0; 32],
+            H256::default()
+        );
+        db.insert_block(&new_transaction_block).unwrap();
+
+        let parent: H256 = deserialize(&db.db.get_cf(parent_neighbor_cf, serialize(&new_transaction_block.hash()).unwrap()).unwrap().unwrap()).unwrap();
+        assert_eq!(parent, *PROPOSER_GENESIS_HASH);
+
+        // Create two proposer blocks, both attached to the genesis proposer block. The first one
+        // refers to nothing, and the second one refers to the first one and the transaction block
+        let new_proposer_content = Content::Proposer(proposer::Content::new(vec![], vec![]));
+        let new_proposer_block_1 = Block::new(
+            *PROPOSER_GENESIS_HASH,
+            0,
+            0,
+            H256::default(),
+            vec![],
+            new_proposer_content,
+            [0; 32],
+            H256::default()
+        );
+        db.insert_block(&new_proposer_block_1).unwrap();
+
+        let new_proposer_content = Content::Proposer(proposer::Content::new(vec![new_transaction_block.hash()], vec![new_proposer_block_1.hash()]));
+        let new_proposer_block_2 = Block::new(
+            *PROPOSER_GENESIS_HASH,
+            0,
+            0,
+            H256::default(),
+            vec![],
+            new_proposer_content,
+            [0; 32],
+            H256::default()
+        );
+        db.insert_block(&new_proposer_block_2).unwrap();
+
+        let parent: H256 = deserialize(&db.db.get_cf(parent_neighbor_cf, serialize(&new_proposer_block_2.hash()).unwrap()).unwrap().unwrap()).unwrap();
+        assert_eq!(parent, *PROPOSER_GENESIS_HASH);
+        let level: u64 = deserialize(&db.db.get_cf(proposer_node_level_cf, serialize(&new_proposer_block_2.hash()).unwrap()).unwrap().unwrap()).unwrap();
+        assert_eq!(level, 1);
+        let level_1_blocks: Vec<H256> = deserialize(&db.db.get_cf(proposer_tree_level_cf, serialize(&(1 as u64)).unwrap()).unwrap().unwrap()).unwrap();
+        assert_eq!(level_1_blocks, vec![new_proposer_block_1.hash(), new_proposer_block_2.hash()]);
+        let proposer_ref: Vec<H256> = deserialize(&db.db.get_cf(proposer_ref_neighbor_cf, serialize(&new_proposer_block_2.hash()).unwrap()).unwrap().unwrap()).unwrap();
+        assert_eq!(proposer_ref, vec![new_proposer_block_1.hash()]);
+        let transaction_ref: Vec<H256> = deserialize(&db.db.get_cf(transaction_ref_neighbor_cf, serialize(&new_proposer_block_2.hash()).unwrap()).unwrap().unwrap()).unwrap();
+        assert_eq!(transaction_ref, vec![new_transaction_block.hash()]);
+
+        // Create a voter block attached to proposer block 2 and the first voter chain, and vote for proposer block 1.
+        let new_voter_content = Content::Voter(voter::Content::new(1, VOTER_GENESIS_HASHES[0], vec![new_proposer_block_1.hash()]));
+        let new_voter_block = Block::new(
+            new_proposer_block_2.hash(),
+            0,
+            0,
+            H256::default(),
+            vec![],
+            new_voter_content,
+            [0; 32],
+            H256::default()
+        );
+        db.insert_block(&new_voter_block).unwrap();
+
+        let parent: H256 = deserialize(&db.db.get_cf(parent_neighbor_cf, serialize(&new_voter_block.hash()).unwrap()).unwrap().unwrap()).unwrap();
+        assert_eq!(parent, new_proposer_block_2.hash());
+        let voter_parent: H256 = deserialize(&db.db.get_cf(voter_parent_neighbor_cf, serialize(&new_voter_block.hash()).unwrap()).unwrap().unwrap()).unwrap();
+        assert_eq!(voter_parent, VOTER_GENESIS_HASHES[0]);
+        let level: u64 = deserialize(&db.db.get_cf(voter_node_level_cf, serialize(&new_voter_block.hash()).unwrap()).unwrap().unwrap()).unwrap();
+        assert_eq!(level, 1);
+        let voted: Vec<H256> = deserialize(&db.db.get_cf(vote_neighbor_cf, serialize(&new_voter_block.hash()).unwrap()).unwrap().unwrap()).unwrap();
+        assert_eq!(voted, vec![new_proposer_block_1.hash()]);
+        let voter: Vec<H256> = deserialize(&db.db.get_cf(vote_neighbor_cf, serialize(&new_proposer_block_1.hash()).unwrap()).unwrap().unwrap()).unwrap();
+        assert_eq!(voter, vec![new_voter_block.hash()]);
+
     }
 
     #[test]
