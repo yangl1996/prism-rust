@@ -310,6 +310,31 @@ impl BlockChain {
         drop(unreferred_transaction);
         return list;
     }
+
+    /// Get the list of unvoted proposer blocks that a voter chain should vote for, given the tip
+    /// of the particular voter chain.
+    pub fn unvoted_proposer(&self, tip: &H256) -> Result<Vec<H256>> {
+        // get the deepest voted level
+        let voter_node_voted_level_cf = self.db.cf_handle(VOTER_NODE_VOTED_LEVEL_CF).unwrap();
+        let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
+        let voted_level: u64 = deserialize(&self.db.get_cf(voter_node_voted_level_cf,
+                                                           serialize(&tip).unwrap())?
+                                           .unwrap()).unwrap();
+        // get the deepest proposer level
+        let proposer_best = self.proposer_best.lock().unwrap();
+        let proposer_best_level = proposer_best.1;
+        drop(proposer_best);
+
+        // get the first block we heard on each proposer level
+        let mut list: Vec<H256> = vec![];
+        for level in voted_level+1..=proposer_best_level {
+            let blocks: Vec<H256> = deserialize(&self.db.get_cf(proposer_tree_level_cf, 
+                                                     serialize(&(level as u64)).unwrap())?
+                                     .unwrap()).unwrap();
+            list.push(blocks[0]);
+        }
+        return Ok(list);
+    }
 }
 
 fn h256_vec_append_merge(_: &[u8], existing_val: Option<&[u8]>, operands: &mut rocksdb::merge_operator::MergeOperands) -> Option<Vec<u8>> {
@@ -456,7 +481,7 @@ mod tests {
         assert_eq!(db.unreferred_transaction.lock().unwrap().len(), 0);
 
         // Create a voter block attached to proposer block 2 and the first voter chain, and vote for proposer block 1.
-        let new_voter_content = Content::Voter(voter::Content::new(1, VOTER_GENESIS_HASHES[0], vec![new_proposer_block_1.hash()]));
+        let new_voter_content = Content::Voter(voter::Content::new(0, VOTER_GENESIS_HASHES[0], vec![new_proposer_block_1.hash()]));
         let new_voter_block = Block::new(
             new_proposer_block_2.hash(),
             0,
@@ -503,7 +528,7 @@ mod tests {
             H256::default()
         );
         db.insert_block(&new_proposer_block).unwrap();
-        let new_voter_content = Content::Voter(voter::Content::new(1, VOTER_GENESIS_HASHES[0], vec![new_proposer_block.hash()]));
+        let new_voter_content = Content::Voter(voter::Content::new(0, VOTER_GENESIS_HASHES[0], vec![new_proposer_block.hash()]));
         let new_voter_block = Block::new(
             new_proposer_block.hash(),
             0,
@@ -567,6 +592,55 @@ mod tests {
         db.insert_block(&new_proposer_block_2).unwrap();
         assert_eq!(db.unreferred_transaction(), vec![]);
         assert_eq!(db.unreferred_proposer(), vec![new_proposer_block_2.hash()]);
+    }
+
+    #[test]
+    fn unvoted_proposer() {
+        let db = BlockChain::new("/tmp/prism_test_blockchain_unvoted_proposer.rocksdb").unwrap();
+        assert_eq!(db.unvoted_proposer(&VOTER_GENESIS_HASHES[0]).unwrap(), vec![]);
+
+        let new_proposer_content = Content::Proposer(proposer::Content::new(vec![], vec![]));
+        let new_proposer_block_1 = Block::new(
+            *PROPOSER_GENESIS_HASH,
+            0,
+            0,
+            H256::default(),
+            vec![],
+            new_proposer_content,
+            [0; 32],
+            H256::default()
+        );
+        db.insert_block(&new_proposer_block_1).unwrap();
+
+        let new_proposer_content = Content::Proposer(proposer::Content::new(vec![], vec![]));
+        let new_proposer_block_2 = Block::new(
+            *PROPOSER_GENESIS_HASH,
+            0,
+            0,
+            H256::default(),
+            vec![],
+            new_proposer_content,
+            [0; 32],
+            H256::default()
+        );
+        db.insert_block(&new_proposer_block_2).unwrap();
+        assert_eq!(db.unvoted_proposer(&VOTER_GENESIS_HASHES[0]).unwrap(), vec![new_proposer_block_1.hash()]);
+
+        let new_voter_content = Content::Voter(voter::Content::new(0, VOTER_GENESIS_HASHES[0], vec![new_proposer_block_1.hash()]));
+        let new_voter_block = Block::new(
+            new_proposer_block_2.hash(),
+            0,
+            0,
+            H256::default(),
+            vec![],
+            new_voter_content,
+            [0; 32],
+            H256::default()
+        );
+        db.insert_block(&new_voter_block).unwrap();
+
+        assert_eq!(db.unvoted_proposer(&VOTER_GENESIS_HASHES[0]).unwrap(), vec![new_proposer_block_1.hash()]);
+        assert_eq!(db.unvoted_proposer(&new_voter_block.hash()).unwrap(), vec![]);
     }
 
     #[test]
