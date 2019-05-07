@@ -335,6 +335,90 @@ impl BlockChain {
         }
         return Ok(list);
     }
+
+    /// Get the added and removed votes and their levels between two voter chain tips.
+    pub fn vote_diff(&self, from: &H256, to: &H256) -> Result<(Vec<(H256, u64)>, Vec<(H256, u64)>)> {
+        let voter_node_level_cf = self.db.cf_handle(VOTER_NODE_LEVEL_CF).unwrap();
+        let vote_neighbor_cf = self.db.cf_handle(VOTE_NEIGHBOR_CF).unwrap();
+        let voter_parent_neighbor_cf = self.db.cf_handle(VOTER_PARENT_NEIGHBOR_CF).unwrap();
+
+        let mut added: Vec<(H256, u64)> = vec![];
+        let mut removed: Vec<(H256, u64)> = vec![];
+        let mut from: H256 = *from;
+        let mut to: H256 = *to;
+        // TODO: if performance is an issue, don't read the levels from the db, and instead just
+        // calculate the level as we trace back through the parental link.
+        let mut from_level: u64 = deserialize(&self.db.get_cf(voter_node_level_cf,
+                                                              serialize(&from).unwrap())?
+                                              .unwrap()).unwrap();
+        let mut to_level: u64 = deserialize(&self.db.get_cf(voter_node_level_cf,
+                                                            serialize(&to).unwrap())?
+                                            .unwrap()).unwrap();
+        
+        // trace back through voter parent link to get to the same level
+        while to_level != from_level {
+            if to_level > from_level {
+                let votes: Vec<H256> = deserialize(&self.db.get_cf(vote_neighbor_cf,
+                                                                   serialize(&to).unwrap())?
+                                                   .unwrap()).unwrap();
+                for vote in votes {
+                    added.push((vote, to_level));
+                }
+                to = deserialize(&self.db.get_cf(voter_parent_neighbor_cf,
+                                                 serialize(&to).unwrap())?
+                                 .unwrap()).unwrap();
+                to_level = deserialize(&self.db.get_cf(voter_node_level_cf,
+                                                       serialize(&to).unwrap())?
+                                       .unwrap()).unwrap();
+            } else {
+                let votes: Vec<H256> = deserialize(&self.db.get_cf(vote_neighbor_cf,
+                                                                   serialize(&from).unwrap())?
+                                                   .unwrap()).unwrap();
+                for vote in votes {
+                    removed.push((vote, from_level));
+                }
+                from = deserialize(&self.db.get_cf(voter_parent_neighbor_cf,
+                                                 serialize(&from).unwrap())?
+                                 .unwrap()).unwrap();
+                from_level = deserialize(&self.db.get_cf(voter_node_level_cf,
+                                                       serialize(&from).unwrap())?
+                                       .unwrap()).unwrap();
+            }
+        }
+        
+        // trace back both from chain and to chain until they reach the same block
+        while to != from {
+            // trace back to chain
+            let votes: Vec<H256> = deserialize(&self.db.get_cf(vote_neighbor_cf,
+                                                               serialize(&to).unwrap())?
+                                               .unwrap()).unwrap();
+            for vote in votes {
+                added.push((vote, to_level));
+            }
+            to = deserialize(&self.db.get_cf(voter_parent_neighbor_cf,
+                                             serialize(&to).unwrap())?
+                             .unwrap()).unwrap();
+            to_level = deserialize(&self.db.get_cf(voter_node_level_cf,
+                                                   serialize(&to).unwrap())?
+                                   .unwrap()).unwrap();
+
+            // trace back from chain
+            let votes: Vec<H256> = deserialize(&self.db.get_cf(vote_neighbor_cf,
+                                                               serialize(&from).unwrap())?
+                                               .unwrap()).unwrap();
+            for vote in votes {
+                removed.push((vote, from_level));
+            }
+            from = deserialize(&self.db.get_cf(voter_parent_neighbor_cf,
+                                             serialize(&from).unwrap())?
+                             .unwrap()).unwrap();
+            from_level = deserialize(&self.db.get_cf(voter_node_level_cf,
+                                                   serialize(&from).unwrap())?
+                                   .unwrap()).unwrap();
+        }
+
+        return Ok((added, removed));
+    }
 }
 
 fn h256_vec_append_merge(_: &[u8], existing_val: Option<&[u8]>, operands: &mut rocksdb::merge_operator::MergeOperands) -> Option<Vec<u8>> {
@@ -447,7 +531,7 @@ mod tests {
             H256::default(),
             vec![],
             new_proposer_content,
-            [0; 32],
+            [1; 32],
             H256::default()
         );
         db.insert_block(&new_proposer_block_1).unwrap();
@@ -460,7 +544,7 @@ mod tests {
             H256::default(),
             vec![],
             new_proposer_content,
-            [0; 32],
+            [2; 32],
             H256::default()
         );
         db.insert_block(&new_proposer_block_2).unwrap();
@@ -489,7 +573,7 @@ mod tests {
             H256::default(),
             vec![],
             new_voter_content,
-            [0; 32],
+            [3; 32],
             H256::default()
         );
         db.insert_block(&new_voter_block).unwrap();
@@ -507,7 +591,122 @@ mod tests {
         let voter: Vec<H256> = deserialize(&db.db.get_cf(vote_neighbor_cf, serialize(&new_proposer_block_1.hash()).unwrap()).unwrap().unwrap()).unwrap();
         assert_eq!(voter, vec![new_voter_block.hash()]);
         assert_eq!(*db.voter_best[0].lock().unwrap(), (new_voter_block.hash(), 1));
+    }
 
+    #[test]
+    fn vote_diff() {
+        let db = BlockChain::new("/tmp/prism_test_blockchain_vote_diff.rocksdb").unwrap();
+
+        // Insert two proposer blocks so we have something to vote for
+        let proposer_1 = Content::Proposer(proposer::Content::new(vec![], vec![]));
+        let proposer_1 = Block::new(
+            *PROPOSER_GENESIS_HASH,
+            0,
+            0,
+            H256::default(),
+            vec![],
+            proposer_1,
+            [0; 32],
+            H256::default()
+        );
+        db.insert_block(&proposer_1).unwrap();
+        let proposer_2 = Content::Proposer(proposer::Content::new(vec![], vec![]));
+        let proposer_2 = Block::new(
+            proposer_1.hash(),
+            0,
+            0,
+            H256::default(),
+            vec![],
+            proposer_2,
+            [1; 32],
+            H256::default()
+        );
+        db.insert_block(&proposer_2).unwrap();
+        
+
+        // Create a forked voter chain like this, and calculate the diff of votes on the chain
+        //
+        // 0---1---3
+        //  \
+        //   --2---4---5
+        let voter_1 = Content::Voter(voter::Content::new(0, VOTER_GENESIS_HASHES[0], vec![proposer_1.hash()]));
+        let voter_1 = Block::new(
+            proposer_1.hash(), 
+            0,
+            0,
+            H256::default(),
+            vec![],
+            voter_1,
+            [2; 32],
+            H256::default()
+        );
+        db.insert_block(&voter_1).unwrap();
+        let voter_2 = Content::Voter(voter::Content::new(0, VOTER_GENESIS_HASHES[0], vec![]));
+        let voter_2 = Block::new(
+            *PROPOSER_GENESIS_HASH, 
+            0,
+            0,
+            H256::default(),
+            vec![],
+            voter_2,
+            [3; 32],
+            H256::default()
+        );
+        db.insert_block(&voter_2).unwrap();
+        let voter_3 = Content::Voter(voter::Content::new(0, voter_1.hash(),vec![proposer_2.hash()]));
+        let voter_3 = Block::new(
+            proposer_2.hash(), 
+            0,
+            0,
+            H256::default(),
+            vec![],
+            voter_3,
+            [4; 32],
+            H256::default()
+        );
+        db.insert_block(&voter_3).unwrap();
+        let voter_4 = Content::Voter(voter::Content::new(0, voter_2.hash(), vec![proposer_1.hash()]));
+        let voter_4 = Block::new(
+            proposer_1.hash(), 
+            0,
+            0,
+            H256::default(),
+            vec![],
+            voter_4,
+            [5; 32],
+            H256::default()
+        );
+        db.insert_block(&voter_4).unwrap();
+        let voter_5 = Content::Voter(voter::Content::new(0, voter_4.hash(), vec![proposer_2.hash()]));
+        let voter_5 = Block::new(
+            proposer_2.hash(), 
+            0,
+            0,
+            H256::default(),
+            vec![],
+            voter_5,
+            [6; 32],
+            H256::default()
+        );
+        db.insert_block(&voter_5).unwrap();
+
+        // test the diffs
+        // same genesis blocks
+        assert_eq!(db.vote_diff(&VOTER_GENESIS_HASHES[0], &VOTER_GENESIS_HASHES[0]).unwrap(), (vec![], vec![]));
+        // same blocks
+        assert_eq!(db.vote_diff(&voter_1.hash(), &voter_1.hash()).unwrap(), (vec![], vec![]));
+        // low to high on the same chain
+        assert_eq!(db.vote_diff(&VOTER_GENESIS_HASHES[0], &voter_3.hash()).unwrap(), 
+                   (vec![(proposer_2.hash(), 2), (proposer_1.hash(), 1)], vec![]));
+        // high to low on different chains
+        assert_eq!(db.vote_diff(&voter_5.hash(), &voter_3.hash()).unwrap(), 
+                   (vec![(proposer_2.hash(), 2), (proposer_1.hash(), 1)], vec![(proposer_2.hash(), 3), (proposer_1.hash(), 2)]));
+        // low to high on different chains
+        assert_eq!(db.vote_diff(&voter_1.hash(), &voter_5.hash()).unwrap(), 
+                   (vec![(proposer_2.hash(), 3), (proposer_1.hash(), 2)], vec![(proposer_1.hash(), 1)]));
+        // high to low on the same chain
+        assert_eq!(db.vote_diff(&voter_3.hash(), &voter_1.hash()).unwrap(), 
+                   (vec![], vec![(proposer_2.hash(), 2)]));
     }
 
     #[test]
@@ -536,7 +735,7 @@ mod tests {
             H256::default(),
             vec![],
             new_voter_content,
-            [0; 32],
+            [1; 32],
             H256::default()
         );
         db.insert_block(&new_voter_block).unwrap();
@@ -571,7 +770,7 @@ mod tests {
             H256::default(),
             vec![],
             new_proposer_content,
-            [0; 32],
+            [1; 32],
             H256::default()
         );
         db.insert_block(&new_proposer_block_1).unwrap();
@@ -586,7 +785,7 @@ mod tests {
             H256::default(),
             vec![],
             new_proposer_content,
-            [0; 32],
+            [2; 32],
             H256::default()
         );
         db.insert_block(&new_proposer_block_2).unwrap();
@@ -620,7 +819,7 @@ mod tests {
             H256::default(),
             vec![],
             new_proposer_content,
-            [0; 32],
+            [1; 32],
             H256::default()
         );
         db.insert_block(&new_proposer_block_2).unwrap();
@@ -634,7 +833,7 @@ mod tests {
             H256::default(),
             vec![],
             new_voter_content,
-            [0; 32],
+            [2; 32],
             H256::default()
         );
         db.insert_block(&new_voter_block).unwrap();
