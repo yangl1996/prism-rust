@@ -1,198 +1,141 @@
-pub mod updater;
-
 use crate::crypto::hash::{Hashable, H256};
-use crate::transaction::CoinId;
-use crate::transaction::{Input, Output};
-
+use crate::transaction::{Input, CoinId};
 use bincode::{deserialize, serialize};
+use rocksdb::{DB, Options, WriteBatch, ColumnFamilyDescriptor};
+use std::collections::HashMap;
 use std::sync::Mutex;
+use crate::config::*;
 
-pub type Result<T> = std::result::Result<T, rocksdb::Error>;
+const PROPOSER_LEADER_SEQUENCE_CF: &str = "PROPOSER_LEADER_SEQUENCE";   // level (u64) to hash
+const PROPOSER_VOTE_LEVEL_CF: &str = "PROPOSER_VOTE_LEVEL";   // hash to Vec<level(u64)>
 
-pub type CoinData = Output;
-
-// Bitcoin UTXO is much more complicated because they have extra seg-wit and locktime.
-pub struct UTXO {
-    pub coin_id: CoinId,
-    pub coin_data: CoinData,
+pub struct UtxoDatabase {
+    db: rocksdb::DB,
+    /// The level of each vote on the unconfirmed proposer blocks.
+    unconfirmed_proposer_vote_level: Mutex<HashMap<H256, Vec<u64>>>,
+    /// The hashes of proposer blocks at each unconfirmed level.
+    unconfirmed_proposer_level: Mutex<HashMap<u64, Vec<H256>>>,
+    /// The hash and depth of the best block of each voter chain.
+    voter_best: Vec<Mutex<(H256, u64)>>,
 }
 
-pub struct UTXODatabase {
-    handle: rocksdb::DB,
-    count: Mutex<u64>,
-}
+impl UtxoDatabase {
+    /// Open the database at the given path, and create a new one if one is missing.
+    fn open<P: AsRef<std::path::Path>>(path: P) -> Result<Self, rocksdb::Error> {
+        let proposer_leader_sequence_cf = ColumnFamilyDescriptor::new(PROPOSER_LEADER_SEQUENCE_CF, Options::default());
+        let mut proposer_vote_level_option = Options::default();
+        proposer_vote_level_option.set_merge_operator("append u64 vec", u64_vec_append_merge, None);
+        let proposer_vote_level_cf = ColumnFamilyDescriptor::new(PROPOSER_VOTE_LEVEL_CF, proposer_vote_level_option);
 
-impl UTXODatabase {
-    pub fn new(path: &std::path::Path) -> Result<Self> {
-        let db_handle = rocksdb::DB::open_default(path)?;
-        return Ok(UTXODatabase {
-            handle: db_handle,
-            count: Mutex::new(0),
+        let cfs = vec![
+            proposer_leader_sequence_cf,
+            proposer_vote_level_cf,
+        ];
+        let mut opts = Options::default();
+        opts.create_if_missing(true);
+        opts.create_missing_column_families(true);
+
+        let mut voter_best: Vec<Mutex<(H256, u64)>> = vec![];
+        for _ in 0..NUM_VOTER_CHAINS {
+            voter_best.push(Mutex::new((H256::default(), 0)));
+        }
+
+        let db = DB::open_cf_descriptors(&opts, path, cfs)?;
+        return Ok(UtxoDatabase {
+            db: db,
+            unconfirmed_proposer_vote_level: Mutex::new(HashMap::new()),
+            unconfirmed_proposer_level: Mutex::new(HashMap::new()),
+            voter_best: voter_best,
         });
     }
+    
+    /// Create a new database at the given path, and initialize the content.
+    pub fn new<P: AsRef<std::path::Path>>(path: P) -> Result<Self, rocksdb::Error> {
+        DB::destroy(&Options::default(), &path)?;
+        let db = Self::open(&path)?;
 
-    pub fn insert(&self, utxo: &UTXO) -> Result<()> {
-        let key = serialize(&utxo.coin_id).unwrap();
-        let value = serialize(&utxo.coin_data).unwrap();
-        let mut count = self.count.lock().unwrap();
-        *count += 1;
-        return self.handle.put(&key, &value);
-    }
+        // get cf handles
+        let proposer_leader_sequence_cf = db.db.cf_handle(PROPOSER_LEADER_SEQUENCE_CF).unwrap();
+        let proposer_vote_level_cf = db.db.cf_handle(PROPOSER_VOTE_LEVEL_CF).unwrap();
 
-    pub fn delete(&self, coin_id: &CoinId) -> Result<()> {
-        let key = serialize(coin_id).unwrap();
-        let mut count = self.count.lock().unwrap();
-        *count -= 1;
-        return self.handle.delete(key);
-    }
+        // mark the proposer genesis block as the confirmed leader of level 0
+        let mut wb = WriteBatch::default();
+        wb.put_cf(proposer_leader_sequence_cf, serialize(&(0 as u64)).unwrap(), serialize(&(*PROPOSER_GENESIS_HASH)).unwrap())?;
 
-    pub fn get(&self, coin_id: &CoinId) -> Result<Option<CoinData>> {
-        let key = serialize(coin_id).unwrap();
-        let serialized = self.handle.get(&key)?;
-        match serialized {
-            None => return Ok(None),
-            Some(s) => return Ok(Some(deserialize(&s).unwrap())),
+        // mark the voter genesis blocks as the best block of each chain, and record vote levels
+        // for the proposer genesis block
+        for chain_num in 0..NUM_VOTER_CHAINS {
+            let mut voter_best = db.voter_best[chain_num as usize].lock().unwrap();
+            voter_best.0 = VOTER_GENESIS_HASHES[chain_num as usize];
+            wb.merge_cf(proposer_vote_level_cf, serialize(&(*PROPOSER_GENESIS_HASH)).unwrap(), serialize(&(0 as u64)).unwrap())?;
         }
+        db.db.write(wb)?;
+        return Ok(db);
     }
 
-    //TODO: Check the key without getting the value (Use Bloom filters maybe?)
-    pub fn check(&self, coin_id: &CoinId) -> Result<bool> {
-        let key = serialize(coin_id).unwrap();
-        let serialized = self.handle.get(&key)?;
-        match serialized {
-            None => return Ok(false),
-            Some(_s) => return Ok(true),
-        }
+    /*
+    /// Apply the vote diff, specified as a collection of added votes and removed votes and their
+    /// depth.
+    pub fn apply_vote_diff(&self, added: Vec<(H256, u64)>, removed: Vec<(H256, u64)>) {
+        let mut proposer_vote_level = self.unconfirmed_proposer_vote_level.lock().unwrap();
+        let mut proposer_level = self.unconfirmed_proposer_level.lock().unwrap();
+        
+        // deal with deletion
+        
     }
-
-    pub fn num_utxo(&self) -> u64 {
-        let count = self.count.lock().unwrap();
-        return *count;
-    }
-
-    /// Update the state.
-    /// Can serve as add or rollback, based on arguments to_delete and to_insert.
-    pub fn update(&self, to_delete: &Vec<CoinId>, to_insert: &Vec<UTXO>) -> Result<()> {
-        for coin_id in to_delete {
-            self.delete(coin_id)?;
-        }
-        for utxo in to_insert {
-            self.insert(utxo)?;
-        }
-        Ok(())
-    }
+    */
 }
 
-//#[cfg(test)]
-//pub mod tests {
-//    use super::{CoinData, CoinId, UTXODatabase, UTXO};
-//    use crate::generator::state as state_generator;
-//    use crate::crypto::generator as crypto_generator;
-//    use crate::crypto::hash::{Hashable, H256};
-//    use crate::handler::{to_coinid_and_potential_utxo, to_rollback_coinid_and_potential_utxo};
-//    use crate::transaction::{generator as tx_generator, Input, Transaction};
-//
-//    fn init_with_tx_input(state_db: &mut UTXODatabase, tx: &Transaction) {
-//        let _hash: H256 = tx.hash(); // compute hash here, and below inside Input we don't have to compute again (we just copy)
-//        for input in tx.input.iter() {
-//            let coin_id: CoinId = input.into();
-//            let coin_data = CoinData {
-//                value: 1,
-//                recipient: crypto_generator::h256(),
-//            };
-//            let utxo = UTXO { coin_id, coin_data };
-//            if state_db.insert(&utxo).is_err() {
-//                panic!("State DB error.");
-//            }
-//        }
-//    }
-//
-//    fn try_receive_transaction(state_db: &mut UTXODatabase, tx: &Transaction) {
-//        let (to_delete, to_insert) = to_coinid_and_potential_utxo(tx);
-//        assert!(state_db.update(&to_delete, &to_insert).is_ok());
-//        // assume this tx spends all utxo in state
-//        assert_eq!(state_db.num_utxo() as usize, tx.output.len());
-//        let hash = tx.hash();
-//        for index in 0..tx.output.len() {
-//            assert_eq!(
-//                state_db.check(&CoinId {
-//                    hash,
-//                    index: index as u32
-//                }),
-//                Ok(true)
-//            );
-//            let coin_data = state_db
-//                .get(&CoinId {
-//                    hash,
-//                    index: index as u32,
-//                })
-//                .unwrap()
-//                .unwrap();
-//            assert_eq!(coin_data, tx.output[index])
-//        }
-//    }
-//    fn try_rollback_transaction(state_db: &mut UTXODatabase, tx: &Transaction) {
-//        let (to_delete, to_insert) = to_rollback_coinid_and_potential_utxo(tx);
-//        assert!(state_db.update(&to_delete, &to_insert).is_ok());
-//    }
-//    #[test]
-//    pub fn create_receive_rollback() {
-//        let mut state_db = state_generator::random();
-//        let tx = tx_generator::random();
-//        // we have to init with the inputs, otherwise we cannot receive a tx
-//        init_with_tx_input(&mut state_db, &tx);
-//        assert_eq!(state_db.num_utxo() as usize, tx.input.len());
-//        // receive tx
-//        try_receive_transaction(&mut state_db, &tx);
-//        // rollback tx, after rollback, the db should be identical just after init_with_tx_input
-//        try_rollback_transaction(&mut state_db, &tx);
-//        assert_eq!(state_db.num_utxo() as usize, tx.input.len());
-//        drop(state_db);
-//    }
-//
-//    #[test]
-//    pub fn rollback_at_fork() {
-//        let mut state_db = state_generator::random();
-//        let tx0 = tx_generator::random();
-//        let input1: Vec<Input> = (0..tx0.output.len())
-//            .map(|i| Input {
-//                hash: tx0.hash(),
-//                index: i as u32,
-//                value: tx0.output[i].value,
-//                recipient: tx0.output[i].recipient,
-//            })
-//            .collect();
-//        let tx1 = Transaction {
-//            input: input1.clone(),
-//            ..tx_generator::random()
-//        };
-//        let tx2 = Transaction {
-//            input: input1.clone(),
-//            ..tx_generator::random()
-//        };
-//        /*
-//        tx0 <---- tx1
-//              |
-//              --- tx2
-//        */
-//        // we have to init with the inputs, otherwise we cannot receive a tx
-//        init_with_tx_input(&mut state_db, &tx0);
-//        assert_eq!(state_db.num_utxo() as usize, tx0.input.len());
-//        // receive tx0
-//        try_receive_transaction(&mut state_db, &tx0);
-//        // receive tx1
-//        try_receive_transaction(&mut state_db, &tx1);
-//
-//        // rollback tx1, after rollback, the db should be identical just after receive tx0
-//        try_rollback_transaction(&mut state_db, &tx1);
-//        assert_eq!(state_db.num_utxo() as usize, tx0.output.len());
-//        // receive tx2
-//        try_receive_transaction(&mut state_db, &tx2);
-//        drop(state_db);
-//        assert!(rocksdb::DB::destroy(
-//            &rocksdb::Options::default(),
-//            "/tmp/prism_test_state_2.rocksdb"
-//        )
-//        .is_ok());
-//    }
-//}
+fn u64_vec_append_merge(_: &[u8], existing_val: Option<&[u8]>, operands: &mut rocksdb::merge_operator::MergeOperands) -> Option<Vec<u8>> {
+    let mut existing: Vec<u64> = match existing_val {
+        Some(v) => deserialize(v).unwrap(),
+        None => vec![],
+    };
+    for op in operands {
+        let new_elem: u64 = deserialize(op).unwrap();
+        existing.push(new_elem);
+    }
+    let result: Vec<u8> = serialize(&existing).unwrap();
+    return Some(result);
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn initialize_new() {
+        let db = UtxoDatabase::new("/tmp/prism_test_utxodatabase_new.rocksdb").unwrap();
+        let proposer_leader_sequence_cf = db.db.cf_handle(PROPOSER_LEADER_SEQUENCE_CF).unwrap();
+        let proposer_vote_level_cf = db.db.cf_handle(PROPOSER_VOTE_LEVEL_CF).unwrap();
+
+        let level_0_leader: H256 = deserialize(&db.db.get_cf(proposer_leader_sequence_cf, serialize(&(0 as u64)).unwrap()).unwrap().unwrap()).unwrap();
+        assert_eq!(level_0_leader, *PROPOSER_GENESIS_HASH);
+
+        let mut proposer_genesis_vote_level: Vec<u64> = vec![];
+        for chain_num in 0..NUM_VOTER_CHAINS {
+            let voter_best = db.voter_best[chain_num as usize].lock().unwrap();
+            assert_eq!(*voter_best, (VOTER_GENESIS_HASHES[chain_num as usize], 0));
+            proposer_genesis_vote_level.push(0);
+        }
+        let genesis_votes: Vec<u64> = deserialize(&db.db.get_cf(proposer_vote_level_cf, serialize(&(*PROPOSER_GENESIS_HASH)).unwrap()).unwrap().unwrap()).unwrap();
+        assert_eq!(genesis_votes, proposer_genesis_vote_level);
+    }
+    
+    #[test]
+    fn merge_operator() {
+        let db = UtxoDatabase::new("/tmp/prism_test_utxodatabase_merge_op.rocksdb").unwrap();
+        let cf = db.db.cf_handle(PROPOSER_VOTE_LEVEL_CF).unwrap();
+
+        // merge with an nonexistent entry
+        db.db.merge_cf(cf, b"testkey", serialize(&(1 as u64)).unwrap()).unwrap();
+        let result: Vec<u64> = deserialize(&db.db.get_cf(cf, b"testkey").unwrap().unwrap()).unwrap();
+        assert_eq!(result, vec![1]);
+
+        // merge with an existing entry
+        db.db.merge_cf(cf, b"testkey", serialize(&(2 as u64)).unwrap()).unwrap();
+        db.db.merge_cf(cf, b"testkey", serialize(&(3 as u64)).unwrap()).unwrap();
+        let result: Vec<u64> = deserialize(&db.db.get_cf(cf, b"testkey").unwrap().unwrap()).unwrap();
+        assert_eq!(result, vec![1, 2, 3]);
+    }
+}

@@ -8,13 +8,11 @@ use rocksdb::{Options, ColumnFamilyDescriptor, DB, WriteBatch};
 use std::collections::HashSet;
 
 // Column family names for node/chain metadata
-const PROPOSER_NODE_LEVEL_CF: &str = "PROPOSER_NODE_LEVEL";
-const PROPOSER_NODE_STATUS_CF: &str = "PROPOSER_NODE_STATUS";
-const VOTER_NODE_STATUS_CF: &str = "VOTER_NODE_STATUS";
-const VOTER_NODE_LEVEL_CF: &str = "VOTER_NODE_LEVEL";
-const VOTER_NODE_CHAIN_CF: &str = "VOTER_NODE_CHAIN";
-const PROPOSER_TREE_LEVEL_CF: &str = "PROPOSER_TREE_LEVEL";
-const VOTER_NODE_VOTED_LEVEL_CF: &str = "VOTER_NODE_VOTED_LEVEL";
+const PROPOSER_NODE_LEVEL_CF: &str = "PROPOSER_NODE_LEVEL";         // hash to level (u64)
+const VOTER_NODE_LEVEL_CF: &str = "VOTER_NODE_LEVEL";               // hash to level (u64)
+const VOTER_NODE_CHAIN_CF: &str = "VOTER_NODE_CHAIN";               // hash to chain number (u16)
+const PROPOSER_TREE_LEVEL_CF: &str = "PROPOSER_TREE_LEVEL";         // level (u64) to Vec<hash>
+const VOTER_NODE_VOTED_LEVEL_CF: &str = "VOTER_NODE_VOTED_LEVEL";   // hash to level (u64)
 
 // Column family names for graph neighbors
 const PARENT_NEIGHBOR_CF: &str = "GRAPH_PARENT_NEIGHBOR";   // the proposer parent of a block
@@ -42,9 +40,7 @@ impl BlockChain {
     /// fields must be initialized later.
     fn open<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
         let proposer_node_level_cf = ColumnFamilyDescriptor::new(PROPOSER_NODE_LEVEL_CF, Options::default());
-        let proposer_node_status_cf = ColumnFamilyDescriptor::new(PROPOSER_NODE_STATUS_CF, Options::default());
         let voter_node_level_cf = ColumnFamilyDescriptor::new(VOTER_NODE_LEVEL_CF, Options::default());
-        let voter_node_status_cf = ColumnFamilyDescriptor::new(VOTER_NODE_STATUS_CF, Options::default());
         let voter_node_chain_cf = ColumnFamilyDescriptor::new(VOTER_NODE_CHAIN_CF, Options::default());
         let voter_node_voted_level_cf = ColumnFamilyDescriptor::new(VOTER_NODE_VOTED_LEVEL_CF, Options::default());
 
@@ -74,9 +70,7 @@ impl BlockChain {
 
         let cfs = vec![
             proposer_node_level_cf,
-            proposer_node_status_cf,
             voter_node_level_cf,
-            voter_node_status_cf,
             voter_node_chain_cf,
             voter_node_voted_level_cf,
             proposer_tree_level_cf,
@@ -112,9 +106,7 @@ impl BlockChain {
         let db = Self::open(&path)?;
         // get cf handles
         let proposer_node_level_cf = db.db.cf_handle(PROPOSER_NODE_LEVEL_CF).unwrap();
-        let proposer_node_status_cf = db.db.cf_handle(PROPOSER_NODE_STATUS_CF).unwrap();
         let voter_node_level_cf = db.db.cf_handle(VOTER_NODE_LEVEL_CF).unwrap();
-        let voter_node_status_cf = db.db.cf_handle(VOTER_NODE_STATUS_CF).unwrap();
         let voter_node_chain_cf = db.db.cf_handle(VOTER_NODE_CHAIN_CF).unwrap();
         let voter_node_voted_level_cf = db.db.cf_handle(VOTER_NODE_VOTED_LEVEL_CF).unwrap();
         let proposer_tree_level_cf = db.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
@@ -165,9 +157,7 @@ impl BlockChain {
     pub fn insert_block(&self, block: &Block) -> Result<()> {
         // get cf handles
         let proposer_node_level_cf = self.db.cf_handle(PROPOSER_NODE_LEVEL_CF).unwrap();
-        let proposer_node_status_cf = self.db.cf_handle(PROPOSER_NODE_STATUS_CF).unwrap();
         let voter_node_level_cf = self.db.cf_handle(VOTER_NODE_LEVEL_CF).unwrap();
-        let voter_node_status_cf = self.db.cf_handle(VOTER_NODE_STATUS_CF).unwrap();
         let voter_node_chain_cf = self.db.cf_handle(VOTER_NODE_CHAIN_CF).unwrap();
         let voter_node_voted_level_cf = self.db.cf_handle(VOTER_NODE_VOTED_LEVEL_CF).unwrap();
         let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
@@ -445,9 +435,7 @@ mod tests {
         let db = BlockChain::new("/tmp/prism_test_blockchain_new.rocksdb").unwrap();
         // get cf handles
         let proposer_node_level_cf = db.db.cf_handle(PROPOSER_NODE_LEVEL_CF).unwrap();
-        let proposer_node_status_cf = db.db.cf_handle(PROPOSER_NODE_STATUS_CF).unwrap();
         let voter_node_level_cf = db.db.cf_handle(VOTER_NODE_LEVEL_CF).unwrap();
-        let voter_node_status_cf = db.db.cf_handle(VOTER_NODE_STATUS_CF).unwrap();
         let voter_node_chain_cf = db.db.cf_handle(VOTER_NODE_CHAIN_CF).unwrap();
         let voter_node_voted_level_cf = db.db.cf_handle(VOTER_NODE_VOTED_LEVEL_CF).unwrap();
         let proposer_tree_level_cf = db.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
@@ -489,9 +477,7 @@ mod tests {
         let db = BlockChain::new("/tmp/prism_test_blockchain_insert_block.rocksdb").unwrap();
         // get cf handles
         let proposer_node_level_cf = db.db.cf_handle(PROPOSER_NODE_LEVEL_CF).unwrap();
-        let proposer_node_status_cf = db.db.cf_handle(PROPOSER_NODE_STATUS_CF).unwrap();
         let voter_node_level_cf = db.db.cf_handle(VOTER_NODE_LEVEL_CF).unwrap();
-        let voter_node_status_cf = db.db.cf_handle(VOTER_NODE_STATUS_CF).unwrap();
         let voter_node_chain_cf = db.db.cf_handle(VOTER_NODE_CHAIN_CF).unwrap();
         let voter_node_voted_level_cf = db.db.cf_handle(VOTER_NODE_VOTED_LEVEL_CF).unwrap();
         let proposer_tree_level_cf = db.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
