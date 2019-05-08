@@ -143,8 +143,6 @@ impl BlockChain {
                       serialize(&(*PROPOSER_GENESIS_HASH)).unwrap())?;
             wb.merge_cf(proposer_node_vote_cf, serialize(&(*PROPOSER_GENESIS_HASH)).unwrap(), 
                       serialize(&(true, chain_num as u16, 0 as u64)).unwrap())?;
-            wb.merge_cf(vote_neighbor_cf, serialize(&(*PROPOSER_GENESIS_HASH)).unwrap(), 
-                      serialize(&VOTER_GENESIS_HASHES[chain_num as usize]).unwrap())?;
             wb.put_cf(voter_node_level_cf, serialize(&VOTER_GENESIS_HASHES[chain_num as usize]).unwrap(), 
                       serialize(&(0 as u64)).unwrap())?;
             wb.put_cf(voter_node_voted_level_cf, serialize(&VOTER_GENESIS_HASHES[chain_num as usize]).unwrap(), 
@@ -247,8 +245,6 @@ impl BlockChain {
                           serialize(&content.votes).unwrap())?;
                 let mut deepest_voted_level = 0;
                 for vote_hash in &content.votes {
-                    wb.merge_cf(vote_neighbor_cf, serialize(&vote_hash).unwrap(), 
-                                serialize(&block_hash).unwrap())?;
                     let voted_level: u64 = deserialize(&self.db.get_cf(proposer_node_level_cf,
                                                                        serialize(&vote_hash).unwrap())?
                                                        .unwrap()).unwrap();
@@ -330,6 +326,10 @@ impl BlockChain {
                         for added_vote in &added {
                             wb.merge_cf(proposer_node_vote_cf, serialize(&added_vote.0).unwrap(), serialize(&(true, self_chain as u16, added_vote.1)).unwrap())?;
                         }
+                        // finally add the new votes in this new block
+                        for added_vote in &content.votes {
+                            wb.merge_cf(proposer_node_vote_cf, serialize(&added_vote).unwrap(), serialize(&(true, self_chain as u16, self_level as u64)).unwrap())?;
+                        }
                     }
                 }
             }
@@ -399,9 +399,8 @@ impl BlockChain {
         }
         return Ok(list);
     }
-
-    /*
-    /// Get the hash of the leader block at level 
+/*
+    /// Get the hash of the leader block at the given level 
     pub fn proposer_leader(&self, level: u64) -> Result<Option<H256>> {
         let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
         let proposer_node_vote_level_cf = self.db.cf_handle(PROPOSER_NODE_VOTE_LEVEL_CF).unwrap();
@@ -415,8 +414,7 @@ impl BlockChain {
             let vote_levels = 
         }
     }
-    */
-
+*/
     /// Get the added and removed votes and their levels between two voter chain tips. The format
     /// of the returned tuples is (target proposer hash, from voter level)
     fn vote_diff(&self, from: &H256, to: &H256) -> Result<(Vec<(H256, u64)>, Vec<(H256, u64)>)> {
@@ -578,8 +576,6 @@ mod tests {
             assert_eq!(voted_proposer, vec![*PROPOSER_GENESIS_HASH]);
             assert_eq!(*db.voter_best[chain_num as usize].lock().unwrap(), (VOTER_GENESIS_HASHES[chain_num as usize], 0));
         }
-        let voters: Vec<H256> = deserialize(&db.db.get_cf(vote_neighbor_cf, serialize(&(*PROPOSER_GENESIS_HASH)).unwrap()).unwrap().unwrap()).unwrap();
-        assert_eq!(voters, *VOTER_GENESIS_HASHES);
     }
 
     #[test]
@@ -687,8 +683,6 @@ mod tests {
         assert_eq!(voted_level, 1);
         let voted: Vec<H256> = deserialize(&db.db.get_cf(vote_neighbor_cf, serialize(&new_voter_block.hash()).unwrap()).unwrap().unwrap()).unwrap();
         assert_eq!(voted, vec![new_proposer_block_1.hash()]);
-        let voter: Vec<H256> = deserialize(&db.db.get_cf(vote_neighbor_cf, serialize(&new_proposer_block_1.hash()).unwrap()).unwrap().unwrap()).unwrap();
-        assert_eq!(voter, vec![new_voter_block.hash()]);
         assert_eq!(*db.voter_best[0].lock().unwrap(), (new_voter_block.hash(), 1));
         let votes: Vec<(u16, u64)> = deserialize(&db.db.get_cf(proposer_node_vote_cf, serialize(&new_proposer_block_1.hash()).unwrap()).unwrap().unwrap()).unwrap();
         assert_eq!(votes, vec![(0, 1)]);
