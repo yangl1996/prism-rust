@@ -13,7 +13,7 @@ const VOTER_NODE_LEVEL_CF: &str = "VOTER_NODE_LEVEL";                   // hash 
 const VOTER_NODE_CHAIN_CF: &str = "VOTER_NODE_CHAIN";                   // hash to chain number (u16)
 const PROPOSER_TREE_LEVEL_CF: &str = "PROPOSER_TREE_LEVEL";             // level (u64) to hashes of blocks (Vec<hash>)
 const VOTER_NODE_VOTED_LEVEL_CF: &str = "VOTER_NODE_VOTED_LEVEL";       // hash to max. voted level (u64)
-const PROPOSER_NODE_VOTE_LEVEL_CF: &str = "PROPOSER_NODE_VOTE_LEVEL";   // hash to levels of votes (Vec<u64>)
+const PROPOSER_NODE_VOTE_LEVEL_CF: &str = "PROPOSER_NODE_VOTE_LEVEL";   // hash to levels of main chain votes (Vec<u64>)
 
 // Column family names for graph neighbors
 const PARENT_NEIGHBOR_CF: &str = "GRAPH_PARENT_NEIGHBOR";   // the proposer parent of a block
@@ -258,13 +258,80 @@ impl BlockChain {
                 }
                 wb.put_cf(voter_node_voted_level_cf, serialize(&block_hash).unwrap(), 
                           serialize(&deepest_voted_level).unwrap())?;
-                // set best block info
+
                 let mut voter_best = self.voter_best[self_chain as usize].lock().unwrap();
+                let previous_best = voter_best.0;
+                let previous_best_level = voter_best.1;
+                // update best block
                 if self_level > voter_best.1 {
                     voter_best.0 = block_hash;
                     voter_best.1 = self_level;
                 }
                 drop(voter_best);
+
+                // update vote levels
+                if voter_parent_hash == previous_best {
+                    // if we just attached to the main chain
+                    for added_vote in &content.votes {
+                        wb.merge_cf(proposer_node_vote_level_cf, serialize(&added_vote).unwrap(), serialize(&(true, self_level as u64)).unwrap())?;
+                    }
+                } else {
+                    if self_level > previous_best_level {
+                        // if it's a side chain, and we are now better than the previous best, then
+                        // we are now the new main chain.
+                        let mut to_level = voter_parent_level;
+                        let mut from_level = previous_best_level;
+                        let mut to = voter_parent_hash;
+                        let mut from = previous_best;
+                        let mut added: Vec<(H256, u64)> = vec![];
+                        let mut removed: Vec<(H256, u64)> = vec![];
+                        while to_level > from_level {
+                            let votes: Vec<H256> = deserialize(&self.db.get_cf(vote_neighbor_cf,
+                                                                               serialize(&to).unwrap())?
+                                                               .unwrap()).unwrap();
+                            for vote in votes {
+                                added.push((vote, to_level));
+                            }
+                            to = deserialize(&self.db.get_cf(voter_parent_neighbor_cf,
+                                                             serialize(&to).unwrap())?
+                                             .unwrap()).unwrap();
+                            to_level -= 1;
+                        }
+
+                        // trace back both from chain and to chain until they reach the same block
+                        while to != from {
+                            // trace back to chain
+                            let votes: Vec<H256> = deserialize(&self.db.get_cf(vote_neighbor_cf,
+                                                                               serialize(&to).unwrap())?
+                                                               .unwrap()).unwrap();
+                            for vote in votes {
+                                added.push((vote, to_level));
+                            }
+                            to = deserialize(&self.db.get_cf(voter_parent_neighbor_cf,
+                                                             serialize(&to).unwrap())?
+                                             .unwrap()).unwrap();
+                            to_level -= 1;
+
+                            // trace back from chain
+                            let votes: Vec<H256> = deserialize(&self.db.get_cf(vote_neighbor_cf,
+                                                                               serialize(&from).unwrap())?
+                                                               .unwrap()).unwrap();
+                            for vote in votes {
+                                removed.push((vote, from_level));
+                            }
+                            from = deserialize(&self.db.get_cf(voter_parent_neighbor_cf,
+                                                               serialize(&from).unwrap())?
+                                               .unwrap()).unwrap();
+                            from_level -= 1;
+                        }
+                        for removed_vote in &removed {
+                            wb.merge_cf(proposer_node_vote_level_cf, serialize(&removed_vote.0).unwrap(), serialize(&(false, removed_vote.1)).unwrap())?;
+                        }
+                        for added_vote in &added {
+                            wb.merge_cf(proposer_node_vote_level_cf, serialize(&added_vote.0).unwrap(), serialize(&(true, added_vote.1)).unwrap())?;
+                        }
+                    }
+                }
             }
             Content::Transaction(_) => {
                 // mark itself as unreferred
@@ -499,6 +566,7 @@ mod tests {
     fn insert_block() {
         let db = BlockChain::new("/tmp/prism_test_blockchain_insert_block.rocksdb").unwrap();
         // get cf handles
+        let proposer_node_vote_level_cf = db.db.cf_handle(PROPOSER_NODE_VOTE_LEVEL_CF).unwrap();
         let proposer_node_level_cf = db.db.cf_handle(PROPOSER_NODE_LEVEL_CF).unwrap();
         let voter_node_level_cf = db.db.cf_handle(VOTER_NODE_LEVEL_CF).unwrap();
         let voter_node_chain_cf = db.db.cf_handle(VOTER_NODE_CHAIN_CF).unwrap();
@@ -602,6 +670,43 @@ mod tests {
         let voter: Vec<H256> = deserialize(&db.db.get_cf(vote_neighbor_cf, serialize(&new_proposer_block_1.hash()).unwrap()).unwrap().unwrap()).unwrap();
         assert_eq!(voter, vec![new_voter_block.hash()]);
         assert_eq!(*db.voter_best[0].lock().unwrap(), (new_voter_block.hash(), 1));
+        let vote_level: Vec<u64> = deserialize(&db.db.get_cf(proposer_node_vote_level_cf, serialize(&new_proposer_block_1.hash()).unwrap()).unwrap().unwrap()).unwrap();
+        assert_eq!(vote_level, vec![1]);
+
+        // Create a fork of the voter chain and vote for proposer block 2.
+        let new_voter_content = Content::Voter(voter::Content::new(0, VOTER_GENESIS_HASHES[0], vec![new_proposer_block_2.hash()]));
+        let new_voter_block = Block::new(
+            new_proposer_block_2.hash(),
+            0,
+            0,
+            H256::default(),
+            vec![],
+            new_voter_content,
+            [4; 32],
+            H256::default()
+        );
+        db.insert_block(&new_voter_block).unwrap();
+        let vote_level: Vec<u64> = deserialize(&db.db.get_cf(proposer_node_vote_level_cf, serialize(&new_proposer_block_1.hash()).unwrap()).unwrap().unwrap()).unwrap();
+        assert_eq!(vote_level, vec![1]);
+        
+        // Add to this fork, so that it becomes the longest chain.
+        let new_voter_content = Content::Voter(voter::Content::new(0, new_voter_block.hash(), vec![]));
+        let new_voter_block = Block::new(
+            new_proposer_block_2.hash(),
+            0,
+            0,
+            H256::default(),
+            vec![],
+            new_voter_content,
+            [5; 32],
+            H256::default()
+        );
+        db.insert_block(&new_voter_block).unwrap();
+
+        let vote_level: Vec<u64> = deserialize(&db.db.get_cf(proposer_node_vote_level_cf, serialize(&new_proposer_block_1.hash()).unwrap()).unwrap().unwrap()).unwrap();
+        assert_eq!(vote_level, vec![]);
+        let vote_level: Vec<u64> = deserialize(&db.db.get_cf(proposer_node_vote_level_cf, serialize(&new_proposer_block_2.hash()).unwrap()).unwrap().unwrap()).unwrap();
+        assert_eq!(vote_level, vec![1]);
     }
 
     #[test]
