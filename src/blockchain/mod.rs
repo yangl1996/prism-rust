@@ -399,22 +399,30 @@ impl BlockChain {
         }
         return Ok(list);
     }
-/*
+
     /// Get the hash of the leader block at the given level 
     pub fn proposer_leader(&self, level: u64) -> Result<Option<H256>> {
         let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
-        let proposer_node_vote_level_cf = self.db.cf_handle(PROPOSER_NODE_VOTE_LEVEL_CF).unwrap();
+        let proposer_node_vote_cf = self.db.cf_handle(PROPOSER_NODE_VOTE_CF).unwrap();
 
         let proposer_blocks: Vec<H256> = match self.db.get_cf(proposer_tree_level_cf, serialize(&level).unwrap())? {
             None => return Ok(None),
-            Some(blocks) => blocks,
+            Some(blocks) => deserialize(&blocks).unwrap(),
         };
 
         for block in &proposer_blocks {
-            let vote_levels = 
+            let votes: Vec<(u16, u64)> = match self.db.get_cf(proposer_node_vote_cf, serialize(&block).unwrap())? {
+                None => continue,
+                Some(votes) => deserialize(&votes).unwrap(),
+            };
+
+            if votes.len() as u16 > NUM_VOTER_CHAINS / 2 + 1 {
+                return Ok(Some(*block));
+            }
         }
+        return Ok(None);
     }
-*/
+
     /// Get the added and removed votes and their levels between two voter chain tips. The format
     /// of the returned tuples is (target proposer hash, from voter level)
     fn vote_diff(&self, from: &H256, to: &H256) -> Result<(Vec<(H256, u64)>, Vec<(H256, u64)>)> {
@@ -837,6 +845,63 @@ mod tests {
         // high to low on the same chain
         assert_eq!(db.vote_diff(&voter_3.hash(), &voter_1.hash()).unwrap(), 
                    (vec![], vec![(proposer_2.hash(), 2)]));
+    }
+
+    #[test]
+    fn proposer_leader() {
+        let db = BlockChain::new("/tmp/prism_test_blockchain_proposer_leader.rocksdb").unwrap();
+        assert_eq!(db.proposer_leader(0).unwrap().unwrap(), *PROPOSER_GENESIS_HASH);
+
+        // Insert two proposer blocks so we have something to vote for
+        let proposer_1 = Content::Proposer(proposer::Content::new(vec![], vec![]));
+        let proposer_1 = Block::new(
+            *PROPOSER_GENESIS_HASH,
+            0,
+            0,
+            H256::default(),
+            vec![],
+            proposer_1,
+            [0; 32],
+            H256::default()
+        );
+        db.insert_block(&proposer_1).unwrap();
+        let proposer_2 = Content::Proposer(proposer::Content::new(vec![], vec![]));
+        let proposer_2 = Block::new(
+            proposer_1.hash(),
+            0,
+            0,
+            H256::default(),
+            vec![],
+            proposer_2,
+            [1; 32],
+            H256::default()
+        );
+        db.insert_block(&proposer_2).unwrap();
+        
+        // For each voter chain, insert a voter block to vote for proposer 1. Check that only after
+        // we get more than half chains voting for it do we get a leader
+        for chain_num in 0..NUM_VOTER_CHAINS {
+            let voter = Content::Voter(voter::Content::new(0, VOTER_GENESIS_HASHES[0], vec![proposer_1.hash()]));
+            let voter = Block::new(
+                proposer_1.hash(), 
+                0,
+                0,
+                H256::default(),
+                vec![],
+                voter,
+                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                ((chain_num >> 8) & 0xff) as u8, (chain_num >> 8) as u8],
+                H256::default()
+            );
+            db.insert_block(&voter).unwrap();
+            let leader = db.proposer_leader(1).unwrap();
+            if chain_num <= NUM_VOTER_CHAINS / 2 + 1 {
+                assert_eq!(leader, None);
+            }
+            else {
+                assert_eq!(leader, Some(proposer_1.hash()));
+            }
+        }
     }
 
     #[test]
