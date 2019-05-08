@@ -407,13 +407,13 @@ impl BlockChain {
 
         let proposer_blocks: Vec<H256> = match self.db.get_cf(proposer_tree_level_cf, serialize(&level).unwrap())? {
             None => return Ok(None),
-            Some(blocks) => deserialize(&blocks).unwrap(),
+            Some(d) => deserialize(&d).unwrap(),
         };
 
         for block in &proposer_blocks {
             let votes: Vec<(u16, u64)> = match self.db.get_cf(proposer_node_vote_cf, serialize(&block).unwrap())? {
-                None => continue,
-                Some(votes) => deserialize(&votes).unwrap(),
+                None => vec![],
+                Some(d) => deserialize(&d).unwrap(),
             };
 
             if votes.len() as u16 > NUM_VOTER_CHAINS / 2 + 1 {
@@ -861,19 +861,19 @@ mod tests {
             H256::default(),
             vec![],
             proposer_1,
-            [0; 32],
+            [255; 32],
             H256::default()
         );
         db.insert_block(&proposer_1).unwrap();
         let proposer_2 = Content::Proposer(proposer::Content::new(vec![], vec![]));
         let proposer_2 = Block::new(
-            proposer_1.hash(),
+            *PROPOSER_GENESIS_HASH,
             0,
             0,
             H256::default(),
             vec![],
             proposer_2,
-            [1; 32],
+            [254; 32],
             H256::default()
         );
         db.insert_block(&proposer_2).unwrap();
@@ -881,7 +881,7 @@ mod tests {
         // For each voter chain, insert a voter block to vote for proposer 1. Check that only after
         // we get more than half chains voting for it do we get a leader
         for chain_num in 0..NUM_VOTER_CHAINS {
-            let voter = Content::Voter(voter::Content::new(0, VOTER_GENESIS_HASHES[0], vec![proposer_1.hash()]));
+            let voter = Content::Voter(voter::Content::new(0, VOTER_GENESIS_HASHES[chain_num as usize], vec![proposer_1.hash()]));
             let voter = Block::new(
                 proposer_1.hash(), 
                 0,
@@ -890,15 +890,16 @@ mod tests {
                 vec![],
                 voter,
                 [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                ((chain_num >> 8) & 0xff) as u8, (chain_num >> 8) as u8],
+                ((chain_num >> 8) & 0xff) as u8, (chain_num & 0xff) as u8],
                 H256::default()
             );
             db.insert_block(&voter).unwrap();
             let leader = db.proposer_leader(1).unwrap();
-            if chain_num <= NUM_VOTER_CHAINS / 2 + 1 {
+            if chain_num + 1 as u16 <= NUM_VOTER_CHAINS / 2 + 1 {
                 assert_eq!(leader, None);
             }
             else {
+                println!("{}", chain_num + 1);
                 assert_eq!(leader, Some(proposer_1.hash()));
             }
         }
