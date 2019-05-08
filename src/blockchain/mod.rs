@@ -326,7 +326,8 @@ impl BlockChain {
         return Ok(list);
     }
 
-    /// Get the added and removed votes and their levels between two voter chain tips.
+    /// Get the added and removed votes and their levels between two voter chain tips. The format
+    /// of the returned tuples is (target proposer hash, from voter level)
     pub fn vote_diff(&self, from: &H256, to: &H256) -> Result<(Vec<(H256, u64)>, Vec<(H256, u64)>)> {
         let voter_node_level_cf = self.db.cf_handle(VOTER_NODE_LEVEL_CF).unwrap();
         let vote_neighbor_cf = self.db.cf_handle(VOTE_NEIGHBOR_CF).unwrap();
@@ -336,8 +337,6 @@ impl BlockChain {
         let mut removed: Vec<(H256, u64)> = vec![];
         let mut from: H256 = *from;
         let mut to: H256 = *to;
-        // TODO: if performance is an issue, don't read the levels from the db, and instead just
-        // calculate the level as we trace back through the parental link.
         let mut from_level: u64 = deserialize(&self.db.get_cf(voter_node_level_cf,
                                                               serialize(&from).unwrap())?
                                               .unwrap()).unwrap();
@@ -357,9 +356,7 @@ impl BlockChain {
                 to = deserialize(&self.db.get_cf(voter_parent_neighbor_cf,
                                                  serialize(&to).unwrap())?
                                  .unwrap()).unwrap();
-                to_level = deserialize(&self.db.get_cf(voter_node_level_cf,
-                                                       serialize(&to).unwrap())?
-                                       .unwrap()).unwrap();
+                to_level -= 1;
             } else {
                 let votes: Vec<H256> = deserialize(&self.db.get_cf(vote_neighbor_cf,
                                                                    serialize(&from).unwrap())?
@@ -370,9 +367,7 @@ impl BlockChain {
                 from = deserialize(&self.db.get_cf(voter_parent_neighbor_cf,
                                                  serialize(&from).unwrap())?
                                  .unwrap()).unwrap();
-                from_level = deserialize(&self.db.get_cf(voter_node_level_cf,
-                                                       serialize(&from).unwrap())?
-                                       .unwrap()).unwrap();
+                from_level -= 1;
             }
         }
         
@@ -388,9 +383,7 @@ impl BlockChain {
             to = deserialize(&self.db.get_cf(voter_parent_neighbor_cf,
                                              serialize(&to).unwrap())?
                              .unwrap()).unwrap();
-            to_level = deserialize(&self.db.get_cf(voter_node_level_cf,
-                                                   serialize(&to).unwrap())?
-                                   .unwrap()).unwrap();
+            to_level -= 1;
 
             // trace back from chain
             let votes: Vec<H256> = deserialize(&self.db.get_cf(vote_neighbor_cf,
@@ -402,9 +395,7 @@ impl BlockChain {
             from = deserialize(&self.db.get_cf(voter_parent_neighbor_cf,
                                              serialize(&from).unwrap())?
                              .unwrap()).unwrap();
-            from_level = deserialize(&self.db.get_cf(voter_node_level_cf,
-                                                   serialize(&from).unwrap())?
-                                   .unwrap()).unwrap();
+            from_level -= 1;
         }
 
         return Ok((added, removed));
