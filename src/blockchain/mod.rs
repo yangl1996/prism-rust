@@ -15,9 +15,9 @@ const PROPOSER_TREE_LEVEL_CF: &str = "PROPOSER_TREE_LEVEL"; // level (u64) to ha
 const VOTER_NODE_VOTED_LEVEL_CF: &str = "VOTER_NODE_VOTED_LEVEL"; // hash to max. voted level (u64)
 const PROPOSER_NODE_VOTE_CF: &str = "PROPOSER_NODE_VOTE"; // hash to level and chain number of main chain votes (Vec<u16, u64>)
 const PROPOSER_LEADER_SEQUENCE_CF: &str = "PROPOSER_LEADER_SEQUENCE"; // level (u64) to hash of leader block.
-const PROPOSER_CONFIRM_LIST_CF: &str = "PROPOSER_CONFIRM_LIST"; // level (u64) to the list of proposer blocks confirmed
-                                                                // by this level. The list is in the order that those
-                                                                // blocks should live in the ledger.
+const PROPOSER_LEDGER_ORDER_CF: &str = "PROPOSER_LEDGER_ORDER"; // level (u64) to the list of proposer blocks confirmed
+                                                                // by this level, including the leader itself. The list
+                                                                // is in the order that those blocks should live in the ledger.
 
 // Column family names for graph neighbors
 const PARENT_NEIGHBOR_CF: &str = "GRAPH_PARENT_NEIGHBOR"; // the proposer parent of a block
@@ -54,8 +54,8 @@ impl BlockChain {
             ColumnFamilyDescriptor::new(VOTER_NODE_VOTED_LEVEL_CF, Options::default());
         let proposer_leader_sequence_cf =
             ColumnFamilyDescriptor::new(PROPOSER_LEADER_SEQUENCE_CF, Options::default());
-        let proposer_confirm_list_cf =
-            ColumnFamilyDescriptor::new(PROPOSER_CONFIRM_LIST_CF, Options::default());
+        let proposer_ledger_order_cf =
+            ColumnFamilyDescriptor::new(PROPOSER_LEDGER_ORDER_CF, Options::default());
 
         let mut proposer_tree_level_option = Options::default();
         proposer_tree_level_option.set_merge_operator(
@@ -115,7 +115,7 @@ impl BlockChain {
             voter_node_chain_cf,
             voter_node_voted_level_cf,
             proposer_leader_sequence_cf,
-            proposer_confirm_list_cf,
+            proposer_ledger_order_cf,
             proposer_tree_level_cf,
             proposer_node_vote_cf,
             parent_neighbor_cf,
@@ -158,7 +158,7 @@ impl BlockChain {
         let parent_neighbor_cf = db.db.cf_handle(PARENT_NEIGHBOR_CF).unwrap();
         let vote_neighbor_cf = db.db.cf_handle(VOTE_NEIGHBOR_CF).unwrap();
         let proposer_leader_sequence_cf = db.db.cf_handle(PROPOSER_LEADER_SEQUENCE_CF).unwrap();
-        let proposer_confirm_list_cf = db.db.cf_handle(PROPOSER_CONFIRM_LIST_CF).unwrap();
+        let proposer_ledger_order_cf = db.db.cf_handle(PROPOSER_LEDGER_ORDER_CF).unwrap();
 
         // insert genesis blocks
         let mut wb = WriteBatch::default();
@@ -185,11 +185,11 @@ impl BlockChain {
             serialize(&(0 as u64)).unwrap(),
             serialize(&(*PROPOSER_GENESIS_HASH)).unwrap(),
         )?;
-        let proposer_genesis_confirms: Vec<H256> = vec![];
+        let proposer_genesis_ledger: Vec<H256> = vec![*PROPOSER_GENESIS_HASH];
         wb.put_cf(
-            proposer_confirm_list_cf,
+            proposer_ledger_order_cf,
             serialize(&(0 as u64)).unwrap(),
-            serialize(&proposer_genesis_confirms).unwrap(),
+            serialize(&proposer_genesis_ledger).unwrap(),
         )?;
 
         // voter genesis blocks
@@ -663,7 +663,7 @@ mod tests {
         let parent_neighbor_cf = db.db.cf_handle(PARENT_NEIGHBOR_CF).unwrap();
         let vote_neighbor_cf = db.db.cf_handle(VOTE_NEIGHBOR_CF).unwrap();
         let proposer_leader_sequence_cf = db.db.cf_handle(PROPOSER_LEADER_SEQUENCE_CF).unwrap();
-        let proposer_confirm_list_cf = db.db.cf_handle(PROPOSER_CONFIRM_LIST_CF).unwrap();
+        let proposer_ledger_order_cf = db.db.cf_handle(PROPOSER_LEDGER_ORDER_CF).unwrap();
 
         // validate proposer genesis
         let genesis_level: u64 = deserialize(
@@ -722,12 +722,12 @@ mod tests {
         assert_eq!(level_0_leader, *PROPOSER_GENESIS_HASH);
         let level_0_confirms: Vec<H256> = deserialize(
             &db.db
-                .get_cf(proposer_confirm_list_cf, serialize(&(0 as u64)).unwrap())
+                .get_cf(proposer_ledger_order_cf, serialize(&(0 as u64)).unwrap())
                 .unwrap()
                 .unwrap(),
         )
         .unwrap();
-        assert_eq!(level_0_confirms, vec![]);
+        assert_eq!(level_0_confirms, vec![*PROPOSER_GENESIS_HASH]);
 
         // validate voter genesis
         for chain_num in 0..NUM_VOTER_CHAINS {
