@@ -393,25 +393,17 @@ impl BlockChain {
                 drop(voter_best);
 
                 // update vote levels
-                if voter_parent_hash == previous_best {
-                    // if we just attached to the main chain
-                    for added_vote in &content.votes {
-                        wb.merge_cf(
-                            proposer_node_vote_cf,
-                            serialize(&added_vote).unwrap(),
-                            serialize(&(true, self_chain as u16, self_level as u64)).unwrap(),
-                        )?;
-                    }
-                } else {
-                    if self_level > previous_best_level {
-                        // if it's a side chain, and we are now better than the previous best, then
-                        // we are now the new main chain.
+                // only update if we are the main chain
+                if self_level > previous_best_level {
+                    let mut added: Vec<(H256, u64)> = vec![];
+                    let mut removed: Vec<(H256, u64)> = vec![];
+                    // if it's a side chain, and we are now better than the previous best, then
+                    // we are now the new main chain.
+                    if voter_parent_hash != previous_best {
                         let mut to_level = voter_parent_level;
                         let mut from_level = previous_best_level;
                         let mut to = voter_parent_hash;
                         let mut from = previous_best;
-                        let mut added: Vec<(H256, u64)> = vec![];
-                        let mut removed: Vec<(H256, u64)> = vec![];
                         while to_level > from_level {
                             let votes: Vec<H256> = deserialize(
                                 &self
@@ -475,28 +467,28 @@ impl BlockChain {
                             .unwrap();
                             from_level -= 1;
                         }
-                        for removed_vote in &removed {
-                            wb.merge_cf(
-                                proposer_node_vote_cf,
-                                serialize(&removed_vote.0).unwrap(),
-                                serialize(&(false, self_chain as u16, removed_vote.1)).unwrap(),
-                            )?;
-                        }
-                        for added_vote in &added {
-                            wb.merge_cf(
-                                proposer_node_vote_cf,
-                                serialize(&added_vote.0).unwrap(),
-                                serialize(&(true, self_chain as u16, added_vote.1)).unwrap(),
-                            )?;
-                        }
-                        // finally add the new votes in this new block
-                        for added_vote in &content.votes {
-                            wb.merge_cf(
-                                proposer_node_vote_cf,
-                                serialize(&added_vote).unwrap(),
-                                serialize(&(true, self_chain as u16, self_level as u64)).unwrap(),
-                            )?;
-                        }
+                    }
+                    for removed_vote in &removed {
+                        wb.merge_cf(
+                            proposer_node_vote_cf,
+                            serialize(&removed_vote.0).unwrap(),
+                            serialize(&(false, self_chain as u16, removed_vote.1)).unwrap(),
+                        )?;
+                    }
+                    for added_vote in &added {
+                        wb.merge_cf(
+                            proposer_node_vote_cf,
+                            serialize(&added_vote.0).unwrap(),
+                            serialize(&(true, self_chain as u16, added_vote.1)).unwrap(),
+                        )?;
+                    }
+                    // finally add the new votes in this new block
+                    for added_vote in &content.votes {
+                        wb.merge_cf(
+                            proposer_node_vote_cf,
+                            serialize(&added_vote).unwrap(),
+                            serialize(&(true, self_chain as u16, self_level as u64)).unwrap(),
+                        )?;
                     }
                 }
             }
