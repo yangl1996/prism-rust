@@ -4,7 +4,7 @@ use crate::crypto::hash::{Hashable, H256};
 
 use bincode::{deserialize, serialize};
 use rocksdb::{ColumnFamilyDescriptor, Options, WriteBatch, DB};
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashSet};
 use std::sync::Mutex;
 
 // Column family names for node/chain metadata
@@ -468,12 +468,16 @@ impl BlockChain {
                             from_level -= 1;
                         }
                     }
+                    // track which proposer levels did we touch
+                    let mut affected: BTreeSet<u64> = BTreeSet::new();
                     for removed_vote in &removed {
                         wb.merge_cf(
                             proposer_node_vote_cf,
                             serialize(&removed_vote.0).unwrap(),
                             serialize(&(false, self_chain as u16, removed_vote.1)).unwrap(),
                         )?;
+                        let proposer_level: u64 = deserialize(&self.db.get_cf(proposer_node_level_cf, serialize(&removed_vote.0).unwrap()).unwrap().unwrap()).unwrap();
+                        affected.insert(proposer_level);
                     }
                     for added_vote in &added {
                         wb.merge_cf(
@@ -481,6 +485,8 @@ impl BlockChain {
                             serialize(&added_vote.0).unwrap(),
                             serialize(&(true, self_chain as u16, added_vote.1)).unwrap(),
                         )?;
+                        let proposer_level: u64 = deserialize(&self.db.get_cf(proposer_node_level_cf, serialize(&added_vote.0).unwrap()).unwrap().unwrap()).unwrap();
+                        affected.insert(proposer_level);
                     }
                     // finally add the new votes in this new block
                     for added_vote in &content.votes {
@@ -489,6 +495,8 @@ impl BlockChain {
                             serialize(&added_vote).unwrap(),
                             serialize(&(true, self_chain as u16, self_level as u64)).unwrap(),
                         )?;
+                        let proposer_level: u64 = deserialize(&self.db.get_cf(proposer_node_level_cf, serialize(&added_vote).unwrap()).unwrap().unwrap()).unwrap();
+                        affected.insert(proposer_level);
                     }
                 }
             }
