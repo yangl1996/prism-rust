@@ -37,6 +37,7 @@ pub struct BlockChain {
     unreferred_transaction: Mutex<HashSet<H256>>,
     unreferred_proposer: Mutex<HashSet<H256>>,
     unconfirmed_proposer: Mutex<HashSet<H256>>,
+    ledger_tip: Mutex<u64>,
 }
 
 // Functions to edit the blockchain
@@ -141,6 +142,7 @@ impl BlockChain {
             unreferred_transaction: Mutex::new(HashSet::new()),
             unreferred_proposer: Mutex::new(HashSet::new()),
             unconfirmed_proposer: Mutex::new(HashSet::new()),
+            ledger_tip: Mutex::new(0),
         };
 
         return Ok(blockchain_db);
@@ -545,31 +547,47 @@ impl BlockChain {
                                 Some(d) => deserialize(&d).unwrap(),
                             };
 
-                        for block in &proposer_blocks {
-                            let votes: Vec<(u16, u64)> = match self
-                                .db
-                                .get_cf(proposer_node_vote_cf, serialize(&block).unwrap())?
-                                {
-                                    None => vec![],
-                                    Some(d) => deserialize(&d).unwrap(),
-                                };
+                        let existing_leader: Option<H256> = match self.db.get_cf(proposer_leader_sequence_cf, serialize(&(*level as u64)).unwrap())? {
+                            None => None,
+                            Some(d) => Some(deserialize(&d).unwrap())
+                        };
 
-                            // check whether this block is the leader
-                            if votes.len() as u16 > NUM_VOTER_CHAINS / 2 + 1 {
-                                let new_leader = *block;
-                                // check whether it differs from the existing one
-                                let existing_leader: Option<H256> = match self.db.get_cf(proposer_leader_sequence_cf, serialize(&(*level as u64)).unwrap())? {
-                                    None => None,
-                                    Some(d) => Some(deserialize(&d).unwrap())
-                                };
-                                if Some(new_leader) != existing_leader {
-                                    wb.put_cf(proposer_leader_sequence_cf, serialize(&(*level as u64)).unwrap(), serialize(&block).unwrap())?;
-                                    if change_begin.is_none() {
-                                        change_begin = Some(*level);
-                                    }
+                        let new_leader: Option<H256> = {
+                            let mut new_leader: Option<H256> = None;
+                            for block in &proposer_blocks {
+                                let votes: Vec<(u16, u64)> = match self
+                                    .db
+                                    .get_cf(proposer_node_vote_cf, serialize(&block).unwrap())?
+                                    {
+                                        None => vec![],
+                                        Some(d) => deserialize(&d).unwrap(),
+                                    };
+
+                                // check whether this block is the leader
+                                if votes.len() as u16 > NUM_VOTER_CHAINS / 2 + 1 {
+                                    new_leader = Some(*block);
                                 }
                             }
+                            new_leader
+                        };
+
+                        if new_leader != existing_leader {
+                            match new_leader {
+                                None => wb.delete_cf(proposer_leader_sequence_cf,
+                                                     serialize(&(*level as u64)).unwrap())?,
+                                Some(new_leader) => wb.put_cf(proposer_leader_sequence_cf,
+                                                              serialize(&(*level as u64)).unwrap(),
+                                                              serialize(&new_leader).unwrap())?
+                            };
+                            if change_begin.is_none() {
+                                change_begin = Some(*level);
+                            }
                         }
+                    }
+
+                    // recompute the ledger order from the first changed level until we reach a
+                    // level that does not have a 
+                    if change_begin.is_some() {
                     }
 
                     self.db.write(wb)?;
@@ -1211,6 +1229,56 @@ mod tests {
                 None => None,
             };
             let num_voted = chain_num + 1;
+            if num_voted as u16 > NUM_VOTER_CHAINS / 2 + 1 {
+                assert_eq!(level_1_leader, Some(new_proposer_block_2.hash()));
+            } else {
+                assert_eq!(level_1_leader, None);
+            }
+        }
+
+        // Fork all voter chains (except chain 0) to revert ledger level 1 
+        for chain_num in 1..NUM_VOTER_CHAINS {
+            let new_voter_content =
+                Content::Voter(voter::Content::new(0, VOTER_GENESIS_HASHES[chain_num as usize], vec![]));
+            let mut random_payload: [u8; 32] = [0; 32];
+            random_payload[0] = (chain_num & 0xff) as u8;
+            random_payload[1] = ((chain_num >> 8) & 0xff) as u8;
+            random_payload[2] = 1;
+            let new_voter_block = Block::new(
+                *PROPOSER_GENESIS_HASH,
+                0,
+                0,
+                H256::default(),
+                vec![],
+                new_voter_content,
+                random_payload,
+                H256::default(),
+            );
+            db.insert_block(&new_voter_block).unwrap();
+            let new_voter_content =
+                Content::Voter(voter::Content::new(0, new_voter_block.hash(), vec![]));
+            let mut random_payload: [u8; 32] = [0; 32];
+            random_payload[0] = (chain_num & 0xff) as u8;
+            random_payload[1] = ((chain_num >> 8) & 0xff) as u8;
+            random_payload[2] = 2;
+            let new_voter_block = Block::new(
+                *PROPOSER_GENESIS_HASH,
+                0,
+                0,
+                H256::default(),
+                vec![],
+                new_voter_content,
+                random_payload,
+                H256::default(),
+            );
+            db.insert_block(&new_voter_block).unwrap();
+            
+            // Check that after we revert enough chains, proposer block 2 is no longer the leader
+            let level_1_leader: Option<H256> = match db.db.get_cf(proposer_leader_sequence_cf, serialize(&(1 as u64)).unwrap()).unwrap() {
+                Some(d) => Some(deserialize(&d).unwrap()),
+                None => None,
+            };
+            let num_voted = NUM_VOTER_CHAINS - chain_num as u16;
             if num_voted as u16 > NUM_VOTER_CHAINS / 2 + 1 {
                 assert_eq!(level_1_leader, Some(new_proposer_block_2.hash()));
             } else {
