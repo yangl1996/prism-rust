@@ -7,14 +7,9 @@ use std::collections::{HashSet};
 use std::sync::{Mutex, Arc};
 use crate::config::*;
 
-// level (u64) to hash of leader block.
-const PROPOSER_LEADER_SEQUENCE_CF: &str = "PROPOSER_LEADER_SEQUENCE";   
-// level (u64) to the list of proposer blocks confirmed by this level. The list is in the order
-// that those blocks should live in the ledger.
-const PROPOSER_CONFIRM_LIST_CF: &str = "PROPOSER_CONFIRM_LIST";
 
 
-pub struct Ledger {
+pub struct Context {
     db: rocksdb::DB,
     unconfirmed_proposer: HashSet<H256>,
 }
