@@ -626,8 +626,48 @@ impl BlockChain {
                                     break;
                                 }
                                 Some(leader) => {
-                                    // compute the ledger of this level
-                                    
+                                    // Get the collection of confirmed blocks by doing a DFS, so
+                                    // that we preserve the reference order (i.e. the blocks that
+                                    // is referred earlier appears in the front). We will then sort
+                                    // the list (stable sort) according to the level, so we get a
+                                    // total ordering by level and break ties by reference order.
+
+                                    let mut ledger: Vec<(H256, u64)> = vec![];
+                                    let mut stack: Vec<H256> = vec![leader];
+
+                                    // Start DFS
+                                    while let Some(top) = stack.pop() {
+                                        // See whether this block is in the unconfirmed list. If
+                                        // so, remove it. Otherwise, just pass this block.
+                                        if !unconfirmed_proposer.remove(&top) {
+                                            continue;
+                                        }
+
+                                        // Get info of this block.
+                                        let level: u64 = deserialize(&self.db.get_cf(proposer_node_level_cf, serialize(&top).unwrap())?.unwrap()).unwrap();
+                                        let refs: Vec<H256> = deserialize(&self.db.get_cf(proposer_ref_neighbor_cf,
+                                                                                          serialize(&top).unwrap())?
+                                                                          .unwrap()).unwrap();
+                                        
+                                        // Insert into the ledger.
+                                        ledger.push((top, level));
+
+                                        // Search all referenced blocks. Note that we need to
+                                        // reverse the order of the refs: we want the front
+                                        // of the reference list to be searched first, so we need
+                                        // to make sure it appears at the top of the stack.
+                                        for ref_hash in refs.iter().rev() {
+                                            stack.push(*ref_hash);
+                                        }
+                                    }
+
+                                    // Stable sort the ledger according to level
+                                    ledger.sort_by_cached_key(|k| k.1);
+
+                                    // Write the new ledger
+                                    let ledger: Vec<H256> = ledger.iter().map(|x| x.0).collect();
+                                    wb.put_cf(proposer_ledger_order_cf, serialize(&(level as u64)).unwrap(), 
+                                              serialize(&ledger).unwrap())?;
                                 }
                             }
                         }
@@ -1273,11 +1313,17 @@ mod tests {
                 Some(d) => Some(deserialize(&d).unwrap()),
                 None => None,
             };
+            let level_1_ledger: Option<Vec<H256>> = match db.db.get_cf(proposer_ledger_order_cf, serialize(&(1 as u64)).unwrap()).unwrap() {
+                Some(d) => Some(deserialize(&d).unwrap()),
+                None => None,
+            };
             let num_voted = chain_num + 1;
             if num_voted as u16 > NUM_VOTER_CHAINS / 2 + 1 {
                 assert_eq!(level_1_leader, Some(new_proposer_block_2.hash()));
+                assert_eq!(level_1_ledger, Some(vec![new_proposer_block_2.hash(), new_proposer_block_1.hash()]));
             } else {
                 assert_eq!(level_1_leader, None);
+                assert_eq!(level_1_ledger, None);
             }
         }
 
