@@ -13,7 +13,7 @@ pub mod crypto;
 //pub mod handler;
 //pub mod miner;
 //pub mod network;
-//pub mod ledger;
+//pub mod utxodb;
 pub mod transaction;
 //pub mod validation;
 //pub mod visualization;
