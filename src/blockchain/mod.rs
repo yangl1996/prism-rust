@@ -585,9 +585,54 @@ impl BlockChain {
                         }
                     }
 
-                    // recompute the ledger order from the first changed level until we reach a
-                    // level that does not have a 
+                    // FIXME: yet another db commit. This commits the new leader blocks.
+                    self.db.write(wb)?;
+                    let mut wb = WriteBatch::default();
+
+                    // If change happens, recompute the ledger. First, retire all levels from the
+                    // current ledger tip all the way to the first touched level, by deconfirming
+                    // the blocks originally confirmed by those levels. Then, start confirming
+                    // blocks from the first touched level until we reach a level without current
+                    // leader block.
                     if change_begin.is_some() {
+                        let change_begin = change_begin.unwrap();
+                        let mut ledger_tip = self.ledger_tip.lock().unwrap();
+                        let mut unconfirmed_proposer = self.unconfirmed_proposer.lock().unwrap();
+                        
+                        // deconfirm the blocks
+                        for level in change_begin..=*ledger_tip {
+                            match self.db.get_cf(proposer_ledger_order_cf, serialize(&(level as u64)).unwrap())? {
+                                None => {},
+                                Some(d) => {
+                                    let original_ledger: Vec<H256> = deserialize(&d).unwrap();
+                                    wb.delete_cf(proposer_ledger_order_cf, serialize(&(level as u64)).unwrap())?;
+                                    for block in &original_ledger {
+                                        unconfirmed_proposer.insert(*block);
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // recompute the ledger
+                        for level in change_begin.. {
+                            let leader: Option<H256> = match self.db.get_cf(proposer_leader_sequence_cf, serialize(&(level as u64)).unwrap())? {
+                                None => None,
+                                Some(d) => Some(deserialize(&d).unwrap())
+                            };
+                            match leader {
+                                None => {
+                                    // mark that the ledger lasts till the previous level
+                                    *ledger_tip = level - 1;
+                                    break;
+                                }
+                                Some(leader) => {
+                                    // compute the ledger of this level
+                                    
+                                }
+                            }
+                        }
+                        drop(ledger_tip);
+                        drop(unconfirmed_proposer);
                     }
 
                     self.db.write(wb)?;
