@@ -36,6 +36,7 @@ pub struct BlockChain {
     voter_best: Vec<Mutex<(H256, u64)>>,
     unreferred_transaction: Mutex<HashSet<H256>>,
     unreferred_proposer: Mutex<HashSet<H256>>,
+    unconfirmed_proposer: Mutex<HashSet<H256>>,
 }
 
 // Functions to edit the blockchain
@@ -139,6 +140,7 @@ impl BlockChain {
             voter_best: voter_best,
             unreferred_transaction: Mutex::new(HashSet::new()),
             unreferred_proposer: Mutex::new(HashSet::new()),
+            unconfirmed_proposer: Mutex::new(HashSet::new()),
         };
 
         return Ok(blockchain_db);
@@ -314,6 +316,10 @@ impl BlockChain {
                     proposer_best.1 = self_level;
                 }
                 drop(proposer_best);
+                // mark this new proposer block as unconfirmed
+                let mut unconfirmed_proposer = self.unconfirmed_proposer.lock().unwrap();
+                unconfirmed_proposer.insert(block_hash);
+                drop(unconfirmed_proposer);
             }
             Content::Voter(content) => {
                 // add voter parent
@@ -704,6 +710,10 @@ mod tests {
             *db.proposer_best.lock().unwrap(),
             (*PROPOSER_GENESIS_HASH, 0)
         );
+        assert_eq!(
+            *db.unconfirmed_proposer.lock().unwrap(),
+            HashSet::new()
+        );
         assert_eq!(db.unreferred_proposer.lock().unwrap().len(), 1);
         assert_eq!(
             db.unreferred_proposer
@@ -940,6 +950,21 @@ mod tests {
         assert_eq!(db.unreferred_proposer.lock().unwrap().len(), 1);
         assert_eq!(
             db.unreferred_proposer
+                .lock()
+                .unwrap()
+                .contains(&new_proposer_block_2.hash()),
+            true
+        );
+        assert_eq!(db.unconfirmed_proposer.lock().unwrap().len(), 2);
+        assert_eq!(
+            db.unconfirmed_proposer
+                .lock()
+                .unwrap()
+                .contains(&new_proposer_block_1.hash()),
+            true
+        );
+        assert_eq!(
+            db.unconfirmed_proposer
                 .lock()
                 .unwrap()
                 .contains(&new_proposer_block_2.hash()),
