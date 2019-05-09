@@ -88,7 +88,7 @@ pub struct Authorization {
 pub mod tests {
     use super::*;
     use crate::crypto::hash::tests::generate_random_hash;
-    use rand::{Rng, RngCore};
+    use rand::RngCore;
 
     pub fn generate_random_coinid() -> CoinId {
         let mut rng = rand::thread_rng();
