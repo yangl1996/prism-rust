@@ -335,7 +335,7 @@ impl BlockChain {
                 wb.put_cf(
                     voter_parent_neighbor_cf,
                     serialize(&block_hash).unwrap(),
-                    serialize(&content.voter_parent).unwrap(),
+                    serialize(&voter_parent_hash).unwrap(),
                 )?;
                 // get current block level and chain number
                 let voter_parent_level: u64 = deserialize(
@@ -602,6 +602,9 @@ impl BlockChain {
                         let change_begin = change_begin.unwrap();
                         let mut ledger_tip = self.ledger_tip.lock().unwrap();
                         let mut unconfirmed_proposer = self.unconfirmed_proposer.lock().unwrap();
+
+                        let mut removed: Vec<H256> = vec![];    // proposer blocks removed from the ledger
+                        let mut added: Vec<H256> = vec![];      // proposer blocks added to the ledger
                         
                         // deconfirm the blocks
                         for level in change_begin..=*ledger_tip {
@@ -612,6 +615,7 @@ impl BlockChain {
                                     wb.delete_cf(proposer_ledger_order_cf, serialize(&(level as u64)).unwrap())?;
                                     for block in &original_ledger {
                                         unconfirmed_proposer.insert(*block);
+                                        removed.push(*block);
                                     }
                                 }
                             }
@@ -672,14 +676,35 @@ impl BlockChain {
                                     let ledger: Vec<H256> = ledger.iter().map(|x| x.0).collect();
                                     wb.put_cf(proposer_ledger_order_cf, serialize(&(level as u64)).unwrap(), 
                                               serialize(&ledger).unwrap())?;
+                                    for block in &ledger {
+                                        added.push(*block);
+                                    }
                                 }
                             }
                         }
                         drop(ledger_tip);
                         drop(unconfirmed_proposer);
+                        // commit the new ledger
+                        self.db.write(wb)?;
+
+                        // If we did touch the ledger, gather the diff of the ledger in the form of transaction blocks
+                        let mut removed_transaction: Vec<H256> = vec![];
+                        let mut added_transaction: Vec<H256> = vec![];
+                        for hash in removed {
+                            let mut transactions: Vec<H256> = deserialize(&self.db.get_cf(transaction_ref_neighbor_cf, serialize(&hash).unwrap())?.unwrap()).unwrap();
+                            removed_transaction.append(&mut transactions);
+                        }
+                        for hash in added {
+                            let mut transactions: Vec<H256> = deserialize(&self.db.get_cf(transaction_ref_neighbor_cf, serialize(&hash).unwrap())?.unwrap()).unwrap();
+                            added_transaction.append(&mut transactions);
+                        }
+
+                        return Ok((added_transaction, removed_transaction));
+                    } else {
+                        // If we didn't change any leader, and thus didn't touch the ledger
+                        self.db.write(wb)?;
+                        return Ok((vec![], vec![]));
                     }
-                    self.db.write(wb)?;
-                    return Ok((vec![], vec![]));
                 } else {
                     // If we didn't update the votes.
                     self.db.write(wb)?;
@@ -1312,7 +1337,7 @@ mod tests {
                 random_payload,
                 H256::default(),
             );
-            db.insert_block(&new_voter_block).unwrap();
+            let diff = db.insert_block(&new_voter_block).unwrap();
             
             // Check that after we inserted more than NUM_VOTER_CHAINS/2+1 blocks, proposer block 2
             // becomes the leader
@@ -1325,12 +1350,17 @@ mod tests {
                 None => None,
             };
             let num_voted = chain_num + 1;
+            if num_voted as u16 == NUM_VOTER_CHAINS / 2 + 1 + 1 {
+                assert_eq!(diff, (vec![new_transaction_block.hash()], vec![]));
+            }
             if num_voted as u16 > NUM_VOTER_CHAINS / 2 + 1 {
                 assert_eq!(level_1_leader, Some(new_proposer_block_2.hash()));
                 assert_eq!(level_1_ledger, Some(vec![new_proposer_block_2.hash(), new_proposer_block_1.hash()]));
+                assert_eq!(db.unconfirmed_proposer.lock().unwrap().len(), 0);
             } else {
                 assert_eq!(level_1_leader, None);
                 assert_eq!(level_1_ledger, None);
+                assert_eq!(db.unconfirmed_proposer.lock().unwrap().len(), 2);
             }
         }
 
@@ -1369,7 +1399,7 @@ mod tests {
                 random_payload,
                 H256::default(),
             );
-            db.insert_block(&new_voter_block).unwrap();
+            let diff = db.insert_block(&new_voter_block).unwrap();
             
             // Check that after we revert enough chains, proposer block 2 is no longer the leader
             let level_1_leader: Option<H256> = match db.db.get_cf(proposer_leader_sequence_cf, serialize(&(1 as u64)).unwrap()).unwrap() {
@@ -1377,10 +1407,15 @@ mod tests {
                 None => None,
             };
             let num_voted = NUM_VOTER_CHAINS - chain_num as u16;
+            if num_voted as u16 == NUM_VOTER_CHAINS / 2 + 1 {
+                assert_eq!(diff, (vec![], vec![new_transaction_block.hash()]));
+            }
             if num_voted as u16 > NUM_VOTER_CHAINS / 2 + 1 {
                 assert_eq!(level_1_leader, Some(new_proposer_block_2.hash()));
+                assert_eq!(db.unconfirmed_proposer.lock().unwrap().len(), 0);
             } else {
                 assert_eq!(level_1_leader, None);
+                assert_eq!(db.unconfirmed_proposer.lock().unwrap().len(), 2);
             }
         }
     }
