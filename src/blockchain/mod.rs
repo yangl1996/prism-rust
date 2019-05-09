@@ -248,6 +248,8 @@ impl BlockChain {
         let voter_parent_neighbor_cf = self.db.cf_handle(VOTER_PARENT_NEIGHBOR_CF).unwrap();
         let transaction_ref_neighbor_cf = self.db.cf_handle(TRANSACTION_REF_NEIGHBOR_CF).unwrap();
         let proposer_ref_neighbor_cf = self.db.cf_handle(PROPOSER_REF_NEIGHBOR_CF).unwrap();
+        let proposer_leader_sequence_cf = self.db.cf_handle(PROPOSER_LEADER_SEQUENCE_CF).unwrap();
+        let proposer_ledger_order_cf = self.db.cf_handle(PROPOSER_LEDGER_ORDER_CF).unwrap();
 
         let mut wb = WriteBatch::default();
 
@@ -519,6 +521,59 @@ impl BlockChain {
                         .unwrap();
                         affected.insert(proposer_level);
                     }
+
+                    // FIXME: this is ugly. We have an ongoing write batch `wb` that contains
+                    // updates to cf'es except leader sequence and ledger order (basically
+                    // all topological information). Now we are going to commit this batch and use
+                    // the data we just committed to update leader sequence and ledger order. To do
+                    // this, we create a new write batch still named `wb` and return early here.
+                    // It breaks the promise that all writes happens in this function are committed
+                    // in one batch. We need to fix it if we want concurrent access to blockchain.
+                    self.db.write(wb)?;
+                    let mut wb = WriteBatch::default();
+                    
+                    // track the smallest level whose leader has changed
+                    let mut change_begin: Option<u64> = None;
+
+                    // try to update the leader block of each touched proposer level
+                    for level in &affected {
+                        let proposer_blocks: Vec<H256> = match self
+                            .db
+                            .get_cf(proposer_tree_level_cf, serialize(&level).unwrap())?
+                            {
+                                None => continue,
+                                Some(d) => deserialize(&d).unwrap(),
+                            };
+
+                        for block in &proposer_blocks {
+                            let votes: Vec<(u16, u64)> = match self
+                                .db
+                                .get_cf(proposer_node_vote_cf, serialize(&block).unwrap())?
+                                {
+                                    None => vec![],
+                                    Some(d) => deserialize(&d).unwrap(),
+                                };
+
+                            // check whether this block is the leader
+                            if votes.len() as u16 > NUM_VOTER_CHAINS / 2 + 1 {
+                                let new_leader = *block;
+                                // check whether it differs from the existing one
+                                let existing_leader: Option<H256> = match self.db.get_cf(proposer_leader_sequence_cf, serialize(&(*level as u64)).unwrap())? {
+                                    None => None,
+                                    Some(d) => Some(deserialize(&d).unwrap())
+                                };
+                                if Some(new_leader) != existing_leader {
+                                    wb.put_cf(proposer_leader_sequence_cf, serialize(&(*level as u64)).unwrap(), serialize(&block).unwrap())?;
+                                    if change_begin.is_none() {
+                                        change_begin = Some(*level);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    self.db.write(wb)?;
+                    return Ok(());
                 }
             }
             Content::Transaction(_) => {
@@ -594,35 +649,6 @@ impl BlockChain {
             list.push(blocks[0]);
         }
         return Ok(list);
-    }
-
-    /// Get the hash of the leader block at the given level
-    pub fn proposer_leader(&self, level: u64) -> Result<Option<H256>> {
-        let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
-        let proposer_node_vote_cf = self.db.cf_handle(PROPOSER_NODE_VOTE_CF).unwrap();
-
-        let proposer_blocks: Vec<H256> = match self
-            .db
-            .get_cf(proposer_tree_level_cf, serialize(&level).unwrap())?
-        {
-            None => return Ok(None),
-            Some(d) => deserialize(&d).unwrap(),
-        };
-
-        for block in &proposer_blocks {
-            let votes: Vec<(u16, u64)> = match self
-                .db
-                .get_cf(proposer_node_vote_cf, serialize(&block).unwrap())?
-            {
-                None => vec![],
-                Some(d) => deserialize(&d).unwrap(),
-            };
-
-            if votes.len() as u16 > NUM_VOTER_CHAINS / 2 + 1 {
-                return Ok(Some(*block));
-            }
-        }
-        return Ok(None);
     }
 }
 
@@ -836,6 +862,8 @@ mod tests {
         let voter_parent_neighbor_cf = db.db.cf_handle(VOTER_PARENT_NEIGHBOR_CF).unwrap();
         let transaction_ref_neighbor_cf = db.db.cf_handle(TRANSACTION_REF_NEIGHBOR_CF).unwrap();
         let proposer_ref_neighbor_cf = db.db.cf_handle(PROPOSER_REF_NEIGHBOR_CF).unwrap();
+        let proposer_leader_sequence_cf = db.db.cf_handle(PROPOSER_LEADER_SEQUENCE_CF).unwrap();
+        let proposer_ledger_order_cf = db.db.cf_handle(PROPOSER_LEDGER_ORDER_CF).unwrap();
 
         // Create a transaction block on the proposer genesis.
         let new_transaction_content = Content::Transaction(transaction::Content::new(vec![]));
@@ -1156,100 +1184,37 @@ mod tests {
         )
         .unwrap();
         assert_eq!(votes, vec![(0, 1)]);
-    }
 
-    #[test]
-    fn proposer_leader() {
-        let db = BlockChain::new("/tmp/prism_test_blockchain_proposer_leader.rocksdb").unwrap();
-        assert_eq!(
-            db.proposer_leader(0).unwrap().unwrap(),
-            *PROPOSER_GENESIS_HASH
-        );
-
-        // Insert two proposer blocks so we have something to vote for
-        let proposer_1 = Content::Proposer(proposer::Content::new(vec![], vec![]));
-        let proposer_1 = Block::new(
-            *PROPOSER_GENESIS_HASH,
-            0,
-            0,
-            H256::default(),
-            vec![],
-            proposer_1,
-            [255; 32],
-            H256::default(),
-        );
-        db.insert_block(&proposer_1).unwrap();
-        let proposer_2 = Content::Proposer(proposer::Content::new(vec![], vec![]));
-        let proposer_2 = Block::new(
-            *PROPOSER_GENESIS_HASH,
-            0,
-            0,
-            H256::default(),
-            vec![],
-            proposer_2,
-            [254; 32],
-            H256::default(),
-        );
-        db.insert_block(&proposer_2).unwrap();
-
-        // For each voter chain, insert a voter block to vote for proposer 1. Check that only after
-        // we get more than half chains voting for it do we get a leader
-        for chain_num in 0..NUM_VOTER_CHAINS {
-            let voter = Content::Voter(voter::Content::new(
-                0,
-                VOTER_GENESIS_HASHES[chain_num as usize],
-                vec![proposer_1.hash()],
-            ));
-            let voter = Block::new(
-                proposer_1.hash(),
+        // Create a voter block on all remaining voter chains to vote for proposer block 2
+        for chain_num in 1..NUM_VOTER_CHAINS {
+            let new_voter_content =
+                Content::Voter(voter::Content::new(0, VOTER_GENESIS_HASHES[chain_num as usize], vec![new_proposer_block_2.hash()]));
+            let mut random_payload: [u8; 32] = [0; 32];
+            random_payload[0] = (chain_num & 0xff) as u8;
+            random_payload[1] = ((chain_num >> 8) & 0xff) as u8;
+            let new_voter_block = Block::new(
+                new_proposer_block_2.hash(),
                 0,
                 0,
                 H256::default(),
                 vec![],
-                voter,
-                [
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    ((chain_num >> 8) & 0xff) as u8,
-                    (chain_num & 0xff) as u8,
-                ],
+                new_voter_content,
+                random_payload,
                 H256::default(),
             );
-            db.insert_block(&voter).unwrap();
-            let leader = db.proposer_leader(1).unwrap();
-            if chain_num + 1 as u16 <= NUM_VOTER_CHAINS / 2 + 1 {
-                assert_eq!(leader, None);
+            db.insert_block(&new_voter_block).unwrap();
+            
+            // Check that after we inserted more than NUM_VOTER_CHAINS/2+1 blocks, proposer block 2
+            // becomes the leader
+            let level_1_leader: Option<H256> = match db.db.get_cf(proposer_leader_sequence_cf, serialize(&(1 as u64)).unwrap()).unwrap() {
+                Some(d) => Some(deserialize(&d).unwrap()),
+                None => None,
+            };
+            let num_voted = chain_num + 1;
+            if num_voted as u16 > NUM_VOTER_CHAINS / 2 + 1 {
+                assert_eq!(level_1_leader, Some(new_proposer_block_2.hash()));
             } else {
-                println!("{}", chain_num + 1);
-                assert_eq!(leader, Some(proposer_1.hash()));
+                assert_eq!(level_1_leader, None);
             }
         }
     }
