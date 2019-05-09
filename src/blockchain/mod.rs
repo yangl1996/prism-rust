@@ -476,7 +476,14 @@ impl BlockChain {
                             serialize(&removed_vote.0).unwrap(),
                             serialize(&(false, self_chain as u16, removed_vote.1)).unwrap(),
                         )?;
-                        let proposer_level: u64 = deserialize(&self.db.get_cf(proposer_node_level_cf, serialize(&removed_vote.0).unwrap()).unwrap().unwrap()).unwrap();
+                        let proposer_level: u64 = deserialize(
+                            &self
+                                .db
+                                .get_cf(proposer_node_level_cf, serialize(&removed_vote.0).unwrap())
+                                .unwrap()
+                                .unwrap(),
+                        )
+                        .unwrap();
                         affected.insert(proposer_level);
                     }
                     for added_vote in &added {
@@ -485,7 +492,14 @@ impl BlockChain {
                             serialize(&added_vote.0).unwrap(),
                             serialize(&(true, self_chain as u16, added_vote.1)).unwrap(),
                         )?;
-                        let proposer_level: u64 = deserialize(&self.db.get_cf(proposer_node_level_cf, serialize(&added_vote.0).unwrap()).unwrap().unwrap()).unwrap();
+                        let proposer_level: u64 = deserialize(
+                            &self
+                                .db
+                                .get_cf(proposer_node_level_cf, serialize(&added_vote.0).unwrap())
+                                .unwrap()
+                                .unwrap(),
+                        )
+                        .unwrap();
                         affected.insert(proposer_level);
                     }
                     // finally add the new votes in this new block
@@ -495,7 +509,14 @@ impl BlockChain {
                             serialize(&added_vote).unwrap(),
                             serialize(&(true, self_chain as u16, self_level as u64)).unwrap(),
                         )?;
-                        let proposer_level: u64 = deserialize(&self.db.get_cf(proposer_node_level_cf, serialize(&added_vote).unwrap()).unwrap().unwrap()).unwrap();
+                        let proposer_level: u64 = deserialize(
+                            &self
+                                .db
+                                .get_cf(proposer_node_level_cf, serialize(&added_vote).unwrap())
+                                .unwrap()
+                                .unwrap(),
+                        )
+                        .unwrap();
                         affected.insert(proposer_level);
                     }
                 }
@@ -710,10 +731,7 @@ mod tests {
             *db.proposer_best.lock().unwrap(),
             (*PROPOSER_GENESIS_HASH, 0)
         );
-        assert_eq!(
-            *db.unconfirmed_proposer.lock().unwrap(),
-            HashSet::new()
-        );
+        assert_eq!(*db.unconfirmed_proposer.lock().unwrap(), HashSet::new());
         assert_eq!(db.unreferred_proposer.lock().unwrap().len(), 1);
         assert_eq!(
             db.unreferred_proposer
