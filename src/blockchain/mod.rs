@@ -237,7 +237,9 @@ impl BlockChain {
         return Ok(db);
     }
 
-    pub fn insert_block(&self, block: &Block) -> Result<()> {
+    /// Insert a new block into the ledger. Returns the list of added transaction blocks and
+    /// removed transaction blocks.
+    pub fn insert_block(&self, block: &Block) -> Result<(Vec<H256>, Vec<H256>)> {
         // get cf handles
         let proposer_node_level_cf = self.db.cf_handle(PROPOSER_NODE_LEVEL_CF).unwrap();
         let voter_node_level_cf = self.db.cf_handle(VOTER_NODE_LEVEL_CF).unwrap();
@@ -324,6 +326,8 @@ impl BlockChain {
                 let mut unconfirmed_proposer = self.unconfirmed_proposer.lock().unwrap();
                 unconfirmed_proposer.insert(block_hash);
                 drop(unconfirmed_proposer);
+                self.db.write(wb)?;
+                return Ok((vec![], vec![]));
             }
             Content::Voter(content) => {
                 // add voter parent
@@ -674,9 +678,12 @@ impl BlockChain {
                         drop(ledger_tip);
                         drop(unconfirmed_proposer);
                     }
-
                     self.db.write(wb)?;
-                    return Ok(());
+                    return Ok((vec![], vec![]));
+                } else {
+                    // If we didn't update the votes.
+                    self.db.write(wb)?;
+                    return Ok((vec![], vec![]));
                 }
             }
             Content::Transaction(_) => {
@@ -684,10 +691,10 @@ impl BlockChain {
                 let mut unreferred_transaction = self.unreferred_transaction.lock().unwrap();
                 unreferred_transaction.insert(block_hash);
                 drop(unreferred_transaction);
+                self.db.write(wb)?;
+                return Ok((vec![], vec![]));
             }
         }
-        self.db.write(wb)?;
-        return Ok(());
     }
 
     pub fn best_proposer(&self) -> H256 {
