@@ -23,7 +23,9 @@ pub const TRANSACTION_MINING_RATE: u32 = 100 - PROPOSER_MINING_RATE - VOTER_MINI
 
 lazy_static! {
     pub static ref DEFAULT_DIFFICULTY: H256 = {
-        let raw: [u8; 32] = [255; 32];
+        let mut raw: [u8; 32] = [255; 32];
+        raw[0] = 0;
+        raw[1] = 25;
         raw.into()
     };
 
