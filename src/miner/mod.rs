@@ -260,15 +260,15 @@ impl Context {
     fn update_context(&mut self) {
         // get mutex of blockchain and get all required data
         let blockchain = self.blockchain.lock().unwrap();
-        self.proposer_parent_hash = blockchain.get_proposer_best_block();
+        self.proposer_parent_hash = blockchain.best_proposer();
         self.difficulty = self.get_difficulty(&self.proposer_parent_hash);
-        let transaction_block_refs = blockchain.get_unreferred_tx_blocks(); //.clone();
-        let proposer_block_refs = blockchain.get_unreferred_prop_blocks().clone(); // remove clone?
+        let transaction_block_refs = blockchain.unreferred_transaction(); //.clone();
+        let proposer_block_refs = blockchain.unreferred_proposer().clone(); // remove clone?
         let voter_parent_hash: Vec<H256> = (0..NUM_VOTER_CHAINS)
-            .map(|i| blockchain.get_voter_best_block(i).clone())
+            .map(|i| blockchain.best_voter(i as usize).clone())
             .collect();
         let proposer_block_votes: Vec<Vec<H256>> = (0..NUM_VOTER_CHAINS)
-            .map(|i| blockchain.get_unvoted_prop_blocks(i).clone())
+            .map(|i| blockchain.unvoted_proposer(&voter_parent_hash[i as usize]).unwrap().clone())
             .collect();
         drop(blockchain);
         // get mutex of mempool and get all required data
@@ -344,7 +344,7 @@ impl Context {
     // TODO: shall we make a dedicated type for difficulty?
     fn get_difficulty(&self, block_hash: &H256) -> H256 {
         // Get the header of the block corresponding to block_hash
-        match self.db.get(*block_hash).unwrap() {
+        match self.db.get(block_hash).unwrap() {
             // extract difficulty
             Some(b) => {
                 return b.header.difficulty;

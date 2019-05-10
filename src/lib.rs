@@ -11,7 +11,7 @@ pub mod blockdb;
 pub mod config;
 pub mod crypto;
 //pub mod handler;
-//pub mod miner;
+pub mod miner;
 //pub mod network;
 pub mod utxodb;
 pub mod transaction;
