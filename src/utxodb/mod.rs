@@ -1,6 +1,6 @@
 use crate::crypto::hash::Hashable;
-use crate::transaction::{Output, CoinId, Transaction};
-use bincode::{serialize};
+use crate::transaction::{Input, Output, CoinId, Transaction};
+use bincode::serialize;
 use rocksdb::{DB, Options};
 
 pub struct UtxoDatabase {
@@ -39,7 +39,9 @@ impl UtxoDatabase {
     }
 
     /// Remove the given transactions, then add another set of transactions.
-    pub fn apply_diff(&self, added: &[Transaction], removed: &[Transaction]) -> Result<(), rocksdb::Error> {
+    pub fn apply_diff(&self, added: &[Transaction], removed: &[Transaction]) -> Result<(Vec<Input>, Vec<Input>), rocksdb::Error> {
+        let mut added_coins: Vec<Input> = vec![];
+        let mut removed_coins: Vec<Input> = vec![];
         // revert the transactions
         for t in removed.iter().rev() {
             // remove the output
@@ -67,6 +69,12 @@ impl UtxoDatabase {
                         index: idx as u32
                     };
                     self.db.delete(serialize(&id).unwrap())?;
+                    let coin = Input {
+                        coin: id,
+                        value: t.output[idx].value,
+                        owner: t.output[idx].recipient,
+                    };
+                    removed_coins.push(coin);
                 }
                 // add back the input
                 for input in &t.input {
@@ -75,6 +83,7 @@ impl UtxoDatabase {
                         recipient: input.owner,
                     };
                     self.db.put(serialize(&input.coin).unwrap(), serialize(&out).unwrap())?;
+                    added_coins.push(input.clone());
                 }
             }
         }
@@ -84,6 +93,7 @@ impl UtxoDatabase {
             // remove the input
             for input in &t.input {
                 self.db.delete(serialize(&input.coin).unwrap())?;
+                removed_coins.push(input.clone());
             }
 
             // add the output
@@ -94,9 +104,15 @@ impl UtxoDatabase {
                     index: idx as u32
                 };
                 self.db.put(serialize(&id).unwrap(), serialize(&output).unwrap())?;
+                let coin = Input {
+                    coin: id,
+                    value: output.value,
+                    owner: output.recipient,
+                };
+                removed_coins.push(coin);
             }
         }
-        return Ok(());
+        return Ok((added_coins, removed_coins));
     }
 }
 
@@ -105,6 +121,7 @@ mod test {
     use super::*;
     use crate::transaction::Input;
     use crate::crypto::hash::H256;
+    use bincode::deserialize;
 
     #[test]
     fn initialize_new() {

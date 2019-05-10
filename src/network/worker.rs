@@ -8,6 +8,7 @@ use crate::miner::memory_pool::MemoryPool;
 use crate::miner::ContextUpdateSignal;
 use crate::network::server::Handle as ServerHandle;
 use crate::utxodb::UtxoDatabase;
+use crate::wallet::Wallet;
 use crate::validation::{check_block, BlockResult};
 use log::{debug, info};
 use std::sync::{mpsc, Arc, Mutex};
@@ -20,6 +21,7 @@ pub struct Context {
     chain: Arc<BlockChain>,
     blockdb: Arc<BlockDatabase>,
     utxodb: Arc<UtxoDatabase>,
+    wallet: Arc<Wallet>,
     mempool: Arc<Mutex<MemoryPool>>,
     context_update_chan: mpsc::Sender<ContextUpdateSignal>,
     server: ServerHandle,
@@ -32,6 +34,7 @@ pub fn new(
     blockchain: &Arc<BlockChain>,
     blockdb: &Arc<BlockDatabase>,
     utxodb: &Arc<UtxoDatabase>,
+    wallet: &Arc<Wallet>,
     mempool: &Arc<Mutex<MemoryPool>>,
     ctx_update_sink: mpsc::Sender<ContextUpdateSignal>,
     server: ServerHandle,
@@ -42,6 +45,7 @@ pub fn new(
         chain: Arc::clone(blockchain),
         blockdb: Arc::clone(blockdb),
         utxodb: Arc::clone(utxodb),
+        wallet: Arc::clone(wallet),
         mempool: Arc::clone(mempool),
         context_update_chan: ctx_update_sink,
         server: server,
@@ -125,6 +129,7 @@ impl Context {
                                     &self.chain,
                                     &self.server,
                                     &self.utxodb,
+                                    &self.wallet,
                                 );
                             }
                             _ => {
@@ -151,6 +156,7 @@ impl Context {
                                     &self.chain,
                                     &self.server,
                                     &self.utxodb,
+                                    &self.wallet,
                                 );
                             }
                             _ => {

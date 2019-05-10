@@ -20,8 +20,6 @@ pub type Result<T> = std::result::Result<T, WalletError>;
 pub struct Wallet {
     /// The underlying RocksDB handle.
     handle: rocksdb::DB,
-    /// Channel to notify the miner about context update
-    context_update_chan: mpsc::Sender<ContextUpdateSignal>,
     /// Pool of unmined transactions, will add generated transactions to it.
     mempool: Arc<Mutex<MemoryPool>>,
 }
@@ -80,7 +78,6 @@ impl Wallet {
     pub fn new(
         path: &std::path::Path,
         mempool: &Arc<Mutex<MemoryPool>>,
-        ctx_update_sink: mpsc::Sender<ContextUpdateSignal>,
     ) -> Result<Self> {
         let coin_cf = rocksdb::ColumnFamilyDescriptor::new(COIN_CF, rocksdb::Options::default());
         let keypair_cf = rocksdb::ColumnFamilyDescriptor::new(KEYPAIR_CF, rocksdb::Options::default());
@@ -90,14 +87,13 @@ impl Wallet {
         let handle = rocksdb::DB::open_cf_descriptors(&db_opts, path, vec![coin_cf, keypair_cf])?;
         return Ok(Self {
             handle,
-            context_update_chan: ctx_update_sink,
             mempool: Arc::clone(mempool),
         });
     }
 
     // someone pay to public key A first, then I coincidentally generate A, I will NOT receive the payment
     /// Generate a new key pair
-    pub fn generate_keypair(&mut self) -> Result<()>{
+    pub fn generate_keypair(&self) -> Result<()>{
         let cf = self.handle.cf_handle(KEYPAIR_CF).unwrap();
         let keypair = KeyPair::random();
         let k: Address = keypair.public_key().hash();
@@ -153,17 +149,21 @@ impl Wallet {
 
     /// Add coin to wallet
     /// Use write batch to keep atomicity
-    fn insert_coin_batch(&mut self, coin: &UTXO, batch: &mut rocksdb::WriteBatch) -> Result<()>{
+    fn insert_coin_batch(&self, coin: &Input, batch: &mut rocksdb::WriteBatch) -> Result<()>{
         let cf = self.handle.cf_handle(COIN_CF).unwrap();
-        let k = serialize(&coin.coin_id).unwrap();
-        let v = serialize(&coin.coin_data).unwrap();
+        let k = serialize(&coin.coin).unwrap();
+        let output = Output {
+            value: coin.value,
+            recipient: coin.owner,
+        };
+        let v = serialize(&output).unwrap();
         batch.put_cf(cf,&k, &v)?;
         Ok(())
     }
 
     /// Removes coin from the wallet. Will be used after the tx is confirmed and the coin is spent. Also used in rollback
     /// If the coin was in, it is removed. If not, this fn does NOT panic/error.
-    fn delete_coin(&mut self, coin_id: &CoinId) -> Result<()> {
+    fn delete_coin(&self, coin_id: &CoinId) -> Result<()> {
         let cf = self.handle.cf_handle(COIN_CF).unwrap();
         let k = serialize(coin_id).unwrap();
         self.handle.delete_cf(cf, &k)?;
@@ -173,7 +173,7 @@ impl Wallet {
     /// Removes coin from the wallet. Will be used after the tx is confirmed and the coin is spent. Also used in rollback
     /// If the coin was in, it is removed. If not, this fn does NOT panic/error.
     /// Use write batch to keep atomicity
-    fn delete_coin_batch(&mut self, coin_id: &CoinId, batch: &mut rocksdb::WriteBatch) -> Result<()> {
+    fn delete_coin_batch(&self, coin_id: &CoinId, batch: &mut rocksdb::WriteBatch) -> Result<()> {
         let cf = self.handle.cf_handle(COIN_CF).unwrap();
         let k = serialize(coin_id).unwrap();
         batch.delete_cf(cf, &k)?;
@@ -182,14 +182,14 @@ impl Wallet {
 
     /// Update the wallet atomically using a write batch.
     /// Can serve as add or rollback, based on arguments to_delete and to_insert.
-    pub fn update(&mut self, to_delete: &Vec<CoinId>, to_insert: &Vec<UTXO>) -> Result<()> {
+    pub fn update(&self, add: &[Input], remove: &[Input]) -> Result<()> {
         let mut batch = rocksdb::WriteBatch::default();
-        for coin_id in to_delete {
-            self.delete_coin_batch(coin_id, &mut batch)?;
+        for coin in remove {
+            self.delete_coin_batch(&coin.coin, &mut batch)?;
         }
-        for utxo in to_insert {
-            if let Ok(true) = self.contains_address(&utxo.coin_data.recipient) {
-                self.insert_coin_batch(utxo, &mut batch)?;
+        for coin in add {
+            if let Ok(true) = self.contains_address(&coin.owner) {
+                self.insert_coin_batch(coin, &mut batch)?;
             }
         }
         self.handle.write(batch)?;
@@ -208,8 +208,8 @@ impl Wallet {
     }
 
     /// Create a transaction using the wallet coins
-    fn create_transaction(&mut self, recipient: Address, value: u64) -> Result<Transaction> {
-        let mut coins_to_use: Vec<UTXO> = vec![];
+    fn create_transaction(&self, recipient: Address, value: u64) -> Result<Transaction> {
+        let mut coins_to_use: Vec<Input> = vec![];
         let mut value_sum = 0u64;
         let cf = self.handle.cf_handle(COIN_CF).unwrap();
         let mut iter = self.handle.iterator_cf(cf,rocksdb::IteratorMode::Start)?;
@@ -218,9 +218,10 @@ impl Wallet {
             let coin_id: CoinId = bincode::deserialize(k.as_ref()).unwrap();
             let coin_data: Output = bincode::deserialize(v.as_ref()).unwrap();
             value_sum += coin_data.value;
-            coins_to_use.push(UTXO {
-                coin_id: coin_id,
-                coin_data: coin_data,
+            coins_to_use.push(Input {
+                coin: coin_id,
+                value: coin_data.value,
+                owner: coin_data.recipient,
             }); // coins that will be used for this transaction
             if value_sum >= value {
                 // if we already have enough money, break
@@ -234,7 +235,7 @@ impl Wallet {
         // if we have enough money in our wallet, create tx
         // remove used coin from wallet
         for c in coins_to_use.iter() {
-            self.delete_coin(&c.coin_id)?;
+            self.delete_coin(&c.coin)?;
         }
 
         // create transaction inputs
@@ -242,11 +243,11 @@ impl Wallet {
             .iter()
             .map(|c| Input {
                 coin: CoinId {
-                    hash: c.coin_id.hash,
-                    index: c.coin_id.index,
+                    hash: c.coin.hash,
+                    index: c.coin.index,
                 },
-                value: c.coin_data.value,
-                owner: c.coin_data.recipient,
+                value: c.value,
+                owner: c.owner,
             })
             .collect();
         // create the output
@@ -267,7 +268,7 @@ impl Wallet {
         };
         let mut authorization = vec![];
         for coin in coins_to_use.iter() {
-            let keypair = self.get_keypair(&coin.coin_data.recipient)?;
+            let keypair = self.get_keypair(&coin.owner)?;
             authorization.push(Authorization {
                 pubkey: keypair.public_key(),
                 signature: unsigned.sign(&keypair),
@@ -281,12 +282,10 @@ impl Wallet {
     }
 
     /// Pay to a recipient some value of money, the resulting transaction is just added to memory pool, and may not be confirmed
-    pub fn pay(&mut self, recipient: Address, value: u64) -> Result<H256> {
+    pub fn pay(&self, recipient: Address, value: u64) -> Result<H256> {
         let tx = self.create_transaction(recipient, value)?;
         let hash = tx.hash();
         handler::new_transaction(tx, &self.mempool);
-        // TODO: process the memory pool check
-        self.context_update_chan.send(ContextUpdateSignal::NewContent)?;
         //return tx hash, later we can confirm it in ledger
         Ok(hash)
     }
@@ -303,15 +302,15 @@ impl Wallet {
     }
 }
 
+/*
 #[cfg(test)]
 pub mod tests {
     use super::Wallet;
     use crate::crypto::hash::tests::generate_random_hash;
     use crate::crypto::hash::H256;
     use crate::crypto::sign::Signable;
-    use crate::handler::{to_coinid_and_potential_utxo, to_rollback_coinid_and_potential_utxo};
     use crate::miner::memory_pool::MemoryPool;
-    use crate::miner::miner::ContextUpdateSignal;
+    use crate::miner::ContextUpdateSignal;
     use crate::transaction::{Output, Transaction};
     use std::sync::{mpsc, Arc, Mutex};
     use rand::RngCore;
@@ -322,9 +321,8 @@ pub mod tests {
         mpsc::Receiver<ContextUpdateSignal>,
         H256,
     ) {
-        let (ctx_update_sink, ctx_update_source) = mpsc::channel();
         let pool = Arc::new(Mutex::new(MemoryPool::new()));
-        let mut w = Wallet::new(std::path::Path::new(&format!("/tmp/walletdb_{}.rocksdb",rand::thread_rng().next_u32())), &pool, ctx_update_sink).unwrap();
+        let mut w = Wallet::new(std::path::Path::new(&format!("/tmp/walletdb_{}.rocksdb",rand::thread_rng().next_u32())), &pool).unwrap();
         w.generate_keypair().unwrap();
         let h: H256 = w.get_an_address().unwrap();
         return (w, pool, ctx_update_source, h);
@@ -343,6 +341,7 @@ pub mod tests {
             authorization: vec![],
         };
     }
+
     fn receive(w: &mut Wallet, tx: &Transaction) {
         // test verify of signature before receive
         for auth in tx.authorization.iter() {
@@ -420,3 +419,4 @@ pub mod tests {
         assert_eq!(w.balance().unwrap(), 0);
     }
 }
+*/

@@ -11,6 +11,7 @@ use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::merkle::MerkleTree;
 use crate::handler::new_validated_block;
 use crate::network::server::Handle as ServerHandle;
+use crate::wallet::Wallet;
 use log::info;
 
 use memory_pool::MemoryPool;
@@ -55,6 +56,7 @@ pub struct Context {
     tx_mempool: Arc<Mutex<MemoryPool>>,
     blockchain: Arc<BlockChain>,
     utxodb: Arc<UtxoDatabase>,
+    wallet: Arc<Wallet>,
     db: Arc<BlockDatabase>,
     // Channel for receiving control signal
     control_chan: Receiver<ControlSignal>,
@@ -79,6 +81,7 @@ pub fn new(
     tx_mempool: &Arc<Mutex<MemoryPool>>,
     blockchain: &Arc<BlockChain>,
     utxodb: &Arc<UtxoDatabase>,
+    wallet: &Arc<Wallet>,
     db: &Arc<BlockDatabase>,
     ctx_update_source: Receiver<ContextUpdateSignal>,
     server: ServerHandle,
@@ -88,6 +91,7 @@ pub fn new(
         tx_mempool: Arc::clone(tx_mempool),
         blockchain: Arc::clone(blockchain),
         utxodb: Arc::clone(utxodb),
+        wallet: Arc::clone(wallet),
         db: Arc::clone(db),
         control_chan: signal_chan_receiver,
         context_update_chan: ctx_update_source,
@@ -214,6 +218,7 @@ impl Context {
                     &self.blockchain,
                     &self.server,
                     &self.utxodb,
+                    &self.wallet,
                 );
                 info!("Mined one block");
                 // TODO: Only update block contents if relevant parent
