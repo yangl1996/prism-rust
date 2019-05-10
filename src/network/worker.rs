@@ -147,16 +147,17 @@ impl Context {
                         let validation_result =
                             check_block(&block, &self.chain, &self.blockdb, &self.utxodb);
                         match validation_result {
-                            BlockResult::MissingParent(_) => {
+                            BlockResult::MissingParent(p) => {
                                 debug!("Missing parent block");
                                 self.buffer.lock().unwrap().push(block);
+                                self.server.broadcast(Message::GetBlocks(vec![p]));
                             }
-                            BlockResult::MissingReferences(_) => {
+                            BlockResult::MissingReferences(r) => {
                                 debug!("Missing referred block");
                                 self.buffer.lock().unwrap().push(block);
+                                self.server.broadcast(Message::GetBlocks(r));
                             }
                             BlockResult::Pass => {
-                                // TODO: avoid inserting the same block again here
                                 debug!("Adding new block");
                                 new_validated_block(
                                     &block,
