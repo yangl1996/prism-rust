@@ -4,7 +4,7 @@ use crate::crypto::hash::{Hashable, H256};
 
 use bincode::{deserialize, serialize};
 use rocksdb::{ColumnFamilyDescriptor, Options, WriteBatch, DB};
-use std::collections::{BTreeSet, HashSet};
+use std::collections::{BTreeSet, HashSet, BTreeMap};
 use std::sync::Mutex;
 
 // Column family names for node/chain metadata
@@ -784,6 +784,36 @@ impl BlockChain {
             list.push(blocks[0]);
         }
         return Ok(list);
+    }
+}
+
+// Functions to dump the blockchain
+impl BlockChain {
+    pub fn proposer_tree(&self) -> Result<BTreeMap<u64, Vec<String>>> {
+        let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
+        let iter = self.db.iterator_cf(proposer_tree_level_cf,rocksdb::IteratorMode::Start)?;
+        let mut proposer_tree: BTreeMap<u64, Vec<String>> = BTreeMap::new();
+        for (k, v) in iter {
+            let level: u64 = deserialize(&k).unwrap();
+            let blocks: Vec<H256> = deserialize(&v).unwrap();
+            let blocks: Vec<String> = blocks.iter().map(|h256|h256.to_string()).collect();
+            proposer_tree.insert(level, blocks);
+        }
+        Ok(proposer_tree)
+    }
+
+    pub fn proposer_leader(&self) -> Result<BTreeMap<u64, String>> {
+        let proposer_leader_sequence_cf = self.db.cf_handle(PROPOSER_LEADER_SEQUENCE_CF).unwrap();
+        let iter = self.db.iterator_cf(proposer_leader_sequence_cf,rocksdb::IteratorMode::Start)?;
+        let mut proposer_leader: BTreeMap<u64, String> = BTreeMap::new();
+        for (k, v) in iter {
+            let level: u64 = deserialize(&k).unwrap();
+            let block: Option<H256> = deserialize(&v).unwrap();
+            if let Some(h256) = block {
+                proposer_leader.insert(level, h256.to_string());
+            }
+        }
+        Ok(proposer_leader)
     }
 }
 
