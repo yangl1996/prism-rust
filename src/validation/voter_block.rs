@@ -48,12 +48,12 @@ pub fn check_levels_voted(
     blockdb: &BlockDatabase,
 ) -> bool {
     // get the deepest block voted by our parent
-    let parent_block = blockdb.get(content.voter_parent).unwrap().unwrap();
+    let parent_block = blockdb.get(&content.voter_parent).unwrap().unwrap();
     let last_voted_level = latest_level_voted_on_chain(&parent_block, blockchain, blockdb);
 
     // check whether the votes are continuous, and starts at the next unvoted level
     for (index, proposer_vote) in content.votes.iter().enumerate() {
-        let voted = blockdb.get(*proposer_vote).unwrap().unwrap();
+        let voted = blockdb.get(proposer_vote).unwrap().unwrap();
         let level = blockchain
             .lock()
             .unwrap()
@@ -93,7 +93,7 @@ fn latest_level_voted_on_chain(
             .level as usize;
     } else {
         // if this block voted for zero block, then look for its parent
-        let parent = blockdb.get(content.voter_parent).unwrap().unwrap();
+        let parent = blockdb.get(&content.voter_parent).unwrap().unwrap();
         return latest_level_voted_on_chain(&parent, blockchain, blockdb);
     }
 }

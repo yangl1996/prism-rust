@@ -133,7 +133,7 @@ fn check_block_exist(
     blockchain: &Mutex<BlockChain>,
     blockdb: &BlockDatabase,
 ) -> (bool, bool) {
-    let in_db = match blockdb.get(hash) {
+    let in_db = match blockdb.get(&hash) {
         Err(e) => panic!("Database error {}", e),
         Ok(b) => match b {
             None => false,

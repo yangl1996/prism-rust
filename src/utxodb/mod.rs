@@ -1,6 +1,6 @@
 use crate::crypto::hash::Hashable;
 use crate::transaction::{Output, CoinId, Transaction};
-use bincode::{deserialize, serialize};
+use bincode::{serialize};
 use rocksdb::{DB, Options};
 
 pub struct UtxoDatabase {
