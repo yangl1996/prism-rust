@@ -115,15 +115,19 @@ impl Context {
                         let validation_result =
                             check_block(&block, &self.chain, &self.blockdb, &self.utxodb);
                         match validation_result {
-                            BlockResult::MissingParent(_) | BlockResult::MissingReferences(_) => {
-                                debug!("Missing parent/references");
+                            BlockResult::MissingParent(_) => {
+                                debug!("Missing parent block");
+                                self.buffer.lock().unwrap().push(block);
+                            }
+                            BlockResult::MissingReferences(_) => {
+                                debug!("Missing referred block");
                                 self.buffer.lock().unwrap().push(block);
                             }
                             BlockResult::Pass => {
                                 // TODO: avoid inserting the same block again here
                                 debug!("Adding new block");
                                 new_validated_block(
-                                    block,
+                                    &block,
                                     &self.mempool,
                                     &self.blockdb,
                                     &self.chain,
@@ -140,17 +144,18 @@ impl Context {
                     }
 
                     let mut still_unresolved: Vec<Block> = vec![];
-                    for block in self.buffer.lock().unwrap().drain(..) {
+                    let mut buffer = self.buffer.lock().unwrap();
+                    buffer.retain(|block| {
                         let validation_result =
                             check_block(&block, &self.chain, &self.blockdb, &self.utxodb);
                         match validation_result {
                             BlockResult::MissingParent(_) | BlockResult::MissingReferences(_) => {
-                                still_unresolved.push(block);
+                                return true;    // retain this block
                             }
                             BlockResult::Pass => {
                                 // TODO: avoid inserting the same block again here
                                 new_validated_block(
-                                    block,
+                                    &block,
                                     &self.mempool,
                                     &self.blockdb,
                                     &self.chain,
@@ -158,16 +163,14 @@ impl Context {
                                     &self.utxodb,
                                     &self.wallet,
                                 );
+                                return false;   // remove the block
                             }
                             _ => {
-                                // pass invalid block
+                                return false;   // remove invalid block
                             }
                         }
-                    }
-
-                    for block in still_unresolved {
-                        self.buffer.lock().unwrap().push(block);
-                    }
+                    });
+                    drop(buffer);
 
                     // tell the miner to update the context
                     self.context_update_chan

@@ -212,7 +212,7 @@ impl Context {
                 }
                 // Release block to the network
                 new_validated_block(
-                    mined_block,
+                    &mined_block,
                     &self.tx_mempool,
                     &self.db,
                     &self.blockchain,

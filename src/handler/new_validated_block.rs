@@ -11,7 +11,7 @@ use crate::wallet::Wallet;
 use std::sync::Mutex;
 
 pub fn new_validated_block(
-    block: Block,
+    block: &Block,
     mempool: &Mutex<MemoryPool>,
     blockdb: &BlockDatabase,
     chain: &BlockChain,

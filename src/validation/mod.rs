@@ -72,6 +72,7 @@ pub fn check_block(
     match &block.content {
         Content::Transaction(content) => {
             // check each transaction
+            /*
             for transaction in content.transactions.iter() {
                 if !transaction::check_non_empty(&transaction) {
                     return BlockResult::EmptyTransaction;
@@ -89,6 +90,7 @@ pub fn check_block(
                     return BlockResult::WrongSignature;
                 }
             }
+            */
             return BlockResult::Pass;
         }
         Content::Proposer(content) => {
@@ -107,7 +109,7 @@ pub fn check_block(
             if missing_refs.len() != 0 {
                 return BlockResult::MissingReferences(missing_refs);
             }
-
+            /*
             // check chain number
             if !voter_block::check_chain_number(&content) {
                 return BlockResult::WrongChainNumber;
@@ -117,7 +119,7 @@ pub fn check_block(
             if !voter_block::check_levels_voted(&content, blockchain, blockdb) {
                 return BlockResult::WrongVoteLevel;
             }
-
+            */
             return BlockResult::Pass;
         }
     }
