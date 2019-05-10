@@ -153,46 +153,6 @@ function execute_on_all
 	tput sgr0
 }
 
-function get_performance_metrics_single
-{
-	local perf
-	perf=`ssh $2 -- "bash /home/ubuntu/payload/get-scorex-perf.sh $1" 2>/dev/null`
-	echo "$1,$perf"
-}
-
-function get_protocol_metrics_single
-{
-	local perf
-	perf=`curl -s "http://$3:$4/stats/txcountchain" | python3 scripts/get_num_trans.py`
-	echo "$1,$perf"
-}
-
-function collect_data
-{
-	# $1: which function to execute
-	local nodes=`cat nodes.txt`
-	local pids=''
-	rm -f perf.txt
-	for node in $nodes; do
-		local name
-		local host
-		local pubip
-		local apiport
-		IFS=',' read -r name host pubip _ apiport _ <<< "$node"
-		$1_single $name $host $pubip $apiport > "${name}_data.txt" &
-		pids="$pids $!"
-	done
-	for pid in $pids; do
-		wait $pid
-	done
-	for node in $nodes; do
-		local name
-		IFS=',' read -r name _ <<< "$node"
-		cat "${name}_data.txt"
-	done
-	rm *_data.txt
-}
-
 function run_on_all
 {
 	# $@: command to run
@@ -259,45 +219,6 @@ function scp_from_server
 	scp -r ${id}:${2} $3
 }
 
-function query_api
-{
-	# $1: which node to query
-	# $2: which api to query
-	if [ $# -ne 2 ]; then
-		tput setaf 1
-		echo "Required: node name and API endpoint"
-		tput sgr0
-		echo "API endpoints: blocktime, blockdiff, blocktxncount, blocktxn, balance"
-		exit 1
-	fi
-	case "$2" in
-		blocktime)
-			endpoint="/stats/timechain" ;;
-		blockdiff)
-			endpoint="/stats/diffchain" ;;
-		blocktxncount)
-			endpoint="/stats/txcountchain" ;;
-		blocktxn)
-			endpoint="/debug/txchain" ;;
-		balance)
-			endpoint="/wallet/balances" ;;
-		*)
-			tput setaf 1
-			echo "Unrecognized API endpoint"
-			tput sgr0
-			exit 1 ;;
-	esac
-	node=`cat nodes.txt | grep "$1,"`
-	if [ $? != 0 ]; then
-		tput setaf 1
-		echo "Unrecognized node name"
-		tput sgr0
-		exit 1
-	fi
-	IFS=',' read -r name host pubip _ apiport _ <<< "$node"
-	curl -s "http://$pubip:${apiport}${endpoint}"
-}
-
 mkdir -p log
 case "$1" in
 	help)
@@ -314,10 +235,8 @@ case "$1" in
 		  gen-payload topo      Generate scripts and configuration files
 		  sync-payload          Synchronize payload to remote servers
 		  install-deps          Install dependencies on remote servers
-		  start-scorex          Start Scorex nodes on each remote server
-		  stop-scorex           Stop Scorex nodes on each remote server
-		  get-perf              Collect performance metrics
-		  get-proto             Collect protocol metrics
+		  start-prism           Start Prism nodes on each remote server
+		  stop-prism            Stop Prism nodes on each remote server
 
 		Connect to Testbed
 
@@ -343,8 +262,6 @@ case "$1" in
 		execute_on_all stop_scorex ;;
 	get-perf)
 		collect_data get_performance_metrics ;;
-	get-proto)
-		collect_data get_protocol_metrics ;;
 	run-all)
 		run_on_all "${@:2}" ;;
 	ssh)
