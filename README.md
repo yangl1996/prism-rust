@@ -6,10 +6,13 @@ This is an ongoing effort to implement Prism in Rust.
 
 Run `cargo build`.
 
+The first build could take several mintues, mostly due to building RocksDB.
+
 # Run Tests
 
-Run `cargo test`. To see all the outputs, append `-- --no_capture`.
+Run `cargo test`. To see all the outputs, append `-- --nocapture`.
 
-# Multi-node Mining Demo
+# See Docs
 
-Run `cargo run --example multinode_mining`.
+Run `cargo doc --open`.
+

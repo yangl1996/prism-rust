@@ -1,1818 +1,1664 @@
-pub mod blockgraph;
-pub mod database;
-pub mod edge;
-pub mod node_data_map;
-pub mod proposer;
-pub mod transaction;
-pub mod utils;
-pub mod voter;
-use super::block::{Block, Content};
-use super::crypto::hash::{Hashable, H256};
+use crate::block::{Block, Content};
 use crate::config::*;
-use blockgraph::BlockGraph;
-use edge::Edge;
-use node_data_map::NodeDataMap;
-use proposer::NodeData as ProposerNodeData;
-use proposer::Status as ProposerStatus;
-use proposer::Tree as ProposerTree;
-use std::collections::VecDeque;
-use std::collections::{BTreeMap, HashMap};
-use std::iter::FromIterator;
-use std::sync::mpsc::Sender;
-use std::sync::{Arc, Mutex};
-use transaction::Pool as TxBlkPool;
-use transaction::UpdateMessage as LedgerUpdateMessage;
-use utils::*;
-use voter::Chain as VoterChain;
-use voter::Fork as VoterChainFork;
-use voter::NodeData as VoterNodeData;
-use voter::NodeUpdateStatus as VoterNodeUpdateStatus;
+use crate::crypto::hash::{Hashable, H256};
+
+use bincode::{deserialize, serialize};
+use rocksdb::{ColumnFamilyDescriptor, Options, WriteBatch, DB};
+use std::collections::{BTreeSet, HashSet};
+use std::sync::Mutex;
+
+// Column family names for node/chain metadata
+const PROPOSER_NODE_LEVEL_CF: &str = "PROPOSER_NODE_LEVEL"; // hash to node level (u64)
+const VOTER_NODE_LEVEL_CF: &str = "VOTER_NODE_LEVEL"; // hash to node level (u64)
+const VOTER_NODE_CHAIN_CF: &str = "VOTER_NODE_CHAIN"; // hash to chain number (u16)
+const PROPOSER_TREE_LEVEL_CF: &str = "PROPOSER_TREE_LEVEL"; // level (u64) to hashes of blocks (Vec<hash>)
+const VOTER_NODE_VOTED_LEVEL_CF: &str = "VOTER_NODE_VOTED_LEVEL"; // hash to max. voted level (u64)
+const PROPOSER_NODE_VOTE_CF: &str = "PROPOSER_NODE_VOTE"; // hash to level and chain number of main chain votes (Vec<u16, u64>)
+const PROPOSER_LEADER_SEQUENCE_CF: &str = "PROPOSER_LEADER_SEQUENCE"; // level (u64) to hash of leader block.
+const PROPOSER_LEDGER_ORDER_CF: &str = "PROPOSER_LEDGER_ORDER"; // level (u64) to the list of proposer blocks confirmed
+                                                                // by this level, including the leader itself. The list
+                                                                // is in the order that those blocks should live in the ledger.
+
+// Column family names for graph neighbors
+const PARENT_NEIGHBOR_CF: &str = "GRAPH_PARENT_NEIGHBOR"; // the proposer parent of a block
+const VOTE_NEIGHBOR_CF: &str = "GRAPH_VOTE_NEIGHBOR"; // neighbors associated by a vote
+const VOTER_PARENT_NEIGHBOR_CF: &str = "GRAPH_VOTER_PARENT_NEIGHBOR"; // the voter parent of a block
+const TRANSACTION_REF_NEIGHBOR_CF: &str = "GRAPH_TRANSACTION_REF_NEIGHBOR";
+const PROPOSER_REF_NEIGHBOR_CF: &str = "GRAPH_PROPOSER_REF_NEIGHBOR";
+
+pub type Result<T> = std::result::Result<T, rocksdb::Error>;
+
+// cf_handle is a lightweight operation, it takes 44000 micro seconds to get 100000 cf handles
 
 pub struct BlockChain {
-    /// Database to store all the other fields.
-    pub db: Arc<Mutex<database::BlockChainDatabase>>,
-    /// Graph structure of the blockchain/graph
-    pub graph: BlockGraph,
-    /// Metadata of the proposer tree
-    pub proposer_tree: ProposerTree,
-    /// Metadata of the voter chains
-    pub voter_chains: Vec<VoterChain>,
-    /// Metadata of the transaction blocks
-    pub tx_blocks: TxBlkPool,
-    /// Metadata of blocks
-    pub node_data: NodeDataMap,
+    db: DB,
+    proposer_best: Mutex<(H256, u64)>,
+    voter_best: Vec<Mutex<(H256, u64)>>,
+    unreferred_transaction: Mutex<HashSet<H256>>,
+    unreferred_proposer: Mutex<HashSet<H256>>,
+    unconfirmed_proposer: Mutex<HashSet<H256>>,
+    ledger_tip: Mutex<u64>,
 }
 
 // Functions to edit the blockchain
 impl BlockChain {
-    /// Initializing blockchain graph with genesis blocks.
-    pub fn new(
-        db: Arc<Mutex<database::BlockChainDatabase>>,
-        num_voting_chains: u16,
-        utxo_update: Sender<(LedgerUpdateMessage, Vec<H256>)>, //Sends updates to utxo state thread
-    ) -> Self {
-        // Initializing an empty object
-        let mut graph = BlockGraph {
-            db: Arc::clone(&db),
-            edge_count: 0,
-        };
-        let mut proposer_tree = ProposerTree::new(Arc::clone(&db));
-        let mut voter_chains: Vec<VoterChain> = vec![];
+    /// Open the blockchain database at the given path, and create missing column families.
+    /// This function also populates the metadata fields with default values, and those
+    /// fields must be initialized later.
+    fn open<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
+        let proposer_node_level_cf =
+            ColumnFamilyDescriptor::new(PROPOSER_NODE_LEVEL_CF, Options::default());
+        let voter_node_level_cf =
+            ColumnFamilyDescriptor::new(VOTER_NODE_LEVEL_CF, Options::default());
+        let voter_node_chain_cf =
+            ColumnFamilyDescriptor::new(VOTER_NODE_CHAIN_CF, Options::default());
+        let voter_node_voted_level_cf =
+            ColumnFamilyDescriptor::new(VOTER_NODE_VOTED_LEVEL_CF, Options::default());
+        let proposer_leader_sequence_cf =
+            ColumnFamilyDescriptor::new(PROPOSER_LEADER_SEQUENCE_CF, Options::default());
+        let proposer_ledger_order_cf =
+            ColumnFamilyDescriptor::new(PROPOSER_LEDGER_ORDER_CF, Options::default());
 
-        let tx_blocks: TxBlkPool = TxBlkPool::new(Arc::clone(&db), utxo_update);
+        let mut proposer_tree_level_option = Options::default();
+        proposer_tree_level_option.set_merge_operator(
+            "append H256 vec",
+            h256_vec_append_merge,
+            None,
+        );
+        let proposer_tree_level_cf =
+            ColumnFamilyDescriptor::new(PROPOSER_TREE_LEVEL_CF, proposer_tree_level_option);
 
-        let mut node_data = NodeDataMap {
-            db: Arc::clone(&db),
-        };
-        let mut voter_node_data = HashMap::<H256, VoterNodeData>::new();
+        let mut proposer_node_vote_option = Options::default();
+        proposer_node_vote_option.set_merge_operator("insert or remove vote", vote_vec_merge, None);
+        let proposer_node_vote_cf =
+            ColumnFamilyDescriptor::new(PROPOSER_NODE_VOTE_CF, proposer_node_vote_option);
 
-        // 1. Proposer genesis block
-        // 1a. Add proposer genesis block in the graph
-        let proposer_genesis_node = ProposerNodeData::genesis(num_voting_chains);
-        // Add metadata of the proposer genesis block to the hashmap
-        node_data.insert_proposer(&PROPOSER_GENESIS_HASH, proposer_genesis_node);
+        let mut parent_neighbor_option = Options::default();
+        parent_neighbor_option.set_merge_operator("append H256 vec", h256_vec_append_merge, None);
+        let parent_neighbor_cf =
+            ColumnFamilyDescriptor::new(PARENT_NEIGHBOR_CF, parent_neighbor_option);
 
-        // 1b. Initializing proposer tree
-        proposer_tree.best_block = *PROPOSER_GENESIS_HASH;
-        proposer_tree.add_block_at_level(*PROPOSER_GENESIS_HASH, 0);
-        // Genesis proposer block is the leader block at level 0
-        proposer_tree.insert_leader_block(0, *PROPOSER_GENESIS_HASH);
+        let mut vote_neighbor_option = Options::default();
+        vote_neighbor_option.set_merge_operator("append H256 vec", h256_vec_append_merge, None);
+        let vote_neighbor_cf = ColumnFamilyDescriptor::new(VOTE_NEIGHBOR_CF, vote_neighbor_option);
 
-        // 2. Voter geneses blocks
-        for chain_number in 0..(num_voting_chains) {
-            // 2a. Add voter chain i genesis block in the graph
-            let voter_genesis_node = VoterNodeData::genesis(chain_number as u16);
-            let voter_genesis_hash = VOTER_GENESIS_HASHES[chain_number as usize];
-            // Add voter genesis node data to the hashmap
-            node_data.insert_voter(&voter_genesis_hash, voter_genesis_node);
+        let mut voter_parent_neighbor_option = Options::default();
+        voter_parent_neighbor_option.set_merge_operator(
+            "append H256 vec",
+            h256_vec_append_merge,
+            None,
+        );
+        let voter_parent_neighbor_cf =
+            ColumnFamilyDescriptor::new(VOTER_PARENT_NEIGHBOR_CF, voter_parent_neighbor_option);
 
-            // 2b. Initializing a Voter chain
-            let voter_chain = VoterChain::new(voter_genesis_hash);
-            voter_chains.push(voter_chain);
+        let mut transaction_ref_neighbor_option = Options::default();
+        transaction_ref_neighbor_option.set_merge_operator(
+            "append H256 vec",
+            h256_vec_append_merge,
+            None,
+        );
+        let transaction_ref_neighbor_cf = ColumnFamilyDescriptor::new(
+            TRANSACTION_REF_NEIGHBOR_CF,
+            transaction_ref_neighbor_option,
+        );
+
+        let mut proposer_ref_neighbor_option = Options::default();
+        proposer_ref_neighbor_option.set_merge_operator(
+            "append H256 vec",
+            h256_vec_append_merge,
+            None,
+        );
+        let proposer_ref_neighbor_cf =
+            ColumnFamilyDescriptor::new(PROPOSER_REF_NEIGHBOR_CF, proposer_ref_neighbor_option);
+
+        let cfs = vec![
+            proposer_node_level_cf,
+            voter_node_level_cf,
+            voter_node_chain_cf,
+            voter_node_voted_level_cf,
+            proposer_leader_sequence_cf,
+            proposer_ledger_order_cf,
+            proposer_tree_level_cf,
+            proposer_node_vote_cf,
+            parent_neighbor_cf,
+            vote_neighbor_cf,
+            voter_parent_neighbor_cf,
+            transaction_ref_neighbor_cf,
+            proposer_ref_neighbor_cf,
+        ];
+        let mut opts = Options::default();
+        opts.create_if_missing(true);
+        opts.create_missing_column_families(true);
+        let db = DB::open_cf_descriptors(&opts, path, cfs)?;
+        let mut voter_best: Vec<Mutex<(H256, u64)>> = vec![];
+        for _ in 0..NUM_VOTER_CHAINS {
+            voter_best.push(Mutex::new((H256::default(), 0)));
         }
 
-        return Self {
-            db,
-            graph,
-            proposer_tree,
-            voter_chains,
-            tx_blocks,
-            node_data,
+        let blockchain_db = Self {
+            db: db,
+            proposer_best: Mutex::new((H256::default(), 0)),
+            voter_best: voter_best,
+            unreferred_transaction: Mutex::new(HashSet::new()),
+            unreferred_proposer: Mutex::new(HashSet::new()),
+            unconfirmed_proposer: Mutex::new(HashSet::new()),
+            ledger_tip: Mutex::new(0),
         };
+
+        return Ok(blockchain_db);
     }
 
-    // TODO: add a function to restore BlockChain from BlockDatabase
+    /// Destroy the existing database at the given path, create a new one, and initialize the content.
+    pub fn new<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
+        DB::destroy(&Options::default(), &path)?;
+        let db = Self::open(&path)?;
+        // get cf handles
+        let proposer_node_level_cf = db.db.cf_handle(PROPOSER_NODE_LEVEL_CF).unwrap();
+        let voter_node_level_cf = db.db.cf_handle(VOTER_NODE_LEVEL_CF).unwrap();
+        let voter_node_chain_cf = db.db.cf_handle(VOTER_NODE_CHAIN_CF).unwrap();
+        let voter_node_voted_level_cf = db.db.cf_handle(VOTER_NODE_VOTED_LEVEL_CF).unwrap();
+        let proposer_node_vote_cf = db.db.cf_handle(PROPOSER_NODE_VOTE_CF).unwrap();
+        let proposer_tree_level_cf = db.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
+        let parent_neighbor_cf = db.db.cf_handle(PARENT_NEIGHBOR_CF).unwrap();
+        let vote_neighbor_cf = db.db.cf_handle(VOTE_NEIGHBOR_CF).unwrap();
+        let proposer_leader_sequence_cf = db.db.cf_handle(PROPOSER_LEADER_SEQUENCE_CF).unwrap();
+        let proposer_ledger_order_cf = db.db.cf_handle(PROPOSER_LEDGER_ORDER_CF).unwrap();
 
-    // Add edges from `from` to `to` with type `edge_type`, and edge from `to` to `from` with the
-    // corresponding reversed type.
-    fn insert_edge(&mut self, from: H256, to: H256, edge_type: Edge, value: Option<u32>) {
-        match edge_type {
-            Edge::TransactionToProposerParent
-            | Edge::ProposerToProposerParent
-            | Edge::VoterToProposerParent
-            | Edge::VoterToVoterParent => {
-                self.graph.add_edge_type_1(from, to, edge_type);
-            }
-            Edge::VoterToProposerVote | Edge::VoterToProposerParentAndVote => {
-                self.graph.add_edge_type_1(from, to, edge_type);
-                self.graph
-                    .add_edge_type_1(to, from, edge_type.reverse_edge());
-            }
-            Edge::ProposerToProposerReference
-            | Edge::ProposerToTransactionReference
-            | Edge::ProposerToTransactionLeaderReference
-            | Edge::ProposerToTransactionReferenceAndLeaderReference => {
-                self.graph
-                    .add_edge_type_2(from, to, edge_type, value.unwrap());
-            }
-            _ => panic!("The reverse edges should never be added directly"),
+        // insert genesis blocks
+        let mut wb = WriteBatch::default();
+
+        // proposer genesis block
+        wb.put_cf(
+            proposer_node_level_cf,
+            serialize(&(*PROPOSER_GENESIS_HASH)).unwrap(),
+            serialize(&(0 as u64)).unwrap(),
+        )?;
+        wb.merge_cf(
+            proposer_tree_level_cf,
+            serialize(&(0 as u64)).unwrap(),
+            serialize(&(*PROPOSER_GENESIS_HASH)).unwrap(),
+        )?;
+        let mut proposer_best = db.proposer_best.lock().unwrap();
+        proposer_best.0 = *PROPOSER_GENESIS_HASH;
+        drop(proposer_best);
+        let mut unreferred_proposer = db.unreferred_proposer.lock().unwrap();
+        unreferred_proposer.insert(*PROPOSER_GENESIS_HASH);
+        drop(unreferred_proposer);
+        wb.put_cf(
+            proposer_leader_sequence_cf,
+            serialize(&(0 as u64)).unwrap(),
+            serialize(&(*PROPOSER_GENESIS_HASH)).unwrap(),
+        )?;
+        let proposer_genesis_ledger: Vec<H256> = vec![*PROPOSER_GENESIS_HASH];
+        wb.put_cf(
+            proposer_ledger_order_cf,
+            serialize(&(0 as u64)).unwrap(),
+            serialize(&proposer_genesis_ledger).unwrap(),
+        )?;
+
+        // voter genesis blocks
+        for chain_num in 0..NUM_VOTER_CHAINS {
+            wb.put_cf(
+                parent_neighbor_cf,
+                serialize(&VOTER_GENESIS_HASHES[chain_num as usize]).unwrap(),
+                serialize(&(*PROPOSER_GENESIS_HASH)).unwrap(),
+            )?;
+            wb.merge_cf(
+                vote_neighbor_cf,
+                serialize(&VOTER_GENESIS_HASHES[chain_num as usize]).unwrap(),
+                serialize(&(*PROPOSER_GENESIS_HASH)).unwrap(),
+            )?;
+            wb.merge_cf(
+                proposer_node_vote_cf,
+                serialize(&(*PROPOSER_GENESIS_HASH)).unwrap(),
+                serialize(&(true, chain_num as u16, 0 as u64)).unwrap(),
+            )?;
+            wb.put_cf(
+                voter_node_level_cf,
+                serialize(&VOTER_GENESIS_HASHES[chain_num as usize]).unwrap(),
+                serialize(&(0 as u64)).unwrap(),
+            )?;
+            wb.put_cf(
+                voter_node_voted_level_cf,
+                serialize(&VOTER_GENESIS_HASHES[chain_num as usize]).unwrap(),
+                serialize(&(0 as u64)).unwrap(),
+            )?;
+            wb.put_cf(
+                voter_node_chain_cf,
+                serialize(&VOTER_GENESIS_HASHES[chain_num as usize]).unwrap(),
+                serialize(&(chain_num as u16)).unwrap(),
+            )?;
+            let mut voter_best = db.voter_best[chain_num as usize].lock().unwrap();
+            voter_best.0 = VOTER_GENESIS_HASHES[chain_num as usize];
+            drop(voter_best);
         }
+        db.db.write(wb)?;
+
+        return Ok(db);
     }
 
-    // Add a new block to the blockgraph. Note that all blocks referred by the new block must
-    // already exist in the blockgraph.
-    pub fn insert_node(&mut self, block: &Block) {
+    /// Insert a new block into the ledger. Returns the list of added transaction blocks and
+    /// removed transaction blocks.
+    pub fn insert_block(&self, block: &Block) -> Result<(Vec<H256>, Vec<H256>)> {
+        // get cf handles
+        let proposer_node_level_cf = self.db.cf_handle(PROPOSER_NODE_LEVEL_CF).unwrap();
+        let voter_node_level_cf = self.db.cf_handle(VOTER_NODE_LEVEL_CF).unwrap();
+        let voter_node_chain_cf = self.db.cf_handle(VOTER_NODE_CHAIN_CF).unwrap();
+        let voter_node_voted_level_cf = self.db.cf_handle(VOTER_NODE_VOTED_LEVEL_CF).unwrap();
+        let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
+        let proposer_node_vote_cf = self.db.cf_handle(PROPOSER_NODE_VOTE_CF).unwrap();
+        let parent_neighbor_cf = self.db.cf_handle(PARENT_NEIGHBOR_CF).unwrap();
+        let vote_neighbor_cf = self.db.cf_handle(VOTE_NEIGHBOR_CF).unwrap();
+        let voter_parent_neighbor_cf = self.db.cf_handle(VOTER_PARENT_NEIGHBOR_CF).unwrap();
+        let transaction_ref_neighbor_cf = self.db.cf_handle(TRANSACTION_REF_NEIGHBOR_CF).unwrap();
+        let proposer_ref_neighbor_cf = self.db.cf_handle(PROPOSER_REF_NEIGHBOR_CF).unwrap();
+        let proposer_leader_sequence_cf = self.db.cf_handle(PROPOSER_LEADER_SEQUENCE_CF).unwrap();
+        let proposer_ledger_order_cf = self.db.cf_handle(PROPOSER_LEDGER_ORDER_CF).unwrap();
+
+        let mut wb = WriteBatch::default();
+
+        // insert parent link
         let block_hash = block.hash();
-        let parent_proposer_block_hash = block.header.parent;
-        // Parse the block content and add the edges according to Prism logic.
-        let content: &Content = &block.content;
-        match content {
-            Content::Transaction(_) => {
-                // add edge from tx block to its proposer parent
-                self.insert_edge(
-                    block_hash,
-                    parent_proposer_block_hash,
-                    Edge::TransactionToProposerParent,
-                    None,
-                );
+        let parent_hash = block.header.parent;
+        wb.put_cf(
+            parent_neighbor_cf,
+            serialize(&block_hash).unwrap(),
+            serialize(&parent_hash).unwrap(),
+        )?;
 
-                // mark this new tx block as not in ledger and as unreferred
-                self.tx_blocks.insert_not_in_ledger(block_hash);
-                self.tx_blocks.insert_unreferred(block_hash);
-            }
-
+        match &block.content {
             Content::Proposer(content) => {
-                // 1. Add edge from prop block to its proposer parent
-                self.insert_edge(
-                    block_hash,
-                    parent_proposer_block_hash,
-                    Edge::ProposerToProposerParent,
-                    None,
-                );
-                // Since the parent proposer block is now referred, remove it from the unreferred proposer pool
-                self.proposer_tree
-                    .remove_unreferred(&parent_proposer_block_hash);
-                // Mark the new block we just got as unreferred
-                self.proposer_tree.insert_unreferred(block_hash);
-
-                // 2. Iterate through the list of proposer blocks referred by this new block
-                for (position, prop_hash) in content.proposer_refs.iter().enumerate() {
-                    self.insert_edge(
-                        block_hash,
-                        *prop_hash,
-                        Edge::ProposerToProposerReference,
-                        Some((1 + position) as u32),
-                    ); // The parent prop block has the first position
-                    self.proposer_tree.remove_unreferred(prop_hash);
+                // remove ref'ed blocks from unreferred list, mark itself as unreferred
+                let mut unreferred_proposer = self.unreferred_proposer.lock().unwrap();
+                for ref_hash in &content.proposer_refs {
+                    unreferred_proposer.remove(&ref_hash);
                 }
-
-                // 3. Iterate through the list of transaction blocks referred by this new block and add an edge
-                for (position, tx_hash) in content.transaction_refs.iter().enumerate() {
-                    self.insert_edge(
-                        block_hash,
-                        *tx_hash,
-                        Edge::ProposerToTransactionReference,
-                        Some(position as u32),
-                    );
-                    // Since the tx proposer block is now referred, remove it from the unreferred tx pool
-                    self.tx_blocks.remove_unreferred(tx_hash);
+                unreferred_proposer.remove(&parent_hash);
+                unreferred_proposer.insert(block_hash);
+                drop(unreferred_proposer);
+                let mut unreferred_transaction = self.unreferred_transaction.lock().unwrap();
+                for ref_hash in &content.transaction_refs {
+                    unreferred_transaction.remove(&ref_hash);
                 }
-
-                // 4. Add the proposer block to the list of unvoted blocks on all the voter chains.
-                //                let self_level = self.proposer_node_data[&parent_proposer_block_hash].level + 1;
-                let self_level = self
-                    .node_data
-                    .get_proposer(&parent_proposer_block_hash)
-                    .level
-                    + 1;
-                for i in 0..self.voter_chains.len() {
-                    self.voter_chains
-                        .get_mut(i as usize)
-                        .unwrap()
-                        .insert_unvoted(self_level, block_hash);
+                drop(unreferred_transaction);
+                // add ref'ed blocks
+                // note that the parent is the first proposer block that we refer
+                let mut refed_proposer: Vec<H256> = vec![parent_hash];
+                refed_proposer.extend(&content.proposer_refs);
+                wb.put_cf(
+                    proposer_ref_neighbor_cf,
+                    serialize(&block_hash).unwrap(),
+                    serialize(&refed_proposer).unwrap(),
+                )?;
+                wb.put_cf(
+                    transaction_ref_neighbor_cf,
+                    serialize(&block_hash).unwrap(),
+                    serialize(&content.transaction_refs).unwrap(),
+                )?;
+                // get current block level
+                let parent_level: u64 = deserialize(
+                    &self
+                        .db
+                        .get_cf(proposer_node_level_cf, serialize(&parent_hash).unwrap())?
+                        .unwrap(),
+                )
+                .unwrap();
+                let self_level = parent_level + 1;
+                // set current block level
+                wb.put_cf(
+                    proposer_node_level_cf,
+                    serialize(&block_hash).unwrap(),
+                    serialize(&self_level).unwrap(),
+                )?;
+                wb.merge_cf(
+                    proposer_tree_level_cf,
+                    serialize(&self_level).unwrap(),
+                    serialize(&block_hash).unwrap(),
+                )?;
+                // set best block info
+                let mut proposer_best = self.proposer_best.lock().unwrap();
+                if self_level > proposer_best.1 {
+                    proposer_best.0 = block_hash;
+                    proposer_best.1 = self_level;
                 }
-
-                // 5. Creating proposer node data.
-                // TODO: replace default with new
-                let mut proposer_node_data = ProposerNodeData::default();
-                proposer_node_data.level = self_level;
-
-                // 6. Add node data in the map
-                //                self.proposer_node_data.insert(block_hash, proposer_node_data);
-                self.node_data
-                    .insert_proposer(&block_hash, proposer_node_data);
-
-                // 7. Add the block in the proposer_tree field at self_level.
-                self.proposer_tree
-                    .add_block_at_level(block_hash, self_level);
+                drop(proposer_best);
+                // mark this new proposer block as unconfirmed
+                let mut unconfirmed_proposer = self.unconfirmed_proposer.lock().unwrap();
+                unconfirmed_proposer.insert(block_hash);
+                drop(unconfirmed_proposer);
+                self.db.write(wb)?;
+                return Ok((vec![], vec![]));
             }
-
             Content::Voter(content) => {
-                // 1, Add edge from voter block to its proposer parent
-                self.insert_edge(
-                    block_hash,
-                    parent_proposer_block_hash,
-                    Edge::VoterToProposerParent,
-                    None,
-                );
-
-                // 2. Add edge from voter block to its voter parent
-                self.insert_edge(
-                    block_hash,
-                    content.voter_parent,
-                    Edge::VoterToVoterParent,
-                    None,
-                );
-
-                // 3. Add edge from voter block to proposer block it voted.
-                for prop_block_hash in content.votes.iter() {
-                    // if the votee is the same as the parent
-                    if *prop_block_hash == parent_proposer_block_hash {
-                        self.insert_edge(
-                            block_hash,
-                            *prop_block_hash,
-                            Edge::VoterToProposerParentAndVote,
-                            None,
-                        );
-                    } else {
-                        self.insert_edge(
-                            block_hash,
-                            *prop_block_hash,
-                            Edge::VoterToProposerVote,
-                            None,
-                        );
+                // add voter parent
+                let voter_parent_hash = content.voter_parent;
+                wb.put_cf(
+                    voter_parent_neighbor_cf,
+                    serialize(&block_hash).unwrap(),
+                    serialize(&voter_parent_hash).unwrap(),
+                )?;
+                // get current block level and chain number
+                let voter_parent_level: u64 = deserialize(
+                    &self
+                        .db
+                        .get_cf(voter_node_level_cf, serialize(&voter_parent_hash).unwrap())?
+                        .unwrap(),
+                )
+                .unwrap();
+                let voter_parent_chain: u16 = deserialize(
+                    &self
+                        .db
+                        .get_cf(voter_node_chain_cf, serialize(&voter_parent_hash).unwrap())?
+                        .unwrap(),
+                )
+                .unwrap();
+                let self_level = voter_parent_level + 1;
+                let self_chain = voter_parent_chain;
+                // set current block level and chain number
+                wb.put_cf(
+                    voter_node_level_cf,
+                    serialize(&block_hash).unwrap(),
+                    serialize(&self_level).unwrap(),
+                )?;
+                wb.put_cf(
+                    voter_node_chain_cf,
+                    serialize(&block_hash).unwrap(),
+                    serialize(&self_chain).unwrap(),
+                )?;
+                // add voted blocks and set deepest voted level
+                wb.put_cf(
+                    vote_neighbor_cf,
+                    serialize(&block_hash).unwrap(),
+                    serialize(&content.votes).unwrap(),
+                )?;
+                let mut deepest_voted_level = 0;
+                for vote_hash in &content.votes {
+                    let voted_level: u64 = deserialize(
+                        &self
+                            .db
+                            .get_cf(proposer_node_level_cf, serialize(&vote_hash).unwrap())?
+                            .unwrap(),
+                    )
+                    .unwrap();
+                    if voted_level > deepest_voted_level {
+                        deepest_voted_level = voted_level;
                     }
-
-                    // Incrementing the votes of the proposer block being voted
-                    let ref proposer_node_data = self.node_data.get_proposer(&prop_block_hash);
                 }
+                wb.put_cf(
+                    voter_node_voted_level_cf,
+                    serialize(&block_hash).unwrap(),
+                    serialize(&deepest_voted_level).unwrap(),
+                )?;
 
-                // 4. Updating the voter chain.
-                //                let parent_voter_node_data: VoterNodeData =
-                //                    self.voter_node_data[&content.voter_parent];
-                let parent_voter_node_data = self.node_data.get_voter(&content.voter_parent);
-                // The update status is used to create the voter node data
-                let voter_node_update = self.voter_chains
-                    [parent_voter_node_data.chain_number as usize]
-                    .add_voter_block(
-                        block_hash,
-                        content.voter_parent,
-                        parent_voter_node_data.level + 1,
-                    );
+                let mut voter_best = self.voter_best[self_chain as usize].lock().unwrap();
+                let previous_best = voter_best.0;
+                let previous_best_level = voter_best.1;
+                // update best block
+                if self_level > voter_best.1 {
+                    voter_best.0 = block_hash;
+                    voter_best.1 = self_level;
+                }
+                drop(voter_best);
 
-                // 5. Create voter node data.
-                // Also update the unvoted_levels on the voter chain. For mining.
-                // TODO: replace default with new
-                let mut voter_node_data = VoterNodeData::default();
-                voter_node_data.level = parent_voter_node_data.level + 1;
-                voter_node_data.chain_number = parent_voter_node_data.chain_number;
-                //                self.voter_node_data.insert(block_hash, voter_node_data);
-                self.node_data.insert_voter(&block_hash, voter_node_data);
+                // update vote levels
+                // only update if we are the main chain
+                if self_level > previous_best_level {
+                    let mut added: Vec<(H256, u64)> = vec![];
+                    let mut removed: Vec<(H256, u64)> = vec![];
+                    // if it's a side chain, and we are now better than the previous best, then
+                    // we are now the new main chain.
+                    if voter_parent_hash != previous_best {
+                        let mut to_level = voter_parent_level;
+                        let mut from_level = previous_best_level;
+                        let mut to = voter_parent_hash;
+                        let mut from = previous_best;
+                        while to_level > from_level {
+                            let votes: Vec<H256> = deserialize(
+                                &self
+                                    .db
+                                    .get_cf(vote_neighbor_cf, serialize(&to).unwrap())?
+                                    .unwrap(),
+                            )
+                            .unwrap();
+                            for vote in votes {
+                                added.push((vote, to_level));
+                            }
+                            to = deserialize(
+                                &self
+                                    .db
+                                    .get_cf(voter_parent_neighbor_cf, serialize(&to).unwrap())?
+                                    .unwrap(),
+                            )
+                            .unwrap();
+                            to_level -= 1;
+                        }
 
-                match voter_node_update {
-                    // Case: New block extends the main chain. Good situation.
-                    VoterNodeUpdateStatus::ExtendedMainChain => {
-                        // change the status of the new voter block
-                        self.node_data.voter_make_on_main_chain(&block_hash);
-                        // Remove the prop block levels voted by this block from list of unvoted levels of this chain.
-                        for prop_block_hash in content.votes.iter() {
-                            let proposer_level = self.prop_node_data(&prop_block_hash).level;
-                            self.voter_chains
-                                .get_mut(voter_node_data.chain_number as usize)
-                                .unwrap()
-                                .remove_unvoted(proposer_level);
+                        // trace back both from chain and to chain until they reach the same block
+                        while to != from {
+                            // trace back to chain
+                            let votes: Vec<H256> = deserialize(
+                                &self
+                                    .db
+                                    .get_cf(vote_neighbor_cf, serialize(&to).unwrap())?
+                                    .unwrap(),
+                            )
+                            .unwrap();
+                            for vote in votes {
+                                added.push((vote, to_level));
+                            }
+                            to = deserialize(
+                                &self
+                                    .db
+                                    .get_cf(voter_parent_neighbor_cf, serialize(&to).unwrap())?
+                                    .unwrap(),
+                            )
+                            .unwrap();
+                            to_level -= 1;
 
+                            // trace back from chain
+                            let votes: Vec<H256> = deserialize(
+                                &self
+                                    .db
+                                    .get_cf(vote_neighbor_cf, serialize(&from).unwrap())?
+                                    .unwrap(),
+                            )
+                            .unwrap();
+                            for vote in votes {
+                                removed.push((vote, from_level));
+                            }
+                            from = deserialize(
+                                &self
+                                    .db
+                                    .get_cf(voter_parent_neighbor_cf, serialize(&from).unwrap())?
+                                    .unwrap(),
+                            )
+                            .unwrap();
+                            from_level -= 1;
                         }
                     }
-                    // Case: New block is part of a side fork which is longer fork than the main chain.
-                    // This is a bad (and complex) situation.
-                    VoterNodeUpdateStatus::LongerFork => {
-                        //1. Construct the Fork  object
-                        let chain_number = voter_node_data.chain_number as usize;
-                        let left_leaf = self.voter_chains[chain_number].best_block;
-                        let left_leaf_level = self.voter_chains[chain_number].best_level;
-                        let right_leaf = block_hash;
-                        let right_leaf_level = voter_node_data.level;
-                        let fork =
-                            self.get_fork(left_leaf, right_leaf, left_leaf_level, right_leaf_level);
-                        //2. Switch the main chain to the right segment of the fork
-                        let new_best_block = fork.right_segment.last().unwrap();
-                        let new_best_level = self.node_data.get_voter(new_best_block).level;
-                        self.voter_chains[chain_number]
-                            .switch_the_main_chain(*new_best_block, new_best_level);
+                    // track which proposer levels did we touch
+                    let mut affected: BTreeSet<u64> = BTreeSet::new();
+                    for removed_vote in &removed {
+                        wb.merge_cf(
+                            proposer_node_vote_cf,
+                            serialize(&removed_vote.0).unwrap(),
+                            serialize(&(false, self_chain as u16, removed_vote.1)).unwrap(),
+                        )?;
+                        let proposer_level: u64 = deserialize(
+                            &self
+                                .db
+                                .get_cf(proposer_node_level_cf, serialize(&removed_vote.0).unwrap())
+                                .unwrap()
+                                .unwrap(),
+                        )
+                        .unwrap();
+                        affected.insert(proposer_level);
+                    }
+                    for added_vote in &added {
+                        wb.merge_cf(
+                            proposer_node_vote_cf,
+                            serialize(&added_vote.0).unwrap(),
+                            serialize(&(true, self_chain as u16, added_vote.1)).unwrap(),
+                        )?;
+                        let proposer_level: u64 = deserialize(
+                            &self
+                                .db
+                                .get_cf(proposer_node_level_cf, serialize(&added_vote.0).unwrap())
+                                .unwrap()
+                                .unwrap(),
+                        )
+                        .unwrap();
+                        affected.insert(proposer_level);
+                    }
+                    // finally add the new votes in this new block
+                    for added_vote in &content.votes {
+                        wb.merge_cf(
+                            proposer_node_vote_cf,
+                            serialize(&added_vote).unwrap(),
+                            serialize(&(true, self_chain as u16, self_level as u64)).unwrap(),
+                        )?;
+                        let proposer_level: u64 = deserialize(
+                            &self
+                                .db
+                                .get_cf(proposer_node_level_cf, serialize(&added_vote).unwrap())
+                                .unwrap()
+                                .unwrap(),
+                        )
+                        .unwrap();
+                        affected.insert(proposer_level);
+                    }
 
-                        //3a. Change the status of left_segment voter blocks to Orphan and get the votes by this segment.
-                        let mut votes_on_proposers_left: Vec<(H256, u32)> = vec![];
-                        for voter_block in fork.left_segment.iter() {
-                            self.node_data.voter_make_orphan(voter_block);
+                    // FIXME: this is ugly. We have an ongoing write batch `wb` that contains
+                    // updates to cf'es except leader sequence and ledger order (basically
+                    // all topological information). Now we are going to commit this batch and use
+                    // the data we just committed to update leader sequence and ledger order. To do
+                    // this, we create a new write batch still named `wb` and return early here.
+                    // It breaks the promise that all writes happens in this function are committed
+                    // in one batch. We need to fix it if we want concurrent access to blockchain.
+                    self.db.write(wb)?;
+                    let mut wb = WriteBatch::default();
+                    
+                    // track the smallest level whose leader has changed
+                    let mut change_begin: Option<u64> = None;
 
-                            let proposer_blocks = self.get_votes_by_voter(voter_block);
-                            for proposer_block in proposer_blocks {
-                                let level = self.prop_node_data(&proposer_block).level;
-                                votes_on_proposers_left.push((proposer_block, level));
+                    // try to update the leader block of each touched proposer level
+                    for level in &affected {
+                        let proposer_blocks: Vec<H256> = match self
+                            .db
+                            .get_cf(proposer_tree_level_cf, serialize(&level).unwrap())?
+                            {
+                                None => continue,
+                                Some(d) => deserialize(&d).unwrap(),
+                            };
+
+                        let existing_leader: Option<H256> = match self.db.get_cf(proposer_leader_sequence_cf, serialize(&(*level as u64)).unwrap())? {
+                            None => None,
+                            Some(d) => Some(deserialize(&d).unwrap())
+                        };
+
+                        let new_leader: Option<H256> = {
+                            let mut new_leader: Option<H256> = None;
+                            for block in &proposer_blocks {
+                                let votes: Vec<(u16, u64)> = match self
+                                    .db
+                                    .get_cf(proposer_node_vote_cf, serialize(&block).unwrap())?
+                                    {
+                                        None => vec![],
+                                        Some(d) => deserialize(&d).unwrap(),
+                                    };
+
+                                // check whether this block is the leader
+                                if votes.len() as u16 > NUM_VOTER_CHAINS / 2 + 1 {
+                                    new_leader = Some(*block);
+                                }
                             }
-                            votes_on_proposers_left.sort_by_key(|k| k.1);
-                        }
+                            new_leader
+                        };
 
-                        let first_left_segment_vote_level = votes_on_proposers_left[0].1; // This will be used for rollback
-
-                        //3b. Change the status of right_segment voter blocks to OnMainChain and get the votes by this segment.
-                        let mut votes_on_proposers_right: Vec<(H256, u32)> = vec![];
-                        for voter_block in fork.right_segment.iter() {
-                            self.node_data.voter_make_on_main_chain(voter_block);
-
-                            let proposer_blocks = self.get_votes_by_voter(voter_block);
-                            for proposer_block in proposer_blocks {
-                                let level = self.prop_node_data(&proposer_block).level;
-                                votes_on_proposers_right.push((proposer_block, level));
+                        if new_leader != existing_leader {
+                            match new_leader {
+                                None => wb.delete_cf(proposer_leader_sequence_cf,
+                                                     serialize(&(*level as u64)).unwrap())?,
+                                Some(new_leader) => wb.put_cf(proposer_leader_sequence_cf,
+                                                              serialize(&(*level as u64)).unwrap(),
+                                                              serialize(&new_leader).unwrap())?
+                            };
+                            if change_begin.is_none() {
+                                change_begin = Some(*level);
                             }
-                            votes_on_proposers_right.sort_by_key(|k| k.1);
                         }
+                    }
 
-                        //4a. Add votes_on_proposers_left to unvoted_proposer_blocks in voter chain. For mining.
-                        self.voter_chains[chain_number]
-                            .add_unvoted_while_switching(votes_on_proposers_left);
+                    // FIXME: yet another db commit. This commits the new leader blocks.
+                    self.db.write(wb)?;
+                    let mut wb = WriteBatch::default();
 
-                        //4b. Remove the votes_on_proposers_left to unvoted_proposer_blocks in voter chain. For mining.
-                        self.voter_chains[chain_number]
-                            .remove_unvoted_while_switching(votes_on_proposers_right);
+                    // If change happens, recompute the ledger. First, retire all levels from the
+                    // current ledger tip all the way to the first touched level, by deconfirming
+                    // the blocks originally confirmed by those levels. Then, start confirming
+                    // blocks from the first touched level until we reach a level without current
+                    // leader block.
+                    if change_begin.is_some() {
+                        let change_begin = change_begin.unwrap();
+                        let mut ledger_tip = self.ledger_tip.lock().unwrap();
+                        let mut unconfirmed_proposer = self.unconfirmed_proposer.lock().unwrap();
 
-                        //5 Rollback the ledger if required.
-
-                        //5a. Check if the leader blocks have changed between first_left_segment_vote_level and max_confirmed_level.
-                        let mut roll_back_level = 0;
-                        let mut roll_back_required = false;
-                        for level in
-                            first_left_segment_vote_level..self.proposer_tree.max_confirmed_level
-                        {
-                            let old_leader_block = self.get_leader_block_at_level(level).unwrap();
-                            match self.compute_leader_block_at_level(level) {
-                                Some(new_leader_block) => {
-                                    if old_leader_block != new_leader_block {
-                                        // Leader block changed at the level
-                                        roll_back_required = true;
-                                        roll_back_level = level;
-                                        break;
+                        let mut removed: Vec<H256> = vec![];    // proposer blocks removed from the ledger
+                        let mut added: Vec<H256> = vec![];      // proposer blocks added to the ledger
+                        
+                        // deconfirm the blocks
+                        for level in change_begin..=*ledger_tip {
+                            match self.db.get_cf(proposer_ledger_order_cf, serialize(&(level as u64)).unwrap())? {
+                                None => {},
+                                Some(d) => {
+                                    let original_ledger: Vec<H256> = deserialize(&d).unwrap();
+                                    wb.delete_cf(proposer_ledger_order_cf, serialize(&(level as u64)).unwrap())?;
+                                    for block in &original_ledger {
+                                        unconfirmed_proposer.insert(*block);
+                                        removed.push(*block);
                                     }
                                 }
+                            }
+                        }
+                        
+                        // recompute the ledger
+                        for level in change_begin.. {
+                            let leader: Option<H256> = match self.db.get_cf(proposer_leader_sequence_cf, serialize(&(level as u64)).unwrap())? {
+                                None => None,
+                                Some(d) => Some(deserialize(&d).unwrap())
+                            };
+                            match leader {
                                 None => {
-                                    // level leader block is not the leader block and infact level has not leader block
-                                    self.proposer_tree.remove_leader_block(level);
-                                    roll_back_required = true;
-                                    roll_back_level = level;
+                                    // mark that the ledger lasts till the previous level
+                                    *ledger_tip = level - 1;
                                     break;
                                 }
-                            }
-                        }
+                                Some(leader) => {
+                                    // Get the collection of confirmed blocks by doing a DFS, so
+                                    // that we preserve the reference order (i.e. the blocks that
+                                    // is referred earlier appears in the front). We will then sort
+                                    // the list (stable sort) according to the level, so we get a
+                                    // total ordering by level and break ties by reference order.
 
-                        if roll_back_required {
-                            println!("51% attack, roll back at level {}", roll_back_level);
-                            //5b. Change status of all the proposer blocks from level roll_back_level onwards to Potential Leader
-                            for level in roll_back_level..self.proposer_tree.max_confirmed_level {
-                                for proposer_block in
-                                    self.proposer_tree.get_blocks_at_level(level).iter()
-                                {
-                                    self.node_data
-                                        .give_proposer_potential_leader_status(proposer_block);
+                                    let mut ledger: Vec<(H256, u64)> = vec![];
+                                    let mut stack: Vec<H256> = vec![leader];
+
+                                    // Start DFS
+                                    while let Some(top) = stack.pop() {
+                                        // See whether this block is in the unconfirmed list. If
+                                        // so, remove it. Otherwise, just pass this block.
+                                        if !unconfirmed_proposer.remove(&top) {
+                                            continue;
+                                        }
+
+                                        // Get info of this block.
+                                        let level: u64 = deserialize(&self.db.get_cf(proposer_node_level_cf, serialize(&top).unwrap())?.unwrap()).unwrap();
+                                        let refs: Vec<H256> = deserialize(&self.db.get_cf(proposer_ref_neighbor_cf,
+                                                                                          serialize(&top).unwrap())?
+                                                                          .unwrap()).unwrap();
+                                        
+                                        // Insert into the ledger.
+                                        ledger.push((top, level));
+
+                                        // Search all referenced blocks. Note that we need to
+                                        // reverse the order of the refs: we want the front
+                                        // of the reference list to be searched first, so we need
+                                        // to make sure it appears at the top of the stack.
+                                        for ref_hash in refs.iter().rev() {
+                                            stack.push(*ref_hash);
+                                        }
+                                    }
+
+                                    // Stable sort the ledger according to level
+                                    ledger.sort_by_cached_key(|k| k.1);
+
+                                    // Write the new ledger
+                                    let ledger: Vec<H256> = ledger.iter().map(|x| x.0).collect();
+                                    wb.put_cf(proposer_ledger_order_cf, serialize(&(level as u64)).unwrap(), 
+                                              serialize(&ledger).unwrap())?;
+                                    for block in &ledger {
+                                        added.push(*block);
+                                    }
                                 }
-
-                                self.proposer_tree.remove_leader_block(level);
                             }
-                            //5c. Rollback ledger from 'roll_back_level' level onwards.
-                            self.tx_blocks.rollback_ledger(roll_back_level);
-                            self.proposer_tree.max_confirmed_level = roll_back_level as u32;
                         }
+                        drop(ledger_tip);
+                        drop(unconfirmed_proposer);
+                        // commit the new ledger
+                        self.db.write(wb)?;
+
+                        // If we did touch the ledger, gather the diff of the ledger in the form of transaction blocks
+                        let mut removed_transaction: Vec<H256> = vec![];
+                        let mut added_transaction: Vec<H256> = vec![];
+                        for hash in removed {
+                            let mut transactions: Vec<H256> = deserialize(&self.db.get_cf(transaction_ref_neighbor_cf, serialize(&hash).unwrap())?.unwrap()).unwrap();
+                            removed_transaction.append(&mut transactions);
+                        }
+                        for hash in added {
+                            let mut transactions: Vec<H256> = deserialize(&self.db.get_cf(transaction_ref_neighbor_cf, serialize(&hash).unwrap())?.unwrap()).unwrap();
+                            added_transaction.append(&mut transactions);
+                        }
+
+                        return Ok((added_transaction, removed_transaction));
+                    } else {
+                        // If we didn't change any leader, and thus didn't touch the ledger
+                        self.db.write(wb)?;
+                        return Ok((vec![], vec![]));
                     }
-                    // Case: A orphan voter block. Do nothing.
-                    VoterNodeUpdateStatus::SideChain => {}
-                }
-                // Try confirming levels from the min unconfirmed proposer level.
-                loop {
-                    let level = self.proposer_tree.max_confirmed_level;
-                    self.try_confirm_leader_block_at_level(level);
-                    // Exit the loop if previous step did not increase "self.proposer_tree.max_confirmed_level"
-                    if level == self.proposer_tree.max_confirmed_level {
-                        break;
-                    }
+                } else {
+                    // If we didn't update the votes.
+                    self.db.write(wb)?;
+                    return Ok((vec![], vec![]));
                 }
             }
-        };
+            Content::Transaction(_) => {
+                // mark itself as unreferred
+                let mut unreferred_transaction = self.unreferred_transaction.lock().unwrap();
+                unreferred_transaction.insert(block_hash);
+                drop(unreferred_transaction);
+                self.db.write(wb)?;
+                return Ok((vec![], vec![]));
+            }
+        }
     }
 
-    fn get_fork(
-        &mut self,
-        left_leaf: H256,
-        right_leaf: H256,
-        left_leaf_level: u32,
-        right_leaf_level: u32,
-    ) -> VoterChainFork {
-        if left_leaf_level >= right_leaf_level {
-            panic!("This function should not be called when a small fork appears")
-        }
-        let mut left_segment: Vec<H256> = vec![];
-        let mut right_segment: Vec<H256> = vec![];
-        let mut left_end: H256 = left_leaf;
-        let mut right_end: H256 = right_leaf;
+    pub fn best_proposer(&self) -> H256 {
+        let proposer_best = self.proposer_best.lock().unwrap();
+        let hash = proposer_best.0;
+        drop(proposer_best);
+        return hash;
+    }
 
-        //1. Construct right segment until the level of right_end is same as left_end
-        for _level in left_leaf_level..right_leaf_level {
-            right_segment.push(right_end);
-            right_end = self.get_voter_parent(right_end);
-        }
+    pub fn best_voter(&self, chain_num: usize) -> H256 {
+        let voter_best = self.voter_best[chain_num].lock().unwrap();
+        let hash = voter_best.0;
+        drop(voter_best);
+        return hash;
+    }
 
-        loop {
-            // If the ends are the same, then we've found a common parent
-            if left_end == right_end {
-                left_segment.reverse();
-                right_segment.reverse();
-                return VoterChainFork {
-                    common_parent: left_end,
-                    left_segment,
-                    right_segment,
+    pub fn unreferred_proposer(&self) -> Vec<H256> {
+        // TODO: does ordering matter?
+        // TODO: should remove the parent block when mining
+        let unreferred_proposer = self.unreferred_proposer.lock().unwrap();
+        let list: Vec<H256> = unreferred_proposer.iter().cloned().collect();
+        drop(unreferred_proposer);
+        return list;
+    }
+
+    pub fn unreferred_transaction(&self) -> Vec<H256> {
+        // TODO: does ordering matter?
+        let unreferred_transaction = self.unreferred_transaction.lock().unwrap();
+        let list: Vec<H256> = unreferred_transaction.iter().cloned().collect();
+        drop(unreferred_transaction);
+        return list;
+    }
+
+    /// Get the list of unvoted proposer blocks that a voter chain should vote for, given the tip
+    /// of the particular voter chain.
+    pub fn unvoted_proposer(&self, tip: &H256) -> Result<Vec<H256>> {
+        // get the deepest voted level
+        let voter_node_voted_level_cf = self.db.cf_handle(VOTER_NODE_VOTED_LEVEL_CF).unwrap();
+        let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
+        let voted_level: u64 = deserialize(
+            &self
+                .db
+                .get_cf(voter_node_voted_level_cf, serialize(&tip).unwrap())?
+                .unwrap(),
+        )
+        .unwrap();
+        // get the deepest proposer level
+        let proposer_best = self.proposer_best.lock().unwrap();
+        let proposer_best_level = proposer_best.1;
+        drop(proposer_best);
+
+        // get the first block we heard on each proposer level
+        let mut list: Vec<H256> = vec![];
+        for level in voted_level + 1..=proposer_best_level {
+            let blocks: Vec<H256> = deserialize(
+                &self
+                    .db
+                    .get_cf(proposer_tree_level_cf, serialize(&(level as u64)).unwrap())?
+                    .unwrap(),
+            )
+            .unwrap();
+            list.push(blocks[0]);
+        }
+        return Ok(list);
+    }
+}
+
+fn vote_vec_merge(
+    _: &[u8],
+    existing_val: Option<&[u8]>,
+    operands: &mut rocksdb::merge_operator::MergeOperands,
+) -> Option<Vec<u8>> {
+    let mut existing: Vec<(u16, u64)> = match existing_val {
+        Some(v) => deserialize(v).unwrap(),
+        None => vec![],
+    };
+    for op in operands {
+        // parse the operation as add(true)/remove(false), chain(u16), level(u64)
+        let operation: (bool, u16, u64) = deserialize(op).unwrap();
+        match operation.0 {
+            true => {
+                existing.push((operation.1, operation.2));
+            }
+            false => {
+                match existing.iter().position(|&x| x.0 == operation.1) {
+                    Some(p) => existing.swap_remove(p),
+                    None => continue, // TODO: potential bug here - what if we delete a nonexisting item
                 };
             }
-            // Extends both the segments.
-            right_segment.push(right_end);
-            right_end = self.get_voter_parent(right_end);
-
-            left_segment.push(left_end);
-            left_end = self.get_voter_parent(left_end);
         }
     }
+    let result: Vec<u8> = serialize(&existing).unwrap();
+    return Some(result);
 }
 
-// Functions to infer the voter chains. These functions are not currently used in logic but they are tested.
-impl BlockChain {
-    /// Return the voter blocks on the longest voter chain `chain_number`
-    pub fn get_longest_chain(&mut self, chain_number: u16) -> Vec<H256> {
-        let chain = &self.voter_chains[chain_number as usize];
-        let best_level = chain.best_level;
-        let mut longest_chain: Vec<H256> = vec![];
-        let mut top_block: H256 = chain.best_block;
-
-        // Recursively push the top block
-        // TODO: I have a sense that this can be realized using Option and collect
-        for _ in 0..best_level {
-            longest_chain.push(top_block);
-            top_block = self.get_voter_parent(top_block);
-        }
-        longest_chain.push(top_block);
-        longest_chain.reverse();
-        return longest_chain;
+fn h256_vec_append_merge(
+    _: &[u8],
+    existing_val: Option<&[u8]>,
+    operands: &mut rocksdb::merge_operator::MergeOperands,
+) -> Option<Vec<u8>> {
+    let mut existing: Vec<H256> = match existing_val {
+        Some(v) => deserialize(v).unwrap(),
+        None => vec![],
+    };
+    for op in operands {
+        let new_hash: H256 = deserialize(op).unwrap();
+        existing.push(new_hash);
     }
-
-    /// Return the hashes of the proposer blocks voted by a voter chain.
-    pub fn get_votes_from_chain(&mut self, chain_number: u16) -> Vec<H256> {
-        let longest_chain: Vec<H256> = self.get_longest_chain(chain_number);
-        let mut votes: Vec<H256> = vec![];
-        for voter in longest_chain {
-            let mut voter_votes = self.get_votes_by_voter(&voter);
-            voter_votes.reverse(); // TODO: Why? Ordering?
-            votes.extend(voter_votes);
-        }
-        return votes;
-    }
-
-    /// Return the hashes of the proposer blocks voted by a single voter block.
-    pub fn get_votes_by_voter(&mut self, block_hash: &H256) -> Vec<H256> {
-        if !self.node_data.contains_voter(&block_hash) {
-            panic!("The voter block with hash {} doesn't exist", block_hash);
-        }
-        let voter_ref_nodes = self.graph.get_neighbours_type_1(
-            *block_hash,
-            vec![
-                Edge::VoterToProposerVote,
-                Edge::VoterToProposerParentAndVote,
-            ],
-        );
-        return voter_ref_nodes;
-    }
-
-    /// Return the voter parent of a voter block
-    pub fn get_voter_parent(&mut self, block_hash: H256) -> H256 {
-        if !self.node_data.contains_voter(&block_hash) {
-            panic!("The voter block with hash {} doesn't exist", block_hash);
-        }
-        //        let voter_parent_edges = self
-        //            .graph
-        ////            .edges(block_hash)
-        //            .filter(|&x| *x.2 == Edge::VoterToVoterParent);
-        //        let voter_parent_nodes: Vec<H256> = voter_parent_edges.map(|x| x.1).collect();
-        let voter_parent_nodes: Vec<H256> = self
-            .graph
-            .get_neighbours_type_1(block_hash, vec![Edge::VoterToVoterParent]);
-        if voter_parent_nodes.len() == 1 {
-            return voter_parent_nodes[0];
-        } else {
-            panic!(
-                "{} proposer parents for {}",
-                voter_parent_nodes.len(),
-                block_hash
-            )
-        }
-    }
-
-    pub fn number_of_voting_chains(&self) -> u32 {
-        return self.voter_chains.len() as u32;
-    }
-}
-
-// Functions to generate the ledger. This uses the confirmation logic of Prism.
-impl BlockChain {
-    /// Returns the list of ordered tx blocks. This is the initial step of creating the full ledger.
-    pub fn get_ledger(&mut self) -> Vec<H256> {
-        return self.tx_blocks.get_ledger();
-    }
-
-    /// Checks if there are sufficient votes to confirm leader block at the level.
-    /// If yes it confirms the leader block at the level and updates the ledger. Else it does nothing.
-    // TODO: This function should be called when the voter chain has collected sufficient votes on level.
-    pub fn try_confirm_leader_block_at_level(&mut self, level: u32) {
-        if self.proposer_tree.contains_leader_block_at(level) {
-            return; // Return if the level already has a confirmed leader block.
-        }
-
-        if self.proposer_tree.best_level < level {
-            return; // Return if the level has no proposer blocks.
-        }
-
-        if self.get_total_votes_at_level(level) < self.number_of_voting_chains() / 2 {
-            return; // Return if less than half the votes are be caste. This is only for efficiency
-        }
-
-        let leader_block;
-        match self.compute_leader_block_at_level(level) {
-            Some(x) => leader_block = x,
-            None => return,
-        }
-
-        // 2a. Adding the leader block for the level
-        self.proposer_tree.insert_leader_block(level, leader_block);
-        self.proposer_tree.max_confirmed_level = level + 1;
-
-        // 2b. Giving leader status to leader_block
-        self.node_data.give_proposer_leader_status(&leader_block);
-
-        // 2c. Giving NotLeaderUnconfirmed status to all blocks at 'level' except the leader_block
-        for proposer_block in self.proposer_tree.get_blocks_at_level(level).iter() {
-            if *proposer_block != leader_block {
-                self.node_data
-                    .give_proposer_not_leader_status(proposer_block);
-            }
-        }
-
-        // 3. Updating ledger because a new leader block is added.
-        self.update_ledger(level);
-    }
-
-    /// Computes the leader block at the level using the  voter chains
-    pub fn compute_leader_block_at_level(&mut self, level: u32) -> Option<H256> {
-        //0. Get the list of proposer blocks at the level.
-        let proposers_blocks: &Vec<H256> = &self.proposer_tree.get_blocks_at_level(level);
-
-        // 1. Getting the lcb of votes on each proposer block and  the block with max_lcb votes.
-        let mut lcb_proposer_votes: HashMap<H256, f32> = HashMap::<H256, f32>::new();
-        let mut max_lcb_vote: f32 = -1.0;
-        let mut max_lcb_vote_index: usize = 0;
-        // Stores the number votes which have not been caste (or are still not permanent).
-        let mut left_over_votes: f32 = self.voter_chains.len() as f32;
-
-        // todo: This seems inefficient. Also equal votes situation is not considered.
-        for (index, proposer) in proposers_blocks.iter().enumerate() {
-            let proposer_votes: Vec<u32> = self.get_vote_depths_on_proposer(proposer);
-            let lcb = utils::lcb_from_vote_depths(proposer_votes);
-            lcb_proposer_votes.insert(*proposer, lcb);
-            left_over_votes -= lcb; // removing the cast (or permanent) votes
-            if max_lcb_vote < lcb {
-                max_lcb_vote = lcb;
-                max_lcb_vote_index = index;
-            }
-        }
-        // It the left over votes is more than the votes received by the max_lcb_vote_index block, then
-        // dont confirm because a private proposer block could potentially get all these left over votes.
-        // and become the leader block of that level.
-        if left_over_votes >= max_lcb_vote {
-            return None;
-        }
-        // TODO: The fast confirmation can be done here
-        // Dont confirm if another proposer block could potentially get all these left over votes.
-        for (index, proposer) in proposers_blocks.iter().enumerate() {
-            let ucb = lcb_proposer_votes[proposer] + left_over_votes;
-            if index == max_lcb_vote_index {
-                continue;
-            }
-            if ucb >= max_lcb_vote {
-                return None;
-            }
-        }
-
-        // If the function reaches here, the 'level' has a proposer block with maximum votes. Yay.
-        return Some(proposers_blocks[max_lcb_vote_index]);
-    }
-
-    /// For all the votes (on the voter chain) for a given proposer block, return the depth of
-    /// those votes, where depth is the number of children voter blocks on the vote.
-    pub fn get_vote_depths_on_proposer(&mut self, block_hash: &H256) -> Vec<u32> {
-        if !self.node_data.contains_proposer(block_hash) {
-            panic!("The proposer block with hash {} doesn't exist", block_hash);
-        }
-        //1. Extracting the voter blocks which have voted on this proposer block
-        let voter_nodes = self.graph.get_neighbours_type_1(
-            *block_hash,
-            vec![
-                Edge::VoterFromProposerVote,
-                Edge::VoterFromProposerParentAndVote,
-            ],
-        );
-
-        let mut voter_depths: Vec<u32> = vec![];
-        for voter_block_hash in voter_nodes {
-            //2a. Filter out votes which come from non-main-chain voter blocks
-            let voter_node_data = self.node_data.get_voter(&voter_block_hash);
-            if !voter_node_data.is_on_main_chain() {
-                continue;
-            }
-            //2b Get the depth of the voter
-            let voter_level = voter_node_data.level;
-            let voter_chain_number = voter_node_data.chain_number;
-            let voter_chain_depth = self.voter_chains[voter_chain_number as usize].best_level;
-            voter_depths.push(voter_chain_depth - voter_level + 1);
-        }
-        return voter_depths;
-    }
-
-    /// Called when a new leader block is confirmed at some level.
-    fn update_ledger(&mut self, level: u32) {
-        let leader_block = self.proposer_tree.get_leader_block_at(level);
-
-        //1. Get all the proposer blocks referred by this leader block which are not confirmed and
-        // aren't themselves leader blocks on their level. We need an *ordered* list here.
-        // Reason: We can confirm these proposer blocks and thereby confirming the tx blocks referred by these proposer blocks.
-        let to_confirm_proposer_blocks =
-            self.get_unconfirmed_notleader_referred_proposer_blocks(leader_block);
-
-        //2. Add the transactions blocks referred by these proposer blocks to the ledger.
-        let mut tx_blocks_to_add: Vec<H256> = vec![];
-        for proposer_block in to_confirm_proposer_blocks.iter() {
-            // Get all the tx blocks referred.
-            for tx_block in self.get_referred_tx_blocks_ordered(proposer_block) {
-                // Add the tx block to the ledger if not already in the ledger
-                if !self.tx_blocks.is_in_ledger(&tx_block) {
-                    tx_blocks_to_add.push(tx_block);
-                }
-            }
-            // Changing the status of these prop blocks to 'not leader but confirmed'.
-            // Reason: This is done to prevent these prop blocks from getting confirmed again.
-            if *proposer_block != leader_block {
-                self.node_data
-                    .give_proposer_not_leader_confirmed_status(proposer_block);
-            }
-        }
-        self.tx_blocks.add_to_ledger(level, tx_blocks_to_add);
-    }
-
-    /// Idea: When a new leader block, B, is confirmed, it also confirms
-    /// 'notleader and unconfirmed' proposer blocks directly and indirectly referred by B.
-    /// Let set S be the list of all the 'notleader and unconfirmed' proposer blocks referred by B.
-    /// The function obtains S and orders them according the the following rule
-    /// Topologically ordering rule: for forall B1, B2 \in S:
-    /// 1. If B1.level < B2.level ==> B1 < B2.
-    /// 2. If B1.level == B2.level, then B1 < B2 if B1 is (directly or indirectly) referred before B2 in block B.
-    fn get_unconfirmed_notleader_referred_proposer_blocks(
-        &mut self,
-        block_hash: H256,
-    ) -> Vec<H256> {
-        let mut all_blocks: BTreeMap<H256, PropOrderingHelper> = BTreeMap::new(); // Will store the set S.
-
-        //Algo: Run DFS graph traversal to obtain and order the 'notleader and unconfirmed' prop blocks.
-        // Each block has a 'position' and is ordered according to the position.
-
-        // The queue is used for DFS traversal. The topological ordering logic is present in struct PropOrderingHelper.
-        let mut queue: VecDeque<(H256, PropOrderingHelper)> = VecDeque::new();
-        let node_data = self.prop_node_data(&block_hash);
-        queue.push_back((
-            block_hash,
-            PropOrderingHelper::new(node_data.level, vec![0]),
-        ));
-
-        while let Some(block) = queue.pop_front() {
-            let block_hash = block.0.clone(); // next block in the traversal path
-            let new_position = block.1.clone();
-
-            //1. Add the block to all_blocks.
-
-            //If the block is already present in all_blocks, remove it if the new position is better than the previous.
-            if all_blocks.contains_key(&block.0) {
-                let old_position = &all_blocks[&block.0];
-                if new_position < *old_position {
-                    all_blocks.remove(&block.0);
-                } else {
-                    continue; // skip the loop to go the next block in the DFS traversal path
-                }
-            }
-            // Add the block to all_blocks
-            all_blocks.insert(block.0, block.1);
-
-            //2. Add the block's parent and referred notleader proposer blocks to the DFS traversal queue.
-            let referred_prop_blocks =
-                self.get_unconfirmed_notleader_referred_proposer_blocks_prev_level(block_hash);
-            for block in referred_prop_blocks {
-                let block_h = block.0;
-                let node_data = self.prop_node_data(&block_h);
-                let level = node_data.level; // level in the prop tree
-                let mut new_position_vec = new_position.position.clone();
-                new_position_vec.push(block.1);
-                queue.push_back((block_h, PropOrderingHelper::new(level, new_position_vec)));
-            }
-        }
-        // Order all_blocks using via comparision logic in the comment of the function which is
-        // coded in PropOrderingHelper.
-        let mut v_all_blocks = Vec::from_iter(all_blocks);
-        v_all_blocks.sort_by(|(_, a), (_, b)| a.cmp(&b));
-
-        let answer: Vec<H256> = v_all_blocks.into_iter().map(|(x, _)| x).collect();
-        return answer;
-    }
-
-    /// Returns the tx blocks directly referred by the proposer block
-    pub fn get_referred_tx_blocks_ordered(&mut self, block_hash: &H256) -> Vec<H256> {
-        if !self.node_data.contains_proposer(block_hash) {
-            panic!("The proposer block with hash {} doesn't exist", *block_hash);
-        }
-        let mut referred_tx_blocks_nodes = self
-            .graph
-            .get_neighbours_type_2(*block_hash, Edge::ProposerToTransactionReference);
-        referred_tx_blocks_nodes.sort_by_key(|k| k.1);
-        // returning the hashes only
-        return referred_tx_blocks_nodes
-            .into_iter()
-            .map(|(x, _)| x)
-            .collect();
-    }
-
-    /// Returns all the notleader proposer blocks references by the block_hash including the parent on the previous level of the  block hash.
-    /// The blocks are ordered by their position in the reference list.
-    fn get_unconfirmed_notleader_referred_proposer_blocks_prev_level(
-        &mut self,
-        block_hash: H256,
-    ) -> Vec<(H256, u32)> {
-        let parent_block: H256 = self.get_proposer_parent(block_hash);
-        let mut referred_prop_blocks: Vec<(H256, u32)> = self.get_referred_prop_blocks(block_hash);
-        referred_prop_blocks.push((parent_block, 0));
-
-        // Filtering only NotLeader and Unconfirmed Blocks
-        let mut filtered_referred_prop_blocks: Vec<(H256, u32)> = referred_prop_blocks
-            .into_iter()
-            .filter(|&x| {
-                self.prop_node_data(&x.0).leadership_status == ProposerStatus::NotLeaderUnconfirmed
-            })
-            .collect();
-        // Order the proposer blocks by their edge number
-        filtered_referred_prop_blocks.sort_by_key(|k| k.1);
-
-        return filtered_referred_prop_blocks;
-    }
-
-    /// Return the proposer parent of the block
-    pub fn get_proposer_parent(&mut self, block_hash: H256) -> H256 {
-        let proposer_parent_nodes = self.graph.get_neighbours_type_1(
-            block_hash,
-            vec![
-                Edge::TransactionToProposerParent,
-                Edge::ProposerToProposerParent,
-                Edge::VoterToProposerParent,
-            ],
-        );
-        if proposer_parent_nodes.len() == 1 {
-            return proposer_parent_nodes[0];
-        } else {
-            panic!(
-                "{} proposer parents for {}",
-                proposer_parent_nodes.len(),
-                block_hash
-            )
-        }
-    }
-
-    /// Returns the prop blocks directly referred by the proposer block
-    pub fn get_referred_prop_blocks(&mut self, block_hash: H256) -> Vec<(H256, u32)> {
-        if !self.node_data.contains_proposer(&block_hash) {
-            panic!("The proposer block with hash {} doesn't exist", block_hash);
-        }
-        let mut referred_prop_blocks_nodes: Vec<(H256, u32)> = self
-            .graph
-            .get_neighbours_type_2(block_hash, Edge::ProposerToProposerReference);
-
-        return referred_prop_blocks_nodes;
-    }
-
-    /// Return a single leader block at the given level
-    fn get_leader_block_at_level(&mut self, level: u32) -> Option<H256> {
-        if self.proposer_tree.contains_leader_block_at(level) {
-            return Some(self.proposer_tree.get_leader_block_at(level));
-        }
-        return None;
-    }
-
-    /// Returns the leader blocks from 0 to best level of the proposer tree
-    pub fn get_leader_block_sequence(&mut self) -> Vec<H256> {
-        let leader_blocks: Vec<H256> = (1..self.proposer_tree.max_confirmed_level)
-            .map(|level| self.get_leader_block_at_level(level).unwrap())
-            .collect();
-        return leader_blocks;
-    }
-}
-
-/// Functions for mining.
-impl BlockChain {
-    /// Return the best blocks on voter chain 'chain number'.
-    pub fn get_voter_best_block(&self, chain_number: u16) -> H256 {
-        let voter_best_block: H256 = self.voter_chains[chain_number as usize].best_block;
-        return voter_best_block;
-    }
-
-    /// Return the best block on proposer tree.s
-    pub fn get_proposer_best_block(&self) -> H256 {
-        return self.proposer_tree.best_block;
-    }
-
-    /// Proposer block content 1
-    pub fn get_unreferred_prop_blocks(&self) -> Vec<H256> {
-        let mut unreferred_prop_blocks = self.proposer_tree.unreferred.clone();
-        // Remove the parent block
-        unreferred_prop_blocks.remove(&self.get_proposer_best_block());
-        return Vec::from_iter(unreferred_prop_blocks);
-    }
-
-    /// Proposer block content 2
-    pub fn get_unreferred_tx_blocks(&self) -> Vec<H256> {
-        let unreferred_tx_blocks = self.tx_blocks.unreferred.clone();
-        return Vec::from_iter(unreferred_tx_blocks);
-    }
-
-    /// Voter block content
-    pub fn get_unvoted_prop_blocks(&self, chain_number: u16) -> Vec<H256> {
-        return self.voter_chains[chain_number as usize].get_unvoted_prop_blocks();
-    }
-
-    //The content for transaction blocks is maintained in the tx-mempool, not here.
-}
-
-/// Functions for block validation
-impl BlockChain {
-    pub fn check_node(&mut self, hash: H256) -> bool {
-        return self.graph.contains_node(hash);
-    }
-}
-
-/// Helper functions
-impl BlockChain {
-    pub fn prop_node_data(&self, hash: &H256) -> ProposerNodeData {
-        return self.node_data.get_proposer(hash);
-    }
-
-    pub fn voter_node_data(&self, hash: &H256) -> VoterNodeData {
-        return self.node_data.get_voter(hash);
-    }
-
-    pub fn get_total_votes_at_level(&mut self, level: u32) -> u32 {
-        let prop_blocks_at_level = self.proposer_tree.get_blocks_at_level(level);
-        let mut total_votes: u32 = 0;
-        for prop_block in prop_blocks_at_level.iter() {
-            total_votes += self.get_vote_depths_on_proposer(prop_block).len() as u32;
-        }
-        return total_votes;
-    }
+    let result: Vec<u8> = serialize(&existing).unwrap();
+    return Some(result);
 }
 
 #[cfg(test)]
 mod tests {
-    use super::utils;
     use super::*;
-    use crate::block::Block;
+    use crate::block::{proposer, transaction, voter, Block, Content};
     use crate::crypto::hash::H256;
-    const NUM_VOTER_CHAINS: u16 = 10;
-    use std::sync::mpsc;
 
-    // At initialization the blockchain only consists of (m+1) genesis blocks.
-    // The hash of these genesis nodes in the blockchain graph are fixed for now
-    // because we have designed the genesis blocks themselves.
     #[test]
-    fn blockchain_initialization() {
-        let blockchain_db_path = std::path::Path::new("/tmp/blockchain_test1.rocksdb");
-        let blockchain_db = database::BlockChainDatabase::new(blockchain_db_path).unwrap();
-        let blockchain_db = Arc::new(Mutex::new(blockchain_db));
+    fn initialize_new() {
+        let db = BlockChain::new("/tmp/prism_test_blockchain_new.rocksdb").unwrap();
+        // get cf handles
+        let proposer_node_vote_cf = db.db.cf_handle(PROPOSER_NODE_VOTE_CF).unwrap();
+        let proposer_node_level_cf = db.db.cf_handle(PROPOSER_NODE_LEVEL_CF).unwrap();
+        let voter_node_level_cf = db.db.cf_handle(VOTER_NODE_LEVEL_CF).unwrap();
+        let voter_node_chain_cf = db.db.cf_handle(VOTER_NODE_CHAIN_CF).unwrap();
+        let voter_node_voted_level_cf = db.db.cf_handle(VOTER_NODE_VOTED_LEVEL_CF).unwrap();
+        let proposer_tree_level_cf = db.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
+        let parent_neighbor_cf = db.db.cf_handle(PARENT_NEIGHBOR_CF).unwrap();
+        let vote_neighbor_cf = db.db.cf_handle(VOTE_NEIGHBOR_CF).unwrap();
+        let proposer_leader_sequence_cf = db.db.cf_handle(PROPOSER_LEADER_SEQUENCE_CF).unwrap();
+        let proposer_ledger_order_cf = db.db.cf_handle(PROPOSER_LEDGER_ORDER_CF).unwrap();
 
-        // Initialize a blockchain with 10  voter chains.
-        let (state_update_sink, _state_update_source) = mpsc::channel();
-
-        let mut blockchain = BlockChain::new(blockchain_db, NUM_VOTER_CHAINS, state_update_sink);
-
-        // Checking proposer tree's genesis block hash
-        let proposer_genesis_hash_shouldbe: [u8; 32] = [
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0,
-        ];
-        // Hash vector of proposer genesis block. todo: Shift to a global config  file
-        let proposer_genesis_hash_shouldbe: H256 = (&proposer_genesis_hash_shouldbe).into();
+        // validate proposer genesis
+        let genesis_level: u64 = deserialize(
+            &db.db
+                .get_cf(
+                    proposer_node_level_cf,
+                    serialize(&(*PROPOSER_GENESIS_HASH)).unwrap(),
+                )
+                .unwrap()
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(genesis_level, 0);
+        let level_0_blocks: Vec<H256> = deserialize(
+            &db.db
+                .get_cf(proposer_tree_level_cf, serialize(&(0 as u64)).unwrap())
+                .unwrap()
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(level_0_blocks, vec![*PROPOSER_GENESIS_HASH]);
+        let genesis_votes: Vec<(u16, u64)> = deserialize(
+            &db.db
+                .get_cf(
+                    proposer_node_vote_cf,
+                    serialize(&(*PROPOSER_GENESIS_HASH)).unwrap(),
+                )
+                .unwrap()
+                .unwrap(),
+        )
+        .unwrap();
+        let mut true_genesis_votes: Vec<(u16, u64)> = vec![];
+        for chain_num in 0..NUM_VOTER_CHAINS {
+            true_genesis_votes.push((chain_num as u16, 0));
+        }
+        assert_eq!(genesis_votes, true_genesis_votes);
         assert_eq!(
-            proposer_genesis_hash_shouldbe,
-            blockchain.proposer_tree.best_block
+            *db.proposer_best.lock().unwrap(),
+            (*PROPOSER_GENESIS_HASH, 0)
         );
+        assert_eq!(*db.unconfirmed_proposer.lock().unwrap(), HashSet::new());
+        assert_eq!(db.unreferred_proposer.lock().unwrap().len(), 1);
+        assert_eq!(
+            db.unreferred_proposer
+                .lock()
+                .unwrap()
+                .contains(&(PROPOSER_GENESIS_HASH)),
+            true
+        );
+        let level_0_leader: H256 = deserialize(
+            &db.db
+                .get_cf(proposer_leader_sequence_cf, serialize(&(0 as u64)).unwrap())
+                .unwrap()
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(level_0_leader, *PROPOSER_GENESIS_HASH);
+        let level_0_confirms: Vec<H256> = deserialize(
+            &db.db
+                .get_cf(proposer_ledger_order_cf, serialize(&(0 as u64)).unwrap())
+                .unwrap()
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(level_0_confirms, vec![*PROPOSER_GENESIS_HASH]);
 
-        // Checking all voter tree's genesis block hashes
-        for chain_number in 0..NUM_VOTER_CHAINS {
-            let b1 = ((chain_number + 1) >> 8) as u8;
-            let b2 = (chain_number + 1) as u8;
-            let voter_genesis_hash_shouldbe: [u8; 32] = [
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, b1, b2,
-            ];
-            // Hash vector of voter genesis block. todo: Shift to a global config  file
-            let voter_genesis_hash_shouldbe: H256 = (&voter_genesis_hash_shouldbe).into();
+        // validate voter genesis
+        for chain_num in 0..NUM_VOTER_CHAINS {
+            let genesis_level: u64 = deserialize(
+                &db.db
+                    .get_cf(
+                        voter_node_level_cf,
+                        serialize(&VOTER_GENESIS_HASHES[chain_num as usize]).unwrap(),
+                    )
+                    .unwrap()
+                    .unwrap(),
+            )
+            .unwrap();
+            assert_eq!(genesis_level, 0);
+            let voted_level: u64 = deserialize(
+                &db.db
+                    .get_cf(
+                        voter_node_voted_level_cf,
+                        serialize(&VOTER_GENESIS_HASHES[chain_num as usize]).unwrap(),
+                    )
+                    .unwrap()
+                    .unwrap(),
+            )
+            .unwrap();
+            assert_eq!(voted_level, 0);
+            let genesis_chain: u16 = deserialize(
+                &db.db
+                    .get_cf(
+                        voter_node_chain_cf,
+                        serialize(&VOTER_GENESIS_HASHES[chain_num as usize]).unwrap(),
+                    )
+                    .unwrap()
+                    .unwrap(),
+            )
+            .unwrap();
+            assert_eq!(genesis_chain, chain_num as u16);
+            let parent: H256 = deserialize(
+                &db.db
+                    .get_cf(
+                        parent_neighbor_cf,
+                        serialize(&VOTER_GENESIS_HASHES[chain_num as usize]).unwrap(),
+                    )
+                    .unwrap()
+                    .unwrap(),
+            )
+            .unwrap();
+            assert_eq!(parent, *PROPOSER_GENESIS_HASH);
+            let voted_proposer: Vec<H256> = deserialize(
+                &db.db
+                    .get_cf(
+                        vote_neighbor_cf,
+                        serialize(&VOTER_GENESIS_HASHES[chain_num as usize]).unwrap(),
+                    )
+                    .unwrap()
+                    .unwrap(),
+            )
+            .unwrap();
+            assert_eq!(voted_proposer, vec![*PROPOSER_GENESIS_HASH]);
             assert_eq!(
-                voter_genesis_hash_shouldbe,
-                blockchain.voter_chains[chain_number as usize].best_block
+                *db.voter_best[chain_num as usize].lock().unwrap(),
+                (VOTER_GENESIS_HASHES[chain_num as usize], 0)
             );
         }
     }
 
     #[test]
-    fn blockchain_growing() {
-        let _rng = rand::thread_rng();
-        // Initialize a blockchain with 10 voter chains.
+    fn insert_block() {
+        let db = BlockChain::new("/tmp/prism_test_blockchain_insert_block.rocksdb").unwrap();
+        // get cf handles
+        let proposer_node_vote_cf = db.db.cf_handle(PROPOSER_NODE_VOTE_CF).unwrap();
+        let proposer_node_level_cf = db.db.cf_handle(PROPOSER_NODE_LEVEL_CF).unwrap();
+        let voter_node_level_cf = db.db.cf_handle(VOTER_NODE_LEVEL_CF).unwrap();
+        let voter_node_chain_cf = db.db.cf_handle(VOTER_NODE_CHAIN_CF).unwrap();
+        let voter_node_voted_level_cf = db.db.cf_handle(VOTER_NODE_VOTED_LEVEL_CF).unwrap();
+        let proposer_tree_level_cf = db.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
+        let parent_neighbor_cf = db.db.cf_handle(PARENT_NEIGHBOR_CF).unwrap();
+        let vote_neighbor_cf = db.db.cf_handle(VOTE_NEIGHBOR_CF).unwrap();
+        let voter_parent_neighbor_cf = db.db.cf_handle(VOTER_PARENT_NEIGHBOR_CF).unwrap();
+        let transaction_ref_neighbor_cf = db.db.cf_handle(TRANSACTION_REF_NEIGHBOR_CF).unwrap();
+        let proposer_ref_neighbor_cf = db.db.cf_handle(PROPOSER_REF_NEIGHBOR_CF).unwrap();
+        let proposer_leader_sequence_cf = db.db.cf_handle(PROPOSER_LEADER_SEQUENCE_CF).unwrap();
+        let proposer_ledger_order_cf = db.db.cf_handle(PROPOSER_LEDGER_ORDER_CF).unwrap();
 
-        let blockchain_db_path = std::path::Path::new("/tmp/blockchain_test2.rocksdb");
-        let blockchain_db1 = database::BlockChainDatabase::new(blockchain_db_path);
-        let blockchain_db: database::BlockChainDatabase;
-        match blockchain_db1 {
-            Err(e) => panic!("Did  you delete db from /tmp?. Error {}", e),
-            Ok(s) => blockchain_db = s,
-        }
-        let blockchain_db = Arc::new(Mutex::new(blockchain_db));
-
-        // Initialize a blockchain with 10  voter chains.
-        let (state_update_sink, _state_update_source) = mpsc::channel();
-        let mut blockchain = BlockChain::new(blockchain_db, NUM_VOTER_CHAINS, state_update_sink);
-
-        // Store the parent blocks to mine on voter trees.
-        let mut voter_best_blocks: Vec<H256> = (0..NUM_VOTER_CHAINS)
-            .map(|i| blockchain.voter_chains[i as usize].best_block)
-            .collect(); // Currently the voter genesis blocks.
-
-        let proposer_genesis = blockchain.proposer_tree.best_block;
-        let voter_genesis_blocks = voter_best_blocks.clone();
-        // Maintains the list of tx blocks.
-        let mut tx_block_vec: Vec<Block> = vec![];
-        let mut unreferred_tx_block_index = 0;
-
-        println!("Test 1:   Initialized blockchain");
-        assert_eq!(0, blockchain.graph.edge_count, "Expecting 0 edges");
-
-        println!("Test 2:   Added 5 tx blocks on prop genesis");
-        // Mine 5 tx block's with prop_best_block as the parent
-        let tx_block_5: Vec<Block> =
-            utils::test_tx_blocks_with_parent(5, blockchain.proposer_tree.best_block);
-        tx_block_vec.extend(tx_block_5.iter().cloned());
-        // Add the tx blocks to blockchain
-        for i in 0..5 {
-            blockchain.insert_node(&tx_block_vec[i]);
-        }
-        assert_eq!(5, blockchain.graph.edge_count, "Expecting 10 edges");
-
-        println!("Test 3:   Added prop block referring these 5 tx blocks");
-        // Generate a proposer block with prop_parent_block as the parent which referencing the above 5 tx blocks
-        let prop_block1a = utils::test_prop_block(
-            blockchain.proposer_tree.best_block,
-            tx_block_vec[0..5].iter().map(|x| x.hash()).collect(),
+        // Create a transaction block on the proposer genesis.
+        let new_transaction_content = Content::Transaction(transaction::Content::new(vec![]));
+        let new_transaction_block = Block::new(
+            *PROPOSER_GENESIS_HASH,
+            0,
+            0,
+            H256::default(),
             vec![],
+            new_transaction_content,
+            [0; 32],
+            H256::default(),
         );
-        // Add the prop_block
-        blockchain.insert_node(&prop_block1a);
+        db.insert_block(&new_transaction_block).unwrap();
+
+        let parent: H256 = deserialize(
+            &db.db
+                .get_cf(
+                    parent_neighbor_cf,
+                    serialize(&new_transaction_block.hash()).unwrap(),
+                )
+                .unwrap()
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(parent, *PROPOSER_GENESIS_HASH);
+        assert_eq!(db.unreferred_transaction.lock().unwrap().len(), 1);
         assert_eq!(
-            prop_block1a.hash(),
-            blockchain.proposer_tree.best_block,
-            "Proposer best block"
+            db.unreferred_transaction
+                .lock()
+                .unwrap()
+                .contains(&new_transaction_block.hash()),
+            true
         );
-        assert_eq!(11, blockchain.graph.edge_count, "Expecting 22 edges");
 
-        println!("Test 4:   Add 10 voter blocks voting on proposer block at level 1");
-        for i in 0..NUM_VOTER_CHAINS {
-            assert_eq!(
-                1,
-                blockchain.voter_chains[i as usize]
-                    .get_unvoted_prop_blocks()
-                    .len()
-            );
-            assert_eq!(
-                prop_block1a.hash(),
-                blockchain.voter_chains[i as usize].get_unvoted_prop_blocks()[0]
-            );
-            let voter_block = utils::test_voter_block(
-                blockchain.proposer_tree.best_block,
-                i as u16,
-                blockchain.voter_chains[i as usize].best_block,
-                blockchain.voter_chains[i as usize].get_unvoted_prop_blocks(),
-            );
-            //            println!("{}",i);
-            blockchain.insert_node(&voter_block);
-        }
-        let prop_block1a_votes = blockchain
-            .get_vote_depths_on_proposer(&prop_block1a.hash())
-            .len();
-        assert_eq!(51, blockchain.graph.edge_count);
-        assert_eq!(10, prop_block1a_votes, "prop block 1 should have 10 votes");
-
-        println!("Test 5:   Mining 5 tx blocks, 2 prop blocks at level 2 with 3, 5 tx refs");
-        unreferred_tx_block_index += 5;
-        let tx_block_5: Vec<Block> =
-            utils::test_tx_blocks_with_parent(5, blockchain.proposer_tree.best_block);
-        tx_block_vec.extend(tx_block_5.iter().cloned());
-        // Add the tx blocks to blockchain
-        for i in 0..5 {
-            blockchain.insert_node(&tx_block_vec[unreferred_tx_block_index + i]);
-        }
-        let prop_block2a = utils::test_prop_block(
-            blockchain.proposer_tree.best_block,
-            tx_block_vec[5..8].iter().map(|x| x.hash()).collect(),
+        // Create two proposer blocks, both attached to the genesis proposer block. The first one
+        // refers to nothing (except the parent), and the second one refers to the first one and
+        // the transaction block
+        let new_proposer_content = Content::Proposer(proposer::Content::new(vec![], vec![]));
+        let new_proposer_block_1 = Block::new(
+            *PROPOSER_GENESIS_HASH,
+            0,
+            0,
+            H256::default(),
             vec![],
-        ); // Referring 3 tx blocks
-        blockchain.insert_node(&prop_block2a);
-        assert_eq!(
-            prop_block2a.hash(),
-            blockchain.proposer_tree.best_block,
-            "Proposer best block"
+            new_proposer_content,
+            [1; 32],
+            H256::default(),
         );
-        assert_eq!(60, blockchain.graph.edge_count, "Expecting 80 edges");
+        db.insert_block(&new_proposer_block_1).unwrap();
 
-        let prop_block2b = utils::test_prop_block(
-            prop_block1a.hash(),
-            tx_block_vec[5..10].iter().map(|x| x.hash()).collect(),
+        let new_proposer_content = Content::Proposer(proposer::Content::new(
+            vec![new_transaction_block.hash()],
+            vec![new_proposer_block_1.hash()],
+        ));
+        let new_proposer_block_2 = Block::new(
+            *PROPOSER_GENESIS_HASH,
+            0,
+            0,
+            H256::default(),
             vec![],
-        ); // Referring 5 tx blocks
-        blockchain.insert_node(&prop_block2b);
-        assert_ne!(
-            prop_block2b.hash(),
-            blockchain.proposer_tree.best_block,
-            "prop 2b is not best block"
+            new_proposer_content,
+            [2; 32],
+            H256::default(),
         );
-        assert_eq!(66, blockchain.graph.edge_count, "Expecting 92 edges");
+        db.insert_block(&new_proposer_block_2).unwrap();
 
-        println!("Test 6:   Add 7+3 votes on proposer blocks at level 2");
-        for i in 0..7 {
-            assert_eq!(
-                1,
-                blockchain.voter_chains[i as usize]
-                    .get_unvoted_prop_blocks()
-                    .len()
-            );
-            assert_eq!(
-                prop_block2a.hash(),
-                blockchain.voter_chains[i as usize].get_unvoted_prop_blocks()[0]
-            );
-            let voter_block = utils::test_voter_block(
-                prop_block2a.hash(),
-                i as u16,
-                blockchain.voter_chains[i as usize].best_block,
-                blockchain.voter_chains[i as usize].get_unvoted_prop_blocks(),
-            );
-            blockchain.insert_node(&voter_block);
-        }
-        for i in 7..10 {
-            assert_eq!(
-                1,
-                blockchain.voter_chains[i as usize]
-                    .get_unvoted_prop_blocks()
-                    .len()
-            );
-            assert_eq!(
-                prop_block2a.hash(),
-                blockchain.voter_chains[i as usize].get_unvoted_prop_blocks()[0]
-            );
-            // We are instead voting on prop block 2b
-            let voter_block = utils::test_voter_block(
-                prop_block2b.hash(),
-                i as u16,
-                blockchain.voter_chains[i as usize].best_block,
-                vec![prop_block2b.hash()],
-            );
-            blockchain.insert_node(&voter_block);
-        }
-        let prop_block2a_votes = blockchain
-            .get_vote_depths_on_proposer(&prop_block2a.hash())
-            .len();
-        let prop_block2b_votes = blockchain
-            .get_vote_depths_on_proposer(&prop_block2b.hash())
-            .len();
-        assert_eq!(7, prop_block2a_votes, "prop block 2a should have 7 votes");
-        assert_eq!(3, prop_block2b_votes, "prop block 2b should have 3 votes");
+        let parent: H256 = deserialize(
+            &db.db
+                .get_cf(
+                    parent_neighbor_cf,
+                    serialize(&new_proposer_block_2.hash()).unwrap(),
+                )
+                .unwrap()
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(parent, *PROPOSER_GENESIS_HASH);
+        let level: u64 = deserialize(
+            &db.db
+                .get_cf(
+                    proposer_node_level_cf,
+                    serialize(&new_proposer_block_2.hash()).unwrap(),
+                )
+                .unwrap()
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(level, 1);
+        let level_1_blocks: Vec<H256> = deserialize(
+            &db.db
+                .get_cf(proposer_tree_level_cf, serialize(&(1 as u64)).unwrap())
+                .unwrap()
+                .unwrap(),
+        )
+        .unwrap();
         assert_eq!(
-            10,
-            blockchain.get_total_votes_at_level(1),
-            "Level 2 total votes should have 10",
+            level_1_blocks,
+            vec![new_proposer_block_1.hash(), new_proposer_block_2.hash()]
         );
-        assert_eq!(106, blockchain.graph.edge_count);
-
-        println!(
-            "Test 7:   Mining 4 tx block and 1 prop block referring 4 tx blocks + prop_block_2b)"
-        );
-        unreferred_tx_block_index += 5;
-        let tx_block_4: Vec<Block> =
-            utils::test_tx_blocks_with_parent(4, blockchain.proposer_tree.best_block);
-        tx_block_vec.extend(tx_block_4.iter().cloned());
-        // Add the tx blocks to blockchain
-        for i in 0..4 {
-            blockchain.insert_node(&tx_block_vec[unreferred_tx_block_index + i]);
-        }
-        let prop_block3 = utils::test_prop_block(
-            blockchain.proposer_tree.best_block,
-            tx_block_vec[10..14].iter().map(|x| x.hash()).collect(),
-            vec![prop_block2b.hash()],
-        ); // Referring 4 tx blocks + 1 prop_block
-        blockchain.insert_node(&prop_block3);
+        let proposer_ref: Vec<H256> = deserialize(
+            &db.db
+                .get_cf(
+                    proposer_ref_neighbor_cf,
+                    serialize(&new_proposer_block_2.hash()).unwrap(),
+                )
+                .unwrap()
+                .unwrap(),
+        )
+        .unwrap();
         assert_eq!(
-            prop_block3.hash(),
-            blockchain.proposer_tree.best_block,
-            "Proposer best block"
+            proposer_ref,
+            vec![*PROPOSER_GENESIS_HASH, new_proposer_block_1.hash()]
         );
-        assert_eq!(116, blockchain.graph.edge_count, "Expecting 152 edges");
+        let transaction_ref: Vec<H256> = deserialize(
+            &db.db
+                .get_cf(
+                    transaction_ref_neighbor_cf,
+                    serialize(&new_proposer_block_2.hash()).unwrap(),
+                )
+                .unwrap()
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(transaction_ref, vec![new_transaction_block.hash()]);
+        assert_eq!(
+            *db.proposer_best.lock().unwrap(),
+            (new_proposer_block_1.hash(), 1)
+        );
+        assert_eq!(db.unreferred_proposer.lock().unwrap().len(), 1);
+        assert_eq!(
+            db.unreferred_proposer
+                .lock()
+                .unwrap()
+                .contains(&new_proposer_block_2.hash()),
+            true
+        );
+        assert_eq!(db.unconfirmed_proposer.lock().unwrap().len(), 2);
+        assert_eq!(
+            db.unconfirmed_proposer
+                .lock()
+                .unwrap()
+                .contains(&new_proposer_block_1.hash()),
+            true
+        );
+        assert_eq!(
+            db.unconfirmed_proposer
+                .lock()
+                .unwrap()
+                .contains(&new_proposer_block_2.hash()),
+            true
+        );
+        assert_eq!(db.unreferred_transaction.lock().unwrap().len(), 0);
 
-        println!("Test 8:   Mining only 3+3 voter blocks voting on none + prob_block3");
-        for i in 0..3 {
-            assert_eq!(
-                1,
-                blockchain.voter_chains[i as usize]
-                    .get_unvoted_prop_blocks()
-                    .len()
-            );
-            assert_eq!(
-                prop_block3.hash(),
-                blockchain.voter_chains[i as usize].get_unvoted_prop_blocks()[0]
-            );
-            let voter_block = utils::test_voter_block(
-                prop_block2a.hash(), // Mining on 2a (because 3 hasnt showed up yet (fake))
-                i as u16,
-                blockchain.voter_chains[i as usize].best_block,
+        // Create a voter block attached to proposer block 2 and the first voter chain, and vote for proposer block 1.
+        let new_voter_content = Content::Voter(voter::Content::new(
+            0,
+            VOTER_GENESIS_HASHES[0],
+            vec![new_proposer_block_1.hash()],
+        ));
+        let new_voter_block = Block::new(
+            new_proposer_block_2.hash(),
+            0,
+            0,
+            H256::default(),
+            vec![],
+            new_voter_content,
+            [3; 32],
+            H256::default(),
+        );
+        db.insert_block(&new_voter_block).unwrap();
+
+        let parent: H256 = deserialize(
+            &db.db
+                .get_cf(
+                    parent_neighbor_cf,
+                    serialize(&new_voter_block.hash()).unwrap(),
+                )
+                .unwrap()
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(parent, new_proposer_block_2.hash());
+        let voter_parent: H256 = deserialize(
+            &db.db
+                .get_cf(
+                    voter_parent_neighbor_cf,
+                    serialize(&new_voter_block.hash()).unwrap(),
+                )
+                .unwrap()
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(voter_parent, VOTER_GENESIS_HASHES[0]);
+        let level: u64 = deserialize(
+            &db.db
+                .get_cf(
+                    voter_node_level_cf,
+                    serialize(&new_voter_block.hash()).unwrap(),
+                )
+                .unwrap()
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(level, 1);
+        let chain: u16 = deserialize(
+            &db.db
+                .get_cf(
+                    voter_node_chain_cf,
+                    serialize(&new_voter_block.hash()).unwrap(),
+                )
+                .unwrap()
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(chain, 0);
+        let voted_level: u64 = deserialize(
+            &db.db
+                .get_cf(
+                    voter_node_voted_level_cf,
+                    serialize(&new_voter_block.hash()).unwrap(),
+                )
+                .unwrap()
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(voted_level, 1);
+        let voted: Vec<H256> = deserialize(
+            &db.db
+                .get_cf(
+                    vote_neighbor_cf,
+                    serialize(&new_voter_block.hash()).unwrap(),
+                )
+                .unwrap()
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(voted, vec![new_proposer_block_1.hash()]);
+        assert_eq!(
+            *db.voter_best[0].lock().unwrap(),
+            (new_voter_block.hash(), 1)
+        );
+        let votes: Vec<(u16, u64)> = deserialize(
+            &db.db
+                .get_cf(
+                    proposer_node_vote_cf,
+                    serialize(&new_proposer_block_1.hash()).unwrap(),
+                )
+                .unwrap()
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(votes, vec![(0, 1)]);
+
+        // Create a fork of the voter chain and vote for proposer block 2.
+        let new_voter_content = Content::Voter(voter::Content::new(
+            0,
+            VOTER_GENESIS_HASHES[0],
+            vec![new_proposer_block_2.hash()],
+        ));
+        let new_voter_block = Block::new(
+            new_proposer_block_2.hash(),
+            0,
+            0,
+            H256::default(),
+            vec![],
+            new_voter_content,
+            [4; 32],
+            H256::default(),
+        );
+        db.insert_block(&new_voter_block).unwrap();
+        let votes: Vec<(u16, u64)> = deserialize(
+            &db.db
+                .get_cf(
+                    proposer_node_vote_cf,
+                    serialize(&new_proposer_block_1.hash()).unwrap(),
+                )
+                .unwrap()
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(votes, vec![(0, 1)]);
+
+        // Add to this fork, so that it becomes the longest chain.
+        let new_voter_content =
+            Content::Voter(voter::Content::new(0, new_voter_block.hash(), vec![]));
+        let new_voter_block = Block::new(
+            new_proposer_block_2.hash(),
+            0,
+            0,
+            H256::default(),
+            vec![],
+            new_voter_content,
+            [5; 32],
+            H256::default(),
+        );
+        db.insert_block(&new_voter_block).unwrap();
+
+        let votes: Vec<(u16, u64)> = deserialize(
+            &db.db
+                .get_cf(
+                    proposer_node_vote_cf,
+                    serialize(&new_proposer_block_1.hash()).unwrap(),
+                )
+                .unwrap()
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(votes, vec![]);
+        let votes: Vec<(u16, u64)> = deserialize(
+            &db.db
+                .get_cf(
+                    proposer_node_vote_cf,
+                    serialize(&new_proposer_block_2.hash()).unwrap(),
+                )
+                .unwrap()
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(votes, vec![(0, 1)]);
+
+        // Create a voter block on all remaining voter chains to vote for proposer block 2
+        for chain_num in 1..NUM_VOTER_CHAINS {
+            let new_voter_content =
+                Content::Voter(voter::Content::new(0, VOTER_GENESIS_HASHES[chain_num as usize], vec![new_proposer_block_2.hash()]));
+            let mut random_payload: [u8; 32] = [0; 32];
+            random_payload[0] = (chain_num & 0xff) as u8;
+            random_payload[1] = ((chain_num >> 8) & 0xff) as u8;
+            let new_voter_block = Block::new(
+                new_proposer_block_2.hash(),
+                0,
+                0,
+                H256::default(),
                 vec![],
+                new_voter_content,
+                random_payload,
+                H256::default(),
             );
-            blockchain.insert_node(&voter_block);
-        }
-        for i in 3..6 {
-            assert_eq!(
-                1,
-                blockchain.voter_chains[i as usize]
-                    .get_unvoted_prop_blocks()
-                    .len()
-            );
-            assert_eq!(
-                prop_block3.hash(),
-                blockchain.voter_chains[i as usize].get_unvoted_prop_blocks()[0]
-            );
-            let voter_block = utils::test_voter_block(
-                prop_block3.hash(), // Mining on 3 after it showed up
-                i as u16,
-                blockchain.voter_chains[i as usize].best_block,
-                vec![prop_block3.hash()],
-            );
-            blockchain.insert_node(&voter_block);
-        }
-        assert_eq!(134, blockchain.graph.edge_count, "Expecting 176 edges");
-
-        println!("Test 9:  Mining 2 tx block and 1 prop block referring the 2 tx blocks");
-        unreferred_tx_block_index += 4;
-        let tx_block_2: Vec<Block> =
-            utils::test_tx_blocks_with_parent(2, blockchain.proposer_tree.best_block);
-        tx_block_vec.extend(tx_block_2.iter().cloned());
-        // Add the tx blocks to blockchain
-        for i in 0..2 {
-            blockchain.insert_node(&tx_block_vec[unreferred_tx_block_index + i]);
-        }
-        let prop_block4 = utils::test_prop_block(
-            blockchain.proposer_tree.best_block,
-            tx_block_vec[14..16].iter().map(|x| x.hash()).collect(),
-            vec![],
-        ); // Referring 4 tx blocks + 1 prop_block
-        blockchain.insert_node(&prop_block4);
-        assert_eq!(
-            prop_block4.hash(),
-            blockchain.proposer_tree.best_block,
-            "Proposer best block"
-        );
-        assert_eq!(139, blockchain.graph.edge_count, "Expecting 186 edges");
-        // Checking the number of unconfirmed tx blocks 2 of prop2a, 4 from prop3, and 2 from prop4.
-        assert_eq!(8, blockchain.tx_blocks.not_in_ledger.len());
-
-        println!("Test 10:  1-6 voter chains vote on prop4 and 6-10 voter blocks vote on prop3 and prop4" );
-        //Storing voter_parents used in step 12 test
-        for i in 0..10 {
-            voter_best_blocks[i] = blockchain.voter_chains[i as usize].best_block.clone();
-        }
-        for i in 0..3 {
-            assert_eq!(
-                2,
-                blockchain.voter_chains[i as usize]
-                    .get_unvoted_prop_blocks()
-                    .len()
-            );
-            assert_eq!(
-                prop_block3.hash(),
-                blockchain.voter_chains[i as usize].get_unvoted_prop_blocks()[0]
-            );
-            assert_eq!(
-                prop_block4.hash(),
-                blockchain.voter_chains[i as usize].get_unvoted_prop_blocks()[1]
-            );
-            let voter_block = utils::test_voter_block(
-                prop_block4.hash(), // Mining on 4
-                i as u16,
-                blockchain.voter_chains[i as usize].best_block,
-                vec![prop_block3.hash(), prop_block4.hash()],
-            );
-            blockchain.insert_node(&voter_block);
-        }
-
-        // prop3 is confirmed. Unconfirmed tx blocks 2 from prop4.
-        assert_eq!(2, blockchain.tx_blocks.not_in_ledger.len());
-
-        for i in 3..6 {
-            assert_eq!(
-                1,
-                blockchain.voter_chains[i as usize]
-                    .get_unvoted_prop_blocks()
-                    .len()
-            );
-            assert_eq!(
-                prop_block4.hash(),
-                blockchain.voter_chains[i as usize].get_unvoted_prop_blocks()[0]
-            );
-            let voter_block = utils::test_voter_block(
-                prop_block4.hash(), // Mining on 4
-                i as u16,
-                blockchain.voter_chains[i as usize].best_block,
-                vec![prop_block4.hash()],
-            );
-            blockchain.insert_node(&voter_block);
-        }
-        // prop4 is also confirmed.
-        assert_eq!(0, blockchain.tx_blocks.not_in_ledger.len());
-
-        for i in 6..10 {
-            assert_eq!(
-                2,
-                blockchain.voter_chains[i as usize]
-                    .get_unvoted_prop_blocks()
-                    .len()
-            );
-            assert_eq!(
-                prop_block3.hash(),
-                blockchain.voter_chains[i as usize].get_unvoted_prop_blocks()[0]
-            );
-            assert_eq!(
-                prop_block4.hash(),
-                blockchain.voter_chains[i as usize].get_unvoted_prop_blocks()[1]
-            );
-            let voter_block = utils::test_voter_block(
-                prop_block4.hash(), // Mining on 3 after it showed up
-                i as u16,
-                blockchain.voter_chains[i as usize].best_block,
-                vec![prop_block3.hash(), prop_block4.hash()],
-            );
-            blockchain.insert_node(&voter_block);
-        }
-        assert_eq!(193, blockchain.graph.edge_count);
-        // Checking the voter chain growth
-        for i in 0..6 {
-            assert_eq!(4, blockchain.voter_chains[i as usize].best_level);
-        }
-        for i in 6..10 {
-            assert_eq!(3, blockchain.voter_chains[i as usize].best_level);
-        }
-
-        println!("Test 11:  Checking get_proposer_parent()");
-        assert_eq!(
-            blockchain.get_proposer_parent(prop_block4.hash()),
-            prop_block3.hash()
-        );
-        assert_eq!(
-            blockchain.get_proposer_parent(tx_block_vec[14].hash()),
-            prop_block3.hash()
-        );
-        for i in 0..10 {
-            assert_eq!(
-                blockchain.get_proposer_parent(blockchain.voter_chains[i as usize].best_block),
-                prop_block4.hash()
-            );
-        }
-
-        println!("Test 12:  Checking get_voter_parent()");
-        for i in 0..10 {
-            assert_eq!(
-                blockchain.get_voter_parent(blockchain.voter_chains[i as usize].best_block),
-                voter_best_blocks[i]
-            );
-        }
-
-        println!("Test 13:  Checking get_votes_by_voter()");
-        for i in 0..3 {
-            let voter_chain_best_block = blockchain.voter_chains[i as usize].best_block;
-            let mut votes = blockchain.get_votes_by_voter(&voter_chain_best_block);
-            let mut expected = vec![prop_block3.hash(), prop_block4.hash()];
-            votes.sort_by(|a, b| a.partial_cmp(b).unwrap());
-            expected.sort_by(|a, b| a.partial_cmp(b).unwrap());
-            let matching = votes
-                .iter()
-                .zip(expected.iter())
-                .filter(|&(a, b)| a == b)
-                .count();
-            assert_eq!(matching, expected.len());
-        }
-        for i in 3..6 {
-            let voter_chain_best_block = blockchain.voter_chains[i as usize].best_block;
-            let votes = blockchain.get_votes_by_voter(&voter_chain_best_block);
-            let expected = vec![prop_block4.hash()];
-            let matching = votes
-                .iter()
-                .zip(expected.iter())
-                .filter(|&(a, b)| a == b)
-                .count();
-            assert_eq!(matching, expected.len());
-        }
-        for i in 6..10 {
-            let voter_chain_best_block = blockchain.voter_chains[i as usize].best_block;
-            let mut votes = blockchain.get_votes_by_voter(&voter_chain_best_block);
-            let mut expected = vec![prop_block3.hash(), prop_block4.hash()];
-            votes.sort_by(|a, b| a.partial_cmp(b).unwrap());
-            expected.sort_by(|a, b| a.partial_cmp(b).unwrap());
-            let matching = votes
-                .iter()
-                .zip(expected.iter())
-                .filter(|&(a, b)| a == b)
-                .count();
-            assert_eq!(matching, expected.len());
-        }
-
-        println!("Test 14:  Checking get_referred_tx_blocks_ordered()");
-        let mut referred_tx_blocks: Vec<H256> =
-            blockchain.get_referred_tx_blocks_ordered(&prop_block4.hash());
-        let mut expected: Vec<H256> = tx_block_vec[14..16].iter().map(|x| x.hash()).collect();
-        referred_tx_blocks.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        expected.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        let matching = referred_tx_blocks
-            .iter()
-            .zip(expected.iter())
-            .filter(|&(a, b)| a == b)
-            .count();
-        assert_eq!(matching, expected.len());
-        // Check 2
-        let mut referred_tx_blocks: Vec<H256> =
-            blockchain.get_referred_tx_blocks_ordered(&prop_block2a.hash());
-        let mut expected: Vec<H256> = tx_block_vec[5..8].iter().map(|x| x.hash()).collect();
-        referred_tx_blocks.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        expected.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        let matching = referred_tx_blocks
-            .iter()
-            .zip(expected.iter())
-            .filter(|&(a, b)| a == b)
-            .count();
-        assert_eq!(matching, expected.len());
-
-        println!("Test 15:  Checking get_referred_prop_blocks() ");
-        let mut referred_prop_blocks: Vec<H256> = blockchain
-            .get_referred_prop_blocks(prop_block3.hash())
-            .iter()
-            .map(|x| x.0)
-            .collect();
-        let mut expected: Vec<H256> = vec![prop_block2b.hash()];
-        referred_prop_blocks.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        expected.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        let matching = referred_prop_blocks
-            .iter()
-            .zip(expected.iter())
-            .filter(|&(a, b)| a == b)
-            .count();
-        assert_eq!(matching, expected.len());
-
-        println!("Test 16:  Checking get_votes_from_chain()");
-        for i in 0..7 {
-            let mut chain_votes = blockchain.get_votes_from_chain(i);
-            let mut expected = vec![
-                prop_block1a.hash(),
-                prop_block2a.hash(),
-                prop_block3.hash(),
-                prop_block4.hash(),
-            ];
-
-            chain_votes.sort_by(|a, b| a.partial_cmp(b).unwrap());
-            expected.sort_by(|a, b| a.partial_cmp(b).unwrap());
-            let matching = chain_votes
-                .iter()
-                .zip(expected.iter())
-                .filter(|&(a, b)| a == b)
-                .count();
-            assert_eq!(matching, expected.len());
-        }
-        for i in 7..10 {
-            let mut chain_votes = blockchain.get_votes_from_chain(i);
-            let mut expected = vec![
-                prop_block1a.hash(),
-                prop_block2b.hash(),
-                prop_block3.hash(),
-                prop_block4.hash(),
-            ];
-            chain_votes.sort_by(|a, b| a.partial_cmp(b).unwrap());
-            expected.sort_by(|a, b| a.partial_cmp(b).unwrap());
-            let matching = chain_votes
-                .iter()
-                .zip(expected.iter())
-                .filter(|&(a, b)| a == b)
-                .count();
-            assert_eq!(matching, expected.len());
-        }
-
-        println!("Test 17:  Checking leader blocks for first four levels");
-        let leader_block_sequence = blockchain.get_leader_block_sequence();
-        assert_eq!(prop_block1a.hash(), leader_block_sequence[0]);
-        assert_eq!(prop_block2a.hash(), leader_block_sequence[1]);
-        assert_eq!(prop_block3.hash(), leader_block_sequence[2]);
-        assert_eq!(prop_block4.hash(), leader_block_sequence[3]);
-        assert_eq!(
-            blockchain
-                .node_data
-                .get_proposer(&prop_block1a.hash())
-                .leadership_status,
-            ProposerStatus::Leader
-        );
-        assert_eq!(
-            blockchain
-                .node_data
-                .get_proposer(&prop_block2a.hash())
-                .leadership_status,
-            ProposerStatus::Leader
-        );
-        assert_eq!(
-            blockchain
-                .node_data
-                .get_proposer(&prop_block2b.hash())
-                .leadership_status,
-            ProposerStatus::NotLeaderAndConfirmed
-        );
-        assert_eq!(
-            blockchain
-                .node_data
-                .get_proposer(&prop_block3.hash())
-                .leadership_status,
-            ProposerStatus::Leader
-        );
-        assert_eq!(
-            blockchain
-                .node_data
-                .get_proposer(&prop_block4.hash())
-                .leadership_status,
-            ProposerStatus::Leader
-        );
-
-        println!("Test 18:  Checking NotLeaderUnconfirmed blocks for first four levels");
-        assert_eq!(
-            0,
-            blockchain
-                .get_unconfirmed_notleader_referred_proposer_blocks_prev_level(prop_block1a.hash())
-                .len()
-        );
-        assert_eq!(
-            0,
-            blockchain
-                .get_unconfirmed_notleader_referred_proposer_blocks_prev_level(prop_block2a.hash())
-                .len()
-        );
-        assert_eq!(
-            0,
-            blockchain
-                .get_unconfirmed_notleader_referred_proposer_blocks_prev_level(prop_block4.hash())
-                .len()
-        );
-
-        println!("Test 19:  The ledger tx blocks");
-        assert_eq!(16, blockchain.tx_blocks.get_ledger().len());
-        let ordered_tx_blocks = blockchain.get_ledger();
-        for i in 0..16 {
-            assert_eq!(ordered_tx_blocks[i], tx_block_vec[i].hash());
-        }
-
-        println!("Test 20: Mining 2 tx block and 1 prop block referring the 2 tx blocks");
-        unreferred_tx_block_index += 2;
-        let tx_block_2: Vec<Block> =
-            utils::test_tx_blocks_with_parent(2, blockchain.proposer_tree.best_block);
-        tx_block_vec.extend(tx_block_2.iter().cloned());
-        // Add the tx blocks to blockchain
-        for i in 0..2 {
-            blockchain.insert_node(&tx_block_vec[unreferred_tx_block_index + i]);
-        }
-        let prop_block5 = utils::test_prop_block(
-            blockchain.proposer_tree.best_block,
-            tx_block_vec[16..18].iter().map(|x| x.hash()).collect(),
-            vec![],
-        ); // Referring 4 tx blocks + 1 prop_block
-        blockchain.insert_node(&prop_block5);
-
-        assert_eq!(2, blockchain.tx_blocks.not_in_ledger.len());
-
-        println!("Test 21: 51% attack - Changing level 1 leader ");
-
-        let old_leader_blocks = blockchain.get_leader_block_sequence();
-        //1. Mine another prop block at level 1
-        let prop_block1b = utils::test_prop_block(
-            proposer_genesis,
-            tx_block_vec[0..5].iter().map(|x| x.hash()).collect(),
-            vec![],
-        );
-        blockchain.insert_node(&prop_block1b);
-
-        // Forking from genesis with length 5 sized voter chain on first 6 voter chains.
-        for i in 0..10 {
-            let voter_block1 = utils::test_voter_block(
-                prop_block1b.hash(),
-                i as u16,
-                voter_genesis_blocks[i as usize],
-                vec![prop_block1b.hash()],
-            );
-            blockchain.insert_node(&voter_block1);
-
-            let voter_block2 = utils::test_voter_block(
-                prop_block2a.hash(),
-                i as u16,
-                voter_block1.hash(),
-                vec![prop_block2a.hash()],
-            );
-            blockchain.insert_node(&voter_block2);
-
-            let voter_block3 = utils::test_voter_block(
-                prop_block3.hash(),
-                i as u16,
-                voter_block2.hash(),
-                vec![prop_block3.hash()],
-            );
-            blockchain.insert_node(&voter_block3);
-
-            let voter_block4 =
-                utils::test_voter_block(prop_block3.hash(), i as u16, voter_block3.hash(), vec![]);
-            blockchain.insert_node(&voter_block4);
-
-            let voter_block5 = utils::test_voter_block(
-                prop_block4.hash(),
-                i as u16,
-                voter_block4.hash(),
-                vec![prop_block4.hash()],
-            );
-
-            blockchain.insert_node(&voter_block5);
-
-            // Check of the longest chain has switched
-            assert_eq!(
-                blockchain.voter_chains[i as usize].best_block,
-                voter_block5.hash()
-            );
-
-            if i <= 3 {
-                // Make sure that leader blocks have not changed
-                let leader_blocks = blockchain.get_leader_block_sequence();
-                for j in 0..leader_blocks.len() {
-                    assert_eq!(leader_blocks[j], old_leader_blocks[j]);
-                }
+            let diff = db.insert_block(&new_voter_block).unwrap();
+            
+            // Check that after we inserted more than NUM_VOTER_CHAINS/2+1 blocks, proposer block 2
+            // becomes the leader
+            let level_1_leader: Option<H256> = match db.db.get_cf(proposer_leader_sequence_cf, serialize(&(1 as u64)).unwrap()).unwrap() {
+                Some(d) => Some(deserialize(&d).unwrap()),
+                None => None,
+            };
+            let level_1_ledger: Option<Vec<H256>> = match db.db.get_cf(proposer_ledger_order_cf, serialize(&(1 as u64)).unwrap()).unwrap() {
+                Some(d) => Some(deserialize(&d).unwrap()),
+                None => None,
+            };
+            let num_voted = chain_num + 1;
+            if num_voted as u16 == NUM_VOTER_CHAINS / 2 + 1 + 1 {
+                assert_eq!(diff, (vec![new_transaction_block.hash()], vec![]));
             }
-
-            if i == 4 {
-                // The first level has a tie in votes, so it has no leader yet
-                assert_eq!(0, blockchain.get_leader_block_sequence().len());
+            if num_voted as u16 > NUM_VOTER_CHAINS / 2 + 1 {
+                assert_eq!(level_1_leader, Some(new_proposer_block_2.hash()));
+                assert_eq!(level_1_ledger, Some(vec![new_proposer_block_2.hash(), new_proposer_block_1.hash()]));
+                assert_eq!(db.unconfirmed_proposer.lock().unwrap().len(), 0);
+            } else {
+                assert_eq!(level_1_leader, None);
+                assert_eq!(level_1_ledger, None);
+                assert_eq!(db.unconfirmed_proposer.lock().unwrap().len(), 2);
             }
-            if i >= 5 {
-                // Make sure that only level 1 leader blocks hash changed
-                let leader_blocks = blockchain.get_leader_block_sequence();
-                assert_eq!(leader_blocks[0], prop_block1b.hash());
-                for j in 1..leader_blocks.len() {
-                    assert_eq!(leader_blocks[j], old_leader_blocks[j]);
-                }
+        }
+
+        // Fork all voter chains (except chain 0) to revert ledger level 1 
+        for chain_num in 1..NUM_VOTER_CHAINS {
+            let new_voter_content =
+                Content::Voter(voter::Content::new(0, VOTER_GENESIS_HASHES[chain_num as usize], vec![]));
+            let mut random_payload: [u8; 32] = [0; 32];
+            random_payload[0] = (chain_num & 0xff) as u8;
+            random_payload[1] = ((chain_num >> 8) & 0xff) as u8;
+            random_payload[2] = 1;
+            let new_voter_block = Block::new(
+                *PROPOSER_GENESIS_HASH,
+                0,
+                0,
+                H256::default(),
+                vec![],
+                new_voter_content,
+                random_payload,
+                H256::default(),
+            );
+            db.insert_block(&new_voter_block).unwrap();
+            let new_voter_content =
+                Content::Voter(voter::Content::new(0, new_voter_block.hash(), vec![]));
+            let mut random_payload: [u8; 32] = [0; 32];
+            random_payload[0] = (chain_num & 0xff) as u8;
+            random_payload[1] = ((chain_num >> 8) & 0xff) as u8;
+            random_payload[2] = 2;
+            let new_voter_block = Block::new(
+                *PROPOSER_GENESIS_HASH,
+                0,
+                0,
+                H256::default(),
+                vec![],
+                new_voter_content,
+                random_payload,
+                H256::default(),
+            );
+            let diff = db.insert_block(&new_voter_block).unwrap();
+            
+            // Check that after we revert enough chains, proposer block 2 is no longer the leader
+            let level_1_leader: Option<H256> = match db.db.get_cf(proposer_leader_sequence_cf, serialize(&(1 as u64)).unwrap()).unwrap() {
+                Some(d) => Some(deserialize(&d).unwrap()),
+                None => None,
+            };
+            let num_voted = NUM_VOTER_CHAINS - chain_num as u16;
+            if num_voted as u16 == NUM_VOTER_CHAINS / 2 + 1 {
+                assert_eq!(diff, (vec![], vec![new_transaction_block.hash()]));
+            }
+            if num_voted as u16 > NUM_VOTER_CHAINS / 2 + 1 {
+                assert_eq!(level_1_leader, Some(new_proposer_block_2.hash()));
+                assert_eq!(db.unconfirmed_proposer.lock().unwrap().len(), 0);
+            } else {
+                assert_eq!(level_1_leader, None);
+                assert_eq!(db.unconfirmed_proposer.lock().unwrap().len(), 2);
             }
         }
     }
 
     #[test]
-    fn proposer_block_ordering() {
-        pub const NUM_VOTER_CHAINS: u16 = 10;
-        let _rng = rand::thread_rng();
-        // Initialize a blockchain with 10 voter chains.
-        let blockchain_db_path = std::path::Path::new("/tmp/blockchain_test3.rocksdb");
-        let blockchain_db = database::BlockChainDatabase::new(blockchain_db_path).unwrap();
-        let blockchain_db = Arc::new(Mutex::new(blockchain_db));
+    fn best_proposer_and_voter() {
+        let db =
+            BlockChain::new("/tmp/prism_test_blockchain_best_proposer_and_voter.rocksdb").unwrap();
+        assert_eq!(db.best_proposer(), *PROPOSER_GENESIS_HASH);
+        assert_eq!(db.best_voter(0), VOTER_GENESIS_HASHES[0]);
 
-        // Initialize a blockchain with 10  voter chains.
-        let (state_update_sink, _state_update_source) = mpsc::channel();
-
-        let mut blockchain = BlockChain::new(blockchain_db, NUM_VOTER_CHAINS, state_update_sink);
-        // Store the parent blocks to mine on voter trees.
-        let _voter_best_blocks: Vec<H256> = (0..NUM_VOTER_CHAINS)
-            .map(|i| blockchain.voter_chains[i as usize].best_block)
-            .collect(); // Currently the voter genesis blocks.
-
-        // Maintains the list of tx blocks.
-        let _tx_block_vec: Vec<Block> = vec![];
-        let _unreferred_tx_block_index = 0;
-        assert_eq!(0, blockchain.graph.edge_count, "Expecting 0 edges");
-
-        // Adding 6 prop blocks with notleader status
-        let prop_block1a =
-            utils::test_prop_block(blockchain.proposer_tree.best_block, vec![], vec![]);
-        //        println!("P-1: {}", prop_block1a.hash());
-        blockchain.insert_node(&prop_block1a);
-
-        let prop_block2a = utils::test_prop_block(prop_block1a.hash(), vec![], vec![]);
-        //        println!("P-2a: {}", prop_block2a.hash());
-        blockchain.insert_node(&prop_block2a);
-        let prop_block2b = utils::test_prop_block(prop_block1a.hash(), vec![], vec![]);
-        //        println!("P-2b: {}", prop_block2b.hash());
-        blockchain.insert_node(&prop_block2b);
-        let prop_block2c = utils::test_prop_block(prop_block1a.hash(), vec![], vec![]);
-        //        println!("P-2c: {}", prop_block2c.hash());
-        blockchain.insert_node(&prop_block2c);
-
-        let prop_block3a = utils::test_prop_block(
-            blockchain.proposer_tree.best_block,
+        let new_proposer_content = Content::Proposer(proposer::Content::new(vec![], vec![]));
+        let new_proposer_block = Block::new(
+            *PROPOSER_GENESIS_HASH,
+            0,
+            0,
+            H256::default(),
             vec![],
-            vec![prop_block2b.hash()],
+            new_proposer_content,
+            [0; 32],
+            H256::default(),
         );
-        //        println!("P-3a: {}", prop_block3a.hash());
-        blockchain.insert_node(&prop_block3a);
-        let prop_block3b = utils::test_prop_block(prop_block2b.hash(), vec![], vec![]);
-        //        println!("P-3b: {}", prop_block3b.hash());
-        blockchain.insert_node(&prop_block3b);
-
-        let prop_block4a = utils::test_prop_block(
-            prop_block3b.hash(),
+        db.insert_block(&new_proposer_block).unwrap();
+        let new_voter_content = Content::Voter(voter::Content::new(
+            0,
+            VOTER_GENESIS_HASHES[0],
+            vec![new_proposer_block.hash()],
+        ));
+        let new_voter_block = Block::new(
+            new_proposer_block.hash(),
+            0,
+            0,
+            H256::default(),
             vec![],
-            vec![prop_block2a.hash(), prop_block3a.hash()],
+            new_voter_content,
+            [1; 32],
+            H256::default(),
         );
-        //        println!("P-4a: {}", prop_block4a.hash());
-        blockchain.insert_node(&prop_block4a);
-        let prop_block4b = utils::test_prop_block(prop_block3b.hash(), vec![], vec![]);
-        //        println!("P-4b: {}", prop_block4b.hash());
-        blockchain.insert_node(&prop_block4b);
+        db.insert_block(&new_voter_block).unwrap();
+        assert_eq!(db.best_proposer(), new_proposer_block.hash());
+        assert_eq!(db.best_voter(0), new_voter_block.hash());
+    }
 
-        let prop_block5a = utils::test_prop_block(
-            prop_block4b.hash(),
+    #[test]
+    fn unreferred_transaction_and_proposer() {
+        let db =
+            BlockChain::new("/tmp/prism_test_blockchain_unreferred_transaction_proposer.rocksdb")
+                .unwrap();
+
+        let new_transaction_content = Content::Transaction(transaction::Content::new(vec![]));
+        let new_transaction_block = Block::new(
+            *PROPOSER_GENESIS_HASH,
+            0,
+            0,
+            H256::default(),
             vec![],
-            vec![
-                prop_block2c.hash(),
-                prop_block2a.hash(),
-                prop_block4a.hash(),
-                prop_block3a.hash(),
-            ],
+            new_transaction_content,
+            [0; 32],
+            H256::default(),
         );
-        //        println!("P-5a: {}", prop_block5a.hash());
-        blockchain.insert_node(&prop_block5a);
-
-        /*
-                    _____
-                    | 1 |<===================\\
-                    |___|<========||         ||
-                      ||          ||         ||
-                    __||_       __||_       _||__
-             /----->| 2a|   /-->| 2b|       | 2c|
-             |  /-->|___|  /    |___|       |___|<--\
-             |  |     ||  /       ||                |
-             |  |   __||_/      __||_               |
-             |  |   | 3a|       | 3b|               |
-             |  |   |___|       |___|<========\\    |
-             |  |     |           ||          ||    |
-             |  |     |         __||__      __||_   |
-             |__|_____|_________| 4a|       | 4b|   |
-                |     |         |___|       |___|   |
-                |     |   --------|           ||    |
-                |   __|__/                    ||    |
-                \---| 5 |=====================//    |
-                    |___|---------------------------|
-
-
-        */
-
-        // Changing it to notleader status ONLY for testing
-        blockchain
-            .node_data
-            .give_proposer_not_leader_status(&prop_block1a.hash());
-        blockchain
-            .node_data
-            .give_proposer_not_leader_status(&prop_block2a.hash());
-        blockchain
-            .node_data
-            .give_proposer_not_leader_status(&prop_block2b.hash());
-        blockchain
-            .node_data
-            .give_proposer_not_leader_status(&prop_block2c.hash());
-        blockchain
-            .node_data
-            .give_proposer_not_leader_status(&prop_block3a.hash());
-        blockchain
-            .node_data
-            .give_proposer_not_leader_status(&prop_block3b.hash());
-        blockchain
-            .node_data
-            .give_proposer_not_leader_status(&prop_block4a.hash());
-        blockchain
-            .node_data
-            .give_proposer_not_leader_status(&prop_block4b.hash());
-        blockchain
-            .node_data
-            .give_proposer_not_leader_status(&prop_block5a.hash());
-
-        println!("Test 2:   Checking the order of get_unconfirmed_notleader_referred_proposer_blocks_prev_level()");
-        let prop_block_2a_ref = blockchain
-            .get_unconfirmed_notleader_referred_proposer_blocks_prev_level(prop_block2a.hash());
-        assert_eq!(1, prop_block_2a_ref.len());
-        assert_eq!(prop_block1a.hash(), prop_block_2a_ref[0].0);
-
-        let prop_block_3a_ref = blockchain
-            .get_unconfirmed_notleader_referred_proposer_blocks_prev_level(prop_block3a.hash());
-        assert_eq!(2, prop_block_3a_ref.len());
-        assert_eq!(prop_block2a.hash(), prop_block_3a_ref[0].0);
-        assert_eq!(prop_block2b.hash(), prop_block_3a_ref[1].0);
-
-        let prop_block_3b_ref = blockchain
-            .get_unconfirmed_notleader_referred_proposer_blocks_prev_level(prop_block3b.hash());
-        assert_eq!(1, prop_block_3b_ref.len());
-        assert_eq!(prop_block2b.hash(), prop_block_3b_ref[0].0);
-
-        let prop_block_4a_ref = blockchain
-            .get_unconfirmed_notleader_referred_proposer_blocks_prev_level(prop_block4a.hash());
-        assert_eq!(3, prop_block_4a_ref.len());
-        assert_eq!(prop_block3b.hash(), prop_block_4a_ref[0].0);
-        assert_eq!(prop_block2a.hash(), prop_block_4a_ref[1].0);
-        assert_eq!(prop_block3a.hash(), prop_block_4a_ref[2].0);
-
-        println!(
-            "Test 3:   Checking the order of get_unconfirmed_notleader_referred_proposer_blocks()"
+        db.insert_block(&new_transaction_block).unwrap();
+        assert_eq!(
+            db.unreferred_transaction(),
+            vec![new_transaction_block.hash()]
         );
-        let prop_block_2a_ref =
-            blockchain.get_unconfirmed_notleader_referred_proposer_blocks(prop_block2a.hash());
-        assert_eq!(2, prop_block_2a_ref.len());
-        // The expected order
-        assert_eq!(prop_block1a.hash(), prop_block_2a_ref[0]);
-        assert_eq!(prop_block2a.hash(), prop_block_2a_ref[1]);
+        assert_eq!(db.unreferred_proposer(), vec![*PROPOSER_GENESIS_HASH]);
 
-        let prop_block_3a_ref =
-            blockchain.get_unconfirmed_notleader_referred_proposer_blocks(prop_block3a.hash());
-        assert_eq!(4, prop_block_3a_ref.len());
+        let new_proposer_content = Content::Proposer(proposer::Content::new(vec![], vec![]));
+        let new_proposer_block_1 = Block::new(
+            *PROPOSER_GENESIS_HASH,
+            0,
+            0,
+            H256::default(),
+            vec![],
+            new_proposer_content,
+            [1; 32],
+            H256::default(),
+        );
+        db.insert_block(&new_proposer_block_1).unwrap();
+        assert_eq!(
+            db.unreferred_transaction(),
+            vec![new_transaction_block.hash()]
+        );
+        assert_eq!(db.unreferred_proposer(), vec![new_proposer_block_1.hash()]);
 
-        // The expected order
-        assert_eq!(prop_block1a.hash(), prop_block_3a_ref[0]);
-        assert_eq!(prop_block2a.hash(), prop_block_3a_ref[1]);
-        assert_eq!(prop_block2b.hash(), prop_block_3a_ref[2]);
-        assert_eq!(prop_block3a.hash(), prop_block_3a_ref[3]);
+        let new_proposer_content = Content::Proposer(proposer::Content::new(
+            vec![new_transaction_block.hash()],
+            vec![new_proposer_block_1.hash()],
+        ));
+        let new_proposer_block_2 = Block::new(
+            *PROPOSER_GENESIS_HASH,
+            0,
+            0,
+            H256::default(),
+            vec![],
+            new_proposer_content,
+            [2; 32],
+            H256::default(),
+        );
+        db.insert_block(&new_proposer_block_2).unwrap();
+        assert_eq!(db.unreferred_transaction(), vec![]);
+        assert_eq!(db.unreferred_proposer(), vec![new_proposer_block_2.hash()]);
+    }
 
-        let prop_block_4a_ref =
-            blockchain.get_unconfirmed_notleader_referred_proposer_blocks(prop_block4a.hash());
-        assert_eq!(6, prop_block_4a_ref.len());
-        assert_eq!(prop_block1a.hash(), prop_block_4a_ref[0]);
-        assert_eq!(prop_block2b.hash(), prop_block_4a_ref[1]);
-        assert_eq!(prop_block2a.hash(), prop_block_4a_ref[2]);
-        assert_eq!(prop_block3b.hash(), prop_block_4a_ref[3]);
-        assert_eq!(prop_block3a.hash(), prop_block_4a_ref[4]);
-        assert_eq!(prop_block4a.hash(), prop_block_4a_ref[5]);
+    #[test]
+    fn unvoted_proposer() {
+        let db = BlockChain::new("/tmp/prism_test_blockchain_unvoted_proposer.rocksdb").unwrap();
+        assert_eq!(
+            db.unvoted_proposer(&VOTER_GENESIS_HASHES[0]).unwrap(),
+            vec![]
+        );
 
-        //        println!(" Here ");
-        let prop_block_5a_ref =
-            blockchain.get_unconfirmed_notleader_referred_proposer_blocks(prop_block5a.hash());
-        assert_eq!(prop_block2b.hash(), prop_block_5a_ref[1], "1");
-        assert_eq!(prop_block2c.hash(), prop_block_5a_ref[2], "2");
-        assert_eq!(prop_block2a.hash(), prop_block_5a_ref[3], "3");
-        assert_eq!(prop_block3b.hash(), prop_block_5a_ref[4], "4");
-        assert_eq!(prop_block3a.hash(), prop_block_5a_ref[5], "5");
-        assert_eq!(prop_block4b.hash(), prop_block_5a_ref[6], "6");
-        assert_eq!(prop_block4a.hash(), prop_block_5a_ref[7], "7");
-        assert_eq!(prop_block5a.hash(), prop_block_5a_ref[8], "8");
+        let new_proposer_content = Content::Proposer(proposer::Content::new(vec![], vec![]));
+        let new_proposer_block_1 = Block::new(
+            *PROPOSER_GENESIS_HASH,
+            0,
+            0,
+            H256::default(),
+            vec![],
+            new_proposer_content,
+            [0; 32],
+            H256::default(),
+        );
+        db.insert_block(&new_proposer_block_1).unwrap();
 
-        // Making 1, 2a leaders
-        blockchain
-            .node_data
-            .give_proposer_leader_status(&prop_block1a.hash());
-        blockchain
-            .node_data
-            .give_proposer_leader_status(&prop_block2a.hash());
-        let prop_block_5a_ref =
-            blockchain.get_unconfirmed_notleader_referred_proposer_blocks(prop_block5a.hash());
-        assert_eq!(prop_block2b.hash(), prop_block_5a_ref[0], "1");
-        assert_eq!(prop_block2c.hash(), prop_block_5a_ref[1], "2");
-        assert_eq!(prop_block3b.hash(), prop_block_5a_ref[2], "4");
-        assert_eq!(prop_block3a.hash(), prop_block_5a_ref[3], "5");
-        assert_eq!(prop_block4b.hash(), prop_block_5a_ref[4], "6");
-        assert_eq!(prop_block4a.hash(), prop_block_5a_ref[5], "7");
-        assert_eq!(prop_block5a.hash(), prop_block_5a_ref[6], "8");
+        let new_proposer_content = Content::Proposer(proposer::Content::new(vec![], vec![]));
+        let new_proposer_block_2 = Block::new(
+            *PROPOSER_GENESIS_HASH,
+            0,
+            0,
+            H256::default(),
+            vec![],
+            new_proposer_content,
+            [1; 32],
+            H256::default(),
+        );
+        db.insert_block(&new_proposer_block_2).unwrap();
+        assert_eq!(
+            db.unvoted_proposer(&VOTER_GENESIS_HASHES[0]).unwrap(),
+            vec![new_proposer_block_1.hash()]
+        );
+
+        let new_voter_content = Content::Voter(voter::Content::new(
+            0,
+            VOTER_GENESIS_HASHES[0],
+            vec![new_proposer_block_1.hash()],
+        ));
+        let new_voter_block = Block::new(
+            new_proposer_block_2.hash(),
+            0,
+            0,
+            H256::default(),
+            vec![],
+            new_voter_content,
+            [2; 32],
+            H256::default(),
+        );
+        db.insert_block(&new_voter_block).unwrap();
+
+        assert_eq!(
+            db.unvoted_proposer(&VOTER_GENESIS_HASHES[0]).unwrap(),
+            vec![new_proposer_block_1.hash()]
+        );
+        assert_eq!(
+            db.unvoted_proposer(&new_voter_block.hash()).unwrap(),
+            vec![]
+        );
+    }
+
+    #[test]
+    fn merge_operator_h256_vec() {
+        let db = BlockChain::new("/tmp/prism_test_blockchain_merge_op_h256_vec.rocksdb").unwrap();
+        let cf = db.db.cf_handle(PARENT_NEIGHBOR_CF).unwrap();
+
+        // merge with an nonexistent entry
+        db.db
+            .merge_cf(cf, b"testkey", serialize(&H256::default()).unwrap())
+            .unwrap();
+        let result: Vec<H256> =
+            deserialize(&db.db.get_cf(cf, b"testkey").unwrap().unwrap()).unwrap();
+        assert_eq!(result, vec![H256::default()]);
+
+        // merge with an existing entry
+        db.db
+            .merge_cf(cf, b"testkey", serialize(&H256::default()).unwrap())
+            .unwrap();
+        db.db
+            .merge_cf(cf, b"testkey", serialize(&H256::default()).unwrap())
+            .unwrap();
+        let result: Vec<H256> =
+            deserialize(&db.db.get_cf(cf, b"testkey").unwrap().unwrap()).unwrap();
+        assert_eq!(
+            result,
+            vec![H256::default(), H256::default(), H256::default()]
+        );
+    }
+
+    #[test]
+    fn merge_operator_btreemap() {
+        let db = BlockChain::new("/tmp/prism_test_blockchain_merge_op_u64_vec.rocksdb").unwrap();
+        let cf = db.db.cf_handle(PROPOSER_NODE_VOTE_CF).unwrap();
+
+        // merge with an nonexistent entry
+        db.db
+            .merge_cf(
+                cf,
+                b"testkey",
+                serialize(&(true, 0 as u16, 0 as u64)).unwrap(),
+            )
+            .unwrap();
+        let result: Vec<(u16, u64)> =
+            deserialize(&db.db.get_cf(cf, b"testkey").unwrap().unwrap()).unwrap();
+        assert_eq!(result, vec![(0, 0)]);
+
+        // insert
+        db.db
+            .merge_cf(
+                cf,
+                b"testkey",
+                serialize(&(true, 10 as u16, 0 as u64)).unwrap(),
+            )
+            .unwrap();
+        db.db
+            .merge_cf(
+                cf,
+                b"testkey",
+                serialize(&(true, 5 as u16, 0 as u64)).unwrap(),
+            )
+            .unwrap();
+        let result: Vec<(u16, u64)> =
+            deserialize(&db.db.get_cf(cf, b"testkey").unwrap().unwrap()).unwrap();
+        assert_eq!(result, vec![(0, 0), (10, 0), (5, 0)]);
+
+        // remove
+        db.db
+            .merge_cf(
+                cf,
+                b"testkey",
+                serialize(&(false, 5 as u16, 0 as u64)).unwrap(),
+            )
+            .unwrap();
+        let result: Vec<(u16, u64)> =
+            deserialize(&db.db.get_cf(cf, b"testkey").unwrap().unwrap()).unwrap();
+        assert_eq!(result, vec![(0, 0), (10, 0)]);
     }
 }

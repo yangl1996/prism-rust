@@ -10,16 +10,16 @@ pub mod blockchain;
 pub mod blockdb;
 pub mod config;
 pub mod crypto;
-pub mod handler;
+//pub mod handler;
 pub mod miner;
-pub mod network;
-pub mod state;
+//pub mod network;
+pub mod utxodb;
 pub mod transaction;
-pub mod validation;
+//pub mod validation;
 //pub mod visualization;
-pub mod generator;
-pub mod wallet;
+//pub mod wallet;
 
+/*
 use crate::blockchain::transaction::UpdateMessage as LedgerUpdateMessage;
 use crate::crypto::hash::H256;
 use crate::state::UTXODatabase;
@@ -82,3 +82,4 @@ pub fn start(
 
     return Ok((server, miner, wallets));
 }
+*/
