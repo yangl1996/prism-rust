@@ -2,19 +2,22 @@
 extern crate clap;
 
 use log::{debug, error, info};
-use prism::blockchain;
-use prism::blockdb;
+use prism::blockchain::BlockChain;
+use prism::blockdb::BlockDatabase;
 use prism::config;
-use prism::miner::memory_pool;
-use prism::state;
+use prism::miner::memory_pool::MemoryPool;
+use prism::utxodb::UtxoDatabase;
+use prism::wallet::Wallet;
 use std::net;
 use std::process;
-use std::sync::mpsc;
+use std::sync::{mpsc, Arc};
 
 const DEFAULT_IP: &str = "127.0.0.1";
 const DEFAULT_P2P_PORT: u16 = 6000;
-const DEFAULT_BLOCKDB: &str = "/tmp/prismblocks.rocksdb";
-const DEFAULT_UTXODB: &str = "/tmp/prismutxo.rocksdb";
+const DEFAULT_BLOCKDB: &str = "/tmp/prism-blocks.rocksdb";
+const DEFAULT_UTXODB: &str = "/tmp/prism-utxo.rocksdb";
+const DEFAULT_BLOCKCHAIN: &str = "/tmp/prism-blockchain.rocksdb";
+const DEFAULT_WALLET: &str = "/tmp/prism-wallet.rocksdb";
 
 fn main() {
     // parse command line arguments
@@ -27,6 +30,8 @@ fn main() {
      (@arg known_peer: -c --connect ... [PEER] "Sets the peers to connect to")
      (@arg block_db: --blockdb ... [PATH] "Sets the path of the block database")
      (@arg utxo_db: --utxodb ... [PATH] "Sets the path of the UTXO database")
+     (@arg blockchain_db: --blockchain ... [PATH] "Sets the path of the blockchain database")
+     (@arg wallet_db: --wallet ... [PATH] "Sets the path of the wallet")
     )
     .get_matches();
 
@@ -34,30 +39,37 @@ fn main() {
     let verbosity = matches.occurrences_of("verbose") as usize;
     stderrlog::new().verbosity(verbosity).init().unwrap();
 
+    // init mempool
+    let mempool = MemoryPool::new();
+    let mempool = Arc::new(std::sync::Mutex::new(mempool));
+
     // init block database
-    let blockdb_path = match matches.value_of("block_db") {
-        Some(path) => std::path::Path::new(path),
-        None => std::path::Path::new(&DEFAULT_BLOCKDB),
+    let blockdb = match matches.value_of("block_db") {
+        Some(path) => BlockDatabase::new(&path).unwrap(),
+        None => BlockDatabase::new(&DEFAULT_BLOCKDB).unwrap(),
     };
-    let blockdb = blockdb::BlockDatabase::new(blockdb_path).unwrap();
-    let blockdb = std::sync::Arc::new(blockdb);
+    let blockdb = Arc::new(blockdb);
 
     // init utxo database
-    let utxodb_path = match matches.value_of("utxo_db") {
-        Some(path) => std::path::Path::new(path),
-        None => std::path::Path::new(&DEFAULT_UTXODB),
+    let utxodb = match matches.value_of("utxo_db") {
+        Some(path) => UtxoDatabase::new(&path).unwrap(),
+        None => UtxoDatabase::new(&DEFAULT_UTXODB).unwrap(),
     };
-    let utxodb = utxodb::UtxoDatabase::new(utxodb_path).unwrap();
-    let utxodb = std::sync::Arc::new(utxodb);
+    let utxodb = Arc::new(utxodb);
 
-    // init blockchain
-    let (state_update_sink, state_update_source) = mpsc::channel();
-    let blockchain = blockchain::BlockChain::new(config::NUM_VOTER_CHAINS, state_update_sink);
-    let blockchain = std::sync::Arc::new(std::sync::Mutex::new(blockchain));
+    // init blockchain database 
+    let blockchain = match matches.value_of("blockchain_db") {
+        Some(path) => BlockChain::new(&path).unwrap(),
+        None => BlockChain::new(&DEFAULT_BLOCKCHAIN).unwrap(),
+    };
+    let blockchain = Arc::new(blockchain);
 
-    // init mempool
-    let mempool = memory_pool::MemoryPool::new();
-    let mempool = std::sync::Arc::new(std::sync::Mutex::new(mempool));
+    // init wallet database 
+    let wallet = match matches.value_of("wallet_db") {
+        Some(path) => Wallet::new(&path, &mempool).unwrap(),
+        None => Wallet::new(&DEFAULT_WALLET, &mempool).unwrap(),
+    };
+    let wallet = Arc::new(wallet);
 
     // parse server ip and port
     let peer_ip = match matches.value_of("peer_ip") {
@@ -78,13 +90,13 @@ fn main() {
 
     // init server and miner
     debug!("Starting P2P server at {}", peer_socket_addr);
-    let (server, miner, _wallet) = prism::start(
+    let (server, miner) = prism::start(
         peer_socket_addr,
         &blockdb,
         &utxodb,
         &blockchain,
+        &wallet,
         &mempool,
-        state_update_source,
     )
     .unwrap();
 

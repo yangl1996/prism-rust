@@ -24,11 +24,6 @@ pub struct Wallet {
     mempool: Arc<Mutex<MemoryPool>>,
 }
 
-pub struct UTXO {
-    pub coin_id: CoinId,
-    pub coin_data: Output,
-}
-
 #[derive(Debug)]
 pub enum WalletError {
     InsufficientMoney,
@@ -75,10 +70,7 @@ impl From<mpsc::SendError<ContextUpdateSignal>> for WalletError {
 }
 
 impl Wallet {
-    pub fn new(
-        path: &std::path::Path,
-        mempool: &Arc<Mutex<MemoryPool>>,
-    ) -> Result<Self> {
+    fn open<P: AsRef<std::path::Path>>(path: P, mempool: &Arc<Mutex<MemoryPool>>) -> Result<Self> {
         let coin_cf = rocksdb::ColumnFamilyDescriptor::new(COIN_CF, rocksdb::Options::default());
         let keypair_cf = rocksdb::ColumnFamilyDescriptor::new(KEYPAIR_CF, rocksdb::Options::default());
         let mut db_opts = rocksdb::Options::default();
@@ -89,6 +81,11 @@ impl Wallet {
             handle,
             mempool: Arc::clone(mempool),
         });
+    }
+
+    pub fn new<P: AsRef<std::path::Path>>(path: P, mempool: &Arc<Mutex<MemoryPool>>) -> Result<Self> {
+        rocksdb::DB::destroy(&rocksdb::Options::default(), &path);
+        return Self::open(path, mempool);
     }
 
     // someone pay to public key A first, then I coincidentally generate A, I will NOT receive the payment
