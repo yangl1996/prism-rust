@@ -1,14 +1,13 @@
 use crate::crypto::hash::{Hashable, H256};
-use crate::transaction::{Input, CoinId};
+use crate::transaction::{Output, CoinId, Transaction};
 use bincode::{deserialize, serialize};
-use rocksdb::{DB, Options, WriteBatch};
-use crate::config::*;
+use rocksdb::{DB, Options};
 
 pub struct UtxoDatabase {
-    db: rocksdb::DB,
+    db: rocksdb::DB,    // coin id to output
 }
 
-impl Ledger {
+impl UtxoDatabase {
     /// Open the database at the given path, and create a new one if one is missing.
     fn open<P: AsRef<std::path::Path>>(path: P) -> Result<Self, rocksdb::Error> {
         let cfs = vec![];
@@ -29,14 +28,132 @@ impl Ledger {
 
         return Ok(db);
     }
+
+    /// Remove the given transactions, then add another set of transactions.
+    pub fn apply_diff(&self, added: &[Transaction], removed: &[Transaction]) -> Result<(), rocksdb::Error> {
+        // revert the transactions
+        for t in removed.iter().rev() {
+            // remove the output
+            let transaction_hash = t.hash();
+            let num_outputs = t.output.len();
+            for idx in 0..num_outputs {
+                let id = CoinId {
+                    hash: transaction_hash,
+                    index: idx as u32
+                };
+                self.db.delete(serialize(&id).unwrap())?;
+            }
+            
+            // add back the input
+            for input in &t.input {
+                let out = Output {
+                    value: input.value,
+                    recipient: input.owner,
+                };
+                self.db.put(serialize(&input.coin).unwrap(), serialize(&out).unwrap())?;
+            }
+        }
+
+        // apply new transactions
+        for t in added.iter() {
+            // remove the input
+            for input in &t.input {
+                self.db.delete(serialize(&input.coin).unwrap())?;
+            }
+
+            // add the output
+            let transaction_hash = t.hash();
+            for (idx, output) in t.output.iter().enumerate() {
+                let id = CoinId {
+                    hash: transaction_hash,
+                    index: idx as u32
+                };
+                self.db.put(serialize(&id).unwrap(), serialize(&output).unwrap())?;
+            }
+        }
+        return Ok(());
+    }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::transaction::Input;
 
     #[test]
     fn initialize_new() {
-        let db = Ledger::new("/tmp/prism_test_ledger_new.rocksdb").unwrap();
+        let _db = UtxoDatabase::new("/tmp/prism_test_ledger_new.rocksdb").unwrap();
+    }
+
+    #[test]
+    fn apply_diff() {
+        let db = UtxoDatabase::new("/tmp/prism_test_ledger_apply_diff.rocksdb").unwrap();
+        let transaction_1 = Transaction {
+            input: vec![],
+            output: vec![
+                Output {
+                    value: 100,
+                    recipient: H256::default(),
+                },
+                Output {
+                    value: 75,
+                    recipient: H256::default(),
+                }
+            ],
+            authorization: vec![],
+        };
+        let transaction_2 = Transaction {
+            input: vec![],
+            output: vec![
+                Output {
+                    value: 50,
+                    recipient: H256::default(),
+                }
+            ],
+            authorization: vec![],
+        };
+        db.apply_diff(&vec![transaction_1.clone(), transaction_2.clone()], &vec![]).unwrap();
+        let out: Output = deserialize(&db.db.get(serialize(&CoinId {
+            hash: transaction_1.hash(),
+            index: 1,
+        }).unwrap()).unwrap().unwrap()).unwrap();
+        assert_eq!(out, Output {
+            value: 75,
+            recipient: H256::default(),
+        });
+        let transaction_3 = Transaction {
+            input: vec![
+                Input {
+                    coin: CoinId {
+                        hash: transaction_1.hash(),
+                        index: 0
+                    },
+                    value: 100,
+                    owner: H256::default(),
+                }
+            ],
+            output: vec![
+                Output {
+                    value: 100,
+                    recipient: H256::default(),
+                }
+            ],
+            authorization: vec![],
+        };
+        db.apply_diff(&vec![transaction_3.clone()], &vec![]).unwrap();
+        let out = db.db.get(serialize(&CoinId {
+            hash: transaction_1.hash(),
+            index: 0,
+        }).unwrap()).unwrap();
+        assert_eq!(out.is_none(), true);
+        db.apply_diff(&vec![], &vec![transaction_2.clone(), transaction_3.clone()]).unwrap();
+        let out: Output = deserialize(&db.db.get(serialize(&CoinId {
+            hash: transaction_1.hash(),
+            index: 0,
+        }).unwrap()).unwrap().unwrap()).unwrap();
+        assert_eq!(out, Output {
+            value: 100,
+            recipient: H256::default(),
+        });
     }
 }
