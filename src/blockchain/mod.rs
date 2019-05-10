@@ -4,7 +4,7 @@ use crate::crypto::hash::{Hashable, H256};
 
 use bincode::{deserialize, serialize};
 use rocksdb::{ColumnFamilyDescriptor, Options, WriteBatch, DB};
-use std::collections::{BTreeSet, HashSet, BTreeMap};
+use std::collections::{BTreeSet, HashSet, HashMap};
 use std::sync::Mutex;
 
 // Column family names for node/chain metadata
@@ -800,34 +800,64 @@ impl BlockChain {
     }
 }
 
-// Functions to dump the blockchain
+// Functions to dump the blockchain, only ~ last 100 levels
 impl BlockChain {
-    pub fn proposer_tree(&self) -> Result<BTreeMap<u64, Vec<String>>> {
+    pub fn print_dump(&self) -> Result<()> {
+        const DUMP_LIMIT: u16 = 100;
         let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
-        let iter = self.db.iterator_cf(proposer_tree_level_cf,rocksdb::IteratorMode::Start)?;
-        let mut proposer_tree: BTreeMap<u64, Vec<String>> = BTreeMap::new();
+        let proposer_leader_sequence_cf = self.db.cf_handle(PROPOSER_LEADER_SEQUENCE_CF).unwrap();
+        let parent_neighbor_cf = self.db.cf_handle(PARENT_NEIGHBOR_CF).unwrap();
+
+        let iter = self.db.iterator_cf(proposer_tree_level_cf,rocksdb::IteratorMode::End)?;
+
+        let mut nodes_to_show: HashSet<H256> = HashSet::new();//we only add ~ 100 levels of nodes to this set, and filter out edges not related to this set
+        let mut proposer_tree: HashMap<u64, Vec<H256>> = HashMap::new();
+        let mut cnt = 0u16;
         for (k, v) in iter {
             let level: u64 = deserialize(&k).unwrap();
             let blocks: Vec<H256> = deserialize(&v).unwrap();
-            let blocks: Vec<String> = blocks.iter().map(|h256|h256.to_string()).collect();
+            nodes_to_show.extend(blocks.iter());
+            //let blocks: Vec<String> = blocks.iter().map(|h256|h256.to_string()).collect();
             proposer_tree.insert(level, blocks);
+            cnt+=1;
+            if cnt > DUMP_LIMIT {break;}
         }
-        Ok(proposer_tree)
-    }
 
-    pub fn proposer_leader(&self) -> Result<BTreeMap<u64, String>> {
-        let proposer_leader_sequence_cf = self.db.cf_handle(PROPOSER_LEADER_SEQUENCE_CF).unwrap();
-        let iter = self.db.iterator_cf(proposer_leader_sequence_cf,rocksdb::IteratorMode::Start)?;
-        let mut proposer_leader: BTreeMap<u64, String> = BTreeMap::new();
-        for (k, v) in iter {
-            let level: u64 = deserialize(&k).unwrap();
-            let block: Option<H256> = deserialize(&v).unwrap();
-            if let Some(h256) = block {
-                proposer_leader.insert(level, h256.to_string());
+        let mut proposer_leader: HashMap<u64, String> = HashMap::new();
+        for level in proposer_tree.keys() {
+            match self.db.get_cf(proposer_leader_sequence_cf, serialize(level).unwrap())? {
+                Some(d) => {
+                    let h256: H256 = deserialize(&d).unwrap();
+                    proposer_leader.insert(*level, h256.to_string());
+                }
+                None => {}
             }
         }
-        Ok(proposer_leader)
+
+        let mut parent_neighbor: HashMap<String, String> = HashMap::new();
+        for blocks in proposer_tree.values() {
+            for block in blocks {
+                match self.db.get_cf(parent_neighbor_cf, serialize(block).unwrap())? {
+                    Some(d) => {
+                        let parent: H256 = deserialize(&d).unwrap();
+                        if nodes_to_show.contains(&parent) {
+                            parent_neighbor.insert(block.to_string(), parent.to_string());
+                        }
+                    }
+                    None => {}
+                }
+            }
+        }
+
+        let mut proposer_tree_string: HashMap<u64, Vec<String>> = proposer_tree.into_iter()
+            .map(|(k,v)|(k,v.into_iter().map(|h256|h256.to_string()).collect())).collect();
+        println!("nodes_to_show {:?}", nodes_to_show);
+        println!("proposer_tree {:?}", proposer_tree_string);
+        println!("proposer_leader {:?}", proposer_leader);
+        println!("parent_neighbor {:?}", parent_neighbor);
+        Ok(())
     }
+
 }
 
 fn vote_vec_merge(
@@ -1703,5 +1733,54 @@ mod tests {
         let result: Vec<(u16, u64)> =
             deserialize(&db.db.get_cf(cf, b"testkey").unwrap().unwrap()).unwrap();
         assert_eq!(result, vec![(0, 0), (10, 0)]);
+    }
+
+    #[test]
+    fn dump() {
+        let db = BlockChain::new("/tmp/prism_test_blockchain_dump.rocksdb").unwrap();
+
+        let new_proposer_content = Content::Proposer(proposer::Content::new(vec![], vec![]));
+        let new_proposer_block_1 = Block::new(
+            *PROPOSER_GENESIS_HASH,
+            0,
+            0,
+            H256::default(),
+            vec![],
+            new_proposer_content,
+            [0; 32],
+            H256::default(),
+        );
+        db.insert_block(&new_proposer_block_1).unwrap();
+
+        let new_proposer_content = Content::Proposer(proposer::Content::new(vec![], vec![]));
+        let new_proposer_block_2 = Block::new(
+            *PROPOSER_GENESIS_HASH,
+            0,
+            0,
+            H256::default(),
+            vec![],
+            new_proposer_content,
+            [1; 32],
+            H256::default(),
+        );
+        db.insert_block(&new_proposer_block_2).unwrap();
+
+        let new_voter_content = Content::Voter(voter::Content::new(
+            0,
+            VOTER_GENESIS_HASHES[0],
+            vec![new_proposer_block_1.hash()],
+        ));
+        let new_voter_block = Block::new(
+            new_proposer_block_2.hash(),
+            0,
+            0,
+            H256::default(),
+            vec![],
+            new_voter_content,
+            [2; 32],
+            H256::default(),
+        );
+        db.insert_block(&new_voter_block).unwrap();
+        db.print_dump();
     }
 }
