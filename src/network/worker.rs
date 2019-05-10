@@ -143,7 +143,6 @@ impl Context {
                         }
                     }
 
-                    let mut still_unresolved: Vec<Block> = vec![];
                     let mut buffer = self.buffer.lock().unwrap();
                     buffer.retain(|block| {
                         let validation_result =
