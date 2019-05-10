@@ -10,7 +10,7 @@ use tiny_http::Response;
 use tiny_http::Server as HTTPServer;
 
 pub struct Server {
-    blockchain: Arc<Mutex<BlockChain>>,
+    blockchain: Arc<BlockChain>,
     blockdb: Arc<BlockDatabase>,
     utxodb: Arc<UtxoDatabase>,
     handle: HTTPServer,
@@ -53,7 +53,7 @@ macro_rules! serve_dynamic_file {
 impl Server {
     pub fn start(
         addr: std::net::SocketAddr,
-        blockchain: Arc<Mutex<BlockChain>>,
+        blockchain: Arc<BlockChain>,
         blockdb: Arc<BlockDatabase>,
         utxodb: Arc<UtxoDatabase>,
     ) {

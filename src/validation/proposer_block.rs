@@ -7,7 +7,7 @@ use std::sync::Mutex;
 
 pub fn get_missing_references(
     content: &Content,
-    blockchain: &Mutex<BlockChain>,
+    blockchain: &BlockChain,
     blockdb: &BlockDatabase,
 ) -> Vec<H256> {
     let mut missing_blocks: Vec<H256> = vec![];

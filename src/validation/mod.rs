@@ -49,7 +49,7 @@ impl std::fmt::Display for BlockResult {
 /// Validate a block.
 pub fn check_block(
     block: &Block,
-    blockchain: &Mutex<BlockChain>,
+    blockchain: &BlockChain,
     blockdb: &BlockDatabase,
     utxodb: &UtxoDatabase,
 ) -> BlockResult {
@@ -130,7 +130,7 @@ pub fn check_block(
 /// second one the block chain.
 fn check_block_exist(
     hash: H256,
-    blockchain: &Mutex<BlockChain>,
+    blockchain: &BlockChain,
     blockdb: &BlockDatabase,
 ) -> (bool, bool) {
     let in_db = match blockdb.get(&hash) {
@@ -141,7 +141,7 @@ fn check_block_exist(
         },
     };
 
-    let in_blockchain = blockchain.lock().unwrap().check_node(hash);
+    let in_blockchain = blockchain.check_node(hash);
 
     return (in_db, in_blockchain);
 }

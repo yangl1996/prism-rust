@@ -13,9 +13,9 @@ pub fn new_validated_block(
     block: Block,
     mempool: &Mutex<MemoryPool>,
     blockdb: &BlockDatabase,
-    chain: &Mutex<BlockChain>,
+    chain: &BlockChain,
     server: &ServerHandle,
-    utxodb: &Mutex<UtxoDatabase>,
+    utxodb: &UtxoDatabase,
 ) {
     // insert the new block into the blockdb
     blockdb.insert(&block).unwrap();
@@ -38,7 +38,6 @@ pub fn new_validated_block(
     };
 
     // insert the new block into the blockchain
-    let mut chain = chain.lock().unwrap();
     let diff = chain.insert_block(&block).unwrap();
     drop(chain);
 
@@ -64,8 +63,7 @@ pub fn new_validated_block(
         remove.append(&mut transactions);
     }
 
-    let mut utxo = utxodb.lock().unwrap();
-    utxo.apply_diff(&add, &remove);
+    utxodb.apply_diff(&add, &remove);
 
     // tell the neighbors that we have a new block
     server.broadcast(message::Message::NewBlockHashes(vec![block.hash()]));

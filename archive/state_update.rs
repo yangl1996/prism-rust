@@ -11,7 +11,7 @@ use std::sync::{mpsc, Arc, Mutex};
 fn ledger_new_txs(
     txs: Vec<Transaction>,
     mempool: &Mutex<MemoryPool>,
-    utxodb: &Mutex<UtxoDatabase>,
+    utxodb: &UtxoDatabase,
     wallets: &Vec<Mutex<Wallet>>,
 ) {
     let mut m = mempool.lock().unwrap();
@@ -27,7 +27,7 @@ fn ledger_new_txs(
 // suppose a miner mine the whole mempool, and they are confirmed in ledger
 fn mine_whole_mempool(
     mempool: &Mutex<MemoryPool>,
-    utxodb: &Mutex<UtxoDatabase>,
+    utxodb: &UtxoDatabase,
     wallets: &Vec<Mutex<Wallet>>,
 ) {
     let m = mempool.lock().unwrap();
@@ -37,7 +37,7 @@ fn mine_whole_mempool(
     ledger_new_txs(txs, mempool, utxodb, wallets);
 }
 
-fn status_check(utxodb: &Mutex<UtxoDatabase>, wallets: &Vec<Mutex<Wallet>>) {
+fn status_check(utxodb: &UtxoDatabase, wallets: &Vec<Mutex<Wallet>>) {
     println!(
         "Balance of wallets: {:?}.",
         wallets

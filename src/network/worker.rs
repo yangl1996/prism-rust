@@ -17,7 +17,7 @@ use std::thread;
 pub struct Context {
     msg_chan: Arc<Mutex<mpsc::Receiver<(message::Message, peer::Handle)>>>,
     num_worker: usize,
-    chain: Arc<Mutex<BlockChain>>,
+    chain: Arc<BlockChain>,
     blockdb: Arc<BlockDatabase>,
     utxodb: Arc<UtxoDatabase>,
     mempool: Arc<Mutex<MemoryPool>>,
@@ -29,7 +29,7 @@ pub struct Context {
 pub fn new(
     num_worker: usize,
     msg_src: mpsc::Receiver<(message::Message, peer::Handle)>,
-    blockchain: &Arc<Mutex<BlockChain>>,
+    blockchain: &Arc<BlockChain>,
     blockdb: &Arc<BlockDatabase>,
     utxodb: &Arc<UtxoDatabase>,
     mempool: &Arc<Mutex<MemoryPool>>,
@@ -124,6 +124,7 @@ impl Context {
                                     &self.blockdb,
                                     &self.chain,
                                     &self.server,
+                                    &self.utxodb,
                                 );
                             }
                             _ => {
@@ -149,6 +150,7 @@ impl Context {
                                     &self.blockdb,
                                     &self.chain,
                                     &self.server,
+                                    &self.utxodb,
                                 );
                             }
                             _ => {

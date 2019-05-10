@@ -33,7 +33,7 @@ pub fn start(
     addr: std::net::SocketAddr,
     blockdb: &Arc<BlockDatabase>,
     utxodb: &Arc<UtxoDatabase>,
-    blockchain: &Arc<Mutex<BlockChain>>,
+    blockchain: &Arc<BlockChain>,
     mempool: &Arc<Mutex<MemoryPool>>,
     state_update_source: mpsc::Receiver<(LedgerUpdateMessage, Vec<H256>)>,
 ) -> std::io::Result<(

@@ -11,7 +11,7 @@ use std::sync::Mutex;
 
 pub fn get_missing_references(
     content: &Content,
-    blockchain: &Mutex<BlockChain>,
+    blockchain: &BlockChain,
     blockdb: &BlockDatabase,
 ) -> Vec<H256> {
     let mut missing_blocks = vec![];
@@ -44,7 +44,7 @@ pub fn check_chain_number(content: &Content) -> bool {
 
 pub fn check_levels_voted(
     content: &Content,
-    blockchain: &Mutex<BlockChain>,
+    blockchain: &BlockChain,
     blockdb: &BlockDatabase,
 ) -> bool {
     // get the deepest block voted by our parent
@@ -55,8 +55,6 @@ pub fn check_levels_voted(
     for (index, proposer_vote) in content.votes.iter().enumerate() {
         let voted = blockdb.get(proposer_vote).unwrap().unwrap();
         let level = blockchain
-            .lock()
-            .unwrap()
             .prop_node_data(&voted.hash())
             .level as usize;
         if level != index + 1 + last_voted_level {
@@ -70,7 +68,7 @@ pub fn check_levels_voted(
 /// Get the deepest proposer level voted by this chain, until the given voter block.
 fn latest_level_voted_on_chain(
     voter_block: &Block,
-    blockchain: &Mutex<BlockChain>,
+    blockchain: &BlockChain,
     blockdb: &BlockDatabase,
 ) -> usize {
     let content = match &voter_block.content {
@@ -87,8 +85,6 @@ fn latest_level_voted_on_chain(
         // if this block voted for some blocks, then just return the deepest level among them
         let latest_prop_voted = content.votes.last().unwrap();
         return blockchain
-            .lock()
-            .unwrap()
             .prop_node_data(latest_prop_voted)
             .level as usize;
     } else {
