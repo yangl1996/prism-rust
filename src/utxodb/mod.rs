@@ -1,4 +1,4 @@
-use crate::crypto::hash::{Hashable, H256};
+use crate::crypto::hash::Hashable;
 use crate::transaction::{Output, CoinId, Transaction};
 use bincode::{deserialize, serialize};
 use rocksdb::{DB, Options};
@@ -36,21 +36,37 @@ impl UtxoDatabase {
             // remove the output
             let transaction_hash = t.hash();
             let num_outputs = t.output.len();
+
+            // NOTE: we only undo the transaction if the outputs are there (it means that the
+            // transaction was valid when we added it)
+            let mut valid = true;
             for idx in 0..num_outputs {
                 let id = CoinId {
                     hash: transaction_hash,
                     index: idx as u32
                 };
-                self.db.delete(serialize(&id).unwrap())?;
+                if self.db.get(serialize(&id).unwrap())?.is_none() {
+                    valid = false;
+                }
             }
             
-            // add back the input
-            for input in &t.input {
-                let out = Output {
-                    value: input.value,
-                    recipient: input.owner,
-                };
-                self.db.put(serialize(&input.coin).unwrap(), serialize(&out).unwrap())?;
+            if valid {
+                // remove the outputs 
+                for idx in 0..num_outputs {
+                    let id = CoinId {
+                        hash: transaction_hash,
+                        index: idx as u32
+                    };
+                    self.db.delete(serialize(&id).unwrap())?;
+                }
+                // add back the input
+                for input in &t.input {
+                    let out = Output {
+                        value: input.value,
+                        recipient: input.owner,
+                    };
+                    self.db.put(serialize(&input.coin).unwrap(), serialize(&out).unwrap())?;
+                }
             }
         }
 
@@ -79,6 +95,7 @@ impl UtxoDatabase {
 mod test {
     use super::*;
     use crate::transaction::Input;
+    use crate::crypto::hash::H256;
 
     #[test]
     fn initialize_new() {
@@ -155,5 +172,10 @@ mod test {
             value: 100,
             recipient: H256::default(),
         });
+        let out = db.db.get(serialize(&CoinId {
+            hash: transaction_2.hash(),
+            index: 0,
+        }).unwrap()).unwrap();
+        assert_eq!(out.is_none(), true);
     }
 }
