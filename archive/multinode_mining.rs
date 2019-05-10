@@ -41,12 +41,12 @@
 //<<<<<<< HEAD
 //        let utxodb_path_string = format!("/tmp/prism_multinode_mining_{}_utxo.rocksdb", i);
 //        let utxo_path = std::path::Path::new(&utxodb_path_string);
-//        let utxodb = state::UTXODatabase::new(utxo_path).unwrap();
+//        let utxodb = utxodb::UtxoDatabase::new(utxo_path).unwrap();
 //        let utxodb = Arc::new(utxodb);
 //=======
 //        let utxodb_path_string = format!("/tmp/prism_multinode_mining_utxo_{}.rocksdb",i);
 //        let utxodb_path = std::path::Path::new(&utxodb_path_string);
-//        let utxodb = state::UTXODatabase::new(utxodb_path).unwrap();
+//        let utxodb = utxodb::UtxoDatabase::new(utxodb_path).unwrap();
 //        let utxodb = Arc::new(Mutex::new(utxodb));
 //>>>>>>> gerui-dev
 //

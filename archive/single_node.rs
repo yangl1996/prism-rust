@@ -16,7 +16,7 @@
 //    let blockdb = Arc::new(blockdb);
 //
 //    let utxodb_path = std::path::Path::new("/tmp/prism_test_state.rocksdb");
-//    let utxodb = state::UTXODatabase::new(utxodb_path).unwrap();
+//    let utxodb = utxodb::UtxoDatabase::new(utxodb_path).unwrap();
 //    let utxodb = Arc::new(utxodb);
 //
 //    let (state_update_sink, state_update_source) = mpsc::channel();

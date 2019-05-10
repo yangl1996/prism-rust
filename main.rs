@@ -47,7 +47,7 @@ fn main() {
         Some(path) => std::path::Path::new(path),
         None => std::path::Path::new(&DEFAULT_UTXODB),
     };
-    let utxodb = state::UTXODatabase::new(utxodb_path).unwrap();
+    let utxodb = utxodb::UtxoDatabase::new(utxodb_path).unwrap();
     let utxodb = std::sync::Arc::new(utxodb);
 
     // init blockchain

@@ -5,11 +5,13 @@ use crate::block::{proposer, transaction, voter};
 use crate::block::{Block, Content};
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
+use crate::utxodb::UtxoDatabase;
 use crate::config::*;
 use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::merkle::MerkleTree;
 use crate::handler::new_validated_block;
 use crate::network::server::Handle as ServerHandle;
+use crate::wallet::Wallet;
 use log::info;
 
 use memory_pool::MemoryPool;
@@ -52,7 +54,9 @@ enum OperatingState {
 
 pub struct Context {
     tx_mempool: Arc<Mutex<MemoryPool>>,
-    blockchain: Arc<Mutex<BlockChain>>,
+    blockchain: Arc<BlockChain>,
+    utxodb: Arc<UtxoDatabase>,
+    wallet: Arc<Wallet>,
     db: Arc<BlockDatabase>,
     // Channel for receiving control signal
     control_chan: Receiver<ControlSignal>,
@@ -75,7 +79,9 @@ pub struct Handle {
 
 pub fn new(
     tx_mempool: &Arc<Mutex<MemoryPool>>,
-    blockchain: &Arc<Mutex<BlockChain>>,
+    blockchain: &Arc<BlockChain>,
+    utxodb: &Arc<UtxoDatabase>,
+    wallet: &Arc<Wallet>,
     db: &Arc<BlockDatabase>,
     ctx_update_source: Receiver<ContextUpdateSignal>,
     server: ServerHandle,
@@ -84,6 +90,8 @@ pub fn new(
     let ctx = Context {
         tx_mempool: Arc::clone(tx_mempool),
         blockchain: Arc::clone(blockchain),
+        utxodb: Arc::clone(utxodb),
+        wallet: Arc::clone(wallet),
         db: Arc::clone(db),
         control_chan: signal_chan_receiver,
         context_update_chan: ctx_update_source,
@@ -209,6 +217,8 @@ impl Context {
                     &self.db,
                     &self.blockchain,
                     &self.server,
+                    &self.utxodb,
+                    &self.wallet,
                 );
                 info!("Mined one block");
                 // TODO: Only update block contents if relevant parent
@@ -259,18 +269,16 @@ impl Context {
     /// Update the block to be mined
     fn update_context(&mut self) {
         // get mutex of blockchain and get all required data
-        let blockchain = self.blockchain.lock().unwrap();
-        self.proposer_parent_hash = blockchain.best_proposer();
+        self.proposer_parent_hash = self.blockchain.best_proposer();
         self.difficulty = self.get_difficulty(&self.proposer_parent_hash);
-        let transaction_block_refs = blockchain.unreferred_transaction(); //.clone();
-        let proposer_block_refs = blockchain.unreferred_proposer().clone(); // remove clone?
+        let transaction_block_refs = self.blockchain.unreferred_transaction(); //.clone();
+        let proposer_block_refs = self.blockchain.unreferred_proposer().clone(); // remove clone?
         let voter_parent_hash: Vec<H256> = (0..NUM_VOTER_CHAINS)
-            .map(|i| blockchain.best_voter(i as usize).clone())
+            .map(|i| self.blockchain.best_voter(i as usize).clone())
             .collect();
         let proposer_block_votes: Vec<Vec<H256>> = (0..NUM_VOTER_CHAINS)
-            .map(|i| blockchain.unvoted_proposer(&voter_parent_hash[i as usize]).unwrap().clone())
+            .map(|i| self.blockchain.unvoted_proposer(&voter_parent_hash[i as usize]).unwrap().clone())
             .collect();
-        drop(blockchain);
         // get mutex of mempool and get all required data
         let mempool = self.tx_mempool.lock().unwrap();
         let transactions = mempool.get_transactions(TX_BLOCK_SIZE);

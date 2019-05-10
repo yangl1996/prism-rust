@@ -4,7 +4,7 @@ use crate::transaction::Transaction;
 use std::sync::Mutex;
 
 /// Handler for new transaction
-// We may want to add the result of memory pool check
+// TODO: We may want to add the result of memory pool check
 pub fn new_transaction(transaction: Transaction, mempool: &Mutex<MemoryPool>) {
     let mut mempool = mempool.lock().unwrap();
     // memory pool check
@@ -12,4 +12,5 @@ pub fn new_transaction(transaction: Transaction, mempool: &Mutex<MemoryPool>) {
         // if check passes, insert the new transaction into the mempool
         mempool.insert(transaction);
     }
+    drop(mempool);
 }

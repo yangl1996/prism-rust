@@ -2,7 +2,7 @@ use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
 use crate::crypto::hash::{Hashable, H256};
 use crate::handler;
-use crate::state::UTXODatabase;
+use crate::utxodb::UtxoDatabase;
 use crate::transaction::CoinId;
 use crate::transaction::Transaction as RawTransaction;
 
@@ -44,7 +44,7 @@ pub struct Dump {
 pub fn dump_ledger(
     blockchain: &BlockChain,
     block_db: &BlockDatabase,
-    state_db: &UTXODatabase,
+    state_db: &UtxoDatabase,
 ) -> String {
     let ordered_tx_block_hashes = blockchain.get_ordered_tx_blocks();
     let mut transactions_blocks: Vec<TransactionBlock> = vec![];

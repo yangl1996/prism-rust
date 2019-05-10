@@ -1,7 +1,7 @@
 use prism::crypto::hash::H256;
 use prism::handler::{confirm_new_tx_block_transactions, unconfirm_old_tx_block_transactions};
 use prism::miner::memory_pool::MemoryPool;
-use prism::state::UTXODatabase;
+use prism::utxodb::UtxoDatabase;
 use prism::transaction::{Output, Transaction};
 use prism::wallet::Wallet;
 use rand::Rng;
@@ -11,7 +11,7 @@ use prism::crypto::hash::tests::generate_random_hash;
 fn ledger_new_txs(
     txs: Vec<Transaction>,
     mempool: &Mutex<MemoryPool>,
-    utxodb: &UTXODatabase,
+    utxodb: &UtxoDatabase,
     wallets: &Vec<Mutex<Wallet>>,
 ) {
     let mut m = mempool.lock().unwrap();
@@ -27,7 +27,7 @@ fn ledger_new_txs(
 // suppose a miner mine the whole mempool, and they are confirmed in ledger
 fn mine_whole_mempool(
     mempool: &Mutex<MemoryPool>,
-    utxodb: &UTXODatabase,
+    utxodb: &UtxoDatabase,
     wallets: &Vec<Mutex<Wallet>>,
 ) {
     let m = mempool.lock().unwrap();
@@ -37,7 +37,7 @@ fn mine_whole_mempool(
     ledger_new_txs(txs, mempool, utxodb, wallets);
 }
 
-fn status_check(utxodb: &UTXODatabase, wallets: &Vec<Mutex<Wallet>>) {
+fn status_check(utxodb: &UtxoDatabase, wallets: &Vec<Mutex<Wallet>>) {
     println!(
         "Balance of wallets: {:?}.",
         wallets
@@ -68,8 +68,8 @@ fn wallet_keep_paying() {
     const ITER: usize = 50;
     // initialize all sorts of stuff
     let utxodb_path = std::path::Path::new("/tmp/prism_test_state.rocksdb");
-    let utxodb = UTXODatabase::new(utxodb_path).unwrap();
-    let utxodb = Arc::new(utxodb);
+    let utxodb = UtxoDatabase::new(utxodb_path).unwrap();
+    let utxodb = Arc::new(Mutex::new(utxodb));
 
     let mempool = MemoryPool::new();
     let mempool = Arc::new(Mutex::new(mempool));
