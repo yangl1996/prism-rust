@@ -17,15 +17,15 @@ pub fn get_missing_references(
     let mut missing_blocks = vec![];
 
     // check the voter parent
-    let voter_parent = check_block_exist(content.voter_parent, blockchain, blockdb);
-    if !(voter_parent.0 && voter_parent.1) {
+    let voter_parent = check_block_exist(content.voter_parent, blockdb);
+    if !voter_parent {
         missing_blocks.push(content.voter_parent);
     }
 
     // check the votes
     for prop_hash in content.votes.iter() {
-        let avail = check_block_exist(*prop_hash, blockchain, blockdb);
-        if !(avail.0 && avail.1) {
+        let avail = check_block_exist(*prop_hash, blockdb);
+        if !avail {
             missing_blocks.push(*prop_hash);
         }
     }
@@ -54,9 +54,7 @@ pub fn check_levels_voted(
     // check whether the votes are continuous, and starts at the next unvoted level
     for (index, proposer_vote) in content.votes.iter().enumerate() {
         let voted = blockdb.get(proposer_vote).unwrap().unwrap();
-        let level = blockchain
-            .prop_node_data(&voted.hash())
-            .level as usize;
+        let level = blockchain.proposer_level(&voted.hash()).unwrap() as usize;
         if level != index + 1 + last_voted_level {
             return false;
         }
@@ -84,9 +82,7 @@ fn latest_level_voted_on_chain(
     } else if content.votes.len() > 0 {
         // if this block voted for some blocks, then just return the deepest level among them
         let latest_prop_voted = content.votes.last().unwrap();
-        return blockchain
-            .prop_node_data(latest_prop_voted)
-            .level as usize;
+        return blockchain.proposer_level(latest_prop_voted).unwrap() as usize;
     } else {
         // if this block voted for zero block, then look for its parent
         let parent = blockdb.get(&content.voter_parent).unwrap().unwrap();

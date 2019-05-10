@@ -11,7 +11,7 @@ pub fn check_non_empty(transaction: &Transaction) -> bool {
 pub fn check_input_unspent(transaction: &Transaction, utxodb: &UtxoDatabase) -> bool {
     transaction.input.iter().all(|input| {
         utxodb
-            .check(&CoinId {
+            .contains(&CoinId {
                 hash: input.coin.hash,
                 index: input.coin.index,
             })

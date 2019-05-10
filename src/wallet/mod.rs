@@ -3,7 +3,6 @@ use crate::crypto::sign::{KeyPair, PubKey, Signable};
 use crate::handler;
 use crate::miner::memory_pool::MemoryPool;
 use crate::miner::ContextUpdateSignal;
-use crate::state::{CoinData, UTXO};
 use crate::transaction::{Authorization, CoinId, Input, Output, Transaction, Address};
 use std::collections::HashMap;
 use std::sync::mpsc;
@@ -25,6 +24,11 @@ pub struct Wallet {
     context_update_chan: mpsc::Sender<ContextUpdateSignal>,
     /// Pool of unmined transactions, will add generated transactions to it.
     mempool: Arc<Mutex<MemoryPool>>,
+}
+
+pub struct UTXO {
+    pub coin_id: CoinId,
+    pub coin_data: Output,
 }
 
 #[derive(Debug)]
@@ -197,7 +201,7 @@ impl Wallet {
         let cf = self.handle.cf_handle(COIN_CF).unwrap();
         let mut iter = self.handle.iterator_cf(cf,rocksdb::IteratorMode::Start)?;
         let balance = iter.map(|(_k,v)| {
-            let coin_data: CoinData = bincode::deserialize(v.as_ref()).unwrap();
+            let coin_data: Output = bincode::deserialize(v.as_ref()).unwrap();
             coin_data.value
         }).sum::<u64>();
         Ok(balance)
@@ -212,7 +216,7 @@ impl Wallet {
         // iterate thru our wallet
         for (k, v) in iter {
             let coin_id: CoinId = bincode::deserialize(k.as_ref()).unwrap();
-            let coin_data: CoinData = bincode::deserialize(v.as_ref()).unwrap();
+            let coin_data: Output = bincode::deserialize(v.as_ref()).unwrap();
             value_sum += coin_data.value;
             coins_to_use.push(UTXO {
                 coin_id: coin_id,

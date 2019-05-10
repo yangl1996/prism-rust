@@ -57,8 +57,8 @@ pub fn check_block(
 
     // check whether the parent exists
     let parent = block.header.parent;
-    let parent_availability = check_block_exist(parent, blockchain, blockdb);
-    if !(parent_availability.0 && parent_availability.1) {
+    let parent_availability = check_block_exist(parent, blockdb);
+    if !parent_availability {
         return BlockResult::MissingParent(parent);
     }
 
@@ -125,14 +125,11 @@ pub fn check_block(
     }
 }
 
-/// Check whether a block exists in the blockchain and the block database. The function returns a
-/// tuple, of which the first member being whether the block is in the block database, and the
-/// second one the block chain.
+/// Check whether a block exists in the block database.
 fn check_block_exist(
     hash: H256,
-    blockchain: &BlockChain,
     blockdb: &BlockDatabase,
-) -> (bool, bool) {
+) -> bool {
     let in_db = match blockdb.get(&hash) {
         Err(e) => panic!("Database error {}", e),
         Ok(b) => match b {
@@ -141,7 +138,5 @@ fn check_block_exist(
         },
     };
 
-    let in_blockchain = blockchain.check_node(hash);
-
-    return (in_db, in_blockchain);
+    return in_db;
 }

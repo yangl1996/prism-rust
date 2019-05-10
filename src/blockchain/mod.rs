@@ -785,6 +785,19 @@ impl BlockChain {
         }
         return Ok(list);
     }
+
+    /// Get the level of the proposer block
+    pub fn proposer_level(&self, hash: &H256) -> Result<u64> {
+        let proposer_node_level_cf = self.db.cf_handle(PROPOSER_NODE_LEVEL_CF).unwrap();
+        let level: u64 = deserialize(
+            &self
+                .db
+                .get_cf(proposer_node_level_cf, serialize(&hash).unwrap())?
+                .unwrap(),
+        )
+        .unwrap();
+        return Ok(level);
+    }
 }
 
 fn vote_vec_merge(

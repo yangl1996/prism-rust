@@ -29,6 +29,15 @@ impl UtxoDatabase {
         return Ok(db);
     }
 
+    /// Check whether the given coin is in the UTXO set.
+    pub fn contains(&self, coin: &CoinId) -> Result<bool, rocksdb::Error> {
+        let result = self.db.get(serialize(&coin).unwrap())?;
+        match result {
+            Some(_) => return Ok(true),
+            None => return Ok(false),
+        };
+    }
+
     /// Remove the given transactions, then add another set of transactions.
     pub fn apply_diff(&self, added: &[Transaction], removed: &[Transaction]) -> Result<(), rocksdb::Error> {
         // revert the transactions
