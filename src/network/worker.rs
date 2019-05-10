@@ -5,9 +5,9 @@ use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
 use crate::handler::new_validated_block;
 use crate::miner::memory_pool::MemoryPool;
-use crate::miner::miner::ContextUpdateSignal;
+use crate::miner::ContextUpdateSignal;
 use crate::network::server::Handle as ServerHandle;
-use crate::state::UTXODatabase;
+use crate::utxodb::UtxoDatabase;
 use crate::validation::{check_block, BlockResult};
 use log::{debug, info};
 use std::sync::{mpsc, Arc, Mutex};
@@ -19,7 +19,7 @@ pub struct Context {
     num_worker: usize,
     chain: Arc<Mutex<BlockChain>>,
     blockdb: Arc<BlockDatabase>,
-    utxodb: Arc<UTXODatabase>,
+    utxodb: Arc<UtxoDatabase>,
     mempool: Arc<Mutex<MemoryPool>>,
     context_update_chan: mpsc::Sender<ContextUpdateSignal>,
     server: ServerHandle,
@@ -31,7 +31,7 @@ pub fn new(
     msg_src: mpsc::Receiver<(message::Message, peer::Handle)>,
     blockchain: &Arc<Mutex<BlockChain>>,
     blockdb: &Arc<BlockDatabase>,
-    utxodb: &Arc<UTXODatabase>,
+    utxodb: &Arc<UtxoDatabase>,
     mempool: &Arc<Mutex<MemoryPool>>,
     ctx_update_sink: mpsc::Sender<ContextUpdateSignal>,
     server: ServerHandle,

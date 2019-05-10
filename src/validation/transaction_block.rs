@@ -4,9 +4,9 @@ use bigint::uint::U256;
 use crate::block::Content;
 use std::sync::{Arc, Mutex};
 use super::transaction::*;
-use crate::state::UTXODatabase;
+use crate::utxodb::UtxoDatabase;
 
-fn validate(block: &Block, utxodb: &UTXODatabase) -> BlockResult {
+fn validate(block: &Block, utxodb: &UtxoDatabase) -> BlockResult {
     let content = match &block.content {
         Content::Transaction(content) => content,
         _ => panic!("Wrong type"),

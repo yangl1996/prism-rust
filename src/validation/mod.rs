@@ -5,7 +5,7 @@ use crate::block::{Block, Content};
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
 use crate::crypto::hash::{Hashable, H256};
-use crate::state::UTXODatabase;
+use crate::utxodb::UtxoDatabase;
 
 use std::sync::Mutex;
 
@@ -51,7 +51,7 @@ pub fn check_block(
     block: &Block,
     blockchain: &Mutex<BlockChain>,
     blockdb: &BlockDatabase,
-    utxodb: &UTXODatabase,
+    utxodb: &UtxoDatabase,
 ) -> BlockResult {
     // TODO: check PoW. Where should we get the current difficulty ranges?
 

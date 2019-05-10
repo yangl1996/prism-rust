@@ -2,7 +2,7 @@ use super::blockchain_dump::dump_blockchain;
 use super::ledger_dump::dump_ledger;
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
-use crate::state::UTXODatabase;
+use crate::utxodb::UtxoDatabase;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use tiny_http::Header;
@@ -12,7 +12,7 @@ use tiny_http::Server as HTTPServer;
 pub struct Server {
     blockchain: Arc<Mutex<BlockChain>>,
     blockdb: Arc<BlockDatabase>,
-    utxodb: Arc<UTXODatabase>,
+    utxodb: Arc<UtxoDatabase>,
     handle: HTTPServer,
 }
 
@@ -55,7 +55,7 @@ impl Server {
         addr: std::net::SocketAddr,
         blockchain: Arc<Mutex<BlockChain>>,
         blockdb: Arc<BlockDatabase>,
-        utxodb: Arc<UTXODatabase>,
+        utxodb: Arc<UtxoDatabase>,
     ) {
         let handle = HTTPServer::http(&addr).unwrap();
         let server = Self {

@@ -1,5 +1,5 @@
 use crate::crypto::hash::Hashable;
-use crate::state::UTXODatabase;
+use crate::utxodb::UtxoDatabase;
 use crate::transaction::{CoinId, Transaction};
 
 /// Checks that input and output are non-empty
@@ -8,7 +8,7 @@ pub fn check_non_empty(transaction: &Transaction) -> bool {
 }
 
 /// Checks if all the inputs are unspent
-pub fn check_input_unspent(transaction: &Transaction, utxodb: &UTXODatabase) -> bool {
+pub fn check_input_unspent(transaction: &Transaction, utxodb: &UtxoDatabase) -> bool {
     transaction.input.iter().all(|input| {
         utxodb
             .check(&CoinId {
