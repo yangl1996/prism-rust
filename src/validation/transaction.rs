@@ -23,16 +23,10 @@ pub fn check_input_unspent(transaction: &Transaction, utxodb: &UtxoDatabase) -> 
 pub fn check_sufficient_input(transaction: &Transaction) -> bool {
     let mut input_sum = 0;
     for input in transaction.input.iter() {
-        if input.value < 0 {
-            return false;
-        }
         input_sum += input.value;
     }
     let mut output_sum = 0;
     for output in transaction.output.iter() {
-        if output.value < 0 {
-            return false;
-        }
         output_sum += output.value;
     }
     return input_sum >= output_sum;

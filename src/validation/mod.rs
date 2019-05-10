@@ -7,8 +7,6 @@ use crate::blockdb::BlockDatabase;
 use crate::crypto::hash::{Hashable, H256};
 use crate::utxodb::UtxoDatabase;
 
-use std::sync::Mutex;
-
 /// The result of block validation.
 pub enum BlockResult {
     /// The validation passes.

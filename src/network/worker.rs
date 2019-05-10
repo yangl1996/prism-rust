@@ -174,7 +174,6 @@ impl Context {
                         .send(ContextUpdateSignal::NewContent)
                         .unwrap();
                 }
-                _ => {}
             }
         }
     }

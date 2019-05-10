@@ -4,7 +4,6 @@ use ring::rand;
 use ring::signature::KeyPair as _;
 use ring::signature::{self, Ed25519KeyPair};
 use untrusted;
-use serde::ser::Serialize;
 
 /// An object that can be meaningfully signed and verified.
 pub trait Signable {

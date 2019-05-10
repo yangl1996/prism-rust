@@ -4,13 +4,13 @@ extern crate clap;
 use log::{debug, error, info};
 use prism::blockchain::BlockChain;
 use prism::blockdb::BlockDatabase;
-use prism::config;
 use prism::miner::memory_pool::MemoryPool;
 use prism::utxodb::UtxoDatabase;
 use prism::wallet::Wallet;
+use prism::visualization::Server as VisualizationServer;
 use std::net;
 use std::process;
-use std::sync::{mpsc, Arc};
+use std::sync::Arc;
 
 const DEFAULT_IP: &str = "127.0.0.1";
 const DEFAULT_P2P_PORT: u16 = 6000;
@@ -27,11 +27,13 @@ fn main() {
      (@arg verbose: -v ... "Increases the verbosity of logging")
      (@arg peer_ip: --ip [IP] "Sets the IP address to listen to peers")
      (@arg peer_port: --port [PORT] "Sets the port to listen to peers")
+     (@arg visualization: --visual [ADDR] "Enables the visualization server at the given address and port")
+     (@arg mine: -m --mine "Enables the CPU miner to mine blocks")
      (@arg known_peer: -c --connect ... [PEER] "Sets the peers to connect to")
-     (@arg block_db: --blockdb ... [PATH] "Sets the path of the block database")
-     (@arg utxo_db: --utxodb ... [PATH] "Sets the path of the UTXO database")
-     (@arg blockchain_db: --blockchain ... [PATH] "Sets the path of the blockchain database")
-     (@arg wallet_db: --wallet ... [PATH] "Sets the path of the wallet")
+     (@arg block_db: --blockdb [PATH] "Sets the path of the block database")
+     (@arg utxo_db: --utxodb [PATH] "Sets the path of the UTXO database")
+     (@arg blockchain_db: --blockchain [PATH] "Sets the path of the blockchain database")
+     (@arg wallet_db: --wallet [PATH] "Sets the path of the wallet")
     )
     .get_matches();
 
@@ -71,6 +73,19 @@ fn main() {
     };
     let wallet = Arc::new(wallet);
 
+    // start visualization server
+    match matches.value_of("visualization") {
+        Some(addr) => {
+            let addr = addr.parse::<net::SocketAddr>().unwrap_or_else(|e| {
+                error!("Error parsing visualization server socket address: {}", e);
+                process::exit(1);
+            });
+            info!("Starting visualization server at {}", &addr);
+            VisualizationServer::start(addr, &blockchain, &blockdb, &utxodb);
+        }
+        None => {},
+    }
+
     // parse server ip and port
     let peer_ip = match matches.value_of("peer_ip") {
         Some(ip) => ip.parse::<net::IpAddr>().unwrap_or_else(|e| {
@@ -89,7 +104,7 @@ fn main() {
     let peer_socket_addr = net::SocketAddr::new(peer_ip, peer_port);
 
     // init server and miner
-    debug!("Starting P2P server at {}", peer_socket_addr);
+    info!("Starting P2P server at {}", peer_socket_addr);
     let (server, miner) = prism::start(
         peer_socket_addr,
         &blockdb,
@@ -117,7 +132,10 @@ fn main() {
         }
     }
 
-    miner.start();
+    // start the miner
+    if matches.is_present("mine") {
+        miner.start();
+    }
 
     loop {
         std::thread::park();

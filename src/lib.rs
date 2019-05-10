@@ -16,10 +16,9 @@ pub mod network;
 pub mod utxodb;
 pub mod transaction;
 pub mod validation;
-//pub mod visualization;
+pub mod visualization;
 pub mod wallet;
 
-use crate::crypto::hash::H256;
 use crate::utxodb::UtxoDatabase;
 use blockchain::BlockChain;
 use wallet::Wallet;
