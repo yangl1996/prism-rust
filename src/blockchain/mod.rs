@@ -802,46 +802,140 @@ impl BlockChain {
 
 // Functions to dump the blockchain, only ~ last 100 levels
 impl BlockChain {
-    pub fn print_dump(&self) -> Result<()> {
+    pub fn dump(&self) -> Result<String> {
+        /// Struct to hold blockchain data to be dumped
+        #[derive(Serialize)]
+        struct Dump {
+            edges: Vec<Edge>,
+            proposer_levels: Vec<Vec<String>>,
+            proposer_leaders: HashMap<u64, String>,
+            voter_longest: Vec<String>,
+//            pub transaction_unconfirmed: Vec<String>,
+//            pub transaction_ordered: Vec<String>,
+//            pub transaction_unreferred: Vec<String>,
+            proposer_nodes: HashMap<String, Proposer>,
+            voter_nodes: HashMap<String, Voter>,
+        }
+
+        #[derive(Serialize)]
+        enum EdgeType {
+            VoterToVoterParent,
+            ProposerToProposerParent,
+            VoterToProposerVote,
+        }
+        #[derive(Serialize)]
+        struct Edge {
+            from: String,
+            to: String,
+            edgetype: EdgeType,
+        }
+
+        #[derive(Serialize)]
+        struct Proposer {
+            level: u64,
+            status: ProposerStatus,
+            votes: u16,
+        }
+
+        #[derive(Serialize)]
+        enum ProposerStatus {
+            Leader,
+            Others,//don't know what other status we need for proposer?
+        }
+
+        #[derive(Serialize)]
+        struct Voter {
+            chain: u16,
+            level: u64,
+            status: VoterStatus,
+        }
+
+        #[derive(Serialize)]
+        enum VoterStatus {
+            OnMainChain,
+            Orphan,
+        }
+
         const DUMP_LIMIT: u16 = 100;
         let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
         let proposer_leader_sequence_cf = self.db.cf_handle(PROPOSER_LEADER_SEQUENCE_CF).unwrap();
         let parent_neighbor_cf = self.db.cf_handle(PARENT_NEIGHBOR_CF).unwrap();
+        let proposer_node_vote_cf = self.db.cf_handle(PROPOSER_NODE_VOTE_CF).unwrap();
+        let voter_parent_neighbor_cf = self.db.cf_handle(VOTER_PARENT_NEIGHBOR_CF).unwrap();
 
+        // get voter best blocks and levels, this is from memory
+        let mut voter_longest: Vec<(H256,u64)> = vec![];
+        for (chain_num, voter_chain) in self.voter_best.iter().enumerate() {
+            let longest = voter_chain.lock().unwrap();
+            voter_longest.push((longest.0,longest.1));
+        }
+
+        // get information from db
         let iter = self.db.iterator_cf(proposer_tree_level_cf,rocksdb::IteratorMode::End)?;
 
-        let mut nodes_to_show: HashSet<H256> = HashSet::new();//we only add ~ 100 levels of nodes to this set, and filter out edges not related to this set
+        // only add 100 levels of proposer nodes to this set. add related voter nodes. filter out edges not related to this set
+        let mut nodes_to_show: HashSet<String> = HashSet::new();
+        // compute the lowest level for voter chains related to the 100 levels of proposer nodes
+        let mut voter_lowest: Vec<u64> = vec![0; voter_longest.len()];
+        // memory cache for votes
+        let mut vote_cache: HashMap<(u16,u64),H256> = HashMap::new();
+
         let mut proposer_tree: HashMap<u64, Vec<H256>> = HashMap::new();
+        let mut edges: Vec<Edge> = vec![];
+        let mut proposer_nodes: HashMap<String, Proposer> = HashMap::new();
+        let mut voter_nodes: HashMap<String, Voter> = HashMap::new();
+        let mut proposer_leaders: HashMap<u64, String> = HashMap::new();
+
+        // proposer tree
         let mut cnt = 0u16;
         for (k, v) in iter {
             let level: u64 = deserialize(&k).unwrap();
             let blocks: Vec<H256> = deserialize(&v).unwrap();
-            nodes_to_show.extend(blocks.iter());
-            //let blocks: Vec<String> = blocks.iter().map(|h256|h256.to_string()).collect();
+//            let blocks_string: Vec<String> = blocks.iter().map(|h256|h256.to_string()).collect();
+            blocks.iter().for_each(|h256|{nodes_to_show.insert(h256.to_string());});
             proposer_tree.insert(level, blocks);
             cnt+=1;
             if cnt > DUMP_LIMIT {break;}
         }
 
-        let mut proposer_leader: HashMap<u64, String> = HashMap::new();
-        for level in proposer_tree.keys() {
-            match self.db.get_cf(proposer_leader_sequence_cf, serialize(level).unwrap())? {
-                Some(d) => {
-                    let h256: H256 = deserialize(&d).unwrap();
-                    proposer_leader.insert(*level, h256.to_string());
-                }
-                None => {}
-            }
-        }
-
-        let mut parent_neighbor: HashMap<String, String> = HashMap::new();
-        for blocks in proposer_tree.values() {
+        // one pass of proposer. get proposer node info, cache votes.
+        for (level, blocks) in proposer_tree.iter() {
             for block in blocks {
+                // get parent edges
                 match self.db.get_cf(parent_neighbor_cf, serialize(block).unwrap())? {
                     Some(d) => {
                         let parent: H256 = deserialize(&d).unwrap();
-                        if nodes_to_show.contains(&parent) {
-                            parent_neighbor.insert(block.to_string(), parent.to_string());
+                        edges.push(
+                            Edge {
+                                from: block.to_string(),
+                                to: parent.to_string(),
+                                edgetype: EdgeType::ProposerToProposerParent,
+                            });
+                    }
+                    None => {}
+                }
+                // get proposer node info
+                match self.db.get_cf(proposer_node_vote_cf, serialize(block).unwrap())? {
+                    Some(d) => {
+                        let votes: Vec<(u16, u64)> = deserialize(&d).unwrap();
+                        proposer_nodes.insert(block.to_string(),
+                                              Proposer {
+                                                  level: *level,
+                                                  status: ProposerStatus::Others,
+                                                  votes: votes.len() as u16,
+                                              });
+
+                        // get voter edges
+                        for (chain_num, level) in &votes {
+                            if let Some(lowest) = voter_lowest.get_mut(*chain_num as usize) {
+                                if *lowest > *level {
+                                    *lowest = *level;
+                                }
+                            } else {
+                                unreachable!();
+                            }
+                            // cache the votes
+                            vote_cache.insert((*chain_num, *level), *block);
                         }
                     }
                     None => {}
@@ -849,13 +943,79 @@ impl BlockChain {
             }
         }
 
-        let mut proposer_tree_string: HashMap<u64, Vec<String>> = proposer_tree.into_iter()
-            .map(|(k,v)|(k,v.into_iter().map(|h256|h256.to_string()).collect())).collect();
-        println!("nodes_to_show {:?}", nodes_to_show);
-        println!("proposer_tree {:?}", proposer_tree_string);
-        println!("proposer_leader {:?}", proposer_leader);
-        println!("parent_neighbor {:?}", parent_neighbor);
-        Ok(())
+        // one pass of votes. get voter info, voter parent, and vote edges. notice the votes are cached
+        for (chain_num, longest) in voter_longest.iter().enumerate() {
+            let mut voter_block = longest.0;
+            let mut level = longest.1;
+            let lowest = voter_lowest[chain_num];
+            while level >= lowest {
+                nodes_to_show.insert(voter_block.to_string());
+                // voter info
+                voter_nodes.insert(voter_block.to_string(),
+                                   Voter {
+                                       chain: chain_num as u16,
+                                       level: level,
+                                       status: VoterStatus::OnMainChain,
+                                   });
+                // vote edges
+                edges.push(
+                    Edge {
+                        from: voter_block.to_string(),
+                        to: vote_cache[&(chain_num as u16, level)].to_string(),
+                        edgetype: EdgeType::VoterToProposerVote,
+                    });
+                // voter parent
+                match self.db.get_cf(voter_parent_neighbor_cf, serialize(&voter_block).unwrap())? {
+                    Some(d) => {
+                        let parent: H256 = deserialize(&d).unwrap();
+                        edges.push(
+                            Edge {
+                                from: voter_block.to_string(),
+                                to: parent.to_string(),
+                                edgetype: EdgeType::VoterToVoterParent,
+                            });
+                        voter_block = parent;
+                        level -= 1;
+                    }
+                    None => {
+                        break;// if no parent, must break the while loop
+                    }
+                }
+            }
+        }
+
+        // proposer leader
+        for level in proposer_tree.keys() {
+            match self.db.get_cf(proposer_leader_sequence_cf, serialize(level).unwrap())? {
+                Some(d) => {
+                    let h256: H256 = deserialize(&d).unwrap();
+                    proposer_leaders.insert(*level, h256.to_string());
+                    if let Some(proposer) = proposer_nodes.get_mut(&h256.to_string()) {
+                        proposer.status = ProposerStatus::Leader;
+                    }
+                }
+                None => {}
+            }
+        }
+
+//        let mut proposer_tree_string: HashMap<u64, Vec<String>> = proposer_tree.into_iter()
+//            .map(|(k,v)|(k,v.into_iter().map(|h256|h256.to_string()).collect())).collect();
+        let proposer_levels: Vec<Vec<String>> = proposer_tree.into_iter()
+            .map(|(k,v)|v.into_iter().map(|h256|h256.to_string()).collect()).collect();
+        let voter_longest: Vec<String> = voter_longest.into_iter().map(|(h,u)|h.to_string()).collect();
+        // filter the edges for nodes_to_show
+        let edges: Vec<Edge> = edges.into_iter().filter(|e|nodes_to_show.contains(&e.from) && nodes_to_show.contains(&e.to)).collect();
+
+        let dump = Dump {
+            edges,
+            proposer_levels,
+            proposer_leaders,
+            voter_longest,
+            proposer_nodes,
+            voter_nodes,
+        };
+
+        Ok(serde_json::to_string_pretty(&dump).unwrap())
     }
 
 }
@@ -1781,6 +1941,6 @@ mod tests {
             H256::default(),
         );
         db.insert_block(&new_voter_block).unwrap();
-        db.print_dump();
+        println!("{}",db.dump().unwrap());
     }
 }

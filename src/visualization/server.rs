@@ -1,8 +1,7 @@
-use super::blockchain_dump::dump_blockchain;
-use super::ledger_dump::dump_ledger;
+//use super::ledger_dump::dump_ledger;
 use crate::blockchain::BlockChain;
-use crate::blockdb::BlockDatabase;
-use crate::utxodb::UtxoDatabase;
+//use crate::blockdb::BlockDatabase;
+//use crate::utxodb::UtxoDatabase;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use tiny_http::Header;
@@ -11,8 +10,8 @@ use tiny_http::Server as HTTPServer;
 
 pub struct Server {
     blockchain: Arc<BlockChain>,
-    blockdb: Arc<BlockDatabase>,
-    utxodb: Arc<UtxoDatabase>,
+//    blockdb: Arc<BlockDatabase>,
+//    utxodb: Arc<UtxoDatabase>,
     handle: HTTPServer,
 }
 
@@ -54,34 +53,37 @@ impl Server {
     pub fn start(
         addr: std::net::SocketAddr,
         blockchain: Arc<BlockChain>,
-        blockdb: Arc<BlockDatabase>,
-        utxodb: Arc<UtxoDatabase>,
+//        blockdb: Arc<BlockDatabase>,
+//        utxodb: Arc<UtxoDatabase>,
     ) {
         let handle = HTTPServer::http(&addr).unwrap();
         let server = Self {
             blockchain,
-            blockdb,
-            utxodb,
+//            blockdb,
+//            utxodb,
             handle,
         };
         thread::spawn(move || {
             for req in server.handle.incoming_requests() {
                 let blockchain = Arc::clone(&server.blockchain);
-                let blockdb = Arc::clone(&server.blockdb);
-                let utxodb = Arc::clone(&server.utxodb);
+//                let blockdb = Arc::clone(&server.blockdb);
+//                let utxodb = Arc::clone(&server.utxodb);
                 thread::spawn(move || match req.url().trim_start_matches("/") {
                     "blockchain.json" => serve_dynamic_file!(
                         req,
-                        dump_blockchain(&blockchain.lock().unwrap()),
+                        match blockchain.dump() {
+                            Ok(dump) => dump,
+                            Err(_) => "Blockchain Dump error".to_string(),
+                        },
                         "application/json",
                         addr
                     ),
-                    "ledger.json" => serve_dynamic_file!(
-                        req,
-                        dump_ledger(&blockchain.lock().unwrap(), &blockdb, &utxodb),
-                        "application/json",
-                        addr
-                    ),
+//                    "ledger.json" => serve_dynamic_file!(
+//                        req,
+//                        dump_ledger(&blockchain.lock().unwrap(), &blockdb, &utxodb),
+//                        "application/json",
+//                        addr
+//                    ),
                     "cytoscape.min.js" => {
                         serve_static_file!(req, "cytoscape.js", "application/javascript")
                     }
@@ -104,15 +106,15 @@ impl Server {
                         "text/html",
                         addr
                     ),
-                    "ledger_vis.js" => serve_dynamic_file!(
-                        req,
-                        include_str!("ledger_vis.js"),
-                        "application/javascript",
-                        addr
-                    ),
-                    "visualize-ledger" => {
-                        serve_dynamic_file!(req, include_str!("ledger_vis.html"), "text/html", addr)
-                    }
+//                    "ledger_vis.js" => serve_dynamic_file!(
+//                        req,
+//                        include_str!("ledger_vis.js"),
+//                        "application/javascript",
+//                        addr
+//                    ),
+//                    "visualize-ledger" => {
+//                        serve_dynamic_file!(req, include_str!("ledger_vis.html"), "text/html", addr)
+//                    }
                     "" => serve_dynamic_file!(req, include_str!("index.html"), "text/html", addr),
                     _ => {
                         let content_type = "Content-Type: text/html".parse::<Header>().unwrap();
