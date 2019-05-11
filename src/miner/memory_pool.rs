@@ -59,7 +59,7 @@ impl MemoryPool {
         self.by_hash.insert(hash, entry);
     }
 
-    fn get(&self, h: &H256) -> Option<&Entry> {
+    pub fn get(&self, h: &H256) -> Option<&Entry> {
         let entry = self.by_hash.get(h)?;
         return Some(entry);
     }

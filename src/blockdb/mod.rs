@@ -35,15 +35,14 @@ impl BlockDatabase {
         // insert proposer genesis block
         let proposer_genesis_hash_u8: [u8; 32] = (*PROPOSER_GENESIS_HASH).into();
         db.handle.put(
-            &proposer_genesis_hash_u8,
+            &(*PROPOSER_GENESIS_HASH),
             &serialize(&proposer_genesis()).unwrap(),
         )?;
 
         // insert voter genesis blocks
         for i in 0..NUM_VOTER_CHAINS {
-            let voter_genesis_hash_u8: [u8; 32] = VOTER_GENESIS_HASHES[i as usize].into();
             db.handle.put(
-                &voter_genesis_hash_u8,
+                &VOTER_GENESIS_HASHES[i as usize],
                 &serialize(&voter_genesis(i as u16)).unwrap(),
             )?;
         }

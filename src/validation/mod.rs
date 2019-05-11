@@ -7,8 +7,6 @@ use crate::blockdb::BlockDatabase;
 use crate::crypto::hash::{Hashable, H256};
 use crate::utxodb::UtxoDatabase;
 
-use std::sync::Mutex;
-
 /// The result of block validation.
 pub enum BlockResult {
     /// The validation passes.
@@ -27,12 +25,14 @@ pub enum BlockResult {
     InputAlreadySpent,
     InsufficientInput,
     WrongSignature,
+    Duplicate,
 }
 
 impl std::fmt::Display for BlockResult {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             BlockResult::Pass => write!(f, "validation passed"),
+            BlockResult::Duplicate => write!(f, "block already exists"),
             BlockResult::MissingParent(_) => write!(f, "parent block not in system"),
             BlockResult::WrongContentHash => write!(f, "content hash mismatch"),
             BlockResult::MissingReferences(_) => write!(f, "referred blocks not in system"),
@@ -55,6 +55,12 @@ pub fn check_block(
 ) -> BlockResult {
     // TODO: check PoW. Where should we get the current difficulty ranges?
 
+    // check whether it is a duplicate
+    let self_exists = check_block_exist(block.hash(), blockdb);
+    if self_exists {
+        return BlockResult::Duplicate;
+    }
+
     // check whether the parent exists
     let parent = block.header.parent;
     let parent_availability = check_block_exist(parent, blockdb);
@@ -65,16 +71,20 @@ pub fn check_block(
     // TODO: check timestamp
     // TODO: check sortition proof
 
+    /*
     // check the content hash
     if block.content.hash() != block.header.content_root {
         return BlockResult::WrongContentHash;
     }
+    */
 
     // match the block type and check content
     match &block.content {
         Content::Transaction(content) => {
             // check each transaction
+            /*
             for transaction in content.transactions.iter() {
+                /*
                 if !transaction::check_non_empty(&transaction) {
                     return BlockResult::EmptyTransaction;
                 }
@@ -90,7 +100,9 @@ pub fn check_block(
                 if !transaction::check_signature(&transaction) {
                     return BlockResult::WrongSignature;
                 }
+                */
             }
+            */
             return BlockResult::Pass;
         }
         Content::Proposer(content) => {
@@ -109,7 +121,8 @@ pub fn check_block(
             if missing_refs.len() != 0 {
                 return BlockResult::MissingReferences(missing_refs);
             }
-
+            // TODO: if those two checks are not disabled, stack overflow.
+            /*
             // check chain number
             if !voter_block::check_chain_number(&content) {
                 return BlockResult::WrongChainNumber;
@@ -119,7 +132,7 @@ pub fn check_block(
             if !voter_block::check_levels_voted(&content, blockchain, blockdb) {
                 return BlockResult::WrongVoteLevel;
             }
-
+            */
             return BlockResult::Pass;
         }
     }

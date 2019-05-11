@@ -12,7 +12,7 @@ use crate::crypto::merkle::MerkleTree;
 use crate::handler::new_validated_block;
 use crate::network::server::Handle as ServerHandle;
 use crate::wallet::Wallet;
-use log::info;
+use log::{info, debug};
 
 use memory_pool::MemoryPool;
 use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
@@ -126,12 +126,12 @@ impl Handle {
 
 impl Context {
     pub fn start(mut self) {
-        println!("Miner started");
+        info!("Miner initialized and paused");
         thread::Builder::new()
             .name("miner".to_string())
             .spawn(move || {
                 self.miner_loop();
-            });
+            }).unwrap();
     }
 
     fn handle_control_signal(&mut self, signal: ControlSignal) {
@@ -212,7 +212,7 @@ impl Context {
                 }
                 // Release block to the network
                 new_validated_block(
-                    mined_block,
+                    &mined_block,
                     &self.tx_mempool,
                     &self.db,
                     &self.blockchain,
@@ -220,7 +220,7 @@ impl Context {
                     &self.utxodb,
                     &self.wallet,
                 );
-                info!("Mined one block");
+                debug!("Mined one block");
                 // TODO: Only update block contents if relevant parent
                 self.update_context();
                 header = self.create_header();

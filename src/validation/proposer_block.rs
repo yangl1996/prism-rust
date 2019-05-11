@@ -3,7 +3,6 @@ use crate::block::proposer::Content;
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
 use crate::crypto::hash::H256;
-use std::sync::Mutex;
 
 pub fn get_missing_references(
     content: &Content,
