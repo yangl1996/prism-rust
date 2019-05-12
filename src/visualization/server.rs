@@ -63,14 +63,12 @@ impl Server {
             utxodb: Arc::clone(utxodb),
             handle: handle,
         };
-        thread::Builder::new().name("visualization server".to_string())
-            .spawn(move || {
+        thread::spawn(move || {
                 for req in server.handle.incoming_requests() {
                     let blockchain = Arc::clone(&server.blockchain);
                     let blockdb = Arc::clone(&server.blockdb);
                     let utxodb = Arc::clone(&server.utxodb);
-                    thread::Builder::new().name("visualization server working".to_string())
-                        .spawn(move || match req.url().trim_start_matches("/") {
+                    thread::spawn(move || match req.url().trim_start_matches("/") {
                             "blockchain.json" => serve_dynamic_file!(
                         req,
                         match blockchain.dump() {
