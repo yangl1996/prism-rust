@@ -827,11 +827,12 @@ impl BlockChain {
             proposer_levels: Vec<Vec<String>>,
             proposer_leaders: HashMap<u64, String>,
             voter_longest: Vec<String>,
-//            pub transaction_unconfirmed: Vec<String>,
-//            pub transaction_ordered: Vec<String>,
-//            pub transaction_unreferred: Vec<String>,
             proposer_nodes: HashMap<String, Proposer>,
             voter_nodes: HashMap<String, Voter>,
+            //pub transaction_unconfirmed: Vec<String>, //what is the definition of this?
+            transaction_in_ledger: Vec<String>,
+            transaction_unreferred: Vec<String>,
+            proposer_in_ledger: Vec<String>,
         }
 
         #[derive(Serialize)]
@@ -865,6 +866,7 @@ impl BlockChain {
             chain: u16,
             level: u64,
             status: VoterStatus,
+            deepest_vote_level: u64
         }
 
         #[derive(Serialize)]
@@ -873,12 +875,21 @@ impl BlockChain {
             Orphan,
         }
 
-
         let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
         let proposer_leader_sequence_cf = self.db.cf_handle(PROPOSER_LEADER_SEQUENCE_CF).unwrap();
         let parent_neighbor_cf = self.db.cf_handle(PARENT_NEIGHBOR_CF).unwrap();
         let proposer_node_vote_cf = self.db.cf_handle(PROPOSER_NODE_VOTE_CF).unwrap();
         let voter_parent_neighbor_cf = self.db.cf_handle(VOTER_PARENT_NEIGHBOR_CF).unwrap();
+        let voter_node_voted_level_cf = self.db.cf_handle(VOTER_NODE_VOTED_LEVEL_CF).unwrap();
+        let proposer_ledger_order_cf = self.db.cf_handle(PROPOSER_LEDGER_ORDER_CF).unwrap();
+        let transaction_ref_neighbor_cf = self.db.cf_handle(TRANSACTION_REF_NEIGHBOR_CF).unwrap();
+
+        // get the ledger tip and bottom, for processing ledger
+        let mut ledger_tip_ = self.ledger_tip.lock().unwrap();
+        let ledger_tip = *ledger_tip_;
+        drop(ledger_tip_);
+        let mut ledger_bottom = 0u64;
+
 
         // for computing the lowest level for voter chains related to the 100 levels of proposer nodes
         let mut voter_lowest: Vec<u64> = vec![];
@@ -903,6 +914,8 @@ impl BlockChain {
         let mut proposer_nodes: HashMap<String, Proposer> = HashMap::new();
         let mut voter_nodes: HashMap<String, Voter> = HashMap::new();
         let mut proposer_leaders: HashMap<u64, String> = HashMap::new();
+        let mut proposer_in_ledger: Vec<H256> = vec![];
+        let mut transaction_in_ledger: Vec<String> = vec![];
 
         // proposer tree
         let mut cnt = 0u16;
@@ -913,7 +926,10 @@ impl BlockChain {
             blocks.iter().for_each(|h256|{nodes_to_show.insert(h256.to_string());});
             proposer_tree.insert(level, blocks);
             cnt+=1;
-            if cnt > limit {break;}
+            if cnt > limit {
+                ledger_bottom = level;
+                break;
+            }
         }
 
         // one pass of proposer. get proposer node info, cache votes.
@@ -974,11 +990,19 @@ impl BlockChain {
                 while level >= *lowest {
                     nodes_to_show.insert(voter_block.to_string());
                     // voter info
+                    let deepest_vote_level: u64 = match self.db.get_cf(
+                        voter_node_voted_level_cf,
+                        serialize(&voter_block).unwrap(),
+                    )? {
+                        Some(d) => deserialize(&d).unwrap(),
+                        _ => unreachable!("voter block should have voted level in database")
+                    };
                     voter_nodes.insert(voter_block.to_string(),
                                        Voter {
                                            chain: chain_num as u16,
-                                           level: level,
+                                           level,
                                            status: VoterStatus::OnMainChain,
+                                           deepest_vote_level,
                                        });
                     // vote edges
                     if let Some(votes) = vote_cache.get(&(chain_num as u16, level)) {
@@ -1026,11 +1050,36 @@ impl BlockChain {
             }
         }
 
-//        let mut proposer_tree_string: HashMap<u64, Vec<String>> = proposer_tree.into_iter()
-//            .map(|(k,v)|(k,v.into_iter().map(|h256|h256.to_string()).collect())).collect();
+        // ledger
+        for level in ledger_bottom..=ledger_tip {
+            match self.db.get_cf(proposer_ledger_order_cf, serialize(&(level as u64)).unwrap())? {
+                None => {},
+                Some(d) => {
+                    let mut blocks: Vec<H256> = deserialize(&d).unwrap();
+                    proposer_in_ledger.append(&mut blocks);
+                }
+            }
+        }
+
+        for hash in &proposer_in_ledger {
+            match self.db.get_cf(transaction_ref_neighbor_cf, serialize(&hash).unwrap())? {
+                None => {},
+                Some(d) => {
+                    let mut blocks: Vec<H256> = deserialize(&d).unwrap();
+                    let mut blocks = blocks.into_iter().map(|h|h.to_string()).collect();
+                    transaction_in_ledger.append(&mut blocks);
+                }
+            }
+        }
+
+        let transaction_unreferred_ = self.unreferred_transaction.lock().unwrap();
+        let transaction_unreferred: Vec<String> = transaction_unreferred_.iter().map(|h|h.to_string()).collect();
+        drop(transaction_unreferred_);
+
         let proposer_levels: Vec<Vec<String>> = proposer_tree.into_iter()
             .map(|(k,v)|v.into_iter().map(|h256|h256.to_string()).collect()).collect();
         let voter_longest: Vec<String> = voter_longest.into_iter().map(|(h,u)|h.to_string()).collect();
+        let proposer_in_ledger: Vec<String> = proposer_in_ledger.into_iter().map(|h|h.to_string()).collect();
         // filter the edges for nodes_to_show
         let edges: Vec<Edge> = edges.into_iter().filter(|e|nodes_to_show.contains(&e.from) && nodes_to_show.contains(&e.to)).collect();
 
@@ -1041,6 +1090,9 @@ impl BlockChain {
             voter_longest,
             proposer_nodes,
             voter_nodes,
+            proposer_in_ledger,
+            transaction_in_ledger,
+            transaction_unreferred,
         };
 
         Ok(serde_json::to_string_pretty(&dump).unwrap())
