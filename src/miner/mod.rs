@@ -208,6 +208,11 @@ impl Context {
                             continue;
                         }
                     }
+                    Content::Voter(content) => {
+                        if content.votes.is_empty() {
+                            continue;
+                        }
+                    }
                     _ => (),
                 }
                 // Release block to the network

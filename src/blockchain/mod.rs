@@ -856,12 +856,7 @@ impl BlockChain {
             Orphan,
         }
 
-        const DUMP_LIMIT: u16 = 10;
-        if self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).is_none() {panic!("No such CF!");}
-        if self.db.cf_handle(PROPOSER_LEADER_SEQUENCE_CF).is_none() {panic!("No such CF!");}
-        if self.db.cf_handle(PARENT_NEIGHBOR_CF).is_none() {panic!("No such CF!");}
-        if self.db.cf_handle(PROPOSER_NODE_VOTE_CF).is_none() {panic!("No such CF!");}
-        if self.db.cf_handle(VOTER_PARENT_NEIGHBOR_CF).is_none() {panic!("No such CF!");}
+        const DUMP_LIMIT: u16 = 100;
         let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
         let proposer_leader_sequence_cf = self.db.cf_handle(PROPOSER_LEADER_SEQUENCE_CF).unwrap();
         let parent_neighbor_cf = self.db.cf_handle(PARENT_NEIGHBOR_CF).unwrap();
@@ -886,8 +881,8 @@ impl BlockChain {
         // memory cache for votes
         let mut vote_cache: HashMap<(u16,u64),Vec<H256>> = HashMap::new();
 
-        let mut proposer_tree: HashMap<u64, Vec<H256>> = HashMap::new();
         let mut edges: Vec<Edge> = vec![];
+        let mut proposer_tree: HashMap<u64, Vec<H256>> = HashMap::new();
         let mut proposer_nodes: HashMap<String, Proposer> = HashMap::new();
         let mut voter_nodes: HashMap<String, Voter> = HashMap::new();
         let mut proposer_leaders: HashMap<u64, String> = HashMap::new();
@@ -954,46 +949,47 @@ impl BlockChain {
             }
         }
 
-        // one pass of votes. get voter info, voter parent, and vote edges. notice the votes are cached
+        // one pass of voters. get voter info, voter parent, and vote edges. notice the votes are cached
         for (chain_num, longest) in voter_longest.iter().enumerate() {
             let mut voter_block = longest.0;
             let mut level = longest.1;
-            let lowest = voter_lowest[chain_num];
-            while level >= lowest {
-                nodes_to_show.insert(voter_block.to_string());
-                // voter info
-                voter_nodes.insert(voter_block.to_string(),
-                                   Voter {
-                                       chain: chain_num as u16,
-                                       level: level,
-                                       status: VoterStatus::OnMainChain,
-                                   });
-                // vote edges
-                if let Some(votes) = vote_cache.get(&(chain_num as u16, level)) {
-                    for vote in votes {
-                        edges.push(
-                            Edge {
-                                from: voter_block.to_string(),
-                                to: vote.to_string(),
-                                edgetype: EdgeType::VoterToProposerVote,
-                            });
+            if let Some(lowest) = voter_lowest.get(chain_num) {
+                while level >= *lowest {
+                    nodes_to_show.insert(voter_block.to_string());
+                    // voter info
+                    voter_nodes.insert(voter_block.to_string(),
+                                       Voter {
+                                           chain: chain_num as u16,
+                                           level: level,
+                                           status: VoterStatus::OnMainChain,
+                                       });
+                    // vote edges
+                    if let Some(votes) = vote_cache.get(&(chain_num as u16, level)) {
+                        for vote in votes {
+                            edges.push(
+                                Edge {
+                                    from: voter_block.to_string(),
+                                    to: vote.to_string(),
+                                    edgetype: EdgeType::VoterToProposerVote,
+                                });
+                        }
                     }
-                }
-                // voter parent
-                match self.db.get_cf(voter_parent_neighbor_cf, serialize(&voter_block).unwrap())? {
-                    Some(d) => {
-                        let parent: H256 = deserialize(&d).unwrap();
-                        edges.push(
-                            Edge {
-                                from: voter_block.to_string(),
-                                to: parent.to_string(),
-                                edgetype: EdgeType::VoterToVoterParent,
-                            });
-                        voter_block = parent;
-                        level -= 1;
-                    }
-                    None => {
-                        break;// if no parent, must break the while loop
+                    // voter parent
+                    match self.db.get_cf(voter_parent_neighbor_cf, serialize(&voter_block).unwrap())? {
+                        Some(d) => {
+                            let parent: H256 = deserialize(&d).unwrap();
+                            edges.push(
+                                Edge {
+                                    from: voter_block.to_string(),
+                                    to: parent.to_string(),
+                                    edgetype: EdgeType::VoterToVoterParent,
+                                });
+                            voter_block = parent;
+                            level -= 1;
+                        }
+                        None => {
+                            break;// if no parent, must break the while loop
+                        }
                     }
                 }
             }
