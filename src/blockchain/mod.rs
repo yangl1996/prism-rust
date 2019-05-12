@@ -371,7 +371,7 @@ impl BlockChain {
                     serialize(&block_hash).unwrap(),
                     serialize(&content.votes).unwrap(),
                 )?;
-                let mut deepest_voted_level = 0;
+                let mut deepest_voted_level: Option<u64> = None;
                 for vote_hash in &content.votes {
                     let voted_level: u64 = deserialize(
                         &self
@@ -380,10 +380,27 @@ impl BlockChain {
                             .unwrap(),
                     )
                     .unwrap();
-                    if voted_level > deepest_voted_level {
-                        deepest_voted_level = voted_level;
+                    if let Some(level) = deepest_voted_level {
+                        if voted_level > level {
+                            deepest_voted_level = Some(voted_level);
+                        }
+                    } else {
+                        deepest_voted_level = Some(voted_level);
                     }
                 }
+                let deepest_voted_level: u64 = match deepest_voted_level {
+                    Some(level) => level,
+                    None => {
+                        // This branch means this voter has 0 votes, so have to ask its parent about the voted level
+                        match self.db.get_cf(
+                            voter_node_voted_level_cf,
+                            serialize(&voter_parent_hash).unwrap(),
+                        )? {
+                            Some(d) => deserialize(&d).unwrap(),
+                            _ => unreachable!("parent voter block should have voted level in database")
+                        }
+                    }
+                };
                 wb.put_cf(
                     voter_node_voted_level_cf,
                     serialize(&block_hash).unwrap(),
@@ -800,9 +817,9 @@ impl BlockChain {
     }
 }
 
-// Functions to dump the blockchain, only ~ last 100 levels
+// Functions to dump the blockchain, limit the number of levels of proposer (start from the tip)
 impl BlockChain {
-    pub fn dump(&self) -> Result<String> {
+    pub fn dump(&self, limit: u16) -> Result<String> {
         /// Struct to hold blockchain data to be dumped
         #[derive(Serialize)]
         struct Dump {
@@ -840,7 +857,7 @@ impl BlockChain {
         #[derive(Serialize)]
         enum ProposerStatus {
             Leader,
-            Others,//don't know what other status we need for proposer?
+            Others,//don't know what other status we need for proposer? like unconfirmed? unreferred?
         }
 
         #[derive(Serialize)]
@@ -856,7 +873,7 @@ impl BlockChain {
             Orphan,
         }
 
-        const DUMP_LIMIT: u16 = 100;
+
         let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
         let proposer_leader_sequence_cf = self.db.cf_handle(PROPOSER_LEADER_SEQUENCE_CF).unwrap();
         let parent_neighbor_cf = self.db.cf_handle(PARENT_NEIGHBOR_CF).unwrap();
@@ -896,7 +913,7 @@ impl BlockChain {
             blocks.iter().for_each(|h256|{nodes_to_show.insert(h256.to_string());});
             proposer_tree.insert(level, blocks);
             cnt+=1;
-            if cnt > DUMP_LIMIT {break;}
+            if cnt > limit {break;}
         }
 
         // one pass of proposer. get proposer node info, cache votes.
@@ -1952,6 +1969,6 @@ mod tests {
             H256::default(),
         );
         db.insert_block(&new_voter_block).unwrap();
-        println!("{}",db.dump().unwrap());
+        println!("{}",db.dump(100).unwrap());
     }
 }

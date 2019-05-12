@@ -71,7 +71,7 @@ impl Server {
                     thread::spawn(move || match req.url().trim_start_matches("/") {
                             "blockchain.json" => serve_dynamic_file!(
                         req,
-                        match blockchain.dump() {
+                        match blockchain.dump(100) {
                             Ok(dump) => dump,
                             Err(_) => "Blockchain Dump error".to_string(),
                         },
@@ -126,8 +126,8 @@ impl Server {
                                     Err(_) => {}//do something?
                                 }
                             }
-                        }).unwrap();
+                        });
                 }
-            }).unwrap();
+            });
     }
 }
