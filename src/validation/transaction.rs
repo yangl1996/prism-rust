@@ -1,8 +1,6 @@
-
 use crate::crypto::hash::Hashable;
-use crate::state::{CoinId, UTXODatabase};
-use crate::transaction::Transaction;
-
+use crate::utxodb::UtxoDatabase;
+use crate::transaction::{CoinId, Transaction};
 
 /// Checks that input and output are non-empty
 pub fn check_non_empty(transaction: &Transaction) -> bool {
@@ -10,12 +8,12 @@ pub fn check_non_empty(transaction: &Transaction) -> bool {
 }
 
 /// Checks if all the inputs are unspent
-pub fn check_input_unspent(transaction: &Transaction, utxodb: &UTXODatabase) -> bool {
+pub fn check_input_unspent(transaction: &Transaction, utxodb: &UtxoDatabase) -> bool {
     transaction.input.iter().all(|input| {
         utxodb
-            .check(&CoinId {
-                hash: input.hash,
-                index: input.index,
+            .contains(&CoinId {
+                hash: input.coin.hash,
+                index: input.coin.index,
             })
             .unwrap()
     })
@@ -25,16 +23,10 @@ pub fn check_input_unspent(transaction: &Transaction, utxodb: &UTXODatabase) -> 
 pub fn check_sufficient_input(transaction: &Transaction) -> bool {
     let mut input_sum = 0;
     for input in transaction.input.iter() {
-        if input.value < 0 {
-            return false;
-        }
         input_sum += input.value;
     }
     let mut output_sum = 0;
     for output in transaction.output.iter() {
-        if output.value < 0 {
-            return false;
-        }
         output_sum += output.value;
     }
     return input_sum >= output_sum;
@@ -43,15 +35,15 @@ pub fn check_sufficient_input(transaction: &Transaction) -> bool {
 pub fn check_signature(transaction: &Transaction) -> bool {
     // TODO: get a set of unique addresses
     // Checking if the number of signatures are same as number of inputs
-    if transaction.input.len() != transaction.signatures.len() {
+    if transaction.input.len() != transaction.authorization.len() {
         return false;
     }
 
     //Checking if the recepient hash = signature pubkey hash
     for index in 0..transaction.input.len() {
         let input = &transaction.input[index];
-        let signature = &transaction.signatures[index];
-        if input.recipient != signature.pubkey.hash() {
+        let signature = &transaction.authorization[index];
+        if input.owner != signature.pubkey.hash() {
             return false;
         }
     }
@@ -60,11 +52,11 @@ pub fn check_signature(transaction: &Transaction) -> bool {
     let unsigned_transaction = Transaction {
         input: transaction.input.clone(),
         output: transaction.output.clone(),
-        signatures: vec![],
+        authorization: vec![],
     };
     let msg = bincode::serialize(&unsigned_transaction).unwrap();
     transaction
-        .signatures
+        .authorization
         .iter()
         .all(|signature| signature.pubkey.verify(&msg, &signature.signature))
 }

@@ -1,117 +1,207 @@
 use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::sign::{KeyPair, PubKey, Signable};
 use crate::handler;
-use crate::miner::memory_pool::MemoryPool;
-use crate::miner::miner::ContextUpdateSignal;
-use crate::state::{CoinData, CoinId, UTXO};
-use crate::transaction::{Input, Output, PubkeyAndSignature, Transaction};
-use std::collections::{HashMap};
-use std::sync::mpsc;
+use crate::transaction::{Authorization, CoinId, Input, Output, Transaction, Address};
 use std::sync::{Arc, Mutex};
+use std::{fmt, error};
+use bincode::{deserialize, serialize};
+
+pub const COIN_CF: &str = "COIN";
+pub const KEYPAIR_CF: &str = "KEYPAIR";
 
 pub type Result<T> = std::result::Result<T, WalletError>;
 
 /// A data structure to maintain key pairs and their coins, and to generate transactions.
 pub struct Wallet {
-    /// List of coins which can be spent
-    coins: HashMap<CoinId, CoinData>,
-    /// List of user keys
-    keypairs: HashMap<H256, KeyPair>,
-    /// Channel to notify the miner about context update
-    context_update_chan: mpsc::Sender<ContextUpdateSignal>,
-    /// Pool of unmined transactions, will add generated transactions to it.
-    mempool: Arc<Mutex<MemoryPool>>,
+    /// The underlying RocksDB handle.
+    handle: rocksdb::DB,
 }
 
 #[derive(Debug)]
 pub enum WalletError {
     InsufficientMoney,
+    ZeroKey,
     MissingKey,
-    ContextUpdateChannelError, //this may due to the miner is down
     MemoryPoolCheckFailure,
+    DBError(rocksdb::Error),
+}
+
+impl fmt::Display for WalletError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            WalletError::InsufficientMoney => write!(f, "Insufficient Money"),
+            WalletError::ZeroKey => write!(f, "You have 0 key pair"),
+            WalletError::MissingKey => write!(f, "No Key Pair correspond to the Address"),
+            WalletError::MemoryPoolCheckFailure => write!(f, "Your transaction has conflict with some tx in memory pool"),
+            WalletError::DBError(ref e) => e.fmt(f),
+        }
+    }
+}
+
+impl error::Error for WalletError {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        match *self {
+            WalletError::DBError(ref e) => Some(e),
+            _ => None,
+        }
+    }
+}
+
+impl From<rocksdb::Error> for WalletError {
+    fn from(err: rocksdb::Error) -> WalletError {
+        WalletError::DBError(err)
+    }
 }
 
 impl Wallet {
-    pub fn new(
-        mempool: &Arc<Mutex<MemoryPool>>,
-        ctx_update_sink: mpsc::Sender<ContextUpdateSignal>,
-    ) -> Self {
-        return Self {
-            coins: HashMap::new(),
-            keypairs: HashMap::new(),
-            context_update_chan: ctx_update_sink,
-            mempool: Arc::clone(mempool),
-        };
+    fn open<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
+        let coin_cf = rocksdb::ColumnFamilyDescriptor::new(COIN_CF, rocksdb::Options::default());
+        let keypair_cf = rocksdb::ColumnFamilyDescriptor::new(KEYPAIR_CF, rocksdb::Options::default());
+        let mut db_opts = rocksdb::Options::default();
+        db_opts.create_missing_column_families(true);
+        db_opts.create_if_missing(true);
+        let handle = rocksdb::DB::open_cf_descriptors(&db_opts, path, vec![coin_cf, keypair_cf])?;
+        return Ok(Self {
+            handle,
+        });
+    }
+
+    pub fn new<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
+        rocksdb::DB::destroy(&rocksdb::Options::default(), &path)?;
+        return Self::open(path);
     }
 
     // someone pay to public key A first, then I coincidentally generate A, I will NOT receive the payment
     /// Generate a new key pair
-    pub fn generate_keypair(&mut self) {
-        let keypair = KeyPair::new();
-        self.keypairs.insert(keypair.public_key().hash(), keypair);
+    pub fn generate_keypair(&self) -> Result<()>{
+        let cf = self.handle.cf_handle(KEYPAIR_CF).unwrap();
+        let keypair = KeyPair::random();
+        let k: Address = keypair.public_key().hash();
+        let k = serialize(&k).unwrap();
+        let v = keypair.pkcs8_bytes;
+        self.handle.put_cf(cf,&k, &v)?;
+        Ok(())
     }
 
     /// Get one pubkey from this wallet
-    pub fn get_pubkey(&self) -> Result<PubKey> {
-        if let Some(keypair) = self.keypairs.values().next() {
+    pub fn get_a_pubkey(&self) -> Result<PubKey> {
+        let cf = self.handle.cf_handle(KEYPAIR_CF).unwrap();
+        let mut iter = self.handle.iterator_cf(cf,rocksdb::IteratorMode::Start)?;
+        if let Some((_k,v)) = iter.next() {
+            let keypair = KeyPair::from_pkcs8(v.to_vec());
             return Ok(keypair.public_key());
         }
-        Err(WalletError::MissingKey)
+        Err(WalletError::ZeroKey)
     }
 
     // this method doesn't compute hash again. we could get pubkey then compute the hash but that compute hash again!
     /// Get one pubkey's hash from this wallet
-    pub fn get_pubkey_hash(&self) -> Result<H256> {
-        if let Some(&pubkey_hash) = self.keypairs.keys().next() {
-            return Ok(pubkey_hash);
+    pub fn get_an_address(&self) -> Result<Address> {
+        let cf = self.handle.cf_handle(KEYPAIR_CF).unwrap();
+        let mut iter = self.handle.iterator_cf(cf,rocksdb::IteratorMode::Start)?;
+        if let Some((k,_v)) = iter.next() {
+            let hash: Address = deserialize(k.as_ref()).unwrap();
+            return Ok(hash);
+        }
+        Err(WalletError::ZeroKey)
+    }
+
+    /// Get a public key by its Address
+    fn get_keypair(&self, addr: &Address) -> Result<KeyPair> {
+        let cf = self.handle.cf_handle(KEYPAIR_CF).unwrap();
+        let k = serialize(addr).unwrap();
+        if let Some(v) = self.handle.get_cf(cf, &k)? {
+            let keypair = KeyPair::from_pkcs8(v.to_vec());
+            return Ok(keypair);
         }
         Err(WalletError::MissingKey)
     }
 
+    /// Check if a pubkey's Address belongs to this wallet
+    fn contains_address(&self, addr: &Address) -> Result<bool> {
+        let cf = self.handle.cf_handle(KEYPAIR_CF).unwrap();
+        let k = serialize(addr).unwrap();
+        if let Some(_) = self.handle.get_cf(cf, &k)? {
+            return Ok(true);
+        }
+        Ok(false)
+    }
+
     /// Add coin to wallet
-    fn insert_coin(&mut self, coin: &UTXO) {
-        self.coins
-            .insert(coin.coin_id.clone(), coin.coin_data.clone());
+    /// Use write batch to keep atomicity
+    fn insert_coin_batch(&self, coin: &Input, batch: &mut rocksdb::WriteBatch) -> Result<()>{
+        let cf = self.handle.cf_handle(COIN_CF).unwrap();
+        let k = serialize(&coin.coin).unwrap();
+        let output = Output {
+            value: coin.value,
+            recipient: coin.owner,
+        };
+        let v = serialize(&output).unwrap();
+        batch.put_cf(cf,&k, &v)?;
+        Ok(())
     }
 
     /// Removes coin from the wallet. Will be used after the tx is confirmed and the coin is spent. Also used in rollback
     /// If the coin was in, it is removed. If not, this fn does NOT panic/error.
-    fn delete_coin(&mut self, coin_id: &CoinId) {
-        self.coins.remove(coin_id);
+    fn delete_coin(&self, coin_id: &CoinId) -> Result<()> {
+        let cf = self.handle.cf_handle(COIN_CF).unwrap();
+        let k = serialize(coin_id).unwrap();
+        self.handle.delete_cf(cf, &k)?;
+        Ok(())
     }
 
-    /// Update the wallet.
+    /// Removes coin from the wallet. Will be used after the tx is confirmed and the coin is spent. Also used in rollback
+    /// If the coin was in, it is removed. If not, this fn does NOT panic/error.
+    /// Use write batch to keep atomicity
+    fn delete_coin_batch(&self, coin_id: &CoinId, batch: &mut rocksdb::WriteBatch) -> Result<()> {
+        let cf = self.handle.cf_handle(COIN_CF).unwrap();
+        let k = serialize(coin_id).unwrap();
+        batch.delete_cf(cf, &k)?;
+        Ok(())
+    }
+
+    /// Update the wallet atomically using a write batch.
     /// Can serve as add or rollback, based on arguments to_delete and to_insert.
-    pub fn update(&mut self, to_delete: &Vec<CoinId>, to_insert: &Vec<UTXO>) {
-        for coin_id in to_delete {
-            self.delete_coin(coin_id);
+    pub fn update(&self, add: &[Input], remove: &[Input]) -> Result<()> {
+        let mut batch = rocksdb::WriteBatch::default();
+        for coin in remove {
+            self.delete_coin_batch(&coin.coin, &mut batch)?;
         }
-        for utxo in to_insert {
-            if self.keypairs.contains_key(&utxo.coin_data.recipient) {
-                self.insert_coin(utxo);
+        for coin in add {
+            if let Ok(true) = self.contains_address(&coin.owner) {
+                self.insert_coin_batch(coin, &mut batch)?;
             }
         }
+        self.handle.write(batch)?;
+        Ok(())
     }
 
     /// Returns the sum of values of all the coin in the wallet
-    pub fn balance(&self) -> u64 {
-        self.coins
-            .values()
-            .map(|coin_data| coin_data.value)
-            .sum::<u64>()
+    pub fn balance(&self) -> Result<u64> {
+        let cf = self.handle.cf_handle(COIN_CF).unwrap();
+        let iter = self.handle.iterator_cf(cf,rocksdb::IteratorMode::Start)?;
+        let balance = iter.map(|(_k,v)| {
+            let coin_data: Output = bincode::deserialize(v.as_ref()).unwrap();
+            coin_data.value
+        }).sum::<u64>();
+        Ok(balance)
     }
 
     /// Create a transaction using the wallet coins
-    fn create_transaction(&mut self, recipient: H256, value: u64) -> Result<Transaction> {
-        let mut coins_to_use: Vec<UTXO> = vec![];
+    pub fn create_transaction(&self, recipient: Address, value: u64) -> Result<Transaction> {
+        let mut coins_to_use: Vec<Input> = vec![];
         let mut value_sum = 0u64;
-
+        let cf = self.handle.cf_handle(COIN_CF).unwrap();
+        let iter = self.handle.iterator_cf(cf,rocksdb::IteratorMode::Start)?;
         // iterate thru our wallet
-        for (coin_id, coin_data) in self.coins.iter() {
+        for (k, v) in iter {
+            let coin_id: CoinId = bincode::deserialize(k.as_ref()).unwrap();
+            let coin_data: Output = bincode::deserialize(v.as_ref()).unwrap();
             value_sum += coin_data.value;
-            coins_to_use.push(UTXO {
-                coin_id: coin_id.clone(),
-                coin_data: coin_data.clone(),
+            coins_to_use.push(Input {
+                coin: coin_id,
+                value: coin_data.value,
+                owner: coin_data.recipient,
             }); // coins that will be used for this transaction
             if value_sum >= value {
                 // if we already have enough money, break
@@ -123,88 +213,78 @@ impl Wallet {
             return Err(WalletError::InsufficientMoney);
         }
         // if we have enough money in our wallet, create tx
+        // remove used coin from wallet
+        for c in coins_to_use.iter() {
+            self.delete_coin(&c.coin)?;
+        }
+
         // create transaction inputs
         let input: Vec<Input> = coins_to_use
             .iter()
             .map(|c| Input {
-                hash: c.coin_id.hash,
-                index: c.coin_id.index,
-                value: c.coin_data.value,
-                recipient: c.coin_data.recipient,
+                coin: CoinId {
+                    hash: c.coin.hash,
+                    index: c.coin.index,
+                },
+                value: c.value,
+                owner: c.owner,
             })
             .collect();
         // create the output
         let mut output = vec![Output { recipient, value }];
         if value_sum > value {
             // transfer the remaining value back to self
-            let recipient = self.get_pubkey_hash()?;
+            let recipient = self.get_an_address()?;
             output.push(Output {
                 recipient,
                 value: value_sum - value,
             });
         }
 
-        // remove used coin from wallet
-        for c in &coins_to_use {
-            self.delete_coin(&c.coin_id);
-        }
-
         let unsigned = Transaction {
             input,
             output,
-            signatures: vec![],
+            authorization: vec![],
         };
-        let mut signatures = vec![];
-        for keypair in coins_to_use
-            .iter()
-            .map(|coin| self.keypairs.get(&coin.coin_data.recipient).unwrap())
-        {
-            signatures.push(PubkeyAndSignature {
+        let mut authorization = vec![];
+        for coin in coins_to_use.iter() {
+            let keypair = self.get_keypair(&coin.owner)?;
+            authorization.push(Authorization {
                 pubkey: keypair.public_key(),
-                signature: unsigned.sign(keypair),
+                signature: unsigned.sign(&keypair),
             });
         }
 
         Ok(Transaction {
-            signatures,
+            authorization,
             ..unsigned
         })
     }
 
-    /// Pay to a recipient some value of money, the resulting transaction is just added to memory pool, and may not be confirmed
-    pub fn pay(&mut self, recipient: H256, value: u64) -> Result<H256> {
-        let tx = self.create_transaction(recipient, value)?;
-        let hash = tx.hash();
-        handler::new_transaction(tx, &self.mempool);
-        // TODO: process the memory pool check
-        match self
-            .context_update_chan
-            .send(ContextUpdateSignal::NewContent)
-        {
-            Err(_e) => return Err(WalletError::ContextUpdateChannelError),
-            _ => (),
-        };
-        //return tx hash, later we can confirm it in ledger
-        Ok(hash)
-    }
-
     // only for test, how to set pub functions just for test?
-    pub fn get_coin_id(&self) -> Vec<CoinId> {
-        self.coins.keys().cloned().collect()
+    fn get_coin_id(&self) -> Vec<CoinId> {
+        let cf = self.handle.cf_handle(COIN_CF).unwrap();
+        let iter = self.handle.iterator_cf(cf,rocksdb::IteratorMode::Start).unwrap();
+        // iterate thru our wallet
+        iter.map(|(k,_v)| {
+            let coin_id: CoinId = bincode::deserialize(k.as_ref()).unwrap();
+            coin_id
+        }).collect()
     }
 }
 
+/*
 #[cfg(test)]
 pub mod tests {
     use super::Wallet;
-    use crate::crypto::generator as crypto_generator;
-    use crate::crypto::hash::{H256};
+    use crate::crypto::hash::tests::generate_random_hash;
+    use crate::crypto::hash::H256;
     use crate::crypto::sign::Signable;
-    use crate::handler::{to_coinid_and_potential_utxo, to_rollback_coinid_and_potential_utxo};
     use crate::miner::memory_pool::MemoryPool;
-    use crate::miner::miner::ContextUpdateSignal;
+    use crate::miner::ContextUpdateSignal;
     use crate::transaction::{Output, Transaction};
     use std::sync::{mpsc, Arc, Mutex};
+    use rand::RngCore;
 
     fn new_wallet_pool_receiver_keyhash() -> (
         Wallet,
@@ -212,11 +292,10 @@ pub mod tests {
         mpsc::Receiver<ContextUpdateSignal>,
         H256,
     ) {
-        let (ctx_update_sink, ctx_update_source) = mpsc::channel();
         let pool = Arc::new(Mutex::new(MemoryPool::new()));
-        let mut w = Wallet::new(&pool, ctx_update_sink);
-        w.generate_keypair();
-        let h: H256 = w.get_pubkey_hash().unwrap();
+        let mut w = Wallet::new(std::path::Path::new(&format!("/tmp/walletdb_{}.rocksdb",rand::thread_rng().next_u32())), &pool).unwrap();
+        w.generate_keypair().unwrap();
+        let h: H256 = w.get_an_address().unwrap();
         return (w, pool, ctx_update_source, h);
     }
     fn transaction_10_10(recipient: &H256) -> Transaction {
@@ -230,42 +309,36 @@ pub mod tests {
         return Transaction {
             input: vec![],
             output,
-            signatures: vec![],
+            authorization: vec![],
         };
     }
+
     fn receive(w: &mut Wallet, tx: &Transaction) {
         // test verify of signature before receive
-        for sig in tx.signatures.iter() {
-            assert!(tx.verify(&sig.pubkey, &sig.signature));
+        for auth in tx.authorization.iter() {
+            assert!(tx.verify(&auth.pubkey, &auth.signature));
         }
         let (to_delete, to_insert) = to_coinid_and_potential_utxo(tx);
-        w.update(&to_delete, &to_insert);
+        assert!(w.update(&to_delete, &to_insert).is_ok());
     }
     fn rollback(w: &mut Wallet, tx: &Transaction) {
         let (to_delete, to_insert) = to_rollback_coinid_and_potential_utxo(tx);
-        w.update(&to_delete, &to_insert);
-    }
-    #[test]
-    pub fn balance() {
-        let (w, _pool, _ctx_update_source, _hash) = new_wallet_pool_receiver_keyhash();
-        assert_eq!(w.balance(), 0);
-    }
-    #[test]
-    pub fn add_transaction() {
-        let (mut w, _pool, _ctx_update_source, hash) = new_wallet_pool_receiver_keyhash();
-        receive(&mut w, &transaction_10_10(&hash));
-        assert_eq!(w.balance(), 100);
+        assert!(w.update(&to_delete, &to_insert).is_ok());
     }
 
     #[test]
     pub fn send_coin() {
         let (mut w, pool, ctx_update_source, hash) = new_wallet_pool_receiver_keyhash();
+        assert_eq!(w.balance().unwrap(), 0);
         receive(&mut w, &transaction_10_10(&hash));
+        assert_eq!(w.balance().unwrap(), 100);
         // now we have 10*10 coins, we try to spend them
         for _ in 0..5 {
-            assert!(w.pay(crypto_generator::h256(), 20).is_ok());
+            assert!(w.pay(generate_random_hash(), 19).is_ok());
         }
-        assert_eq!(w.balance(), 0);
+        assert_eq!(w.balance().unwrap(), 0);
+        // we have 0 money, so pay someone 20 coin will fail
+        assert!(w.pay(generate_random_hash(), 20).is_err());
         let m = pool.lock().unwrap();
         let txs: Vec<Transaction> = m.get_transactions(5);
         drop(m);
@@ -273,79 +346,48 @@ pub mod tests {
         for _ in 0..5 {
             ctx_update_source.recv().unwrap();
         }
-    }
-
-    #[test]
-    pub fn send_coin_2() {
-        let (mut w, pool, ctx_update_source, hash) = new_wallet_pool_receiver_keyhash();
-        receive(&mut w, &transaction_10_10(&hash));
-        // now we have 10*10 coins, we try to spend them
-        for _ in 0..5 {
-            assert!(w.pay(crypto_generator::h256(), 19).is_ok());
-        }
-        assert_eq!(w.balance(), 0);
-        let m = pool.lock().unwrap();
-        let txs: Vec<Transaction> = m.get_transactions(5);
-        drop(m);
-        assert_eq!(txs.len(), 5);
         for tx in &txs {
             // for test, just add new tx into this wallet
             //            println!("{:?}", tx);
             receive(&mut w, &tx);
         }
-        assert_eq!(w.balance(), 5); //10*10-5*19=5 remaining
-        for _ in 0..5 {
-            ctx_update_source.recv().unwrap();
-        }
-    }
-
-    #[test]
-    pub fn send_coin_fail() {
-        let (mut w, _pool, _ctx_update_source, hash) = new_wallet_pool_receiver_keyhash();
-        receive(&mut w, &transaction_10_10(&hash));
-        // now we have 10*10 coins, we try to spend 101
-        assert!(w.pay(crypto_generator::h256(), 101).is_err());
-        // we try to spend 20 6 times, the 6th time should have err
-        for _ in 0..5 {
-            assert!(w.pay(crypto_generator::h256(), 20).is_ok());
-        }
-        assert!(w.pay(crypto_generator::h256(), 20).is_err());
-        assert_eq!(w.balance(), 0);
+        assert_eq!(w.balance().unwrap(), 5);
     }
 
     #[test]
     pub fn key_missing() {
         let (ctx_update_sink, _ctx_update_source) = mpsc::channel();
         let pool = Arc::new(Mutex::new(MemoryPool::new()));
-        let mut w = Wallet::new(&pool, ctx_update_sink);
-        assert!(w.get_pubkey_hash().is_err());
-        assert!(w.get_pubkey().is_err());
-        assert!(w.pay(crypto_generator::h256(), 1).is_err());
-        w.generate_keypair();
-        assert!(w.get_pubkey_hash().is_ok());
-        assert!(w.get_pubkey().is_ok());
-        assert!(w.pay(crypto_generator::h256(), 1).is_err());
+        let mut w = Wallet::new(std::path::Path::new(&format!("/tmp/walletdb_{}.rocksdb",rand::thread_rng().next_u32())), &pool, ctx_update_sink).unwrap();
+        assert!(w.get_an_address().is_err());
+        assert!(w.get_a_pubkey().is_err());
+        assert!(w.pay(generate_random_hash(), 1).is_err());
+        w.generate_keypair().unwrap();
+        assert!(w.get_an_address().is_ok());
+        assert!(w.get_a_pubkey().is_ok());
+        assert!(w.pay(generate_random_hash(), 1).is_err());
     }
 
     #[test]
     pub fn rollback_at_fork() {
         let (mut w, pool, _ctx_update_source, hash) = new_wallet_pool_receiver_keyhash();
         receive(&mut w, &transaction_10_10(&hash));
-        assert_eq!(w.balance(), 100);
+        assert_eq!(w.balance().unwrap(), 100);
         // spend 100
-        assert!(w.pay(crypto_generator::h256(), 100).is_ok());
-        assert_eq!(w.balance(), 0);
+        assert!(w.pay(generate_random_hash(), 100).is_ok());
+        assert_eq!(w.balance().unwrap(), 0);
         let m = pool.lock().unwrap();
         let txs: Vec<Transaction> = m.get_transactions(1);
         drop(m);
         assert_eq!(txs.len(), 1);
         receive(&mut w, &txs[0]);
-        assert_eq!(w.balance(), 0);
+        assert_eq!(w.balance().unwrap(), 0);
         // rollback, after which we can spend 100 again!
         rollback(&mut w, &txs[0]);
         // after rollback, I can spend the 100 coins again!
-        assert_eq!(w.balance(), 100);
-        assert!(w.pay(crypto_generator::h256(), 100).is_ok());
-        assert_eq!(w.balance(), 0);
+        assert_eq!(w.balance().unwrap(), 100);
+        assert!(w.pay(generate_random_hash(), 100).is_ok());
+        assert_eq!(w.balance().unwrap(), 0);
     }
 }
+*/

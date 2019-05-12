@@ -4,49 +4,54 @@ use crate::config::*;
 use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::merkle::MerkleTree;
 
+/// The content of a proposer block.
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct Content {
-    /// List of transaction blocks referred by this proposer block
-    pub transaction_block_hashes: Vec<H256>,
-    /// List of proposer blocks referred by this proposer block
-    pub proposer_block_hashes: Vec<H256>, // todo(V): Add a coinbase transaction
-                                          // todo(V): Might have to reference voter blocks to include their coinbase transactions .
+    /// List of transaction blocks referred by this proposer block.
+    pub transaction_refs: Vec<H256>,
+    /// List of proposer blocks referred by this proposer block.
+    pub proposer_refs: Vec<H256>,
+    // TODO: coinbase transaction, and maybe refer to voter blocks to include their coinbase
+    // transactions.
 }
 
 impl Content {
-    pub fn new(transaction_block_refs: Vec<H256>, proposer_block_refs: Vec<H256>) -> Self {
+    /// Create new proposer block content.
+    pub fn new(transaction_refs: Vec<H256>, proposer_refs: Vec<H256>) -> Self {
         Self {
-            transaction_block_hashes: transaction_block_refs,
-            proposer_block_hashes: proposer_block_refs,
+            transaction_refs,
+            proposer_refs,
         }
     }
 }
 
-/// Hashing the contents in a Merkle tree
 impl Hashable for Content {
     fn hash(&self) -> H256 {
-        // TODO(V): Add the proposer_block_refs too.
-        let tx_merkle_tree = MerkleTree::new(&self.transaction_block_hashes);
-        let _prop_merkle_tree = MerkleTree::new(&self.proposer_block_hashes);
-        // TODO: why do we calculate prop_merkle_tree when we don't use it?
+        // TODO: include proposer merkle tree
+        // TODO: why do we need a merkle tree here? simply hashing all the bytes is much faster and
+        // more straightforward.
+        let tx_merkle_tree = MerkleTree::new(&self.transaction_refs);
+        let _prop_merkle_tree = MerkleTree::new(&self.proposer_refs);
         return tx_merkle_tree.root();
     }
 }
 
+/// Generate the genesis block of the proposer chain.
 pub fn genesis() -> Block {
     let content = Content {
-        transaction_block_hashes: vec![],
-        proposer_block_hashes: vec![],
+        transaction_refs: vec![],
+        proposer_refs: vec![],
     };
     let all_zero: [u8; 32] = [0; 32];
+    // TODO: this will not pass validation.
     return Block::new(
-        (&all_zero).into(),
+        all_zero.into(),
         0,
         0,
-        (&all_zero).into(),
+        all_zero.into(),
         vec![],
         BlockContent::Proposer(content),
-        all_zero.clone(),
+        all_zero,
         *DEFAULT_DIFFICULTY,
     );
 }

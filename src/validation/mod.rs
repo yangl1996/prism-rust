@@ -5,9 +5,7 @@ use crate::block::{Block, Content};
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
 use crate::crypto::hash::{Hashable, H256};
-use crate::state::UTXODatabase;
-
-use std::sync::Mutex;
+use crate::utxodb::UtxoDatabase;
 
 /// The result of block validation.
 pub enum BlockResult {
@@ -27,12 +25,14 @@ pub enum BlockResult {
     InputAlreadySpent,
     InsufficientInput,
     WrongSignature,
+    Duplicate,
 }
 
 impl std::fmt::Display for BlockResult {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             BlockResult::Pass => write!(f, "validation passed"),
+            BlockResult::Duplicate => write!(f, "block already exists"),
             BlockResult::MissingParent(_) => write!(f, "parent block not in system"),
             BlockResult::WrongContentHash => write!(f, "content hash mismatch"),
             BlockResult::MissingReferences(_) => write!(f, "referred blocks not in system"),
@@ -49,32 +49,42 @@ impl std::fmt::Display for BlockResult {
 /// Validate a block.
 pub fn check_block(
     block: &Block,
-    blockchain: &Mutex<BlockChain>,
+    blockchain: &BlockChain,
     blockdb: &BlockDatabase,
-    utxodb: &UTXODatabase,
+    utxodb: &UtxoDatabase,
 ) -> BlockResult {
     // TODO: check PoW. Where should we get the current difficulty ranges?
 
+    // check whether it is a duplicate
+    let self_exists = check_block_exist(block.hash(), blockdb);
+    if self_exists {
+        return BlockResult::Duplicate;
+    }
+
     // check whether the parent exists
-    let parent = block.header.parent_hash;
-    let parent_availability = check_block_exist(parent, blockchain, blockdb);
-    if !(parent_availability.0 && parent_availability.1) {
+    let parent = block.header.parent;
+    let parent_availability = check_block_exist(parent, blockdb);
+    if !parent_availability {
         return BlockResult::MissingParent(parent);
     }
 
     // TODO: check timestamp
     // TODO: check sortition proof
 
+    /*
     // check the content hash
     if block.content.hash() != block.header.content_root {
         return BlockResult::WrongContentHash;
     }
+    */
 
     // match the block type and check content
     match &block.content {
         Content::Transaction(content) => {
             // check each transaction
+            /*
             for transaction in content.transactions.iter() {
+                /*
                 if !transaction::check_non_empty(&transaction) {
                     return BlockResult::EmptyTransaction;
                 }
@@ -90,7 +100,9 @@ pub fn check_block(
                 if !transaction::check_signature(&transaction) {
                     return BlockResult::WrongSignature;
                 }
+                */
             }
+            */
             return BlockResult::Pass;
         }
         Content::Proposer(content) => {
@@ -109,7 +121,8 @@ pub fn check_block(
             if missing_refs.len() != 0 {
                 return BlockResult::MissingReferences(missing_refs);
             }
-
+            // TODO: if those two checks are not disabled, stack overflow.
+            /*
             // check chain number
             if !voter_block::check_chain_number(&content) {
                 return BlockResult::WrongChainNumber;
@@ -119,20 +132,17 @@ pub fn check_block(
             if !voter_block::check_levels_voted(&content, blockchain, blockdb) {
                 return BlockResult::WrongVoteLevel;
             }
-
+            */
             return BlockResult::Pass;
         }
     }
 }
 
-/// Check whether a block exists in the blockchain and the block database. The function returns a
-/// tuple, of which the first member being whether the block is in the block database, and the
-/// second one the block chain.
+/// Check whether a block exists in the block database.
 fn check_block_exist(
     hash: H256,
-    blockchain: &Mutex<BlockChain>,
     blockdb: &BlockDatabase,
-) -> (bool, bool) {
+) -> bool {
     let in_db = match blockdb.get(&hash) {
         Err(e) => panic!("Database error {}", e),
         Ok(b) => match b {
@@ -141,7 +151,5 @@ fn check_block_exist(
         },
     };
 
-    let in_blockchain = blockchain.lock().unwrap().check_node(hash);
-
-    return (in_db, in_blockchain);
+    return in_db;
 }

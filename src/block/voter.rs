@@ -4,54 +4,55 @@ use crate::config::*;
 use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::merkle::MerkleTree;
 
+/// The content of a voter block.
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct Content {
-    /// Voter chain id
+    /// ID of the voter chain this block is attaching to.
     pub chain_number: u16,
     /// Hash of the parent voter block.
-    pub voter_parent_hash: H256,
+    pub voter_parent: H256,
     /// List of votes on proposer blocks.
-    pub proposer_block_votes: Vec<H256>,
+    pub votes: Vec<H256>,
 }
 
 impl Content {
-    pub fn new(
-        chain_number: u16,
-        voter_parent_hash: H256,
-        proposer_block_votes: Vec<H256>,
-    ) -> Self {
+    /// Create new voter block content.
+    pub fn new(chain_number: u16, voter_parent: H256, votes: Vec<H256>) -> Self {
         Self {
             chain_number,
-            voter_parent_hash,
-            proposer_block_votes,
+            voter_parent,
+            votes,
         }
     }
 }
 
-/// Hashing the contents in a Merkle tree
 impl Hashable for Content {
     fn hash(&self) -> H256 {
-        let merkle_tree = MerkleTree::new(&self.proposer_block_votes);
+        // TODO: we are hashing in a merkle tree. why do we need so?
+        let merkle_tree = MerkleTree::new(&self.votes);
         // TODO: Add chain number and voter_parent_hash in the hash
         return merkle_tree.root();
     }
 }
 
+/// Generate the genesis block of the voter chain with the given chain ID.
 pub fn genesis(chain_num: u16) -> Block {
     let all_zero: [u8; 32] = [0; 32];
     let content = Content {
         chain_number: chain_num,
-        voter_parent_hash: (&all_zero).into(),
-        proposer_block_votes: vec![],
+        voter_parent: VOTER_GENESIS_HASHES[chain_num as usize],
+        votes: vec![],
     };
+    // TODO: this block will definitely not pass validation. We depend on the fact that genesis
+    // blocks are added to the system at initialization. Seems like a moderate hack.
     return Block::new(
-        (&all_zero).into(),
+        all_zero.into(),
         0,
         0,
-        (&all_zero).into(),
+        all_zero.into(),
         vec![],
         BlockContent::Voter(content),
-        all_zero.clone(),
+        all_zero,
         *DEFAULT_DIFFICULTY,
     );
 }

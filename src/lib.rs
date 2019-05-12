@@ -13,73 +13,66 @@ pub mod crypto;
 pub mod handler;
 pub mod miner;
 pub mod network;
-pub mod state;
+pub mod utxodb;
 pub mod transaction;
 pub mod validation;
 pub mod visualization;
 pub mod wallet;
 
-use crate::blockchain::transaction::UpdateMessage as LedgerUpdateMessage;
-use crate::crypto::hash::H256;
-use crate::state::UTXODatabase;
+use crate::utxodb::UtxoDatabase;
 use blockchain::BlockChain;
+use wallet::Wallet;
 use blockdb::BlockDatabase;
-use config::NUM_WALLETS;
 use miner::memory_pool::MemoryPool;
 use std::sync::{mpsc, Arc, Mutex};
 
 pub fn start(
     addr: std::net::SocketAddr,
     blockdb: &Arc<BlockDatabase>,
-    utxodb: &Arc<UTXODatabase>,
-    blockchain: &Arc<Mutex<BlockChain>>,
+    utxodb: &Arc<UtxoDatabase>,
+    blockchain: &Arc<BlockChain>,
+    wallet: &Arc<Wallet>,
     mempool: &Arc<Mutex<MemoryPool>>,
-    state_update_source: mpsc::Receiver<(LedgerUpdateMessage, Vec<H256>)>,
 ) -> std::io::Result<(
     network::server::Handle,
-    miner::miner::Handle,
-    Arc<Vec<Mutex<wallet::Wallet>>>,
+    miner::Handle,
 )> {
     // create channels between server and worker, worker and miner, miner and worker
-    let (msg_sink, msg_source) = mpsc::channel();
-    let (ctx_update_sink, ctx_update_source) = mpsc::channel();
-    let ctx_update_sink_wallet = ctx_update_sink.clone();
+    let (msg_tx, msg_rx) = mpsc::channel();
+    let (ctx_tx, ctx_rx) = mpsc::channel();
+    let ctx_tx_wallet = ctx_tx.clone();
 
-    let (ctx, server) = network::server::new(addr, msg_sink)?;
+    let (ctx, server) = network::server::new(addr, msg_tx)?;
     ctx.start().unwrap();
 
     let ctx = network::worker::new(
         4,
-        msg_source,
+        msg_rx,
         blockchain,
         blockdb,
         utxodb,
+        wallet,
         mempool,
-        ctx_update_sink,
+        ctx_tx,
         server.clone(),
     );
     ctx.start();
 
-    let (ctx, miner) = miner::miner::new(
+    let (ctx, miner) = miner::new(
         mempool,
         blockchain,
+        utxodb,
+        wallet,
         blockdb,
-        ctx_update_source,
+        ctx_rx,
         server.clone(),
     );
     ctx.start();
 
-    let mut wallets = vec![];
-    for _ in 0..NUM_WALLETS {
-        let mut w = wallet::Wallet::new(&mempool, ctx_update_sink_wallet.clone());
-        w.generate_keypair();
-        wallets.push(Mutex::new(w));
-    }
-    let wallets = Arc::new(wallets);
+    // TODO: all wallet-related logic are just for demoing. We need an API for user to send/receive
+    // money. For now, we just initialize the wallet here and let it send transactions to itself
+    // periodically.
+    wallet.generate_keypair().unwrap();
 
-    //state_updater part
-    let ctx = state::updater::new(blockdb, utxodb, &wallets, state_update_source);
-    ctx.start();
-
-    return Ok((server, miner, wallets));
+    return Ok((server, miner));
 }
