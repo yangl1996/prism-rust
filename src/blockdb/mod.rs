@@ -51,6 +51,12 @@ impl BlockDatabase {
         return Ok(db);
     }
 
+    /// Restore from a given path
+    pub fn restore<P: AsRef<std::path::Path>>(path: P) -> Result<Self, rocksdb::Error> {
+        let db = Self::open(&path)?;
+        return Ok(db);
+    }
+
     /// Insert a new block to the database.
     pub fn insert(&self, block: &Block) -> Result<(), rocksdb::Error> {
         let hash: H256 = block.hash();

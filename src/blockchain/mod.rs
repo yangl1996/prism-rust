@@ -856,29 +856,35 @@ impl BlockChain {
             Orphan,
         }
 
-        const DUMP_LIMIT: u16 = 100;
+        const DUMP_LIMIT: u16 = 10;
+        if self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).is_none() {panic!("No such CF!");}
+        if self.db.cf_handle(PROPOSER_LEADER_SEQUENCE_CF).is_none() {panic!("No such CF!");}
+        if self.db.cf_handle(PARENT_NEIGHBOR_CF).is_none() {panic!("No such CF!");}
+        if self.db.cf_handle(PROPOSER_NODE_VOTE_CF).is_none() {panic!("No such CF!");}
+        if self.db.cf_handle(VOTER_PARENT_NEIGHBOR_CF).is_none() {panic!("No such CF!");}
         let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
         let proposer_leader_sequence_cf = self.db.cf_handle(PROPOSER_LEADER_SEQUENCE_CF).unwrap();
         let parent_neighbor_cf = self.db.cf_handle(PARENT_NEIGHBOR_CF).unwrap();
         let proposer_node_vote_cf = self.db.cf_handle(PROPOSER_NODE_VOTE_CF).unwrap();
         let voter_parent_neighbor_cf = self.db.cf_handle(VOTER_PARENT_NEIGHBOR_CF).unwrap();
 
+        // for computing the lowest level for voter chains related to the 100 levels of proposer nodes
+        let mut voter_lowest: Vec<u64> = vec![];
         // get voter best blocks and levels, this is from memory
         let mut voter_longest: Vec<(H256,u64)> = vec![];
         for (chain_num, voter_chain) in self.voter_best.iter().enumerate() {
             let longest = voter_chain.lock().unwrap();
             voter_longest.push((longest.0,longest.1));
+            voter_lowest.push(longest.1);
         }
 
         // get information from db
         let iter = self.db.iterator_cf(proposer_tree_level_cf,rocksdb::IteratorMode::End)?;
-
         // only add 100 levels of proposer nodes to this set. add related voter nodes. filter out edges not related to this set
         let mut nodes_to_show: HashSet<String> = HashSet::new();
-        // compute the lowest level for voter chains related to the 100 levels of proposer nodes
-        let mut voter_lowest: Vec<u64> = vec![0; voter_longest.len()];
+
         // memory cache for votes
-        let mut vote_cache: HashMap<(u16,u64),H256> = HashMap::new();
+        let mut vote_cache: HashMap<(u16,u64),Vec<H256>> = HashMap::new();
 
         let mut proposer_tree: HashMap<u64, Vec<H256>> = HashMap::new();
         let mut edges: Vec<Edge> = vec![];
@@ -935,7 +941,12 @@ impl BlockChain {
                                 unreachable!();
                             }
                             // cache the votes
-                            vote_cache.insert((*chain_num, *level), *block);
+                            if let Some(v) = vote_cache.get_mut(&(*chain_num, *level)) {
+                                v.push(*block);
+                            } else {
+                                vote_cache.insert((*chain_num, *level), vec![*block]);
+                            }
+
                         }
                     }
                     None => {}
@@ -958,12 +969,16 @@ impl BlockChain {
                                        status: VoterStatus::OnMainChain,
                                    });
                 // vote edges
-                edges.push(
-                    Edge {
-                        from: voter_block.to_string(),
-                        to: vote_cache[&(chain_num as u16, level)].to_string(),
-                        edgetype: EdgeType::VoterToProposerVote,
-                    });
+                if let Some(votes) = vote_cache.get(&(chain_num as u16, level)) {
+                    for vote in votes {
+                        edges.push(
+                            Edge {
+                                from: voter_block.to_string(),
+                                to: vote.to_string(),
+                                edgetype: EdgeType::VoterToProposerVote,
+                            });
+                    }
+                }
                 // voter parent
                 match self.db.get_cf(voter_parent_neighbor_cf, serialize(&voter_block).unwrap())? {
                     Some(d) => {

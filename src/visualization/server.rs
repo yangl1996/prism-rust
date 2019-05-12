@@ -1,8 +1,8 @@
 //use super::ledger_dump::dump_ledger;
 use crate::blockchain::BlockChain;
-//use crate::blockdb::BlockDatabase;
-//use crate::utxodb::UtxoDatabase;
-use std::sync::{Arc, Mutex};
+use crate::blockdb::BlockDatabase;
+use crate::utxodb::UtxoDatabase;
+use std::sync::Arc;
 use std::thread;
 use tiny_http::Header;
 use tiny_http::Response;
@@ -10,8 +10,8 @@ use tiny_http::Server as HTTPServer;
 
 pub struct Server {
     blockchain: Arc<BlockChain>,
-//    blockdb: Arc<BlockDatabase>,
-//    utxodb: Arc<UtxoDatabase>,
+    blockdb: Arc<BlockDatabase>,
+    utxodb: Arc<UtxoDatabase>,
     handle: HTTPServer,
 }
 
@@ -52,24 +52,26 @@ macro_rules! serve_dynamic_file {
 impl Server {
     pub fn start(
         addr: std::net::SocketAddr,
-        blockchain: Arc<BlockChain>,
-//        blockdb: Arc<BlockDatabase>,
-//        utxodb: Arc<UtxoDatabase>,
+        blockchain: &Arc<BlockChain>,
+        blockdb: &Arc<BlockDatabase>,
+        utxodb: &Arc<UtxoDatabase>,
     ) {
         let handle = HTTPServer::http(&addr).unwrap();
         let server = Self {
-            blockchain,
-//            blockdb,
-//            utxodb,
-            handle,
+            blockchain: Arc::clone(blockchain),
+            blockdb: Arc::clone(blockdb),
+            utxodb: Arc::clone(utxodb),
+            handle: handle,
         };
-        thread::spawn(move || {
-            for req in server.handle.incoming_requests() {
-                let blockchain = Arc::clone(&server.blockchain);
-//                let blockdb = Arc::clone(&server.blockdb);
-//                let utxodb = Arc::clone(&server.utxodb);
-                thread::spawn(move || match req.url().trim_start_matches("/") {
-                    "blockchain.json" => serve_dynamic_file!(
+        thread::Builder::new().name("visualization server".to_string())
+            .spawn(move || {
+                for req in server.handle.incoming_requests() {
+                    let blockchain = Arc::clone(&server.blockchain);
+                    let blockdb = Arc::clone(&server.blockdb);
+                    let utxodb = Arc::clone(&server.utxodb);
+                    thread::Builder::new().name("visualization server working".to_string())
+                        .spawn(move || match req.url().trim_start_matches("/") {
+                            "blockchain.json" => serve_dynamic_file!(
                         req,
                         match blockchain.dump() {
                             Ok(dump) => dump,
@@ -84,23 +86,23 @@ impl Server {
 //                        "application/json",
 //                        addr
 //                    ),
-                    "cytoscape.min.js" => {
-                        serve_static_file!(req, "cytoscape.js", "application/javascript")
-                    }
-                    "dagre.min.js" => {
-                        serve_static_file!(req, "dagre.min.js", "application/javascript")
-                    }
-                    "cytoscape-dagre.js" => {
-                        serve_static_file!(req, "cytoscape-dagre.js", "application/javascript")
-                    }
-                    "bootstrap.min.css" => serve_static_file!(req, "bootstrap.min.css", "text/css"),
-                    "blockchain_vis.js" => serve_dynamic_file!(
+                            "cytoscape.min.js" => {
+                                serve_static_file!(req, "cytoscape.js", "application/javascript")
+                            }
+                            "dagre.min.js" => {
+                                serve_static_file!(req, "dagre.min.js", "application/javascript")
+                            }
+                            "cytoscape-dagre.js" => {
+                                serve_static_file!(req, "cytoscape-dagre.js", "application/javascript")
+                            }
+                            "bootstrap.min.css" => serve_static_file!(req, "bootstrap.min.css", "text/css"),
+                            "blockchain_vis.js" => serve_dynamic_file!(
                         req,
                         include_str!("blockchain_vis.js"),
                         "application/javascript",
                         addr
                     ),
-                    "visualize-blockchain" => serve_dynamic_file!(
+                            "visualize-blockchain" => serve_dynamic_file!(
                         req,
                         include_str!("blockchain_vis.html"),
                         "text/html",
@@ -115,16 +117,19 @@ impl Server {
 //                    "visualize-ledger" => {
 //                        serve_dynamic_file!(req, include_str!("ledger_vis.html"), "text/html", addr)
 //                    }
-                    "" => serve_dynamic_file!(req, include_str!("index.html"), "text/html", addr),
-                    _ => {
-                        let content_type = "Content-Type: text/html".parse::<Header>().unwrap();
-                        let resp = Response::from_string(include_str!("404.html"))
-                            .with_header(content_type)
-                            .with_status_code(404);
-                        req.respond(resp);
-                    }
-                });
-            }
-        });
+                            "" => serve_dynamic_file!(req, include_str!("index.html"), "text/html", addr),
+                            _ => {
+                                let content_type = "Content-Type: text/html".parse::<Header>().unwrap();
+                                let resp = Response::from_string(include_str!("404.html"))
+                                    .with_header(content_type)
+                                    .with_status_code(404);
+                                match req.respond(resp) {
+                                    Ok(_) => {}//do something?
+                                    Err(_) => {}//do something?
+                                }
+                            }
+                        }).unwrap();
+                }
+            }).unwrap();
     }
 }
