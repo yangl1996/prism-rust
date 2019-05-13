@@ -11,6 +11,7 @@ use crate::network::server::Handle as ServerHandle;
 use crate::utxodb::UtxoDatabase;
 use crate::wallet::Wallet;
 use crate::validation::{check_block, BlockResult};
+use crate::crypto::hash::Hashable;
 use log::{debug, info};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
@@ -74,14 +75,14 @@ impl Context {
             let (msg, peer) = msg;
             match msg {
                 Message::Ping(nonce) => {
-                    info!("Ping: {}", nonce);
+                    debug!("Ping: {}", nonce);
                     peer.write(Message::Pong(nonce.to_string()));
                 }
                 Message::Pong(nonce) => {
-                    info!("Pong: {}", nonce);
+                    debug!("Pong: {}", nonce);
                 }
                 Message::NewTransactionHashes(hashes) => {
-                    debug!("NewTransactionHashes");
+                    debug!("Got {} new transaction hashes", hashes.len());
                     let mut hashes_to_request = vec![];
                     for hash in hashes {
                         if !self.mempool.lock().unwrap().contains(&hash) {
@@ -93,7 +94,7 @@ impl Context {
                     }
                 }
                 Message::GetTransactions(hashes) => {
-                    debug!("GetTransactions");
+                    debug!("Asked for {} transactions", hashes.len());
                     let mut transactions = vec![];
                     for hash in hashes {
                         match self.mempool.lock().unwrap().get(&hash) {
@@ -106,16 +107,16 @@ impl Context {
                     peer.write(Message::Transactions(transactions));
                 }
                 Message::Transactions(transactions) => {
-                    debug!("Transactions");
+                    debug!("Got {} transactions", transactions.len());
                     for transaction in transactions {
                         new_transaction(transaction, &self.mempool, &self.server);
                     }
                 }
                 Message::NewBlockHashes(hashes) => {
-                    debug!("NewBlockHashes");
+                    debug!("Got {} new block hashes", hashes.len());
                     let mut hashes_to_request = vec![];
                     for hash in hashes {
-                        // TODO: add a method to blockdb to quickly check whether a block exists
+                        // we need to check blockchain as well
                         match self.blockdb.get(&hash).unwrap() {
                             None => {
                                 hashes_to_request.push(hash);
@@ -128,7 +129,7 @@ impl Context {
                     }
                 }
                 Message::GetBlocks(hashes) => {
-                    debug!("GetBlocks");
+                    debug!("Asked for {} blocks", hashes.len());
                     let mut blocks = vec![];
                     for hash in hashes {
                         match self.blockdb.get(&hash).unwrap() {
@@ -141,24 +142,23 @@ impl Context {
                     peer.write(Message::Blocks(blocks));
                 }
                 Message::Blocks(blocks) => {
-                    debug!("Blocks");
+                    debug!("Got {} blocks", blocks.len());
                     for block in blocks {
-                        // TODO: add validation and buffer logic here
                         let validation_result =
                             check_block(&block, &self.chain, &self.blockdb, &self.utxodb);
                         match validation_result {
                             BlockResult::MissingParent(p) => {
-                                debug!("Missing parent block");
+                                debug!("Missing parent block for block {:.8}", block.hash());
                                 self.buffer.lock().unwrap().push(block);
                                 self.server.broadcast(Message::GetBlocks(vec![p]));
                             }
                             BlockResult::MissingReferences(r) => {
-                                debug!("Missing referred block");
+                                debug!("Missing {} referred blocks for block {:.8}", r.len(), block.hash());
                                 self.buffer.lock().unwrap().push(block);
                                 self.server.broadcast(Message::GetBlocks(r));
                             }
                             BlockResult::Pass => {
-                                debug!("Adding new block");
+                                debug!("Processing block {:.8}", block.hash());
                                 new_validated_block(
                                     &block,
                                     &self.mempool,
@@ -170,7 +170,7 @@ impl Context {
                                 );
                             }
                             _ => {
-                                debug!("Invalid block: {}", validation_result);
+                                debug!("Ignoring invalid block {:.8}: {}", block.hash(), validation_result);
                                 // pass invalid block
                             }
                         }
@@ -185,7 +185,7 @@ impl Context {
                                 return true;    // retain this block
                             }
                             BlockResult::Pass => {
-                                // TODO: avoid inserting the same block again here
+                                debug!("Processing buffered block {:.8}", block.hash());
                                 new_validated_block(
                                     &block,
                                     &self.mempool,

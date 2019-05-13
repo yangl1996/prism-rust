@@ -126,12 +126,12 @@ impl Handle {
 
 impl Context {
     pub fn start(mut self) {
-        info!("Miner initialized and paused");
         thread::Builder::new()
             .name("miner".to_string())
             .spawn(move || {
                 self.miner_loop();
             }).unwrap();
+        info!("Miner initialized into paused mode");
     }
 
     fn handle_control_signal(&mut self, signal: ControlSignal) {
@@ -141,7 +141,7 @@ impl Context {
                 self.operating_state = OperatingState::ShutDown;
             }
             ControlSignal::Start => {
-                info!("Miner starting");
+                info!("Miner starting in continuous mode");
                 self.operating_state = OperatingState::Run;
             }
             ControlSignal::Step => {
@@ -220,7 +220,7 @@ impl Context {
                     &self.utxodb,
                     &self.wallet,
                 );
-                debug!("Mined one block");
+                debug!("Mined block {:.8}", mined_block.hash());
                 // TODO: Only update block contents if relevant parent
                 self.update_context();
                 header = self.create_header();
