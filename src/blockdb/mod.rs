@@ -51,8 +51,8 @@ impl BlockDatabase {
         return Ok(db);
     }
 
-    /// Restore from a given path
-    pub fn restore<P: AsRef<std::path::Path>>(path: P) -> Result<Self, rocksdb::Error> {
+    /// Load database from a given path
+    pub fn load<P: AsRef<std::path::Path>>(path: P) -> Result<Self, rocksdb::Error> {
         let db = Self::open(&path)?;
         return Ok(db);
     }

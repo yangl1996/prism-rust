@@ -394,6 +394,7 @@ impl BlockChain {
                     .unwrap();
                     if voted_level > deepest_voted_level {
                         deepest_voted_level = voted_level;
+                    }
                 }
                 wb.put_cf(
                     voter_node_voted_level_cf,
@@ -811,7 +812,6 @@ impl BlockChain {
     }
 }
 
-// Functions to dump the blockchain, limit the number of levels of proposer (start from the tip)
 impl BlockChain {
     pub fn proposer_transaction_in_ledger(&self, limit: u64) -> Result<Vec<(H256, Vec<H256>)>> {
         let mut ledger_tip_ = self.ledger_tip.lock().unwrap();
