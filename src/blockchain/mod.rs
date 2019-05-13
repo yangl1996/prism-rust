@@ -810,11 +810,29 @@ impl BlockChain {
         .unwrap();
         return Ok(level);
     }
+
+    /// Check whether the given proposer block exists in the database.
+    pub fn contains_proposer(&self, hash: &H256) -> Result<bool> {
+        let proposer_node_level_cf = self.db.cf_handle(PROPOSER_NODE_LEVEL_CF).unwrap();
+        return match self.db.get_cf(proposer_node_level_cf, serialize(&hash).unwrap())? {
+            Some(_) => Ok(true),
+            None => Ok(false),
+        };
+    }
+
+    /// Check whether the given voter block exists in the database.
+    pub fn contains_voter(&self, hash: &H256) -> Result<bool> {
+        let voter_node_level_cf = self.db.cf_handle(VOTER_NODE_LEVEL_CF).unwrap();
+        return match self.db.get_cf(voter_node_level_cf, serialize(&hash).unwrap())? {
+            Some(_) => Ok(true),
+            None => Ok(false),
+        };
+    }
 }
 
 impl BlockChain {
     pub fn proposer_transaction_in_ledger(&self, limit: u64) -> Result<Vec<(H256, Vec<H256>)>> {
-        let mut ledger_tip_ = self.ledger_tip.lock().unwrap();
+        let ledger_tip_ = self.ledger_tip.lock().unwrap();
         let ledger_tip = *ledger_tip_;
         drop(ledger_tip_);
 

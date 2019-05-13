@@ -1,5 +1,5 @@
 use super::super::config;
-use super::check_block_exist;
+use super::{check_voter_block_exists, check_proposer_block_exists};
 use crate::block::voter::Content;
 use crate::block::Block;
 use crate::block::Content as BlockContent;
@@ -16,14 +16,14 @@ pub fn get_missing_references(
     let mut missing_blocks = vec![];
 
     // check the voter parent
-    let voter_parent = check_block_exist(content.voter_parent, blockdb);
+    let voter_parent = check_voter_block_exists(content.voter_parent, blockdb, blockchain);
     if !voter_parent {
         missing_blocks.push(content.voter_parent);
     }
 
     // check the votes
     for prop_hash in content.votes.iter() {
-        let avail = check_block_exist(*prop_hash, blockdb);
+        let avail = check_proposer_block_exists(*prop_hash, blockdb, blockchain);
         if !avail {
             missing_blocks.push(*prop_hash);
         }

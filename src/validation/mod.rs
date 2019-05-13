@@ -55,15 +55,10 @@ pub fn check_block(
 ) -> BlockResult {
     // TODO: check PoW. Where should we get the current difficulty ranges?
 
-    // check whether it is a duplicate
-    let self_exists = check_block_exist(block.hash(), blockdb);
-    if self_exists {
-        return BlockResult::Duplicate;
-    }
 
     // check whether the parent exists
     let parent = block.header.parent;
-    let parent_availability = check_block_exist(parent, blockdb);
+    let parent_availability = check_proposer_block_exists(parent, blockdb, blockchain);
     if !parent_availability {
         return BlockResult::MissingParent(parent);
     }
@@ -81,6 +76,11 @@ pub fn check_block(
     // match the block type and check content
     match &block.content {
         Content::Transaction(content) => {
+            // check whether it is a duplicate
+            let self_exists = check_transaction_block_exists(block.hash(), blockdb);
+            if self_exists {
+                return BlockResult::Duplicate;
+            }
             // check each transaction
             /*
             for transaction in content.transactions.iter() {
@@ -106,6 +106,11 @@ pub fn check_block(
             return BlockResult::Pass;
         }
         Content::Proposer(content) => {
+            // check whether it is a duplicate
+            let self_exists = check_proposer_block_exists(block.hash(), blockdb, blockchain);
+            if self_exists {
+                return BlockResult::Duplicate;
+            }
             // check for missing references
             let missing_refs =
                 proposer_block::get_missing_references(&content, blockchain, blockdb);
@@ -116,6 +121,11 @@ pub fn check_block(
             }
         }
         Content::Voter(content) => {
+            // check whether it is a duplicate
+            let self_exists = check_voter_block_exists(block.hash(), blockdb, blockchain);
+            if self_exists {
+                return BlockResult::Duplicate;
+            }
             // check for missing references
             let missing_refs = voter_block::get_missing_references(&content, blockchain, blockdb);
             if missing_refs.len() != 0 {
@@ -138,8 +148,52 @@ pub fn check_block(
     }
 }
 
-/// Check whether a block exists in the block database.
-fn check_block_exist(
+/// Check whether a proposer block exists in the block database and the blockchain.
+fn check_proposer_block_exists(
+    hash: H256,
+    blockdb: &BlockDatabase,
+    blockchain: &BlockChain,
+) -> bool {
+    let in_db = match blockdb.get(&hash) {
+        Err(e) => panic!("Database error {}", e),
+        Ok(b) => match b {
+            None => false,
+            Some(_) => true,
+        },
+    };
+
+    let in_chain = match blockchain.contains_proposer(&hash) {
+        Err(e) => panic!("Blockchain error {}", e),
+        Ok(b) => b,
+    };
+
+    return in_db && in_chain;
+}
+
+/// Check whether a voter block exists in the block database and the blockchain.
+fn check_voter_block_exists(
+    hash: H256,
+    blockdb: &BlockDatabase,
+    blockchain: &BlockChain,
+) -> bool {
+    let in_db = match blockdb.get(&hash) {
+        Err(e) => panic!("Database error {}", e),
+        Ok(b) => match b {
+            None => false,
+            Some(_) => true,
+        },
+    };
+
+    let in_chain = match blockchain.contains_voter(&hash) {
+        Err(e) => panic!("Blockchain error {}", e),
+        Ok(b) => b,
+    };
+
+    return in_db && in_chain;
+}
+
+/// Check whether a transaction block exists in the block database.
+fn check_transaction_block_exists(
     hash: H256,
     blockdb: &BlockDatabase,
 ) -> bool {
