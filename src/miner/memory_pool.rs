@@ -15,8 +15,6 @@ pub struct MemoryPool {
     by_input: HashMap<Input, H256>,
     /// Storage for order by storage index, it is equivalent to FIFO
     by_storage_index: BTreeMap<u64, H256>,
-    // future: pending storage: txs whose input is in pool (or in pending?)
-    // future: orphan storage: txs whose input can't be found in utxo or pool
 }
 
 #[derive(Debug, Clone)]

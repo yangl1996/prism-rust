@@ -271,8 +271,10 @@ impl Context {
         // get mutex of blockchain and get all required data
         self.proposer_parent_hash = self.blockchain.best_proposer();
         self.difficulty = self.get_difficulty(&self.proposer_parent_hash);
-        let transaction_block_refs = self.blockchain.unreferred_transaction(); //.clone();
-        let proposer_block_refs = self.blockchain.unreferred_proposer().clone(); // remove clone?
+        let transaction_block_refs = self.blockchain.unreferred_transaction();
+        let mut proposer_block_refs = self.blockchain.unreferred_proposer();
+        proposer_block_refs.iter().position(|item| *item == self.proposer_parent_hash).map(|i| proposer_block_refs.remove(i));
+
         let voter_parent_hash: Vec<H256> = (0..NUM_VOTER_CHAINS)
             .map(|i| self.blockchain.best_voter(i as usize).clone())
             .collect();
