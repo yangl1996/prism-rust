@@ -383,7 +383,7 @@ impl BlockChain {
                     serialize(&block_hash).unwrap(),
                     serialize(&content.votes).unwrap(),
                 )?;
-                let mut deepest_voted_level: Option<u64> = None;
+                let mut deepest_voted_level: u64 = deserialize(&self.db.get_cf(voter_node_voted_level_cf, serialize(&voter_parent_hash).unwrap())?.unwrap()).unwrap();
                 for vote_hash in &content.votes {
                     let voted_level: u64 = deserialize(
                         &self
@@ -392,27 +392,9 @@ impl BlockChain {
                             .unwrap(),
                     )
                     .unwrap();
-                    if let Some(level) = deepest_voted_level {
-                        if voted_level > level {
-                            deepest_voted_level = Some(voted_level);
-                        }
-                    } else {
-                        deepest_voted_level = Some(voted_level);
-                    }
+                    if voted_level > deepest_voted_level {
+                        deepest_voted_level = voted_level;
                 }
-                let deepest_voted_level: u64 = match deepest_voted_level {
-                    Some(level) => level,
-                    None => {
-                        // This branch means this voter has 0 votes, so have to ask its parent about the voted level
-                        match self.db.get_cf(
-                            voter_node_voted_level_cf,
-                            serialize(&voter_parent_hash).unwrap(),
-                        )? {
-                            Some(d) => deserialize(&d).unwrap(),
-                            _ => unreachable!("parent voter block should have voted level in database")
-                        }
-                    }
-                };
                 wb.put_cf(
                     voter_node_voted_level_cf,
                     serialize(&block_hash).unwrap(),
