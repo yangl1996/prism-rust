@@ -32,8 +32,8 @@ fn main() {
      (@arg known_peer: -c --connect ... [PEER] "Sets the peers to connect to")
      (@arg block_db: --blockdb [PATH] "Sets the path of the block database")
      (@arg utxo_db: --utxodb [PATH] "Sets the path of the UTXO database")
-     (@arg blockchain_db: --blockchain [PATH] "Sets the path of the blockchain database")
-     (@arg wallet_db: --wallet [PATH] "Sets the path of the wallet")
+     (@arg blockchain_db: --blockchaindb [PATH] "Sets the path of the blockchain database")
+     (@arg wallet_db: --walletdb [PATH] "Sets the path of the wallet")
     )
     .get_matches();
 
