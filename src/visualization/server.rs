@@ -1,4 +1,4 @@
-//use super::ledger_dump::dump_ledger;
+use super::ledger_dump::dump_ledger;
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
 use crate::utxodb::UtxoDatabase;
@@ -64,43 +64,43 @@ impl Server {
             handle: handle,
         };
         thread::spawn(move || {
-                for req in server.handle.incoming_requests() {
-                    let blockchain = Arc::clone(&server.blockchain);
-                    let blockdb = Arc::clone(&server.blockdb);
-                    let utxodb = Arc::clone(&server.utxodb);
-                    thread::spawn(move || match req.url().trim_start_matches("/") {
-                            "blockchain.json" => serve_dynamic_file!(
+            for req in server.handle.incoming_requests() {
+                let blockchain = Arc::clone(&server.blockchain);
+                let blockdb = Arc::clone(&server.blockdb);
+                let utxodb = Arc::clone(&server.utxodb);
+                thread::spawn(move || match req.url().trim_start_matches("/") {
+                    "blockchain.json" => serve_dynamic_file!(
                         req,
-                        match blockchain.dump(100) {
+                        match blockchain.dump(100) {//TODO: change 100 to some number from http request?
                             Ok(dump) => dump,
                             Err(_) => "Blockchain Dump error".to_string(),
                         },
                         "application/json",
                         addr
                     ),
-//                    "ledger.json" => serve_dynamic_file!(
-//                        req,
-//                        dump_ledger(&blockchain.lock().unwrap(), &blockdb, &utxodb),
-//                        "application/json",
-//                        addr
-//                    ),
-                            "cytoscape.min.js" => {
-                                serve_static_file!(req, "cytoscape.js", "application/javascript")
-                            }
-                            "dagre.min.js" => {
-                                serve_static_file!(req, "dagre.min.js", "application/javascript")
-                            }
-                            "cytoscape-dagre.js" => {
-                                serve_static_file!(req, "cytoscape-dagre.js", "application/javascript")
-                            }
-                            "bootstrap.min.css" => serve_static_file!(req, "bootstrap.min.css", "text/css"),
-                            "blockchain_vis.js" => serve_dynamic_file!(
+                    "ledger.json" => serve_dynamic_file!(
+                        req,
+                        dump_ledger(&blockchain, &blockdb, &utxodb, 100),//TODO: change 100 to some number from http request?
+                        "application/json",
+                        addr
+                    ),
+                    "cytoscape.min.js" => {
+                        serve_static_file!(req, "cytoscape.js", "application/javascript")
+                    }
+                    "dagre.min.js" => {
+                        serve_static_file!(req, "dagre.min.js", "application/javascript")
+                    }
+                    "cytoscape-dagre.js" => {
+                        serve_static_file!(req, "cytoscape-dagre.js", "application/javascript")
+                    }
+                    "bootstrap.min.css" => serve_static_file!(req, "bootstrap.min.css", "text/css"),
+                    "blockchain_vis.js" => serve_dynamic_file!(
                         req,
                         include_str!("blockchain_vis.js"),
                         "application/javascript",
                         addr
                     ),
-                            "visualize-blockchain" => serve_dynamic_file!(
+                    "visualize-blockchain" => serve_dynamic_file!(
                         req,
                         include_str!("blockchain_vis.html"),
                         "text/html",
@@ -115,19 +115,19 @@ impl Server {
 //                    "visualize-ledger" => {
 //                        serve_dynamic_file!(req, include_str!("ledger_vis.html"), "text/html", addr)
 //                    }
-                            "" => serve_dynamic_file!(req, include_str!("index.html"), "text/html", addr),
-                            _ => {
-                                let content_type = "Content-Type: text/html".parse::<Header>().unwrap();
-                                let resp = Response::from_string(include_str!("404.html"))
-                                    .with_header(content_type)
-                                    .with_status_code(404);
-                                match req.respond(resp) {
-                                    Ok(_) => {}//do something?
-                                    Err(_) => {}//do something?
-                                }
-                            }
-                        });
-                }
-            });
+                    "" => serve_dynamic_file!(req, include_str!("index.html"), "text/html", addr),
+                    _ => {
+                        let content_type = "Content-Type: text/html".parse::<Header>().unwrap();
+                        let resp = Response::from_string(include_str!("404.html"))
+                            .with_header(content_type)
+                            .with_status_code(404);
+                        match req.respond(resp) {
+                            Ok(_) => {}//do something?
+                            Err(_) => {}//do something?
+                        }
+                    }
+                });
+            }
+        });
     }
 }

@@ -163,6 +163,8 @@ impl BlockChain {
         let vote_neighbor_cf = db.db.cf_handle(VOTE_NEIGHBOR_CF).unwrap();
         let proposer_leader_sequence_cf = db.db.cf_handle(PROPOSER_LEADER_SEQUENCE_CF).unwrap();
         let proposer_ledger_order_cf = db.db.cf_handle(PROPOSER_LEDGER_ORDER_CF).unwrap();
+        let proposer_ref_neighbor_cf = db.db.cf_handle(PROPOSER_REF_NEIGHBOR_CF).unwrap();
+        let transaction_ref_neighbor_cf = db.db.cf_handle(TRANSACTION_REF_NEIGHBOR_CF).unwrap();
 
         // insert genesis blocks
         let mut wb = WriteBatch::default();
@@ -194,6 +196,16 @@ impl BlockChain {
             proposer_ledger_order_cf,
             serialize(&(0 as u64)).unwrap(),
             serialize(&proposer_genesis_ledger).unwrap(),
+        )?;
+        wb.put_cf(
+            proposer_ref_neighbor_cf,
+            serialize(&(*PROPOSER_GENESIS_HASH)).unwrap(),
+            serialize(&Vec::<H256>::new()).unwrap(),
+        )?;
+        wb.put_cf(
+            transaction_ref_neighbor_cf,
+            serialize(&(*PROPOSER_GENESIS_HASH)).unwrap(),
+            serialize(&Vec::<H256>::new()).unwrap(),
         )?;
 
         // voter genesis blocks
@@ -819,7 +831,42 @@ impl BlockChain {
 
 // Functions to dump the blockchain, limit the number of levels of proposer (start from the tip)
 impl BlockChain {
-    pub fn dump(&self, limit: u16) -> Result<String> {
+    pub fn proposer_transaction_in_ledger(&self, limit: u64) -> Result<Vec<(H256, Vec<H256>)>> {
+        let mut ledger_tip_ = self.ledger_tip.lock().unwrap();
+        let ledger_tip = *ledger_tip_;
+        drop(ledger_tip_);
+
+        let ledger_bottom: u64 = match ledger_tip > limit {
+            true => ledger_tip - limit,
+            false => 0,
+        };
+        let proposer_ledger_order_cf = self.db.cf_handle(PROPOSER_LEDGER_ORDER_CF).unwrap();
+        let transaction_ref_neighbor_cf = self.db.cf_handle(TRANSACTION_REF_NEIGHBOR_CF).unwrap();
+
+        let mut proposer_in_ledger: Vec<H256> = vec![];
+        let mut ledger: Vec<(H256, Vec<H256>)> = vec![];
+
+        for level in ledger_bottom..=ledger_tip {
+            match self.db.get_cf(proposer_ledger_order_cf, serialize(&level).unwrap())? {
+                None => unreachable!("level <= ledger tip should have leader"),
+                Some(d) => {
+                    let mut blocks: Vec<H256> = deserialize(&d).unwrap();
+                    proposer_in_ledger.append(&mut blocks);
+                }
+            }
+        }
+
+        for hash in &proposer_in_ledger {
+            let blocks: Vec<H256> = match self.db.get_cf(transaction_ref_neighbor_cf, serialize(&hash).unwrap())? {
+                None => unreachable!("proposer in ledger should have transaction ref in database (even for empty ref)"),
+                Some(d) => deserialize(&d).unwrap(),
+            };
+            ledger.push((*hash, blocks));
+        }
+        Ok(ledger)
+    }
+
+    pub fn dump(&self, limit: u64) -> Result<String> {
         /// Struct to hold blockchain data to be dumped
         #[derive(Serialize)]
         struct Dump {
@@ -872,7 +919,7 @@ impl BlockChain {
         #[derive(Serialize)]
         enum VoterStatus {
             OnMainChain,
-            Orphan,
+//            Orphan,
         }
 
         let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
@@ -885,10 +932,13 @@ impl BlockChain {
         let transaction_ref_neighbor_cf = self.db.cf_handle(TRANSACTION_REF_NEIGHBOR_CF).unwrap();
 
         // get the ledger tip and bottom, for processing ledger
-        let mut ledger_tip_ = self.ledger_tip.lock().unwrap();
+        let ledger_tip_ = self.ledger_tip.lock().unwrap();
         let ledger_tip = *ledger_tip_;
         drop(ledger_tip_);
-        let mut ledger_bottom = 0u64;
+        let ledger_bottom: u64 = match ledger_tip > limit {
+            true => ledger_tip - limit,
+            false => 0,
+        };
 
 
         // for computing the lowest level for voter chains related to the 100 levels of proposer nodes
@@ -918,17 +968,14 @@ impl BlockChain {
         let mut transaction_in_ledger: Vec<String> = vec![];
 
         // proposer tree
-        let mut cnt = 0u16;
-        for (k, v) in iter {
-            let level: u64 = deserialize(&k).unwrap();
-            let blocks: Vec<H256> = deserialize(&v).unwrap();
-//            let blocks_string: Vec<String> = blocks.iter().map(|h256|h256.to_string()).collect();
-            blocks.iter().for_each(|h256|{nodes_to_show.insert(h256.to_string());});
-            proposer_tree.insert(level, blocks);
-            cnt+=1;
-            if cnt > limit {
-                ledger_bottom = level;
-                break;
+        for level in ledger_bottom.. {
+            match self.db.get_cf(proposer_tree_level_cf, serialize(&level).unwrap())? {
+                Some(d) => {
+                    let blocks: Vec<H256> = deserialize(&d).unwrap();
+                    blocks.iter().for_each(|h256|{nodes_to_show.insert(h256.to_string());});
+                    proposer_tree.insert(level, blocks);
+                }
+                None => break,
             }
         }
 
@@ -1065,7 +1112,7 @@ impl BlockChain {
             match self.db.get_cf(transaction_ref_neighbor_cf, serialize(&hash).unwrap())? {
                 None => {},
                 Some(d) => {
-                    let mut blocks: Vec<H256> = deserialize(&d).unwrap();
+                    let blocks: Vec<H256> = deserialize(&d).unwrap();
                     let mut blocks = blocks.into_iter().map(|h|h.to_string()).collect();
                     transaction_in_ledger.append(&mut blocks);
                 }
