@@ -3,15 +3,15 @@ use super::peer;
 use crate::block::Block;
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
-use crate::handler::new_validated_block;
+use crate::crypto::hash::Hashable;
 use crate::handler::new_transaction;
+use crate::handler::new_validated_block;
 use crate::miner::memory_pool::MemoryPool;
 use crate::miner::ContextUpdateSignal;
 use crate::network::server::Handle as ServerHandle;
 use crate::utxodb::UtxoDatabase;
-use crate::wallet::Wallet;
 use crate::validation::{check_block, BlockResult};
-use crate::crypto::hash::Hashable;
+use crate::wallet::Wallet;
 use log::{debug, info};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
@@ -153,7 +153,11 @@ impl Context {
                                 self.server.broadcast(Message::GetBlocks(vec![p]));
                             }
                             BlockResult::MissingReferences(r) => {
-                                debug!("Missing {} referred blocks for block {:.8}", r.len(), block.hash());
+                                debug!(
+                                    "Missing {} referred blocks for block {:.8}",
+                                    r.len(),
+                                    block.hash()
+                                );
                                 self.buffer.lock().unwrap().push(block);
                                 self.server.broadcast(Message::GetBlocks(r));
                             }
@@ -170,7 +174,11 @@ impl Context {
                                 );
                             }
                             _ => {
-                                debug!("Ignoring invalid block {:.8}: {}", block.hash(), validation_result);
+                                debug!(
+                                    "Ignoring invalid block {:.8}: {}",
+                                    block.hash(),
+                                    validation_result
+                                );
                                 // pass invalid block
                             }
                         }
@@ -182,7 +190,7 @@ impl Context {
                             check_block(&block, &self.chain, &self.blockdb, &self.utxodb);
                         match validation_result {
                             BlockResult::MissingParent(_) | BlockResult::MissingReferences(_) => {
-                                return true;    // retain this block
+                                return true; // retain this block
                             }
                             BlockResult::Pass => {
                                 debug!("Processing buffered block {:.8}", block.hash());
@@ -195,10 +203,10 @@ impl Context {
                                     &self.utxodb,
                                     &self.wallet,
                                 );
-                                return false;   // remove the block
+                                return false; // remove the block
                             }
                             _ => {
-                                return false;   // remove invalid block
+                                return false; // remove invalid block
                             }
                         }
                     });

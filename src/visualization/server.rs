@@ -71,7 +71,8 @@ impl Server {
                 thread::spawn(move || match req.url().trim_start_matches("/") {
                     "blockchain.json" => serve_dynamic_file!(
                         req,
-                        match blockchain.dump(100) {//TODO: change 100 to some number from http request?
+                        match blockchain.dump(100) {
+                            //TODO: change 100 to some number from http request?
                             Ok(dump) => dump,
                             Err(_) => "Blockchain Dump error".to_string(),
                         },
@@ -80,7 +81,7 @@ impl Server {
                     ),
                     "ledger.json" => serve_dynamic_file!(
                         req,
-                        dump_ledger(&blockchain, &blockdb, &utxodb, 100),//TODO: change 100 to some number from http request?
+                        dump_ledger(&blockchain, &blockdb, &utxodb, 100), //TODO: change 100 to some number from http request?
                         "application/json",
                         addr
                     ),
@@ -106,15 +107,15 @@ impl Server {
                         "text/html",
                         addr
                     ),
-//                    "ledger_vis.js" => serve_dynamic_file!(
-//                        req,
-//                        include_str!("ledger_vis.js"),
-//                        "application/javascript",
-//                        addr
-//                    ),
-//                    "visualize-ledger" => {
-//                        serve_dynamic_file!(req, include_str!("ledger_vis.html"), "text/html", addr)
-//                    }
+                    //                    "ledger_vis.js" => serve_dynamic_file!(
+                    //                        req,
+                    //                        include_str!("ledger_vis.js"),
+                    //                        "application/javascript",
+                    //                        addr
+                    //                    ),
+                    //                    "visualize-ledger" => {
+                    //                        serve_dynamic_file!(req, include_str!("ledger_vis.html"), "text/html", addr)
+                    //                    }
                     "" => serve_dynamic_file!(req, include_str!("index.html"), "text/html", addr),
                     _ => {
                         let content_type = "Content-Type: text/html".parse::<Header>().unwrap();
@@ -122,8 +123,8 @@ impl Server {
                             .with_header(content_type)
                             .with_status_code(404);
                         match req.respond(resp) {
-                            Ok(_) => {}//do something?
-                            Err(_) => {}//do something?
+                            Ok(_) => {}  //do something?
+                            Err(_) => {} //do something?
                         }
                     }
                 });

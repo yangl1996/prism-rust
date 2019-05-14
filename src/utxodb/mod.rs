@@ -1,10 +1,10 @@
 use crate::crypto::hash::Hashable;
-use crate::transaction::{Input, Output, CoinId, Transaction};
+use crate::transaction::{CoinId, Input, Output, Transaction};
 use bincode::serialize;
-use rocksdb::{DB, Options};
+use rocksdb::{Options, DB};
 
 pub struct UtxoDatabase {
-    db: rocksdb::DB,    // coin id to output
+    db: rocksdb::DB, // coin id to output
 }
 
 impl UtxoDatabase {
@@ -16,11 +16,9 @@ impl UtxoDatabase {
         opts.create_missing_column_families(true);
 
         let db = DB::open_cf_descriptors(&opts, path, cfs)?;
-        return Ok(Self{
-            db: db,
-        });
+        return Ok(Self { db: db });
     }
-    
+
     /// Create a new database at the given path, and initialize the content.
     pub fn new<P: AsRef<std::path::Path>>(path: P) -> Result<Self, rocksdb::Error> {
         DB::destroy(&Options::default(), &path)?;
@@ -39,7 +37,11 @@ impl UtxoDatabase {
     }
 
     /// Remove the given transactions, then add another set of transactions.
-    pub fn apply_diff(&self, added: &[Transaction], removed: &[Transaction]) -> Result<(Vec<Input>, Vec<Input>), rocksdb::Error> {
+    pub fn apply_diff(
+        &self,
+        added: &[Transaction],
+        removed: &[Transaction],
+    ) -> Result<(Vec<Input>, Vec<Input>), rocksdb::Error> {
         let mut added_coins: Vec<Input> = vec![];
         let mut removed_coins: Vec<Input> = vec![];
         // revert the transactions
@@ -54,19 +56,19 @@ impl UtxoDatabase {
             for idx in 0..num_outputs {
                 let id = CoinId {
                     hash: transaction_hash,
-                    index: idx as u32
+                    index: idx as u32,
                 };
                 if self.db.get(serialize(&id).unwrap())?.is_none() {
                     valid = false;
                 }
             }
-            
+
             if valid {
-                // remove the outputs 
+                // remove the outputs
                 for idx in 0..num_outputs {
                     let id = CoinId {
                         hash: transaction_hash,
-                        index: idx as u32
+                        index: idx as u32,
                     };
                     self.db.delete(serialize(&id).unwrap())?;
                     let coin = Input {
@@ -82,7 +84,8 @@ impl UtxoDatabase {
                         value: input.value,
                         recipient: input.owner,
                     };
-                    self.db.put(serialize(&input.coin).unwrap(), serialize(&out).unwrap())?;
+                    self.db
+                        .put(serialize(&input.coin).unwrap(), serialize(&out).unwrap())?;
                     added_coins.push(input.clone());
                 }
             }
@@ -101,9 +104,10 @@ impl UtxoDatabase {
             for (idx, output) in t.output.iter().enumerate() {
                 let id = CoinId {
                     hash: transaction_hash,
-                    index: idx as u32
+                    index: idx as u32,
                 };
-                self.db.put(serialize(&id).unwrap(), serialize(&output).unwrap())?;
+                self.db
+                    .put(serialize(&id).unwrap(), serialize(&output).unwrap())?;
                 let coin = Input {
                     coin: id,
                     value: output.value,
@@ -119,8 +123,8 @@ impl UtxoDatabase {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::transaction::Input;
     use crate::crypto::hash::H256;
+    use crate::transaction::Input;
     use bincode::deserialize;
 
     #[test]
@@ -141,67 +145,100 @@ mod test {
                 Output {
                     value: 75,
                     recipient: H256::default(),
-                }
+                },
             ],
             authorization: vec![],
         };
         let transaction_2 = Transaction {
             input: vec![],
-            output: vec![
-                Output {
-                    value: 50,
-                    recipient: H256::default(),
-                }
-            ],
+            output: vec![Output {
+                value: 50,
+                recipient: H256::default(),
+            }],
             authorization: vec![],
         };
-        db.apply_diff(&vec![transaction_1.clone(), transaction_2.clone()], &vec![]).unwrap();
-        let out: Output = deserialize(&db.db.get(serialize(&CoinId {
-            hash: transaction_1.hash(),
-            index: 1,
-        }).unwrap()).unwrap().unwrap()).unwrap();
-        assert_eq!(out, Output {
-            value: 75,
-            recipient: H256::default(),
-        });
-        let transaction_3 = Transaction {
-            input: vec![
-                Input {
-                    coin: CoinId {
+        db.apply_diff(&vec![transaction_1.clone(), transaction_2.clone()], &vec![])
+            .unwrap();
+        let out: Output = deserialize(
+            &db.db
+                .get(
+                    serialize(&CoinId {
                         hash: transaction_1.hash(),
-                        index: 0
-                    },
-                    value: 100,
-                    owner: H256::default(),
-                }
-            ],
-            output: vec![
-                Output {
-                    value: 100,
-                    recipient: H256::default(),
-                }
-            ],
+                        index: 1,
+                    })
+                    .unwrap(),
+                )
+                .unwrap()
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            out,
+            Output {
+                value: 75,
+                recipient: H256::default(),
+            }
+        );
+        let transaction_3 = Transaction {
+            input: vec![Input {
+                coin: CoinId {
+                    hash: transaction_1.hash(),
+                    index: 0,
+                },
+                value: 100,
+                owner: H256::default(),
+            }],
+            output: vec![Output {
+                value: 100,
+                recipient: H256::default(),
+            }],
             authorization: vec![],
         };
-        db.apply_diff(&vec![transaction_3.clone()], &vec![]).unwrap();
-        let out = db.db.get(serialize(&CoinId {
-            hash: transaction_1.hash(),
-            index: 0,
-        }).unwrap()).unwrap();
+        db.apply_diff(&vec![transaction_3.clone()], &vec![])
+            .unwrap();
+        let out = db
+            .db
+            .get(
+                serialize(&CoinId {
+                    hash: transaction_1.hash(),
+                    index: 0,
+                })
+                .unwrap(),
+            )
+            .unwrap();
         assert_eq!(out.is_none(), true);
-        db.apply_diff(&vec![], &vec![transaction_2.clone(), transaction_3.clone()]).unwrap();
-        let out: Output = deserialize(&db.db.get(serialize(&CoinId {
-            hash: transaction_1.hash(),
-            index: 0,
-        }).unwrap()).unwrap().unwrap()).unwrap();
-        assert_eq!(out, Output {
-            value: 100,
-            recipient: H256::default(),
-        });
-        let out = db.db.get(serialize(&CoinId {
-            hash: transaction_2.hash(),
-            index: 0,
-        }).unwrap()).unwrap();
+        db.apply_diff(&vec![], &vec![transaction_2.clone(), transaction_3.clone()])
+            .unwrap();
+        let out: Output = deserialize(
+            &db.db
+                .get(
+                    serialize(&CoinId {
+                        hash: transaction_1.hash(),
+                        index: 0,
+                    })
+                    .unwrap(),
+                )
+                .unwrap()
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            out,
+            Output {
+                value: 100,
+                recipient: H256::default(),
+            }
+        );
+        let out = db
+            .db
+            .get(
+                serialize(&CoinId {
+                    hash: transaction_2.hash(),
+                    index: 0,
+                })
+                .unwrap(),
+            )
+            .unwrap();
         assert_eq!(out.is_none(), true);
     }
 }

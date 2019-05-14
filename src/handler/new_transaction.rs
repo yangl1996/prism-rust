@@ -1,8 +1,8 @@
 use crate::crypto::hash::Hashable;
 use crate::miner::memory_pool::MemoryPool;
-use crate::transaction::Transaction;
-use crate::network::server::Handle;
 use crate::network::message::Message;
+use crate::network::server::Handle;
+use crate::transaction::Transaction;
 use std::sync::Mutex;
 
 /// Handler for new transaction

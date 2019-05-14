@@ -87,4 +87,3 @@ impl Hashable for Content {
         }
     }
 }
-

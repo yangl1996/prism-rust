@@ -55,7 +55,6 @@ pub fn check_block(
 ) -> BlockResult {
     // TODO: check PoW. Where should we get the current difficulty ranges?
 
-
     // check whether the parent exists
     let parent = block.header.parent;
     let parent_availability = check_proposer_block_exists(parent, blockdb, blockchain);
@@ -171,11 +170,7 @@ fn check_proposer_block_exists(
 }
 
 /// Check whether a voter block exists in the block database and the blockchain.
-fn check_voter_block_exists(
-    hash: H256,
-    blockdb: &BlockDatabase,
-    blockchain: &BlockChain,
-) -> bool {
+fn check_voter_block_exists(hash: H256, blockdb: &BlockDatabase, blockchain: &BlockChain) -> bool {
     let in_db = match blockdb.get(&hash) {
         Err(e) => panic!("Database error {}", e),
         Ok(b) => match b {
@@ -193,10 +188,7 @@ fn check_voter_block_exists(
 }
 
 /// Check whether a transaction block exists in the block database.
-fn check_transaction_block_exists(
-    hash: H256,
-    blockdb: &BlockDatabase,
-) -> bool {
+fn check_transaction_block_exists(hash: H256, blockdb: &BlockDatabase) -> bool {
     let in_db = match blockdb.get(&hash) {
         Err(e) => panic!("Database error {}", e),
         Ok(b) => match b {

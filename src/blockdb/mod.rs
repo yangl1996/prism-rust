@@ -4,8 +4,8 @@ use crate::block::Block;
 use crate::config::*;
 use crate::crypto::hash::{Hashable, H256};
 use bincode::{deserialize, serialize};
+use rocksdb::{self, Options, DB};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use rocksdb::{self, DB, Options};
 
 /// Database that stores blocks.
 pub struct BlockDatabase {
@@ -47,7 +47,8 @@ impl BlockDatabase {
             )?;
         }
 
-        db.count.store(1 + NUM_VOTER_CHAINS as usize, Ordering::Relaxed);
+        db.count
+            .store(1 + NUM_VOTER_CHAINS as usize, Ordering::Relaxed);
         return Ok(db);
     }
 

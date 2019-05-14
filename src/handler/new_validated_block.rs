@@ -3,10 +3,10 @@ use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
 use crate::crypto::hash::Hashable;
 use crate::miner::memory_pool::MemoryPool;
-use crate::utxodb::UtxoDatabase;
 use crate::network::message;
 use crate::network::server::Handle as ServerHandle;
 use crate::transaction::Transaction;
+use crate::utxodb::UtxoDatabase;
 use crate::wallet::Wallet;
 use std::sync::Mutex;
 
@@ -49,7 +49,7 @@ pub fn new_validated_block(
         let block = blockdb.get(&hash).unwrap().unwrap();
         let content = match block.content {
             Content::Transaction(data) => data,
-            _=> unreachable!(),
+            _ => unreachable!(),
         };
         let mut transactions = content.transactions.clone();
         add.append(&mut transactions);
@@ -58,7 +58,7 @@ pub fn new_validated_block(
         let block = blockdb.get(&hash).unwrap().unwrap();
         let content = match block.content {
             Content::Transaction(data) => data,
-            _=> unreachable!(),
+            _ => unreachable!(),
         };
         let mut transactions = content.transactions.clone();
         remove.append(&mut transactions);
@@ -66,7 +66,6 @@ pub fn new_validated_block(
 
     let coin_diff = utxodb.apply_diff(&add, &remove).unwrap();
     wallet.update(&coin_diff.0, &coin_diff.1).unwrap();
-
 
     // tell the neighbors that we have a new block
     server.broadcast(message::Message::NewBlockHashes(vec![block.hash()]));

@@ -1,6 +1,6 @@
 use crate::block::Block;
-use crate::transaction::Transaction;
 use crate::crypto::hash::H256;
+use crate::transaction::Transaction;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Message {

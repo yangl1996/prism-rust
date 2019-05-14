@@ -6,8 +6,8 @@ use prism::blockchain::BlockChain;
 use prism::blockdb::BlockDatabase;
 use prism::miner::memory_pool::MemoryPool;
 use prism::utxodb::UtxoDatabase;
-use prism::wallet::Wallet;
 use prism::visualization::Server as VisualizationServer;
+use prism::wallet::Wallet;
 use std::net;
 use std::process;
 use std::sync::Arc;
@@ -59,14 +59,14 @@ fn main() {
     };
     let utxodb = Arc::new(utxodb);
 
-    // init blockchain database 
+    // init blockchain database
     let blockchain = match matches.value_of("blockchain_db") {
         Some(path) => BlockChain::new(&path).unwrap(),
         None => BlockChain::new(&DEFAULT_BLOCKCHAIN).unwrap(),
     };
     let blockchain = Arc::new(blockchain);
 
-    // init wallet database 
+    // init wallet database
     let wallet = match matches.value_of("wallet_db") {
         Some(path) => Wallet::new(&path).unwrap(),
         None => Wallet::new(&DEFAULT_WALLET).unwrap(),
@@ -83,7 +83,7 @@ fn main() {
             info!("Starting visualization server at {}", &addr);
             VisualizationServer::start(addr, &blockchain, &blockdb, &utxodb);
         }
-        None => {},
+        None => {}
     }
 
     // parse server ip and port

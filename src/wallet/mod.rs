@@ -1,10 +1,10 @@
 use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::sign::{KeyPair, PubKey, Signable};
 use crate::handler;
-use crate::transaction::{Authorization, CoinId, Input, Output, Transaction, Address};
-use std::sync::{Arc, Mutex};
-use std::{fmt, error};
+use crate::transaction::{Address, Authorization, CoinId, Input, Output, Transaction};
 use bincode::{deserialize, serialize};
+use std::sync::{Arc, Mutex};
+use std::{error, fmt};
 
 pub const COIN_CF: &str = "COIN";
 pub const KEYPAIR_CF: &str = "KEYPAIR";
@@ -32,7 +32,10 @@ impl fmt::Display for WalletError {
             WalletError::InsufficientMoney => write!(f, "Insufficient Money"),
             WalletError::ZeroKey => write!(f, "You have 0 key pair"),
             WalletError::MissingKey => write!(f, "No Key Pair correspond to the Address"),
-            WalletError::MemoryPoolCheckFailure => write!(f, "Your transaction has conflict with some tx in memory pool"),
+            WalletError::MemoryPoolCheckFailure => write!(
+                f,
+                "Your transaction has conflict with some tx in memory pool"
+            ),
             WalletError::DBError(ref e) => e.fmt(f),
         }
     }
@@ -56,14 +59,13 @@ impl From<rocksdb::Error> for WalletError {
 impl Wallet {
     fn open<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
         let coin_cf = rocksdb::ColumnFamilyDescriptor::new(COIN_CF, rocksdb::Options::default());
-        let keypair_cf = rocksdb::ColumnFamilyDescriptor::new(KEYPAIR_CF, rocksdb::Options::default());
+        let keypair_cf =
+            rocksdb::ColumnFamilyDescriptor::new(KEYPAIR_CF, rocksdb::Options::default());
         let mut db_opts = rocksdb::Options::default();
         db_opts.create_missing_column_families(true);
         db_opts.create_if_missing(true);
         let handle = rocksdb::DB::open_cf_descriptors(&db_opts, path, vec![coin_cf, keypair_cf])?;
-        return Ok(Self {
-            handle,
-        });
+        return Ok(Self { handle });
     }
 
     pub fn new<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
@@ -73,21 +75,21 @@ impl Wallet {
 
     // someone pay to public key A first, then I coincidentally generate A, I will NOT receive the payment
     /// Generate a new key pair
-    pub fn generate_keypair(&self) -> Result<()>{
+    pub fn generate_keypair(&self) -> Result<()> {
         let cf = self.handle.cf_handle(KEYPAIR_CF).unwrap();
         let keypair = KeyPair::random();
         let k: Address = keypair.public_key().hash();
         let k = serialize(&k).unwrap();
         let v = keypair.pkcs8_bytes;
-        self.handle.put_cf(cf,&k, &v)?;
+        self.handle.put_cf(cf, &k, &v)?;
         Ok(())
     }
 
     /// Get one pubkey from this wallet
     pub fn get_a_pubkey(&self) -> Result<PubKey> {
         let cf = self.handle.cf_handle(KEYPAIR_CF).unwrap();
-        let mut iter = self.handle.iterator_cf(cf,rocksdb::IteratorMode::Start)?;
-        if let Some((_k,v)) = iter.next() {
+        let mut iter = self.handle.iterator_cf(cf, rocksdb::IteratorMode::Start)?;
+        if let Some((_k, v)) = iter.next() {
             let keypair = KeyPair::from_pkcs8(v.to_vec());
             return Ok(keypair.public_key());
         }
@@ -98,8 +100,8 @@ impl Wallet {
     /// Get one pubkey's hash from this wallet
     pub fn get_an_address(&self) -> Result<Address> {
         let cf = self.handle.cf_handle(KEYPAIR_CF).unwrap();
-        let mut iter = self.handle.iterator_cf(cf,rocksdb::IteratorMode::Start)?;
-        if let Some((k,_v)) = iter.next() {
+        let mut iter = self.handle.iterator_cf(cf, rocksdb::IteratorMode::Start)?;
+        if let Some((k, _v)) = iter.next() {
             let hash: Address = deserialize(k.as_ref()).unwrap();
             return Ok(hash);
         }
@@ -129,7 +131,7 @@ impl Wallet {
 
     /// Add coin to wallet
     /// Use write batch to keep atomicity
-    fn insert_coin_batch(&self, coin: &Input, batch: &mut rocksdb::WriteBatch) -> Result<()>{
+    fn insert_coin_batch(&self, coin: &Input, batch: &mut rocksdb::WriteBatch) -> Result<()> {
         let cf = self.handle.cf_handle(COIN_CF).unwrap();
         let k = serialize(&coin.coin).unwrap();
         let output = Output {
@@ -137,7 +139,7 @@ impl Wallet {
             recipient: coin.owner,
         };
         let v = serialize(&output).unwrap();
-        batch.put_cf(cf,&k, &v)?;
+        batch.put_cf(cf, &k, &v)?;
         Ok(())
     }
 
@@ -179,11 +181,13 @@ impl Wallet {
     /// Returns the sum of values of all the coin in the wallet
     pub fn balance(&self) -> Result<u64> {
         let cf = self.handle.cf_handle(COIN_CF).unwrap();
-        let iter = self.handle.iterator_cf(cf,rocksdb::IteratorMode::Start)?;
-        let balance = iter.map(|(_k,v)| {
-            let coin_data: Output = bincode::deserialize(v.as_ref()).unwrap();
-            coin_data.value
-        }).sum::<u64>();
+        let iter = self.handle.iterator_cf(cf, rocksdb::IteratorMode::Start)?;
+        let balance = iter
+            .map(|(_k, v)| {
+                let coin_data: Output = bincode::deserialize(v.as_ref()).unwrap();
+                coin_data.value
+            })
+            .sum::<u64>();
         Ok(balance)
     }
 
@@ -192,7 +196,7 @@ impl Wallet {
         let mut coins_to_use: Vec<Input> = vec![];
         let mut value_sum = 0u64;
         let cf = self.handle.cf_handle(COIN_CF).unwrap();
-        let iter = self.handle.iterator_cf(cf,rocksdb::IteratorMode::Start)?;
+        let iter = self.handle.iterator_cf(cf, rocksdb::IteratorMode::Start)?;
         // iterate thru our wallet
         for (k, v) in iter {
             let coin_id: CoinId = bincode::deserialize(k.as_ref()).unwrap();
@@ -264,12 +268,16 @@ impl Wallet {
     // only for test, how to set pub functions just for test?
     fn get_coin_id(&self) -> Vec<CoinId> {
         let cf = self.handle.cf_handle(COIN_CF).unwrap();
-        let iter = self.handle.iterator_cf(cf,rocksdb::IteratorMode::Start).unwrap();
+        let iter = self
+            .handle
+            .iterator_cf(cf, rocksdb::IteratorMode::Start)
+            .unwrap();
         // iterate thru our wallet
-        iter.map(|(k,_v)| {
+        iter.map(|(k, _v)| {
             let coin_id: CoinId = bincode::deserialize(k.as_ref()).unwrap();
             coin_id
-        }).collect()
+        })
+        .collect()
     }
 }
 

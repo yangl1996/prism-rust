@@ -13,18 +13,18 @@ pub mod crypto;
 pub mod handler;
 pub mod miner;
 pub mod network;
-pub mod utxodb;
 pub mod transaction;
+pub mod utxodb;
 pub mod validation;
 pub mod visualization;
 pub mod wallet;
 
 use crate::utxodb::UtxoDatabase;
 use blockchain::BlockChain;
-use wallet::Wallet;
 use blockdb::BlockDatabase;
 use miner::memory_pool::MemoryPool;
 use std::sync::{mpsc, Arc, Mutex};
+use wallet::Wallet;
 
 pub fn start(
     addr: std::net::SocketAddr,
@@ -33,10 +33,7 @@ pub fn start(
     blockchain: &Arc<BlockChain>,
     wallet: &Arc<Wallet>,
     mempool: &Arc<Mutex<MemoryPool>>,
-) -> std::io::Result<(
-    network::server::Handle,
-    miner::Handle,
-)> {
+) -> std::io::Result<(network::server::Handle, miner::Handle)> {
     // create channels between server and worker, worker and miner, miner and worker
     let (msg_tx, msg_rx) = mpsc::channel();
     let (ctx_tx, ctx_rx) = mpsc::channel();

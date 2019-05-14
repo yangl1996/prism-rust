@@ -1,11 +1,11 @@
+use crate::block::Content;
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
 use crate::crypto::hash::{Hashable, H256};
 use crate::handler;
-use crate::utxodb::UtxoDatabase;
 use crate::transaction::CoinId;
 use crate::transaction::Transaction as RawTransaction;
-use crate::block::Content;
+use crate::utxodb::UtxoDatabase;
 
 #[derive(Serialize)]
 pub struct Input {
@@ -54,7 +54,7 @@ pub fn dump_ledger(
     blockchain: &BlockChain,
     blockdb: &BlockDatabase,
     utxodb: &UtxoDatabase,
-    limit: u64
+    limit: u64,
 ) -> String {
     let ledger = match blockchain.proposer_transaction_in_ledger(limit) {
         Err(_) => return "database err".to_string(),
@@ -71,12 +71,10 @@ pub fn dump_ledger(
             let transactions_in_block: Vec<RawTransaction> = match blockdb.get(tx_block_hash) {
                 Err(_) => return "database err".to_string(),
                 Ok(None) => return "transaction block not found".to_string(),
-                Ok(Some(block)) => {
-                    match block.content {
-                        Content::Transaction(content) => content.transactions,
-                        _ => return "wrong block type, not transaction block".to_string(),
-                    }
-                }
+                Ok(Some(block)) => match block.content {
+                    Content::Transaction(content) => content.transactions,
+                    _ => return "wrong block type, not transaction block".to_string(),
+                },
             };
 
             // loop over all the tx in this transaction block
@@ -125,7 +123,7 @@ pub fn dump_ledger(
         }
         proposer_blocks.push(ProposerBlock {
             hash: proposer_hash.to_string(),
-            transaction_refs: transactions_blocks
+            transaction_refs: transactions_blocks,
         });
     }
     let dump = Dump {

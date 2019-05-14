@@ -1,6 +1,6 @@
 use crate::crypto::hash::Hashable;
-use crate::utxodb::UtxoDatabase;
 use crate::transaction::{CoinId, Transaction};
+use crate::utxodb::UtxoDatabase;
 
 /// Checks that input and output are non-empty
 pub fn check_non_empty(transaction: &Transaction) -> bool {

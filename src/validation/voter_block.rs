@@ -1,5 +1,5 @@
 use super::super::config;
-use super::{check_voter_block_exists, check_proposer_block_exists};
+use super::{check_proposer_block_exists, check_voter_block_exists};
 use crate::block::voter::Content;
 use crate::block::Block;
 use crate::block::Content as BlockContent;

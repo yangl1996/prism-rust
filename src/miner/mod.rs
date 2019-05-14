@@ -5,14 +5,14 @@ use crate::block::{proposer, transaction, voter};
 use crate::block::{Block, Content};
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
-use crate::utxodb::UtxoDatabase;
 use crate::config::*;
 use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::merkle::MerkleTree;
 use crate::handler::new_validated_block;
 use crate::network::server::Handle as ServerHandle;
+use crate::utxodb::UtxoDatabase;
 use crate::wallet::Wallet;
-use log::{info, debug};
+use log::{debug, info};
 
 use memory_pool::MemoryPool;
 use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
@@ -130,7 +130,8 @@ impl Context {
             .name("miner".to_string())
             .spawn(move || {
                 self.miner_loop();
-            }).unwrap();
+            })
+            .unwrap();
         info!("Miner initialized into paused mode");
     }
 
@@ -273,13 +274,21 @@ impl Context {
         self.difficulty = self.get_difficulty(&self.proposer_parent_hash);
         let transaction_block_refs = self.blockchain.unreferred_transaction();
         let mut proposer_block_refs = self.blockchain.unreferred_proposer();
-        proposer_block_refs.iter().position(|item| *item == self.proposer_parent_hash).map(|i| proposer_block_refs.remove(i));
+        proposer_block_refs
+            .iter()
+            .position(|item| *item == self.proposer_parent_hash)
+            .map(|i| proposer_block_refs.remove(i));
 
         let voter_parent_hash: Vec<H256> = (0..NUM_VOTER_CHAINS)
             .map(|i| self.blockchain.best_voter(i as usize).clone())
             .collect();
         let proposer_block_votes: Vec<Vec<H256>> = (0..NUM_VOTER_CHAINS)
-            .map(|i| self.blockchain.unvoted_proposer(&voter_parent_hash[i as usize]).unwrap().clone())
+            .map(|i| {
+                self.blockchain
+                    .unvoted_proposer(&voter_parent_hash[i as usize])
+                    .unwrap()
+                    .clone()
+            })
             .collect();
         // get mutex of mempool and get all required data
         let mempool = self.tx_mempool.lock().unwrap();
