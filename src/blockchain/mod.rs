@@ -287,12 +287,10 @@ impl BlockChain {
                 }
                 unreferred_proposer.remove(&parent_hash);
                 unreferred_proposer.insert(block_hash);
-                drop(unreferred_proposer);
                 let mut unreferred_transaction = self.unreferred_transaction.lock().unwrap();
                 for ref_hash in &content.transaction_refs {
                     unreferred_transaction.remove(&ref_hash);
                 }
-                drop(unreferred_transaction);
                 // add ref'ed blocks
                 // note that the parent is the first proposer block that we refer
                 let mut refed_proposer: Vec<H256> = vec![parent_hash];
@@ -333,12 +331,14 @@ impl BlockChain {
                     proposer_best.0 = block_hash;
                     proposer_best.1 = self_level;
                 }
-                drop(proposer_best);
                 // mark this new proposer block as unconfirmed
                 let mut unconfirmed_proposer = self.unconfirmed_proposer.lock().unwrap();
                 unconfirmed_proposer.insert(block_hash);
-                drop(unconfirmed_proposer);
                 self.db.write(wb)?;
+                drop(unreferred_proposer);
+                drop(unreferred_transaction);
+                drop(proposer_best);
+                drop(unconfirmed_proposer);
                 return Ok((vec![], vec![]));
             }
             Content::Voter(content) => {
@@ -410,7 +410,6 @@ impl BlockChain {
                     voter_best.0 = block_hash;
                     voter_best.1 = self_level;
                 }
-                drop(voter_best);
 
                 // update vote levels
                 // only update if we are the main chain
@@ -694,8 +693,6 @@ impl BlockChain {
                                 }
                             }
                         }
-                        drop(ledger_tip);
-                        drop(unconfirmed_proposer);
                         // commit the new ledger
                         self.db.write(wb)?;
 
@@ -711,15 +708,20 @@ impl BlockChain {
                             added_transaction.append(&mut transactions);
                         }
 
+                        drop(voter_best);
+                        drop(ledger_tip);
+                        drop(unconfirmed_proposer);
                         return Ok((added_transaction, removed_transaction));
                     } else {
                         // If we didn't change any leader, and thus didn't touch the ledger
                         self.db.write(wb)?;
+                        drop(voter_best);
                         return Ok((vec![], vec![]));
                     }
                 } else {
                     // If we didn't update the votes.
                     self.db.write(wb)?;
+                    drop(voter_best);
                     return Ok((vec![], vec![]));
                 }
             }
