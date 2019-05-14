@@ -1,9 +1,10 @@
 use super::message::{self, Message};
 use super::peer;
+use super::buffer::BlockBuffer;
 use crate::block::Block;
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
-use crate::crypto::hash::Hashable;
+use crate::crypto::hash::{Hashable, H256};
 use crate::handler::new_transaction;
 use crate::handler::new_validated_block;
 use crate::miner::memory_pool::MemoryPool;
@@ -15,6 +16,7 @@ use crate::wallet::Wallet;
 use log::{debug, info};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
+use std::collections::HashSet;
 
 #[derive(Clone)]
 pub struct Context {
@@ -27,7 +29,7 @@ pub struct Context {
     mempool: Arc<Mutex<MemoryPool>>,
     context_update_chan: mpsc::Sender<ContextUpdateSignal>,
     server: ServerHandle,
-    buffer: Arc<Mutex<Vec<Block>>>,
+    buffer: Arc<BlockBuffer>,
 }
 
 pub fn new(
@@ -51,7 +53,7 @@ pub fn new(
         mempool: Arc::clone(mempool),
         context_update_chan: ctx_update_sink,
         server: server,
-        buffer: Arc::new(Mutex::new(vec![])),
+        buffer: Arc::new(BlockBuffer::new()),
     };
     return ctx;
 }
@@ -143,14 +145,16 @@ impl Context {
                 }
                 Message::Blocks(blocks) => {
                     debug!("Got {} blocks", blocks.len());
-                    for block in blocks {
+                    let mut to_process: Vec<Block> = blocks;
+                    let mut to_request: Vec<H256> = vec![];
+                    while let Some(block) = to_process.pop() {
                         let validation_result =
                             check_block(&block, &self.chain, &self.blockdb, &self.utxodb);
                         match validation_result {
                             BlockResult::MissingParent(p) => {
                                 debug!("Missing parent block for block {:.8}", block.hash());
-                                self.buffer.lock().unwrap().push(block);
-                                self.server.broadcast(Message::GetBlocks(vec![p]));
+                                self.buffer.insert(block, &vec![p]);
+                                to_request.push(p);
                             }
                             BlockResult::MissingReferences(r) => {
                                 debug!(
@@ -158,8 +162,8 @@ impl Context {
                                     r.len(),
                                     block.hash()
                                 );
-                                self.buffer.lock().unwrap().push(block);
-                                self.server.broadcast(Message::GetBlocks(r));
+                                self.buffer.insert(block, &r);
+                                to_request.extend_from_slice(&r);
                             }
                             BlockResult::Pass => {
                                 debug!("Processing block {:.8}", block.hash());
@@ -172,6 +176,11 @@ impl Context {
                                     &self.utxodb,
                                     &self.wallet,
                                 );
+                                let mut resolved_by_current = self.buffer.satisfy(block.hash());
+                                if !resolved_by_current.is_empty() {
+                                    debug!("Resolved dependency for {} buffered blocks", resolved_by_current.len());
+                                }
+                                to_process.append(&mut resolved_by_current);
                             }
                             _ => {
                                 debug!(
@@ -183,34 +192,11 @@ impl Context {
                             }
                         }
                     }
-
-                    let mut buffer = self.buffer.lock().unwrap();
-                    buffer.retain(|block| {
-                        let validation_result =
-                            check_block(&block, &self.chain, &self.blockdb, &self.utxodb);
-                        match validation_result {
-                            BlockResult::MissingParent(_) | BlockResult::MissingReferences(_) => {
-                                return true; // retain this block
-                            }
-                            BlockResult::Pass => {
-                                debug!("Processing buffered block {:.8}", block.hash());
-                                new_validated_block(
-                                    &block,
-                                    &self.mempool,
-                                    &self.blockdb,
-                                    &self.chain,
-                                    &self.server,
-                                    &self.utxodb,
-                                    &self.wallet,
-                                );
-                                return false; // remove the block
-                            }
-                            _ => {
-                                return false; // remove invalid block
-                            }
-                        }
-                    });
-                    drop(buffer);
+                    if !to_request.is_empty() {
+                        to_request.sort();
+                        to_request.dedup();
+                        self.server.broadcast(Message::GetBlocks(to_request));
+                    }
 
                     // tell the miner to update the context
                     self.context_update_chan
