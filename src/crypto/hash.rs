@@ -7,7 +7,7 @@ pub trait Hashable {
 }
 
 /// A SHA256 hash.
-#[derive(Eq, Serialize, Deserialize, Clone, Hash, Default, Copy)]
+#[derive(Eq, PartialEq, Serialize, Deserialize, Clone, Hash, Default, Copy)]
 pub struct H256([u8; 32]); // big endian u256
 
 impl std::fmt::Display for H256 {
@@ -105,20 +105,6 @@ impl Ord for H256 {
 impl PartialOrd for H256 {
     fn partial_cmp(&self, other: &H256) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
-    }
-}
-
-impl PartialEq for H256 {
-    fn eq(&self, other: &H256) -> bool {
-        let self_higher = u128::from_be_bytes(self.0[0..16].try_into().unwrap());
-        let self_lower = u128::from_be_bytes(self.0[16..32].try_into().unwrap());
-        let other_higher = u128::from_be_bytes(other.0[0..16].try_into().unwrap());
-        let other_lower = u128::from_be_bytes(other.0[16..32].try_into().unwrap());
-        if (self_higher == other_higher) && (self_lower == other_lower) {
-            return true;
-        } else {
-            return false;
-        }
     }
 }
 
