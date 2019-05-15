@@ -6,9 +6,11 @@ use crate::crypto::hash::{Hashable, H256};
 use bincode::{deserialize, serialize};
 use rocksdb::{self, Options, DB, ColumnFamilyDescriptor};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::convert::TryInto;
 
 const BLOCK_CF: &str = "BLOCK";
 const BLOCK_ARRIVAL_ORDER_CF: &str = "BLOCK_ARRIVAL_ORDER";
+const BLOCK_SEQUENCE_NUMBER_CF: &str = "BLOCK_SEQUENCE_NUMBER";
 
 /// Database that stores blocks.
 pub struct BlockDatabase {
@@ -23,7 +25,8 @@ impl BlockDatabase {
     fn open<P: AsRef<std::path::Path>>(path: P) -> Result<Self, rocksdb::Error> {
         let block_cf = ColumnFamilyDescriptor::new(BLOCK_CF, Options::default());
         let block_arrival_order_cf = ColumnFamilyDescriptor::new(BLOCK_ARRIVAL_ORDER_CF, Options::default());
-        let cfs = vec![block_cf, block_arrival_order_cf];
+        let block_sequence_number_cf = ColumnFamilyDescriptor::new(BLOCK_SEQUENCE_NUMBER_CF, Options::default());
+        let cfs = vec![block_cf, block_arrival_order_cf, block_sequence_number_cf];
         let mut opts = Options::default();
         opts.create_if_missing(true);
         opts.create_missing_column_families(true);
@@ -41,10 +44,10 @@ impl BlockDatabase {
 
         let block_cf = db.db.cf_handle(BLOCK_CF).unwrap();
         let block_arrival_order_cf = db.db.cf_handle(BLOCK_ARRIVAL_ORDER_CF).unwrap();
+        let block_sequence_number_cf = db.db.cf_handle(BLOCK_SEQUENCE_NUMBER_CF).unwrap();
 
         let mut counter: u64 = 0;
         // insert proposer genesis block
-        let proposer_genesis_hash_u8: [u8; 32] = (*PROPOSER_GENESIS_HASH).into();
         db.db.put_cf(
             block_cf,
             &(*PROPOSER_GENESIS_HASH),
@@ -54,6 +57,11 @@ impl BlockDatabase {
             block_arrival_order_cf,
             &counter.to_ne_bytes(),
             &(*PROPOSER_GENESIS_HASH)
+        )?;
+        db.db.put_cf(
+            block_sequence_number_cf,
+            &(*PROPOSER_GENESIS_HASH),
+            &counter.to_ne_bytes(),
         )?;
         counter += 1;
 
@@ -68,6 +76,11 @@ impl BlockDatabase {
                 block_arrival_order_cf,
                 &counter.to_ne_bytes(),
                 &VOTER_GENESIS_HASHES[i as usize],
+                )?;
+            db.db.put_cf(
+                block_sequence_number_cf,
+                &VOTER_GENESIS_HASHES[i as usize],
+                &counter.to_ne_bytes(),
                 )?;
             counter += 1;
         }
@@ -87,11 +100,13 @@ impl BlockDatabase {
     pub fn insert(&self, block: &Block) -> Result<u64, rocksdb::Error> {
         let block_cf = self.db.cf_handle(BLOCK_CF).unwrap();
         let block_arrival_order_cf = self.db.cf_handle(BLOCK_ARRIVAL_ORDER_CF).unwrap();
+        let block_sequence_number_cf = self.db.cf_handle(BLOCK_SEQUENCE_NUMBER_CF).unwrap();
         let hash: H256 = block.hash();
         let serialized = serialize(block).unwrap();
         let counter = self.count.fetch_add(1, Ordering::Relaxed);
         self.db.put_cf(block_cf, &hash, &serialized)?;
         self.db.put_cf(block_arrival_order_cf, &counter.to_ne_bytes(), &hash)?;
+        self.db.put_cf(block_sequence_number_cf, &hash, &counter.to_ne_bytes())?;
         return Ok(counter);
     }
 
@@ -106,10 +121,50 @@ impl BlockDatabase {
         }
     }
 
+    pub fn blocks_by_arrival_order(&self, after: &H256, batch_size: u64) -> BlocksInArrivalOrder {
+        let block_sequence_number_cf = self.db.cf_handle(BLOCK_SEQUENCE_NUMBER_CF).unwrap();
+        let start_seq = u64::from_ne_bytes(self.db.get_cf(block_sequence_number_cf, &after).unwrap().unwrap()[0..8].try_into().unwrap()) + 1;
+        return BlocksInArrivalOrder {
+            seq: start_seq,
+            batch: batch_size,
+            db: &self
+        };
+    }
+
     /// Get the number of blocks in the database.
     pub fn num_blocks(&self) -> u64 {
         let count = self.count.load(Ordering::Relaxed);
         return count;
+    }
+}
+
+pub struct BlocksInArrivalOrder<'a> {
+    seq: u64,
+    batch: u64,
+    db: &'a BlockDatabase
+}
+
+impl<'a> std::iter::Iterator for BlocksInArrivalOrder<'a> {
+    type Item = Vec<Block>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let block_cf = self.db.db.cf_handle(BLOCK_CF).unwrap();
+        let block_arrival_order_cf = self.db.db.cf_handle(BLOCK_ARRIVAL_ORDER_CF).unwrap();
+        let num_blocks = self.db.count.load(Ordering::Relaxed);
+        let mut this_batch: u64 = 0;
+        let mut result: Vec<Block> = vec![];
+        while self.seq < num_blocks && this_batch < self.batch {
+            let hash_bytes = self.db.db.get_cf(block_arrival_order_cf, &self.seq.to_ne_bytes()).unwrap().unwrap();
+            let block: Block = deserialize(&self.db.db.get_cf(block_cf, &hash_bytes).unwrap().unwrap()).unwrap();
+            result.push(block);
+            self.seq += 1;
+            this_batch += 1;
+        }
+        if result.is_empty() {
+            return None;
+        } else {
+            return Some(result);
+        }
     }
 }
 
@@ -131,5 +186,28 @@ mod tests {
         assert_eq!(got.hash(), block.hash());
         assert_eq!(num_block, 1 + NUM_VOTER_CHAINS as u64 + 1);
         assert_eq!(seq, num_block - 1);
+    }
+
+    #[test]
+    fn blocks_in_arrival_order() {
+        let db = BlockDatabase::new(&std::path::Path::new(
+            "/tmp/blockdb_tests_blocks_by_arrival_order.rocksdb",
+        ))
+        .unwrap();
+        // try to get all blocks after the proposer genesis
+        let iter = db.blocks_by_arrival_order(&(*PROPOSER_GENESIS_HASH), 2);
+        let mut next_voter = 0;
+        for batch in iter {
+            if next_voter + 1 < NUM_VOTER_CHAINS {
+                assert_eq!(batch[0].hash(), voter_genesis(next_voter).hash());
+                assert_eq!(batch[1].hash(), voter_genesis(next_voter + 1).hash());
+                next_voter += 2;
+            }
+            else {
+                assert_eq!(batch[0].hash(), voter_genesis(next_voter).hash());
+                next_voter += 1;
+            }
+        }
+        assert_eq!(next_voter as u16, NUM_VOTER_CHAINS as u16);
     }
 }
