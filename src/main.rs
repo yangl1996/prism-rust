@@ -34,6 +34,7 @@ fn main() {
      (@arg utxo_db: --utxodb [PATH] "Sets the path of the UTXO database")
      (@arg blockchain_db: --blockchaindb [PATH] "Sets the path of the blockchain database")
      (@arg wallet_db: --walletdb [PATH] "Sets the path of the wallet")
+     (@arg bootstrap: --bootstrap [METHOD] possible_value[slow] "Enables bootstrapping")
     )
     .get_matches();
 
