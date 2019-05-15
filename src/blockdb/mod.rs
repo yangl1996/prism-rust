@@ -136,6 +136,27 @@ impl BlockDatabase {
         let count = self.count.load(Ordering::Relaxed);
         return count;
     }
+
+    /// Get the hash of the latest block.
+    pub fn latest_block_hash(&self) -> Result<H256, rocksdb::Error> {
+        let block_arrival_order_cf = self.db.cf_handle(BLOCK_ARRIVAL_ORDER_CF).unwrap();
+        let mut count = self.count.load(Ordering::Relaxed) - 1;
+        // TODO: this is a hack to deal with a potential race condition: counter is increased
+        // before the hash for that value is committed into the database.
+        loop {
+            let hash_serialized = self.db.get_cf(block_arrival_order_cf, &count.to_ne_bytes())?;
+            let hash: H256 = match hash_serialized {
+                Some(v) => {
+                    let bytes: [u8; 32] = (&v[0..32]).try_into().unwrap();
+                    return Ok(bytes.into());
+                },
+                None => {
+                    count -= 1;
+                    continue;
+                }
+            };
+        }
+    }
 }
 
 pub struct BlocksInArrivalOrder<'a> {
@@ -209,5 +230,14 @@ mod tests {
             }
         }
         assert_eq!(next_voter as u16, NUM_VOTER_CHAINS as u16);
+    }
+
+    #[test]
+    fn latest_block_hash() {
+        let db = BlockDatabase::new(&std::path::Path::new(
+            "/tmp/blockdb_tests_latest_block_hash.rocksdb",
+        ))
+        .unwrap();
+        assert_eq!(db.latest_block_hash().unwrap(), VOTER_GENESIS_HASHES[NUM_VOTER_CHAINS as usize - 1]);
     }
 }
