@@ -203,6 +203,12 @@ impl Context {
                         .send(ContextUpdateSignal::NewContent)
                         .unwrap();
                 }
+                Message::Bootstrap(after) => {
+                    debug!("Asked for all blocks after {}", &after);
+                    for batch in self.blockdb.blocks_after(&after, 500) {
+                        peer.write(Message::Blocks(batch));
+                    }
+                }
             }
         }
     }

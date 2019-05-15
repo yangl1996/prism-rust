@@ -121,7 +121,7 @@ impl BlockDatabase {
         }
     }
 
-    pub fn blocks_by_arrival_order(&self, after: &H256, batch_size: u64) -> BlocksInArrivalOrder {
+    pub fn blocks_after(&self, after: &H256, batch_size: u64) -> BlocksInArrivalOrder {
         let block_sequence_number_cf = self.db.cf_handle(BLOCK_SEQUENCE_NUMBER_CF).unwrap();
         let start_seq = u64::from_ne_bytes(self.db.get_cf(block_sequence_number_cf, &after).unwrap().unwrap()[0..8].try_into().unwrap()) + 1;
         return BlocksInArrivalOrder {
@@ -189,13 +189,13 @@ mod tests {
     }
 
     #[test]
-    fn blocks_in_arrival_order() {
+    fn blocks_after() {
         let db = BlockDatabase::new(&std::path::Path::new(
             "/tmp/blockdb_tests_blocks_by_arrival_order.rocksdb",
         ))
         .unwrap();
         // try to get all blocks after the proposer genesis
-        let iter = db.blocks_by_arrival_order(&(*PROPOSER_GENESIS_HASH), 2);
+        let iter = db.blocks_after(&(*PROPOSER_GENESIS_HASH), 2);
         let mut next_voter = 0;
         for batch in iter {
             if next_voter + 1 < NUM_VOTER_CHAINS {
