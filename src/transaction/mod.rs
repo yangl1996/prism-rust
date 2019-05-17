@@ -88,7 +88,7 @@ pub struct Authorization {
 pub mod tests {
     use super::*;
     use crate::crypto::hash::tests::generate_random_hash;
-    use rand::RngCore;
+    use rand::{RngCore, Rng};
 
     pub fn generate_random_coinid() -> CoinId {
         let mut rng = rand::thread_rng();
@@ -112,6 +112,15 @@ pub mod tests {
         Output {
             value: rng.next_u64(),
             recipient: generate_random_hash(),
+        }
+    }
+
+    pub fn generate_random_transaction() -> Transaction {
+        let mut rng = rand::thread_rng();
+        Transaction {
+            input: (0..rng.gen_range(1,5)).map(|_|generate_random_input()).collect(),
+            output: (0..rng.gen_range(1,5)).map(|_|generate_random_output()).collect(),
+            authorization: vec![],
         }
     }
 }
