@@ -496,7 +496,8 @@ impl BlockChain {
                             from_level -= 1;
                         }
                     }
-                    // track which proposer levels did we touch
+                    // track which proposer levels did we touch. BTreeSet stores the elements in
+                    // order, and its iterator will retain this order.
                     let mut affected: BTreeSet<u64> = BTreeSet::new();
                     for removed_vote in &removed {
                         wb.merge_cf(
