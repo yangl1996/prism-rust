@@ -113,7 +113,7 @@ impl UtxoDatabase {
                     value: output.value,
                     owner: output.recipient,
                 };
-                removed_coins.push(coin);
+                added_coins.push(coin);
             }
         }
         return Ok((added_coins, removed_coins));
