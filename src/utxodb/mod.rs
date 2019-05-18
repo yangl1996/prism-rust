@@ -4,7 +4,7 @@ use bincode::serialize;
 use rocksdb::{Options, DB};
 
 pub struct UtxoDatabase {
-    db: rocksdb::DB, // coin id to output
+    pub db: rocksdb::DB, // coin id to output
 }
 
 impl UtxoDatabase {
