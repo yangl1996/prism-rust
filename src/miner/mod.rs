@@ -338,11 +338,11 @@ impl Context {
         let big_proposer_rate: U256 = PROPOSER_MINING_RATE.into();
         let big_transaction_rate: U256 = TRANSACTION_MINING_RATE.into();
 
-        if big_hash < big_difficulty / 100.into() * big_proposer_rate {
+        if big_hash < big_difficulty / 10000.into() * big_proposer_rate {
             // transaction block
             return PROPOSER_INDEX;
         } else if big_hash
-            < big_difficulty / 100.into() * (big_transaction_rate + big_proposer_rate)
+            < big_difficulty / 10000.into() * (big_transaction_rate + big_proposer_rate)
         {
             // proposer block
             return TRANSACTION_INDEX;
