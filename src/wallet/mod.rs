@@ -284,16 +284,15 @@ impl Wallet {
 #[cfg(test)]
 pub mod tests {
     use super::Wallet;
-    use crate::transaction::{Input, CoinId, tests as tx_generator};
-    use crate::crypto::hash::H256;
+    use crate::transaction::{Input, tests as tx_generator};
 
     #[test]
     fn all_pub_functions() {
-        let w = Wallet::new(std::path::Path::new("/tmp/walletdb_test.rocksdb")).unwrap();
+        let w = Wallet::new("/tmp/walletdb_test.rocksdb").unwrap();
         assert_eq!(w.balance().unwrap(), 0);
         assert!(w.get_an_address().is_err());
         assert!(w.get_a_pubkey().is_err());
-        assert!(w.create_transaction(H256::default(), 1).is_err());
+        assert!(w.create_transaction([0u8;32].into(), 1).is_err());
         w.generate_keypair().unwrap();
         let addr = w.get_an_address().unwrap();
         // create 10*10 coins
@@ -309,12 +308,12 @@ pub mod tests {
         w.update(&ico,&[]).unwrap();
         assert_eq!(w.balance().unwrap(), 100);
         //test create_transaction
-        let tx = w.create_transaction(H256::default(), 19).unwrap();
+        let tx = w.create_transaction([0u8;32].into(), 19).unwrap();
         assert_eq!(tx.input.len(),2);
         assert_eq!(tx.input[0].value,10);
         assert_eq!(tx.input[1].value,10);
         assert_eq!(tx.output.len(),2);
-        assert_eq!(tx.output[0].recipient,H256::default());
+        assert_eq!(tx.output[0].recipient,[0u8;32].into());
         assert_eq!(tx.output[0].value,19);
         assert_eq!(tx.output[1].recipient,addr);
         assert_eq!(tx.output[1].value,1);
