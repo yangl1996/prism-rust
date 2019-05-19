@@ -1012,7 +1012,7 @@ impl BlockChain {
         let mut voter_lowest: Vec<u64> = vec![];
         // get voter best blocks and levels, this is from memory
         let mut voter_longest: Vec<(H256, u64)> = vec![];
-        for (chain_num, voter_chain) in self.voter_best.iter().enumerate() {
+        for (_chain_num, voter_chain) in self.voter_best.iter().enumerate() {
             let longest = voter_chain.lock().unwrap();
             voter_longest.push((longest.0, longest.1));
             voter_lowest.push(longest.1);
@@ -1215,11 +1215,11 @@ impl BlockChain {
 
         let proposer_levels: Vec<Vec<String>> = proposer_tree
             .into_iter()
-            .map(|(k, v)| v.into_iter().map(|h256| h256.to_string()).collect())
+            .map(|(_k, v)| v.into_iter().map(|h256| h256.to_string()).collect())
             .collect();
         let voter_longest: Vec<String> = voter_longest
             .into_iter()
-            .map(|(h, u)| h.to_string())
+            .map(|(h, _u)| h.to_string())
             .collect();
         let proposer_in_ledger: Vec<String> = proposer_in_ledger
             .into_iter()
