@@ -31,8 +31,8 @@ pub const PROPOSER_BLOCK_PROP_BLOCK_REF_LIMIT: u32 = 10; // Max number of prop b
 lazy_static! {
     pub static ref DEFAULT_DIFFICULTY: H256 = {
         let mut raw: [u8; 32] = [255; 32];
-//        raw[0] = 0;
-//        raw[1] = 25;
+        raw[0] = 0;
+        raw[1] = 25;
         raw.into()
     };
 

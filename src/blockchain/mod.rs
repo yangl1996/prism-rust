@@ -3,7 +3,7 @@ use crate::config::*;
 use crate::crypto::hash::{Hashable, H256};
 
 use bincode::{deserialize, serialize};
-use log::{debug, info};
+use log::{debug, info, trace};
 use rocksdb::{ColumnFamilyDescriptor, Options, WriteBatch, DB};
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::mem;
@@ -333,7 +333,7 @@ impl BlockChain {
                     proposer_best.0 = block_hash;
                     proposer_best.1 = self_level;
                 }
-                debug!(
+                trace!(
                     "Inserted: Proposer_block={:.8}; Level={}; n_tx_refs={}; timestamp={}; size={} KB",
                     block_hash,
                     self_level,
@@ -431,15 +431,15 @@ impl BlockChain {
                     voter_best.0 = block_hash;
                     voter_best.1 = self_level;
                 }
-//                debug!(
-//                    "Inserted: Voter_block={:.8}; Chain={}; Level={}; n_tx_refs={}; timestamp={}; size={} KB",
-//                    block_hash,
-//                    self_chain,
-//                    self_level,
-//                    content.votes.len(),
-//                    block.header.timestamp,
-//                    (block.get_bytes() as f64)/1000.0
-//                );
+                trace!(
+                    "Inserted: Voter_block={:.8}; Chain={}; Level={}; n_votes={}; timestamp={}; size={} KB",
+                    block_hash,
+                    self_chain,
+                    self_level,
+                    content.votes.len(),
+                    block.header.timestamp,
+                    (block.get_bytes() as f64)/1000.0
+                );
 
                 // update vote levels
                 // only update if we are the main chain
@@ -621,7 +621,7 @@ impl BlockChain {
                         };
 
                         if new_leader != existing_leader {
-                            debug!(
+                            trace!(
                                 "Confirmed leader block at level {} at time {}",
                                 level, block.header.timestamp
                             );
@@ -821,14 +821,14 @@ impl BlockChain {
                         .unwrap(),
                 )
                 .unwrap();
-//                debug!(
-//                "Inserted: Tx_block={:.8};  Level={}; n_txs={}; timestamp={}; size={} KB",
-//                block_hash,
-//                parent_level,
-//                content.transactions.len(),
-//                block.header.timestamp,
-//                (block.get_bytes() as f32)/1000.0
-//                );
+                trace!(
+                "Inserted: Tx_block={:.8};  Level={}; n_txs={}; timestamp={}; size={} KB",
+                block_hash,
+                parent_level,
+                content.transactions.len(),
+                block.header.timestamp,
+                (block.get_bytes() as f32)/1000.0
+                );
                 return Ok((vec![], vec![]));
             }
         }
