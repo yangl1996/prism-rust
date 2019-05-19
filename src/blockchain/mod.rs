@@ -3,8 +3,10 @@ use crate::config::*;
 use crate::crypto::hash::{Hashable, H256};
 
 use bincode::{deserialize, serialize};
+use log::{debug, info};
 use rocksdb::{ColumnFamilyDescriptor, Options, WriteBatch, DB};
 use std::collections::{BTreeSet, HashMap, HashSet};
+use std::mem;
 use std::sync::Mutex;
 
 // Column family names for node/chain metadata
@@ -331,6 +333,15 @@ impl BlockChain {
                     proposer_best.0 = block_hash;
                     proposer_best.1 = self_level;
                 }
+                debug!(
+                    "Inserted: Proposer_block={:.8}; Level={}; n_tx_refs={}; timestamp={}; size={} KB",
+                    block_hash,
+                    self_level,
+                    content.transaction_refs.len(),
+                    block.header.timestamp,
+                    (block.get_bytes() as f64)/1000.0
+                );
+
                 // mark this new proposer block as unconfirmed
                 let mut unconfirmed_proposer = self.unconfirmed_proposer.lock().unwrap();
                 unconfirmed_proposer.insert(block_hash);
@@ -414,11 +425,21 @@ impl BlockChain {
                 let mut voter_best = self.voter_best[self_chain as usize].lock().unwrap();
                 let previous_best = voter_best.0;
                 let previous_best_level = voter_best.1;
+
                 // update best block
                 if self_level > voter_best.1 {
                     voter_best.0 = block_hash;
                     voter_best.1 = self_level;
                 }
+//                debug!(
+//                    "Inserted: Voter_block={:.8}; Chain={}; Level={}; n_tx_refs={}; timestamp={}; size={} KB",
+//                    block_hash,
+//                    self_chain,
+//                    self_level,
+//                    content.votes.len(),
+//                    block.header.timestamp,
+//                    (block.get_bytes() as f64)/1000.0
+//                );
 
                 // update vote levels
                 // only update if we are the main chain
@@ -582,24 +603,28 @@ impl BlockChain {
 
                         let new_leader: Option<H256> = {
                             let mut new_leader: Option<H256> = None;
-                            for block in &proposer_blocks {
+                            for p_block in &proposer_blocks {
                                 let votes: Vec<(u16, u64)> = match self
                                     .db
-                                    .get_cf(proposer_node_vote_cf, serialize(&block).unwrap())?
+                                    .get_cf(proposer_node_vote_cf, serialize(&p_block).unwrap())?
                                 {
                                     None => vec![],
                                     Some(d) => deserialize(&d).unwrap(),
                                 };
 
-                                // check whether this block is the leader
+                                // check whether this p_block is the leader
                                 if votes.len() as u16 > NUM_VOTER_CHAINS / 2 + 1 {
-                                    new_leader = Some(*block);
+                                    new_leader = Some(*p_block);
                                 }
                             }
                             new_leader
                         };
 
                         if new_leader != existing_leader {
+                            debug!(
+                                "Confirmed leader block at level {} at time {}",
+                                level, block.header.timestamp
+                            );
                             match new_leader {
                                 None => wb.delete_cf(
                                     proposer_leader_sequence_cf,
@@ -782,12 +807,28 @@ impl BlockChain {
                     return Ok((vec![], vec![]));
                 }
             }
-            Content::Transaction(_) => {
+            Content::Transaction(content) => {
                 // mark itself as unreferred
                 let mut unreferred_transaction = self.unreferred_transaction.lock().unwrap();
                 unreferred_transaction.insert(block_hash);
                 drop(unreferred_transaction);
                 self.db.write(wb)?;
+                // get proposer parent block level
+                let parent_level: u64 = deserialize(
+                    &self
+                        .db
+                        .get_cf(proposer_node_level_cf, serialize(&parent_hash).unwrap())?
+                        .unwrap(),
+                )
+                .unwrap();
+//                debug!(
+//                "Inserted: Tx_block={:.8};  Level={}; n_txs={}; timestamp={}; size={} KB",
+//                block_hash,
+//                parent_level,
+//                content.transactions.len(),
+//                block.header.timestamp,
+//                (block.get_bytes() as f32)/1000.0
+//                );
                 return Ok((vec![], vec![]));
             }
         }

@@ -205,9 +205,9 @@ impl Context {
                 //if the mined block is an empty tx block, we ignore it, and go straight to next mining loop
                 match &mined_block.content {
                     Content::Transaction(content) => {
-                        if content.transactions.is_empty() {
-                            continue;
-                        }
+                        //                        if content.transactions.is_empty() {
+                        //                            continue;
+                        //                        }
                     }
                     _ => (),
                 }
@@ -221,7 +221,7 @@ impl Context {
                     &self.utxodb,
                     &self.wallet,
                 );
-                debug!("Mined block {:.8}", mined_block.hash());
+                //                debug!("Mined block {:.8}", mined_block.hash());
                 // TODO: Only update block contents if relevant parent
                 self.update_context();
                 header = self.create_header();
@@ -337,14 +337,13 @@ impl Context {
         let big_difficulty = U256::from_big_endian(&difficulty_raw);
         let big_proposer_rate: U256 = PROPOSER_MINING_RATE.into();
         let big_transaction_rate: U256 = TRANSACTION_MINING_RATE.into();
-
         if big_hash < big_difficulty / 10000.into() * big_proposer_rate {
-            // transaction block
+            // proposer block
             return PROPOSER_INDEX;
         } else if big_hash
             < big_difficulty / 10000.into() * (big_transaction_rate + big_proposer_rate)
         {
-            // proposer block
+            // transaction block
             return TRANSACTION_INDEX;
         } else if big_hash < big_difficulty {
             // voter index, figure out which voter tree we are in

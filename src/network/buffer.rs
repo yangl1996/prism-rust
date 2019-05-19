@@ -1,7 +1,7 @@
-use std::collections::HashMap;
 use crate::block::Block;
-use crate::crypto::hash::{H256, Hashable};
+use crate::crypto::hash::{Hashable, H256};
 use petgraph::prelude::*;
+use std::collections::HashMap;
 use std::sync::Mutex;
 
 pub struct BlockBuffer {

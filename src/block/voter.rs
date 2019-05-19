@@ -24,6 +24,11 @@ impl Content {
             votes,
         }
     }
+
+    /// Return the size in bytes
+    pub fn get_bytes(&self) -> u32 {
+        return (2+32+self.votes.len()*32) as u32;
+    }
 }
 
 impl Hashable for Content {

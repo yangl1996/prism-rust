@@ -20,15 +20,15 @@ pub mod visualization;
 pub mod wallet;
 
 use crate::utxodb::UtxoDatabase;
+use bincode::serialize;
 use blockchain::BlockChain;
 use blockdb::BlockDatabase;
+use crypto::hash::Hashable;
+use crypto::sign::PubKey;
 use miner::memory_pool::MemoryPool;
 use std::sync::{mpsc, Arc, Mutex};
-use wallet::Wallet;
-use crypto::sign::PubKey;
-use crypto::hash::Hashable;
 use transaction::{CoinId, Input, Output, Transaction};
-use bincode::serialize;
+use wallet::Wallet;
 
 pub fn start(
     addr: std::net::SocketAddr,
@@ -78,7 +78,6 @@ pub fn start(
     return Ok((server, miner));
 }
 
-
 /// Gives 100 coins of 100 worth to every public key.
 pub fn ico(
     pub_keys: Vec<PubKey>, // public keys of all the ico recipients
@@ -106,7 +105,8 @@ pub fn ico(
             hash: transaction_hash,
             index: idx as u32,
         };
-        utxodb.db
+        utxodb
+            .db
             .put(serialize(&id).unwrap(), serialize(&output).unwrap())?;
         let coin = Input {
             coin: id,
