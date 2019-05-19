@@ -11,21 +11,21 @@ pub const PROPOSER_INDEX: u32 = 0;
 pub const FIRST_VOTER_INDEX: u32 = 2;
 
 
-// 1:100:200 - Ratio
+// 1:100:100 - Ratio
 // Number of voter chains
 pub const NUM_VOTER_CHAINS: u16 = 100;
 
 // Mining rates in percentages of the total mining rate
-pub const CHAIN_MINING_RATE: u32 = 33;
+pub const CHAIN_MINING_RATE: u32 = 50;
 // Total for the voter chains
-pub const VOTER_MINING_RATE: u32 = CHAIN_MINING_RATE*NUM_VOTER_CHAINS;
+pub const VOTER_MINING_RATE: u32 = CHAIN_MINING_RATE*(NUM_VOTER_CHAINS as u32);
 // Proposer tree
 pub const PROPOSER_MINING_RATE: u32 = CHAIN_MINING_RATE;
 // Transaction blocks
 pub const TRANSACTION_MINING_RATE: u32 = 10000 - PROPOSER_MINING_RATE - VOTER_MINING_RATE;
 
 //Block content limits
-pub const TRANSACTION_BLOCK_TX_LIMIT: u32 = 200; //Max number of tx included in a tx  block
+pub const TRANSACTION_BLOCK_TX_LIMIT: u32 = 400; //Max number of tx included in a tx  block
 pub const PROPOSER_BLOCK_TX_BLOCK_REF_LIMIT: u32 = 300; // Max number of tx blocks referred by a prop block.
 pub const PROPOSER_BLOCK_PROP_BLOCK_REF_LIMIT: u32 = 10; // Max number of prop blocks referred by a prop block.
 
