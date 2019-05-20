@@ -6,7 +6,6 @@ pub const NETWORK_DELAY: f32 = 2.0; // 2 sec delay
 // Design parameters
 pub const NUM_VOTER_CHAINS: u16 = 100 as u16; //
 pub const TX_BLOCK_SIZE_BYTES: u32 = 64_000; //64KB
-pub const AVG_TX_SIZE_BYTES: u32 = 500;
 
 
 // All the parameters below are function of the above parameters
@@ -28,6 +27,7 @@ pub const PROPOSER_MINING_RANGE: u32 = CHAIN_MINING_RANGE;
 pub const TRANSACTION_MINING_RANGE: u32 = TOTAL_MINING_RANGE - PROPOSER_MINING_RANGE - VOTER_MINING_RANGE;
 
 //Block content size limits
+pub const AVG_TX_SIZE_BYTES: u32 = 500;
 pub const TRANSACTION_BLOCK_TX_LIMIT: u32 = TX_BLOCK_SIZE_BYTES/AVG_TX_SIZE_BYTES; // Max number of tx included in a tx block
 pub const PROPOSER_BLOCK_TX_BLOCK_REF_LIMIT: u32 = 3*TRANSACTION_MINING_RANGE/PROPOSER_MINING_RANGE; // Max number of tx blocks referred by a prop block.
 pub const PROPOSER_BLOCK_PROP_BLOCK_REF_LIMIT: u32 = 10; // Max number of prop blocks referred by a prop block.
