@@ -110,6 +110,9 @@ function handle_data(data) {
 	// cytoscape-dagre ranks the trees left-to-right according to the order the nodes
 	// appear in the nodes list. so we insert nodes by chain number
 
+    // clear previous graph
+    cy.elements().remove();
+
 	// add proposer nodes
 	for (hash in data['proposer_nodes']) {
 		v = data['proposer_nodes'][hash];
@@ -119,7 +122,7 @@ function handle_data(data) {
 			group: "nodes",
 			data: {
 				id: hash,
-				disp: short_hash,
+				disp: v['level']+':'+short_hash,
 				type: 'proposer',
 			}
 		};
@@ -139,16 +142,29 @@ function handle_data(data) {
 			return filtered;
 		}, {});
 
+        lowest = -1;
+        for (hash in nodes_on_this_chain) {
+			v = nodes_on_this_chain[hash];
+			if (lowest<0 || v['level']<lowest) {
+			    lowest = v['level'];
+			}
+		}
+
 		// add those voter nodes
 		for (hash in nodes_on_this_chain) {
 			v = nodes_on_this_chain[hash];
 			short_hash = hash.substring(58, 64);
 
+            if (v['level'] == lowest) {
+                prefix = v['level']+':';
+            } else {
+                prefix = '';
+            }
 			new_node = {
 				group: "nodes",
 				data: {
 					id: hash,
-					disp: short_hash,
+					disp: prefix + short_hash,
 					type: 'voter',
 				}
 			};
@@ -197,4 +213,4 @@ function handle_data(data) {
 	}
 }
 
-loadJSON("http://SERVER_IP_ADDR:SERVER_PORT_NUMBER/blockchain.json", handle_data, handle_error);
+//loadJSON("http://SERVER_IP_ADDR:SERVER_PORT_NUMBER/blockchain.json", handle_data, handle_error);
