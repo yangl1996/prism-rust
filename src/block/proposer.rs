@@ -23,6 +23,11 @@ impl Content {
             proposer_refs,
         }
     }
+
+    /// Return the size in bytes
+    pub fn get_bytes(&self) -> u32 {
+        return (self.transaction_refs.len()*32+self.proposer_refs.len()*32) as u32;
+    }
 }
 
 impl Hashable for Content {

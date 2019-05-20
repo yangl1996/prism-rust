@@ -114,10 +114,10 @@ impl MemoryPool {
     }
 
     /// get n transaction by fifo
-    pub fn get_transactions(&self, n: usize) -> Vec<Transaction> {
+    pub fn get_transactions(&self, n: u32) -> Vec<Transaction> {
         self.by_storage_index
             .values()
-            .take(n)
+            .take(n as usize)
             .map(|hash| self.get(hash).unwrap().transaction.clone())
             .collect()
     }

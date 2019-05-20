@@ -1,6 +1,6 @@
+use super::buffer::BlockBuffer;
 use super::message::{self, Message};
 use super::peer;
-use super::buffer::BlockBuffer;
 use crate::block::Block;
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
@@ -14,9 +14,9 @@ use crate::utxodb::UtxoDatabase;
 use crate::validation::{check_block, BlockResult};
 use crate::wallet::Wallet;
 use log::{debug, info};
+use std::collections::HashSet;
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
-use std::collections::HashSet;
 
 #[derive(Clone)]
 pub struct Context {
@@ -178,7 +178,10 @@ impl Context {
                                 );
                                 let mut resolved_by_current = self.buffer.satisfy(block.hash());
                                 if !resolved_by_current.is_empty() {
-                                    debug!("Resolved dependency for {} buffered blocks", resolved_by_current.len());
+                                    debug!(
+                                        "Resolved dependency for {} buffered blocks",
+                                        resolved_by_current.len()
+                                    );
                                 }
                                 to_process.append(&mut resolved_by_current);
                             }

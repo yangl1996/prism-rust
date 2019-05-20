@@ -57,6 +57,10 @@ impl Block {
             sortition_proof,
         }
     }
+
+    pub fn get_bytes(&self) -> u32 {
+        return self.header.get_bytes()+self.content.get_bytes()+(self.sortition_proof.len()*32) as u32;
+    }
 }
 
 impl Hashable for Block {
@@ -84,6 +88,17 @@ impl Hashable for Content {
             Content::Transaction(c) => c.hash(),
             Content::Proposer(c) => c.hash(),
             Content::Voter(c) => c.hash(),
+        }
+    }
+}
+
+
+impl Content {
+    fn get_bytes(&self) -> u32 {
+        match self {
+            Content::Transaction(c) => c.get_bytes(),
+            Content::Proposer(c) => c.get_bytes(),
+            Content::Voter(c) => c.get_bytes(),
         }
     }
 }
