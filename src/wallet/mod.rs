@@ -5,7 +5,6 @@ use crate::transaction::{Address, Authorization, CoinId, Input, Output, Transact
 use bincode::{deserialize, serialize};
 use std::sync::{Arc, Mutex};
 use std::{error, fmt};
-use std::collections::BTreeSet;
 
 pub const COIN_CF: &str = "COIN";
 pub const KEYPAIR_CF: &str = "KEYPAIR";
@@ -252,8 +251,10 @@ impl Wallet {
             authorization: vec![],
         };
         let mut authorization = vec![];
-        let owner_set: BTreeSet<Address> = coins_to_use.into_iter().map(|input|input.owner).collect();
-        for owner in owner_set.iter() {
+        let mut owners: Vec<Address> = coins_to_use.into_iter().map(|input|input.owner).collect();
+        owners.sort_unstable();
+        owners.dedup();
+        for owner in owners.iter() {
             let keypair = self.get_keypair(&owner)?;
             authorization.push(Authorization {
                 pubkey: keypair.public_key(),
