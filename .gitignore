@@ -1,5 +1,3 @@
 /target
 **/*.rs.bk
 .idea
-*.svg
-/miner_output
