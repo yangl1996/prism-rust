@@ -251,8 +251,11 @@ impl Wallet {
             authorization: vec![],
         };
         let mut authorization = vec![];
-        for coin in coins_to_use.iter() {
-            let keypair = self.get_keypair(&coin.owner)?;
+        let mut owners: Vec<Address> = coins_to_use.into_iter().map(|input|input.owner).collect();
+        owners.sort_unstable();
+        owners.dedup();
+        for owner in owners.iter() {
+            let keypair = self.get_keypair(&owner)?;
             authorization.push(Authorization {
                 pubkey: keypair.public_key(),
                 signature: unsigned.sign(&keypair),
