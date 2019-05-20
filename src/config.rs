@@ -7,7 +7,6 @@ pub const NETWORK_DELAY: f32 = 2.0; // 2 sec delay
 pub const NUM_VOTER_CHAINS: u16 = 100 as u16; //
 pub const TX_BLOCK_SIZE_BYTES: u32 = 64_000; //64KB
 
-
 // All the parameters below are function of the above parameters
 pub const TX_THROUGHPUT: u32 = NETWORK_CAPACITY*4/5; // .4 MB == 3.2 Mb.
 pub const CHAIN_MINING_RATE: f32 = 0.2/(NETWORK_DELAY); // Mining rate of each chain.
@@ -32,13 +31,10 @@ pub const TRANSACTION_BLOCK_TX_LIMIT: u32 = TX_BLOCK_SIZE_BYTES/AVG_TX_SIZE_BYTE
 pub const PROPOSER_BLOCK_TX_BLOCK_REF_LIMIT: u32 = 3*TRANSACTION_MINING_RANGE/PROPOSER_MINING_RANGE; // Max number of tx blocks referred by a prop block.
 pub const PROPOSER_BLOCK_PROP_BLOCK_REF_LIMIT: u32 = 10; // Max number of prop blocks referred by a prop block.
 
-
-
 // Chain id
 pub const TRANSACTION_INDEX: u32 = 1;
 pub const PROPOSER_INDEX: u32 = 0;
 pub const FIRST_VOTER_INDEX: u32 = 2;
-
 
 lazy_static! {
     pub static ref DEFAULT_DIFFICULTY: H256 = {
