@@ -8,7 +8,7 @@ use prism::transaction::Transaction;
 use prism::miner::memory_pool::MemoryPool;
 use prism::handler::new_validated_block;
 use prism::network::server;
-use prism::config::NUM_VOTER_CHAINS;
+use prism::config;
 use std::sync::{Mutex, mpsc};
 use std::net::{SocketAddr, IpAddr, Ipv4Addr};
 
@@ -34,11 +34,11 @@ fn integration() {
                    Content::Proposer(proposer::Content {
                        transaction_refs: vec![],
                        proposer_refs: vec![],
-                   }), [0u8;32], [255u8;32].into());
+                   }), [0u8;32], config::DEFAULT_DIFFICULTY);
         new_validated_block(&block, &mempool, &blockdb, &blockchain, &server, &utxodb, &wallet);
     }
     timestamp += 1;
-    for chain_num in 0..NUM_VOTER_CHAINS {
+    for chain_num in 0..config::NUM_VOTER_CHAINS {
         let parent = blockchain.best_proposer();
         let voter_parent = blockchain.best_voter(chain_num as usize);
         let block = Block::new(parent, timestamp as u64, 0, [0u8;32].into(), vec![],
@@ -46,7 +46,7 @@ fn integration() {
                                    chain_number: chain_num,
                                    voter_parent,
                                    votes: vec![],
-                               }), [0u8;32], [255u8;32].into());
+                               }), [0u8;32], config::DEFAULT_DIFFICULTY);
         new_validated_block(&block, &mempool, &blockdb, &blockchain, &server, &utxodb, &wallet);
     }
     timestamp += 1;
@@ -55,7 +55,7 @@ fn integration() {
         let block = Block::new(parent, timestamp as u64, 0, [0u8;32].into(), vec![],
                                Content::Transaction(transaction::Content {
                                    transactions: vec![],
-                               }), [0u8;32], [255u8;32].into());
+                               }), [0u8;32], config::DEFAULT_DIFFICULTY);
         new_validated_block(&block, &mempool, &blockdb, &blockchain, &server, &utxodb, &wallet);
     }
 }
