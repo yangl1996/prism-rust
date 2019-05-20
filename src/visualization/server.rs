@@ -68,63 +68,66 @@ impl Server {
                 let blockchain = Arc::clone(&server.blockchain);
                 let blockdb = Arc::clone(&server.blockdb);
                 let utxodb = Arc::clone(&server.utxodb);
-                thread::spawn(move || match req.url().trim_start_matches("/") {
-                    "blockchain.json" => serve_dynamic_file!(
+                thread::spawn(move || {
+                    let split_url: Vec<&str> = req.url().trim_start_matches("/").split("/").collect();
+                    let limit: u64 = split_url.get(1).map_or(100,|&s|s.parse().unwrap_or(100));
+                    match split_url[0] {
+                        "blockchain.json" => serve_dynamic_file!(
                         req,
-                        match blockchain.dump(100) {
-                            //TODO: change 100 to some number from http request?
+                        match blockchain.dump(limit) {
                             Ok(dump) => dump,
                             Err(_) => "Blockchain Dump error".to_string(),
                         },
                         "application/json",
                         addr
                     ),
-                    "ledger.json" => serve_dynamic_file!(
+                        "ledger.json" => serve_dynamic_file!(
                         req,
-                        dump_ledger(&blockchain, &blockdb, &utxodb, 100), //TODO: change 100 to some number from http request?
+                        dump_ledger(&blockchain, &blockdb, &utxodb, limit),
                         "application/json",
                         addr
                     ),
-                    "cytoscape.min.js" => {
-                        serve_static_file!(req, "cytoscape.js", "application/javascript")
-                    }
-                    "dagre.min.js" => {
-                        serve_static_file!(req, "dagre.min.js", "application/javascript")
-                    }
-                    "cytoscape-dagre.js" => {
-                        serve_static_file!(req, "cytoscape-dagre.js", "application/javascript")
-                    }
-                    "bootstrap.min.css" => serve_static_file!(req, "bootstrap.min.css", "text/css"),
-                    "blockchain_vis.js" => serve_dynamic_file!(
+                        "cytoscape.min.js" => {
+                            serve_static_file!(req, "cytoscape.js", "application/javascript")
+                        }
+                        "dagre.min.js" => {
+                            serve_static_file!(req, "dagre.min.js", "application/javascript")
+                        }
+                        "cytoscape-dagre.js" => {
+                            serve_static_file!(req, "cytoscape-dagre.js", "application/javascript")
+                        }
+                        "bootstrap.min.css" => serve_static_file!(req, "bootstrap.min.css", "text/css"),
+                        "blockchain_vis.js" => serve_dynamic_file!(
                         req,
                         include_str!("blockchain_vis.js"),
                         "application/javascript",
                         addr
                     ),
-                    "visualize-blockchain" => serve_dynamic_file!(
+                        "visualize-blockchain" => serve_dynamic_file!(
                         req,
                         include_str!("blockchain_vis.html"),
                         "text/html",
                         addr
                     ),
-                    //                    "ledger_vis.js" => serve_dynamic_file!(
-                    //                        req,
-                    //                        include_str!("ledger_vis.js"),
-                    //                        "application/javascript",
-                    //                        addr
-                    //                    ),
-                    //                    "visualize-ledger" => {
-                    //                        serve_dynamic_file!(req, include_str!("ledger_vis.html"), "text/html", addr)
-                    //                    }
-                    "" => serve_dynamic_file!(req, include_str!("index.html"), "text/html", addr),
-                    _ => {
-                        let content_type = "Content-Type: text/html".parse::<Header>().unwrap();
-                        let resp = Response::from_string(include_str!("404.html"))
-                            .with_header(content_type)
-                            .with_status_code(404);
-                        match req.respond(resp) {
-                            Ok(_) => {}  //do something?
-                            Err(_) => {} //do something?
+                        //                    "ledger_vis.js" => serve_dynamic_file!(
+                        //                        req,
+                        //                        include_str!("ledger_vis.js"),
+                        //                        "application/javascript",
+                        //                        addr
+                        //                    ),
+                        //                    "visualize-ledger" => {
+                        //                        serve_dynamic_file!(req, include_str!("ledger_vis.html"), "text/html", addr)
+                        //                    }
+                        "" => serve_dynamic_file!(req, include_str!("index.html"), "text/html", addr),
+                        _ => {
+                            let content_type = "Content-Type: text/html".parse::<Header>().unwrap();
+                            let resp = Response::from_string(include_str!("404.html"))
+                                .with_header(content_type)
+                                .with_status_code(404);
+                            match req.respond(resp) {
+                                Ok(_) => {}  //do something?
+                                Err(_) => {} //do something?
+                            }
                         }
                     }
                 });
