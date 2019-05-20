@@ -11,7 +11,6 @@ pub const TX_BLOCK_SIZE_BYTES: u32 = 64_000; //64KB
 pub const TX_THROUGHPUT: u32 = NETWORK_CAPACITY*4/5; // .4 MB == 3.2 Mb.
 pub const CHAIN_MINING_RATE: f32 = 0.2/(NETWORK_DELAY); // Mining rate of each chain.
 
-
 //Ratio Prop::Total_Voter::Tx_block
 pub const RATIO: (f32, f32, f32) = (1.0, NUM_VOTER_CHAINS as f32, (TX_THROUGHPUT as f32)/((TX_BLOCK_SIZE_BYTES as f32)*CHAIN_MINING_RATE) ); 
 
