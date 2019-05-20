@@ -394,32 +394,18 @@ impl BlockChain {
                     serialize(&block_hash).unwrap(),
                     serialize(&content.votes).unwrap(),
                 )?;
-                let mut deepest_voted_level: u64 = deserialize(
+                // set the voted level to be until proposer parent
+                let proposer_parent_level: u64 = deserialize(
                     &self
-                        .db
-                        .get_cf(
-                            voter_node_voted_level_cf,
-                            serialize(&voter_parent_hash).unwrap(),
-                        )?
-                        .unwrap(),
+                    .db
+                    .get_cf(proposer_node_level_cf, serialize(&parent_hash).unwrap())?
+                    .unwrap(),
                 )
                 .unwrap();
-                for vote_hash in &content.votes {
-                    let voted_level: u64 = deserialize(
-                        &self
-                            .db
-                            .get_cf(proposer_node_level_cf, serialize(&vote_hash).unwrap())?
-                            .unwrap(),
-                    )
-                    .unwrap();
-                    if voted_level > deepest_voted_level {
-                        deepest_voted_level = voted_level;
-                    }
-                }
                 wb.put_cf(
                     voter_node_voted_level_cf,
                     serialize(&block_hash).unwrap(),
-                    serialize(&deepest_voted_level).unwrap(),
+                    serialize(&proposer_parent_level).unwrap(),
                 )?;
 
                 let mut voter_best = self.voter_best[self_chain as usize].lock().unwrap();
