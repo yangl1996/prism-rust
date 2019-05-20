@@ -2,12 +2,19 @@ use prism::blockchain::BlockChain;
 use prism::wallet::Wallet;
 use prism::blockdb::BlockDatabase;
 use prism::utxodb::UtxoDatabase;
-use prism::block::{Block, Content, proposer};
+use prism::block::{Block, Content, proposer, voter, transaction};
 use prism::crypto::hash::Hashable;
 use prism::transaction::Transaction;
+use prism::miner::memory_pool::MemoryPool;
+use prism::handler::new_validated_block;
+use prism::network::server;
+use prism::config::NUM_VOTER_CHAINS;
+use std::sync::{Mutex, mpsc};
+use std::net::{SocketAddr, IpAddr, Ipv4Addr};
 
 #[test]
 fn integration() {
+
     let blockdb = BlockDatabase::new("/tmp/prism_test_integration_blockdb.rocksdb").unwrap();
 
     let blockchain = BlockChain::new("/tmp/prism_test_integration_blockchain.rocksdb").unwrap();
@@ -16,42 +23,39 @@ fn integration() {
 
     let wallet = Wallet::new("/tmp/prism_test_integration_walletdb.rocksdb").unwrap();
 
-    for timestamp in 0u64..1 {
+    let mempool = Mutex::new(MemoryPool::new());
+
+    let (msg_tx, _msg_rx) = mpsc::channel();
+    let (_ctx, server) = server::new(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 10999),msg_tx).expect("fail at creating server");
+    let mut timestamp: u64 = 0;
+    {
         let parent = blockchain.best_proposer();
-        let block = Block::new(parent, timestamp,0,[0u8;32].into(), vec![],
+        let block = Block::new(parent, timestamp as u64, 0, [0u8;32].into(), vec![],
                    Content::Proposer(proposer::Content {
                        transaction_refs: vec![],
                        proposer_refs: vec![],
                    }), [0u8;32], [255u8;32].into());
-        blockdb.insert(&block).expect(&format!("fail at inserting block {} into blockdb",timestamp));
-        let diff = blockchain.insert_block(&block).expect(&format!("fail at inserting block {} into blockchain",timestamp));
-        assert_eq!(blockchain.best_proposer(), block.hash());
-        assert!(blockchain.unreferred_proposer().contains(&block.hash()));
-
-        // I copy part of handler here.
-        // If I just want to use part of handler, how can I do it?
-        let mut add: Vec<Transaction> = vec![];
-        let mut remove: Vec<Transaction> = vec![];
-        for hash in diff.0 {
-            let block = blockdb.get(&hash).unwrap().unwrap();
-            let content = match block.content {
-                Content::Transaction(data) => data,
-                _ => unreachable!(),
-            };
-            let mut transactions = content.transactions.clone();
-            add.append(&mut transactions);
-        }
-        for hash in diff.1 {
-            let block = blockdb.get(&hash).unwrap().unwrap();
-            let content = match block.content {
-                Content::Transaction(data) => data,
-                _ => unreachable!(),
-            };
-            let mut transactions = content.transactions.clone();
-            remove.append(&mut transactions);
-        }
-
-        let coin_diff = utxodb.apply_diff(&add, &remove).expect(&format!("fail at updating utxo of block {}",timestamp));
-        wallet.update(&coin_diff.0, &coin_diff.1).expect(&format!("fail at updating wallet of block {}",timestamp));
+        new_validated_block(&block, &mempool, &blockdb, &blockchain, &server, &utxodb, &wallet);
+    }
+    timestamp += 1;
+    for chain_num in 0..NUM_VOTER_CHAINS {
+        let parent = blockchain.best_proposer();
+        let voter_parent = blockchain.best_voter(chain_num as usize);
+        let block = Block::new(parent, timestamp as u64, 0, [0u8;32].into(), vec![],
+                               Content::Voter(voter::Content {
+                                   chain_number: chain_num,
+                                   voter_parent,
+                                   votes: vec![],
+                               }), [0u8;32], [255u8;32].into());
+        new_validated_block(&block, &mempool, &blockdb, &blockchain, &server, &utxodb, &wallet);
+    }
+    timestamp += 1;
+    {
+        let parent = blockchain.best_proposer();
+        let block = Block::new(parent, timestamp as u64, 0, [0u8;32].into(), vec![],
+                               Content::Transaction(transaction::Content {
+                                   transactions: vec![],
+                               }), [0u8;32], [255u8;32].into());
+        new_validated_block(&block, &mempool, &blockdb, &blockchain, &server, &utxodb, &wallet);
     }
 }
