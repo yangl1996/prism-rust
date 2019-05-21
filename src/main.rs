@@ -8,12 +8,14 @@ use prism::miner::memory_pool::MemoryPool;
 use prism::utxodb::UtxoDatabase;
 use prism::visualization::Server as VisualizationServer;
 use prism::wallet::Wallet;
+use prism::api::Server as ApiServer;
 use std::net;
 use std::process;
 use std::sync::Arc;
 
 const DEFAULT_IP: &str = "127.0.0.1";
 const DEFAULT_P2P_PORT: u16 = 6000;
+const DEFAULT_API_ADDR: &str = "127.0.0.1:7000";
 const DEFAULT_BLOCKDB: &str = "/tmp/prism-blocks.rocksdb";
 const DEFAULT_UTXODB: &str = "/tmp/prism-utxo.rocksdb";
 const DEFAULT_BLOCKCHAIN: &str = "/tmp/prism-blockchain.rocksdb";
@@ -28,6 +30,7 @@ fn main() {
      (@arg peer_ip: --ip [IP] "Sets the IP address to listen to peers")
      (@arg peer_port: --port [PORT] "Sets the port to listen to peers")
      (@arg visualization: --visual [ADDR] "Enables the visualization server at the given address and port")
+     (@arg api: --api [ADDR] "Sets the IP address and the port of the API server")
      (@arg mine: -m --mine "Enables the CPU miner to mine blocks")
      (@arg known_peer: -c --connect ... [PEER] "Sets the peers to connect to")
      (@arg block_db: --blockdb [PATH] "Sets the path of the block database")
@@ -103,6 +106,15 @@ fn main() {
     };
     let peer_socket_addr = net::SocketAddr::new(peer_ip, peer_port);
 
+    // parse api server address
+    let api_addr = match matches.value_of("api") {
+        Some(addr) => addr.parse::<net::SocketAddr>().unwrap_or_else(|e| {
+            error!("Error parsing API server address: {}", e);
+            process::exit(1);
+        }),
+        None => DEFAULT_API_ADDR.parse::<net::SocketAddr>().unwrap()
+    };
+
     // init server and miner
     info!("Starting P2P server at {}", peer_socket_addr);
     let (server, miner) = prism::start(
@@ -136,6 +148,9 @@ fn main() {
     if matches.is_present("mine") {
         miner.start();
     }
+
+    // start the API server
+    ApiServer::start(api_addr, &wallet, &server, &mempool);
 
     loop {
         std::thread::park();
