@@ -4,6 +4,9 @@ version = "0.1.0"
 authors = []
 edition = "2018"
 
+[features]
+test-utilities = []
+
 [dependencies]
 ring = "0.14"
 byteorder = "1.3"

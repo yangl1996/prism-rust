@@ -88,7 +88,7 @@ impl Hashable for Content {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-utilities"))]
 pub mod tests {
 
     use super::*;
