@@ -19,6 +19,7 @@ pub mod validation;
 pub mod visualization;
 pub mod wallet;
 pub mod api;
+pub mod experiment;
 
 use crate::utxodb::UtxoDatabase;
 use bincode::serialize;

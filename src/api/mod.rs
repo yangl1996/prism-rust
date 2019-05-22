@@ -1,5 +1,4 @@
-mod transaction_generator;
-
+use crate::experiment::transaction_generator;
 use crate::wallet::Wallet;
 use crate::network::server::Handle as ServerHandle;
 use crate::miner::memory_pool::MemoryPool;
