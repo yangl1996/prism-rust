@@ -39,7 +39,7 @@ impl TransactionGenerator {
             server: server.clone(),
             mempool: Arc::clone(mempool),
             control_chan: control_chan,
-            interval: 10000,
+            interval: 100,
             max_size: 100,
             min_size: 50,
             state: State::Paused,
