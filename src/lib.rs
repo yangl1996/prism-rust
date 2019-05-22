@@ -32,49 +32,6 @@ use std::sync::{mpsc, Arc, Mutex};
 use transaction::{CoinId, Input, Output, Transaction};
 use wallet::Wallet;
 
-pub fn start(
-    addr: std::net::SocketAddr,
-    blockdb: &Arc<BlockDatabase>,
-    utxodb: &Arc<UtxoDatabase>,
-    blockchain: &Arc<BlockChain>,
-    wallet: &Arc<Wallet>,
-    mempool: &Arc<Mutex<MemoryPool>>,
-) -> std::io::Result<(network::server::Handle, miner::Handle)> {
-    // create channels between server and worker, worker and miner, miner and worker
-    let (msg_tx, msg_rx) = mpsc::channel();
-    let (ctx_tx, ctx_rx) = mpsc::channel();
-    let ctx_tx_wallet = ctx_tx.clone();
-
-    let (ctx, server) = network::server::new(addr, msg_tx)?;
-    ctx.start().unwrap();
-
-    let ctx = network::worker::new(
-        4,
-        msg_rx,
-        blockchain,
-        blockdb,
-        utxodb,
-        wallet,
-        mempool,
-        ctx_tx,
-        server.clone(),
-    );
-    ctx.start();
-
-    let (ctx, miner) = miner::new(
-        mempool,
-        blockchain,
-        utxodb,
-        wallet,
-        blockdb,
-        ctx_rx,
-        server.clone(),
-    );
-    ctx.start();
-
-    return Ok((server, miner));
-}
-
 /// Gives 100 coins of 100 worth to every public key.
 pub fn ico(
     pub_keys: Vec<PubKey>, // public keys of all the ico recipients

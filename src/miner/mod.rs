@@ -84,7 +84,7 @@ pub fn new(
     wallet: &Arc<Wallet>,
     db: &Arc<BlockDatabase>,
     ctx_update_source: Receiver<ContextUpdateSignal>,
-    server: ServerHandle,
+    server: &ServerHandle,
 ) -> (Context, Handle) {
     let (signal_chan_sender, signal_chan_receiver) = channel();
     let ctx = Context {
@@ -100,7 +100,7 @@ pub fn new(
         content_merkle_tree_root: H256::default(),
         difficulty: *DEFAULT_DIFFICULTY,
         operating_state: OperatingState::Paused,
-        server: server,
+        server: server.clone(),
     };
 
     let handle = Handle {

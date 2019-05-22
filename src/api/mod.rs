@@ -36,18 +36,11 @@ macro_rules! respond {
 }
 
 impl Server {
-    pub fn start(addr: std::net::SocketAddr, wallet: &Arc<Wallet>, server: &ServerHandle, mempool: &Arc<Mutex<MemoryPool>>) {
-        // TODO: make it a separate API
-        wallet.generate_keypair().unwrap();
-
-        let (transaction_generator_sender, transaction_generator_receiver) = mpsc::channel();
-        let transaction_generator = transaction_generator::TransactionGenerator::new(wallet, server, mempool, transaction_generator_receiver);
-        transaction_generator.start();
-
+    pub fn start(addr: std::net::SocketAddr, wallet: &Arc<Wallet>, server: &ServerHandle, mempool: &Arc<Mutex<MemoryPool>>, txgen_control_chan: mpsc::Sender<transaction_generator::ControlSignal>) {
         let handle = HTTPServer::http(&addr).unwrap();
         let server = Self {
             handle: handle,
-            transaction_generator_handle: transaction_generator_sender,
+            transaction_generator_handle: txgen_control_chan,
         };
         thread::spawn(move || {
             for req in server.handle.incoming_requests() {

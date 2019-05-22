@@ -49,12 +49,13 @@ pub struct TransactionGenerator {
 }
 
 impl TransactionGenerator {
-    pub fn new(wallet: &Arc<Wallet>, server: &ServerHandle, mempool: &Arc<Mutex<MemoryPool>>, control_chan: mpsc::Receiver<ControlSignal>) -> Self {
-        return Self {
+    pub fn new(wallet: &Arc<Wallet>, server: &ServerHandle, mempool: &Arc<Mutex<MemoryPool>>) -> (Self, mpsc::Sender<ControlSignal>) {
+        let (tx, rx) = mpsc::channel();
+        let instance = Self {
             wallet: Arc::clone(wallet),
             server: server.clone(),
             mempool: Arc::clone(mempool),
-            control_chan: control_chan,
+            control_chan: rx,
             arrival_distribution: ArrivalDistribution::Uniform(
                 UniformArrival {
                     interval: 100,
@@ -68,6 +69,7 @@ impl TransactionGenerator {
             ),
             state: State::Paused,
         };
+        return (instance, tx);
     }
 
     fn handle_control_signal(&mut self, signal: ControlSignal) {

@@ -41,7 +41,7 @@ pub fn new(
     wallet: &Arc<Wallet>,
     mempool: &Arc<Mutex<MemoryPool>>,
     ctx_update_sink: mpsc::Sender<ContextUpdateSignal>,
-    server: ServerHandle,
+    server: &ServerHandle,
 ) -> Context {
     let ctx = Context {
         msg_chan: Arc::new(Mutex::new(msg_src)),
@@ -52,7 +52,7 @@ pub fn new(
         wallet: Arc::clone(wallet),
         mempool: Arc::clone(mempool),
         context_update_chan: ctx_update_sink,
-        server: server,
+        server: server.clone(),
         buffer: Arc::new(BlockBuffer::new()),
     };
     return ctx;
