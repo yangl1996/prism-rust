@@ -120,6 +120,66 @@ impl Server {
                                 Err(e) => respond!(req, false, format!("error sending control signal to transaction generator: {}", e)),
                             }
                         }
+                        "/transaction-generator/set-value-distribution" => {
+                            let params = url.query_pairs();
+                            let params: HashMap<_, _> = params.into_owned().collect();
+                            let distribution = match params.get("distribution") {
+                                Some(v) => v,
+                                None => {
+                                    respond!(req, false, "missing distribution");
+                                    return;
+                                }
+                            };
+                            let distribution = match distribution.as_ref() {
+                                "uniform" => {
+                                    let min = match params.get("min") {
+                                        Some(v) => match v.parse::<u64>() {
+                                            Ok(v) => v,
+                                            Err(e) => {
+                                                respond!(req, false, format!("error parsing min: {}", e));
+                                                return;
+                                            }
+                                        }
+                                        None => {
+                                            respond!(req, false, "missing min");
+                                            return;
+                                        }
+                                    };
+                                    let max = match params.get("max") {
+                                        Some(v) => match v.parse::<u64>() {
+                                            Ok(v) => v,
+                                            Err(e) => {
+                                                respond!(req, false, format!("error parsing max: {}", e));
+                                                return;
+                                            }
+                                        }
+                                        None => {
+                                            respond!(req, false, "missing max");
+                                            return;
+                                        }
+                                    };
+                                    if min > max {
+                                        respond!(req, false, format!("min value is bigger than max value"));
+                                        return;
+                                    }
+                                    transaction_generator::ValueDistribution::Uniform(
+                                        transaction_generator::UniformValue {
+                                            min: min,
+                                            max: max,
+                                        }
+                                    )
+                                }
+                                d => {
+                                    respond!(req, false, format!("invalid distribution: {}", d));
+                                    return;
+                                }
+                            };
+                            let control_signal = transaction_generator::ControlSignal::SetValueDistribution(distribution);
+                            match transaction_generator_handle.send(control_signal) {
+                                Ok(()) => respond!(req, true, "ok"),
+                                Err(e) => respond!(req, false, format!("error sending control signal to transaction generator: {}", e)),
+                            }
+                        }
                         _ => {
                             let content_type = "Content-Type: application/json".parse::<Header>().unwrap();
                             let payload = ApiResponse {
