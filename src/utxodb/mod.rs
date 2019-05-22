@@ -4,7 +4,7 @@ use bincode::serialize;
 use rocksdb::{Options, DB};
 
 pub struct UtxoDatabase {
-    db: rocksdb::DB, // coin id to output
+    pub db: rocksdb::DB, // coin id to output
 }
 
 impl UtxoDatabase {
@@ -93,27 +93,37 @@ impl UtxoDatabase {
 
         // apply new transactions
         for t in added.iter() {
-            // remove the input
+            // NOTE: we only add the transaction if the inputs are valid and are unspent
+            let mut valid = true;
             for input in &t.input {
-                self.db.delete(serialize(&input.coin).unwrap())?;
-                removed_coins.push(input.clone());
+                if self.db.get(serialize(&input.coin).unwrap())?.is_none() {
+                    valid = false;
+                }
             }
+            
+            if valid {
+                // remove the input
+                for input in &t.input {
+                    self.db.delete(serialize(&input.coin).unwrap())?;
+                    removed_coins.push(input.clone());
+                }
 
-            // add the output
-            let transaction_hash = t.hash();
-            for (idx, output) in t.output.iter().enumerate() {
-                let id = CoinId {
-                    hash: transaction_hash,
-                    index: idx as u32,
-                };
-                self.db
-                    .put(serialize(&id).unwrap(), serialize(&output).unwrap())?;
-                let coin = Input {
-                    coin: id,
-                    value: output.value,
-                    owner: output.recipient,
-                };
-                added_coins.push(coin);
+                // add the output
+                let transaction_hash = t.hash();
+                for (idx, output) in t.output.iter().enumerate() {
+                    let id = CoinId {
+                        hash: transaction_hash,
+                        index: idx as u32,
+                    };
+                    self.db
+                        .put(serialize(&id).unwrap(), serialize(&output).unwrap())?;
+                    let coin = Input {
+                        coin: id,
+                        value: output.value,
+                        owner: output.recipient,
+                    };
+                    added_coins.push(coin);
+                }
             }
         }
         return Ok((added_coins, removed_coins));
