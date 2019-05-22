@@ -116,7 +116,6 @@ fn main() {
     };
 
     // init server and miner
-    info!("Starting P2P server at {}", peer_socket_addr);
     let (server, miner) = prism::start(
         peer_socket_addr,
         &blockdb,

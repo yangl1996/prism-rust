@@ -10,6 +10,7 @@ use tiny_http::Response;
 use tiny_http::Server as HTTPServer;
 use std::collections::HashMap;
 use url::Url;
+use log::{info};
 
 pub struct Server {
     transaction_generator_handle: mpsc::Sender<transaction_generator::ControlSignal>,
@@ -195,5 +196,6 @@ impl Server {
                 });
             }
         });
+        info!("API server listening at {}", &addr);
     }
 }
