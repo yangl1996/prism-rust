@@ -7,6 +7,7 @@ use std::time;
 use std::sync::{Arc, Mutex, mpsc};
 use rand::Rng;
 use crate::handler::new_transaction;
+use log::{debug, error, info, trace};
 
 pub enum ControlSignal {
     Start,
@@ -19,17 +20,17 @@ pub enum ArrivalDistribution {
     Uniform(UniformArrival),
 }
 
+pub struct UniformArrival {
+    pub interval: u64   // ms
+}
+
 pub enum ValueDistribution {
     Uniform(UniformValue),
 }
 
-pub struct UniformArrival {
-    interval: u64   // ms
-}
-
 pub struct UniformValue {
-    min: u64,
-    max: u64,
+    pub min: u64,
+    pub max: u64,
 }
 
 enum State {
@@ -73,9 +74,11 @@ impl TransactionGenerator {
         match signal {
             ControlSignal::Start => {
                 self.state = State::Run;
+                info!("Transaction generator started");
             }
             ControlSignal::Stop => {
                 self.state = State::Paused;
+                info!("Transaction generator paused");
             }
             ControlSignal::SetArrivalDistribution(new) => {
                 self.arrival_distribution = new;
@@ -120,7 +123,9 @@ impl TransactionGenerator {
                     Ok(t) => {
                         new_transaction(t, &self.mempool, &self.server);
                     }
-                    Err(_) => {}
+                    Err(e) => {
+                        trace!("Failed to generate transaction: {}", e);
+                    }
                 };
                 let interval: u64 = match &self.arrival_distribution {
                     ArrivalDistribution::Uniform(d) => {
@@ -131,5 +136,6 @@ impl TransactionGenerator {
                 thread::sleep(interval);
             }
         });
+        info!("Transaction generator initialized into paused mode");
     }
 }
