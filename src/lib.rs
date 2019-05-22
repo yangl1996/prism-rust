@@ -72,11 +72,6 @@ pub fn start(
     );
     ctx.start();
 
-    // TODO: all wallet-related logic are just for demoing. We need an API for user to send/receive
-    // money. For now, we just initialize the wallet here and let it send transactions to itself
-    // periodically.
-    wallet.generate_keypair().unwrap();
-
     return Ok((server, miner));
 }
 
