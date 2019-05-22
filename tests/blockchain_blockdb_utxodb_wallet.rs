@@ -316,7 +316,10 @@ fn integration() {
     parent_hash = proposer_2.hash();
     let transaction_9 = random_transaction_block_0_input!();
     handle_block!(transaction_9);
-    let proposer_9 = proposer_block!(vec![], vec![transaction_9.hash()]);
+    //this transaction is to test invalid (wrt utxo) transaction
+    let transaction_10 = transaction_block!(vec![tx_generator::generate_random_transaction()]);
+    handle_block!(transaction_10);
+    let proposer_9 = proposer_block!(vec![], vec![transaction_9.hash(),transaction_10.hash()]);
     handle_block!(proposer_9);
     parent_hash = proposer_9.hash();
     for chain_number in 0..config::NUM_VOTER_CHAINS {
@@ -351,6 +354,10 @@ fn integration() {
             assert!(utxodb.contains(&CoinId{hash, index: index as u32}).unwrap());
         }
     }
-
-
+    for t in unwrap_transaction!(transaction_10) {
+        let hash = t.hash();
+        for index in 0..t.output.len() {
+            assert!(!utxodb.contains(&CoinId{hash, index: index as u32}).unwrap());
+        }
+    }
 }
