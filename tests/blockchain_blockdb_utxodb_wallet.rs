@@ -12,7 +12,7 @@ use std::sync::{Mutex, mpsc};
 use std::net::{SocketAddr, IpAddr, Ipv4Addr};
 use prism::block::tests::{proposer_block, voter_block, transaction_block};
 use prism::block::Content;
-
+use prism::ico;
 #[test]
 fn integration() {
     // create the db and ds
@@ -75,10 +75,16 @@ fn integration() {
     assert_eq!(blockchain.unreferred_proposer().len(),1);
     assert_eq!(wallet.balance().unwrap(), 0);
 
+    //test ico
+    ico(vec![wallet_address], &utxodb,&wallet).unwrap();
+    let ico_number = wallet.balance().unwrap();
+
     let transaction_1 = transaction_block!(
-            (0..3).map(|_|tx_generator::generate_random_transaction()).collect());
+            vec![Transaction{input:vec![], output:(0..3).map(|_|tx_generator::generate_random_output()).collect(), authorization:vec![]}]
+            );
     let transaction_2 = transaction_block!(
-            (0..5).map(|_|tx_generator::generate_random_transaction()).collect());
+            vec![Transaction{input:vec![], output:(0..3).map(|_|tx_generator::generate_random_output()).collect(), authorization:vec![]}]
+            );
     handle_block!(transaction_1);
     handle_block!(transaction_2);
     assert_eq!(blockchain.unreferred_transaction().len(),2);
@@ -107,23 +113,24 @@ fn integration() {
         let v = voter_block!(chain_number, blockchain.best_voter(chain_number as usize), vec![proposer_2.hash()]);
         handle_block!(v);
     }
-    //we don't have ico, so we cannot test for coins
-//    for t in unwrap_transaction!(transaction_1) {
-//        let hash = t.hash();
-//        for index in 0..t.output.len() {
-//            assert!(utxodb.contains(&CoinId{hash, index: index as u32}).unwrap());
-//        }
-//    }
-//    for t in unwrap_transaction!(transaction_2) {
-//        let hash = t.hash();
-//        for index in 0..t.output.len() {
-//            assert!(utxodb.contains(&CoinId{hash, index: index as u32}).unwrap());
-//        }
-//    }
+
+    for t in unwrap_transaction!(transaction_1) {
+        let hash = t.hash();
+        for index in 0..t.output.len() {
+            assert!(utxodb.contains(&CoinId{hash, index: index as u32}).unwrap());
+        }
+    }
+    for t in unwrap_transaction!(transaction_2) {
+        let hash = t.hash();
+        for index in 0..t.output.len() {
+            assert!(utxodb.contains(&CoinId{hash, index: index as u32}).unwrap());
+        }
+    }
 
     //grow the proposer tree and add transaction blocks
     let transaction_3 = transaction_block!(
-            (0..2).map(|_|tx_generator::generate_random_transaction()).collect());
+        vec![Transaction{input:vec![], output:(0..3).map(|_|tx_generator::generate_random_output()).collect(), authorization:vec![]}]
+        );
     handle_block!(transaction_3);
     let proposer_3 = proposer_block!(vec![], vec![transaction_3.hash()]);
     handle_block!(proposer_3);
@@ -167,26 +174,23 @@ fn integration() {
         let v = voter_block!(chain_number, blockchain.best_voter(chain_number as usize), vec![proposer_4.hash(), proposer_3.hash()]);
         handle_block!(v);
     }
-//    for t in unwrap_transaction!(transaction_3) {
-//        let hash = t.hash();
-//        for index in 0..t.output.len() {
-//            assert!(utxodb.contains(&CoinId{hash, index: index as u32}).unwrap());
-//        }
-//    }
-//    for t in unwrap_transaction!(transaction_4) {
-//        let hash = t.hash();
-//        for index in 0..t.output.len() {
-//            assert!(utxodb.contains(&CoinId{hash, index: index as u32}).unwrap());
-//        }
-//    }
-//    for t in unwrap_transaction!(transaction_2) {
-//        let hash = t.hash();
-//        for index in 0..t.output.len() {
-//            assert!(!utxodb.contains(&CoinId{hash, index: index as u32}).unwrap());
-//        }
-//    }
-//    assert_eq!(wallet.balance().unwrap(), value_4);
-//    utxodb.contains()
-//    assert_eq!(blockchain.unreferred_transaction().len(),0);
-//    assert_eq!(blockchain.unreferred_proposer().len(),0);
+    for t in unwrap_transaction!(transaction_3) {
+        let hash = t.hash();
+        for index in 0..t.output.len() {
+            assert!(utxodb.contains(&CoinId{hash, index: index as u32}).unwrap());
+        }
+    }
+    for t in unwrap_transaction!(transaction_4) {
+        let hash = t.hash();
+        for index in 0..t.output.len() {
+            assert!(utxodb.contains(&CoinId{hash, index: index as u32}).unwrap());
+        }
+    }
+    for t in unwrap_transaction!(transaction_2) {
+        let hash = t.hash();
+        for index in 0..t.output.len() {
+            assert!(!utxodb.contains(&CoinId{hash, index: index as u32}).unwrap());
+        }
+    }
+    assert_eq!(wallet.balance().unwrap(), value_4+ico_number);
 }

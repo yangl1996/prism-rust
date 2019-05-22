@@ -20,11 +20,15 @@ pub mod visualization;
 pub mod wallet;
 
 use crate::utxodb::UtxoDatabase;
+use bincode::serialize;
 use blockchain::BlockChain;
 use blockdb::BlockDatabase;
+use crypto::hash::Hashable;
 use miner::memory_pool::MemoryPool;
 use std::sync::{mpsc, Arc, Mutex};
+use transaction::{CoinId, Input, Output, Transaction};
 use wallet::Wallet;
+use transaction::Address;
 
 pub fn start(
     addr: std::net::SocketAddr,
@@ -72,4 +76,45 @@ pub fn start(
     wallet.generate_keypair().unwrap();
 
     return Ok((server, miner));
+}
+
+/// Gives 100 coins of 100 worth to every public key.
+pub fn ico(
+    addresses: Vec<Address>, // public keys of all the ico recipients
+    utxodb: &UtxoDatabase,
+    wallet: &Wallet,
+) -> Result<(), rocksdb::Error> {
+    let funding = Transaction {
+        input: vec![],
+        output: addresses
+            .iter()
+            .map(|address| {
+                (0..100).map(move |_| Output {
+                    value: 100,
+                    recipient: *address,
+                })
+            })
+            .flatten()
+            .collect(),
+        authorization: vec![],
+    };
+    let mut funding_coins: Vec<Input> = vec![];
+    let transaction_hash = funding.hash();
+    for (idx, output) in funding.output.iter().enumerate() {
+        let id = CoinId {
+            hash: transaction_hash,
+            index: idx as u32,
+        };
+        utxodb
+            .db
+            .put(serialize(&id).unwrap(), serialize(&output).unwrap())?;
+        let coin = Input {
+            coin: id,
+            value: output.value,
+            owner: output.recipient,
+        };
+        funding_coins.push(coin);
+    }
+    wallet.update(&funding_coins, &vec![]).unwrap();
+    Ok(())
 }

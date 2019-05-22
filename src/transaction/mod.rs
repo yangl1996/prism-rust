@@ -102,7 +102,7 @@ pub mod tests {
         let mut rng = rand::thread_rng();
         Input {
             coin: generate_random_coinid(),
-            value: rng.gen_range(1,10000),
+            value: rng.gen_range(1,100),
             owner: generate_random_hash(),
         }
     }
@@ -110,7 +110,7 @@ pub mod tests {
     pub fn generate_random_output() -> Output {
         let mut rng = rand::thread_rng();
         Output {
-            value: rng.gen_range(1,10000),
+            value: rng.gen_range(1,100),
             recipient: generate_random_hash(),
         }
     }
