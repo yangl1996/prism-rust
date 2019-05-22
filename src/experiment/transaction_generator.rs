@@ -94,6 +94,7 @@ impl TransactionGenerator {
     pub fn start(mut self) {
         thread::spawn(move || {
             let mut rng = rand::thread_rng();
+            // TODO: make it flexible
             let addr = self.wallet.addresses().unwrap()[0];
             loop {
                 // check the current state and try to receive control message
