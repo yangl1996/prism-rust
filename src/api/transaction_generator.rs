@@ -11,9 +11,25 @@ use crate::handler::new_transaction;
 pub enum ControlSignal {
     Start,
     Stop,
-    SetInterval(u64),
-    SetMaxSize(u64),
-    SetMinSize(u64),
+    SetArrivalDistribution(ArrivalDistribution),
+    SetValueDistribution(ValueDistribution),
+}
+
+pub enum ArrivalDistribution {
+    Uniform(UniformArrival),
+}
+
+pub enum ValueDistribution {
+    Uniform(UniformValue),
+}
+
+pub struct UniformArrival {
+    interval: u64   // ms
+}
+
+pub struct UniformValue {
+    min: u64,
+    max: u64,
 }
 
 enum State {
@@ -26,9 +42,8 @@ pub struct TransactionGenerator {
     server: ServerHandle,
     mempool: Arc<Mutex<MemoryPool>>,
     control_chan: mpsc::Receiver<ControlSignal>,
-    interval: u64,  // ms
-    max_size: u64,
-    min_size: u64,
+    arrival_distribution: ArrivalDistribution,
+    value_distribution: ValueDistribution,
     state: State,
 }
 
@@ -39,9 +54,17 @@ impl TransactionGenerator {
             server: server.clone(),
             mempool: Arc::clone(mempool),
             control_chan: control_chan,
-            interval: 100,
-            max_size: 100,
-            min_size: 50,
+            arrival_distribution: ArrivalDistribution::Uniform(
+                UniformArrival {
+                    interval: 100,
+                }
+            ),
+            value_distribution: ValueDistribution::Uniform(
+                UniformValue {
+                    min: 50,
+                    max: 100,
+                }
+            ),
             state: State::Paused,
         };
     }
@@ -54,14 +77,11 @@ impl TransactionGenerator {
             ControlSignal::Stop => {
                 self.state = State::Paused;
             }
-            ControlSignal::SetInterval(new) => {
-                self.interval = new;
+            ControlSignal::SetArrivalDistribution(new) => {
+                self.arrival_distribution = new;
             }
-            ControlSignal::SetMaxSize(new) => {
-                self.max_size = new;
-            }
-            ControlSignal::SetMinSize(new) => {
-                self.min_size = new;
+            ControlSignal::SetValueDistribution(new) => {
+                self.value_distribution = new;
             }
         }
     }
@@ -90,7 +110,11 @@ impl TransactionGenerator {
                         continue;
                     }
                 }
-                let value: u64 = rng.gen_range(self.min_size, self.max_size);
+                let value: u64 = match &self.value_distribution {
+                    ValueDistribution::Uniform(d) => {
+                        rng.gen_range(d.min, d.max)
+                    }
+                };
                 let transaction = self.wallet.create_transaction(addr, value);
                 match transaction {
                     Ok(t) => {
@@ -98,7 +122,12 @@ impl TransactionGenerator {
                     }
                     Err(_) => {}
                 };
-                let interval = time::Duration::from_millis(self.interval);
+                let interval: u64 = match &self.arrival_distribution {
+                    ArrivalDistribution::Uniform(d) => {
+                        d.interval
+                    }
+                };
+                let interval = time::Duration::from_millis(interval);
                 thread::sleep(interval);
             }
         });
