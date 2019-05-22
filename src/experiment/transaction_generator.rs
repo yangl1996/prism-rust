@@ -92,7 +92,7 @@ impl TransactionGenerator {
     pub fn start(mut self) {
         thread::spawn(move || {
             let mut rng = rand::thread_rng();
-            let addr = self.wallet.get_an_address().unwrap();
+            let addr = self.wallet.addresses().unwrap()[0];
             loop {
                 // check the current state and try to receive control message
                 match self.state {

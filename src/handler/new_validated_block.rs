@@ -65,7 +65,7 @@ pub fn new_validated_block(
     }
 
     let coin_diff = utxodb.apply_diff(&add, &remove).unwrap();
-    wallet.update(&coin_diff.0, &coin_diff.1).unwrap();
+    wallet.apply_diff(&coin_diff.0, &coin_diff.1).unwrap();
     drop(mempool);
 
     // tell the neighbors that we have a new block

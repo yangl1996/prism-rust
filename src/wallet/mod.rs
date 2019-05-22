@@ -3,37 +3,31 @@ use crate::crypto::sign::{KeyPair, PubKey, Signable};
 use crate::transaction::{Address, Authorization, CoinId, Input, Output, Transaction};
 use bincode::{deserialize, serialize};
 use std::{error, fmt};
+use std::convert::TryInto;
 
 pub const COIN_CF: &str = "COIN";
-pub const KEYPAIR_CF: &str = "KEYPAIR";
+pub const KEYPAIR_CF: &str = "KEYPAIR";     // &Address to &KeyPairPKCS8
 
 pub type Result<T> = std::result::Result<T, WalletError>;
 
 /// A data structure to maintain key pairs and their coins, and to generate transactions.
 pub struct Wallet {
     /// The underlying RocksDB handle.
-    handle: rocksdb::DB,
+    db: rocksdb::DB,
 }
 
 #[derive(Debug)]
 pub enum WalletError {
-    InsufficientMoney,
-    ZeroKey,
-    MissingKey,
-    MemoryPoolCheckFailure,
+    InsufficientBalance,
+    MissingKeyPair,
     DBError(rocksdb::Error),
 }
 
 impl fmt::Display for WalletError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            WalletError::InsufficientMoney => write!(f, "Insufficient Money"),
-            WalletError::ZeroKey => write!(f, "You have 0 key pair"),
-            WalletError::MissingKey => write!(f, "No Key Pair correspond to the Address"),
-            WalletError::MemoryPoolCheckFailure => write!(
-                f,
-                "Your transaction has conflict with some tx in memory pool"
-            ),
+            WalletError::InsufficientBalance => write!(f, "insufficient balance"),
+            WalletError::MissingKeyPair => write!(f, "missing key pair for the requested address"),
             WalletError::DBError(ref e) => e.fmt(f),
         }
     }
@@ -64,7 +58,7 @@ impl Wallet {
         db_opts.create_missing_column_families(true);
         db_opts.create_if_missing(true);
         let handle = rocksdb::DB::open_cf_descriptors(&db_opts, path, vec![coin_cf, keypair_cf])?;
-        return Ok(Self { handle });
+        return Ok(Self { db: handle });
     }
 
     pub fn new<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
@@ -72,117 +66,75 @@ impl Wallet {
         return Self::open(path);
     }
 
-    // someone pay to public key A first, then I coincidentally generate A, I will NOT receive the payment
     /// Generate a new key pair
-    pub fn generate_keypair(&self) -> Result<()> {
-        let cf = self.handle.cf_handle(KEYPAIR_CF).unwrap();
+    pub fn generate_keypair(&self) -> Result<Address> {
+        let cf = self.db.cf_handle(KEYPAIR_CF).unwrap();
         let keypair = KeyPair::random();
         let k: Address = keypair.public_key().hash();
-        let k = serialize(&k).unwrap();
         let v = keypair.pkcs8_bytes;
-        self.handle.put_cf(cf, &k, &v)?;
-        Ok(())
+        self.db.put_cf(cf, &k, &v)?;
+        Ok(k)
     }
 
-    /// Get one pubkey from this wallet
-    pub fn get_a_pubkey(&self) -> Result<PubKey> {
-        let cf = self.handle.cf_handle(KEYPAIR_CF).unwrap();
-        let mut iter = self.handle.iterator_cf(cf, rocksdb::IteratorMode::Start)?;
-        if let Some((_k, v)) = iter.next() {
-            let keypair = KeyPair::from_pkcs8(v.to_vec());
-            return Ok(keypair.public_key());
+    /// Get the list of addresses for which we have a key pair
+    pub fn addresses(&self) -> Result<Vec<Address>> {
+        let cf = self.db.cf_handle(KEYPAIR_CF).unwrap();
+        let mut iter = self.db.iterator_cf(cf, rocksdb::IteratorMode::Start)?;
+        let mut addrs = vec![];
+        if let Some((k, _)) = iter.next() {
+            let addr_bytes: [u8; 32] = (&k[0..32]).try_into().unwrap();
+            let addr: Address = addr_bytes.into();
+            addrs.push(addr);
         }
-        Err(WalletError::ZeroKey)
+        Ok(addrs)
     }
 
-    // this method doesn't compute hash again. we could get pubkey then compute the hash but that compute hash again!
-    /// Get one pubkey's hash from this wallet
-    pub fn get_an_address(&self) -> Result<Address> {
-        let cf = self.handle.cf_handle(KEYPAIR_CF).unwrap();
-        let mut iter = self.handle.iterator_cf(cf, rocksdb::IteratorMode::Start)?;
-        if let Some((k, _v)) = iter.next() {
-            let hash: Address = deserialize(k.as_ref()).unwrap();
-            return Ok(hash);
-        }
-        Err(WalletError::ZeroKey)
-    }
-
-    /// Get a public key by its Address
-    fn get_keypair(&self, addr: &Address) -> Result<KeyPair> {
-        let cf = self.handle.cf_handle(KEYPAIR_CF).unwrap();
-        let k = serialize(addr).unwrap();
-        if let Some(v) = self.handle.get_cf(cf, &k)? {
+    fn keypair(&self, addr: &Address) -> Result<KeyPair> {
+        let cf = self.db.cf_handle(KEYPAIR_CF).unwrap();
+        if let Some(v) = self.db.get_cf(cf, &addr)? {
             let keypair = KeyPair::from_pkcs8(v.to_vec());
             return Ok(keypair);
         }
-        Err(WalletError::MissingKey)
+        Err(WalletError::MissingKeyPair)
     }
 
-    /// Check if a pubkey's Address belongs to this wallet
-    fn contains_address(&self, addr: &Address) -> Result<bool> {
-        let cf = self.handle.cf_handle(KEYPAIR_CF).unwrap();
-        let k = serialize(addr).unwrap();
-        if let Some(_) = self.handle.get_cf(cf, &k)? {
+    fn contains_keypair(&self, addr: &Address) -> Result<bool> {
+        let cf = self.db.cf_handle(KEYPAIR_CF).unwrap();
+        if let Some(_) = self.db.get_cf(cf, &addr)? {
             return Ok(true);
         }
         Ok(false)
     }
 
-    /// Add coin to wallet
-    /// Use write batch to keep atomicity
-    fn insert_coin_batch(&self, coin: &Input, batch: &mut rocksdb::WriteBatch) -> Result<()> {
-        let cf = self.handle.cf_handle(COIN_CF).unwrap();
-        let k = serialize(&coin.coin).unwrap();
-        let output = Output {
-            value: coin.value,
-            recipient: coin.owner,
-        };
-        let v = serialize(&output).unwrap();
-        batch.put_cf(cf, &k, &v)?;
-        Ok(())
-    }
-
-    /// Removes coin from the wallet. Will be used after the tx is confirmed and the coin is spent. Also used in rollback
-    /// If the coin was in, it is removed. If not, this fn does NOT panic/error.
-    fn delete_coin(&self, coin_id: &CoinId) -> Result<()> {
-        let cf = self.handle.cf_handle(COIN_CF).unwrap();
-        let k = serialize(coin_id).unwrap();
-        self.handle.delete_cf(cf, &k)?;
-        Ok(())
-    }
-
-    /// Removes coin from the wallet. Will be used after the tx is confirmed and the coin is spent. Also used in rollback
-    /// If the coin was in, it is removed. If not, this fn does NOT panic/error.
-    /// Use write batch to keep atomicity
-    fn delete_coin_batch(&self, coin_id: &CoinId, batch: &mut rocksdb::WriteBatch) -> Result<()> {
-        let cf = self.handle.cf_handle(COIN_CF).unwrap();
-        let k = serialize(coin_id).unwrap();
-        batch.delete_cf(cf, &k)?;
-        Ok(())
-    }
-
-    /// Update the wallet atomically using a write batch.
-    /// Can serve as add or rollback, based on arguments to_delete and to_insert.
-    pub fn update(&self, add: &[Input], remove: &[Input]) -> Result<()> {
+    pub fn apply_diff(&self, add: &[Input], remove: &[Input]) -> Result<()> {
         let mut batch = rocksdb::WriteBatch::default();
+        let cf = self.db.cf_handle(COIN_CF).unwrap();
         for coin in remove {
-            self.delete_coin_batch(&coin.coin, &mut batch)?;
+            let key = serialize(&coin.coin).unwrap();
+            batch.delete_cf(cf, &key)?;
         }
         for coin in add {
-            if let Ok(true) = self.contains_address(&coin.owner) {
-                self.insert_coin_batch(coin, &mut batch)?;
+            // TODO: it's so funny that we have to do this for every added coin
+            if self.contains_keypair(&coin.owner)? {
+                let output = Output {
+                    value: coin.value,
+                    recipient: coin.owner,
+                };
+                let key = serialize(&coin.coin).unwrap();
+                let val = serialize(&output).unwrap();
+                batch.put_cf(cf, &key, &val)?;
             }
         }
-        self.handle.write(batch)?;
+        self.db.write(batch)?;
         Ok(())
     }
 
     /// Returns the sum of values of all the coin in the wallet
     pub fn balance(&self) -> Result<u64> {
-        let cf = self.handle.cf_handle(COIN_CF).unwrap();
-        let iter = self.handle.iterator_cf(cf, rocksdb::IteratorMode::Start)?;
+        let cf = self.db.cf_handle(COIN_CF).unwrap();
+        let iter = self.db.iterator_cf(cf, rocksdb::IteratorMode::Start)?;
         let balance = iter
-            .map(|(_k, v)| {
+            .map(|(_, v)| {
                 let coin_data: Output = bincode::deserialize(v.as_ref()).unwrap();
                 coin_data.value
             })
@@ -194,9 +146,9 @@ impl Wallet {
     pub fn create_transaction(&self, recipient: Address, value: u64) -> Result<Transaction> {
         let mut coins_to_use: Vec<Input> = vec![];
         let mut value_sum = 0u64;
-        let cf = self.handle.cf_handle(COIN_CF).unwrap();
-        let iter = self.handle.iterator_cf(cf, rocksdb::IteratorMode::Start)?;
-        // iterate thru our wallet
+        let cf = self.db.cf_handle(COIN_CF).unwrap();
+        let iter = self.db.iterator_cf(cf, rocksdb::IteratorMode::Start)?;
+        // iterate through our wallet
         for (k, v) in iter {
             let coin_id: CoinId = bincode::deserialize(k.as_ref()).unwrap();
             let coin_data: Output = bincode::deserialize(v.as_ref()).unwrap();
@@ -213,48 +165,34 @@ impl Wallet {
         }
         if value_sum < value {
             // we don't have enough money in wallet
-            return Err(WalletError::InsufficientMoney);
+            return Err(WalletError::InsufficientBalance);
         }
         // if we have enough money in our wallet, create tx
         // remove used coin from wallet
-        for c in coins_to_use.iter() {
-            self.delete_coin(&c.coin)?;//could also use batch
-        }
+        self.apply_diff(&vec![], &coins_to_use)?;
 
-        // create transaction inputs
-        let input: Vec<Input> = coins_to_use
-            .iter()
-            .map(|c| Input {
-                coin: CoinId {
-                    hash: c.coin.hash,
-                    index: c.coin.index,
-                },
-                value: c.value,
-                owner: c.owner,
-            })
-            .collect();
         // create the output
         let mut output = vec![Output { recipient, value }];
         if value_sum > value {
             // transfer the remaining value back to self
-            let recipient = self.get_an_address()?;
+            let recipient = self.addresses()?[0];
             output.push(Output {
                 recipient,
                 value: value_sum - value,
             });
         }
 
+        let mut owners: Vec<Address> = coins_to_use.iter().map(|input|input.owner).collect();
         let unsigned = Transaction {
-            input,
-            output,
+            input: coins_to_use,
+            output: output,
             authorization: vec![],
         };
         let mut authorization = vec![];
-        let mut owners: Vec<Address> = coins_to_use.into_iter().map(|input|input.owner).collect();
         owners.sort_unstable();
         owners.dedup();
         for owner in owners.iter() {
-            let keypair = self.get_keypair(&owner)?;
+            let keypair = self.keypair(&owner)?;
             authorization.push(Authorization {
                 pubkey: keypair.public_key(),
                 signature: unsigned.sign(&keypair),
@@ -266,21 +204,6 @@ impl Wallet {
             ..unsigned
         })
     }
-
-    // only for test, how to set pub functions just for test?
-//    fn get_coin_id(&self) -> Vec<CoinId> {
-//        let cf = self.handle.cf_handle(COIN_CF).unwrap();
-//        let iter = self
-//            .handle
-//            .iterator_cf(cf, rocksdb::IteratorMode::Start)
-//            .unwrap();
-//        // iterate thru our wallet
-//        iter.map(|(k, _v)| {
-//            let coin_id: CoinId = bincode::deserialize(k.as_ref()).unwrap();
-//            coin_id
-//        })
-//        .collect()
-//    }
 }
 
 
@@ -290,6 +213,7 @@ pub mod tests {
     use crate::transaction::{Input, CoinId, tests as tx_generator};
     use crate::crypto::hash::H256;
 
+    /*
     #[test]
     fn all_pub_functions() {
         let w = Wallet::new(std::path::Path::new("/tmp/walletdb_test.rocksdb")).unwrap();
@@ -325,5 +249,6 @@ pub mod tests {
         w.update(&[],&ico).unwrap();
         assert_eq!(w.balance().unwrap(), 0);
     }
+    */
 
 }

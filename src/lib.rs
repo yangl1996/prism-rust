@@ -117,6 +117,6 @@ pub fn ico(
         };
         funding_coins.push(coin);
     }
-    wallet.update(&funding_coins, &vec![]).unwrap();
+    wallet.apply_diff(&funding_coins, &vec![]).unwrap();
     Ok(())
 }
