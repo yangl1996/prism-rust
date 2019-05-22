@@ -2,7 +2,7 @@ use prism::blockchain::BlockChain;
 use prism::wallet::Wallet;
 use prism::blockdb::BlockDatabase;
 use prism::utxodb::UtxoDatabase;
-use prism::crypto::hash::Hashable;
+use prism::crypto::hash::{Hashable, H256};
 use prism::transaction::{Transaction, tests as tx_generator, CoinId, Input, Output};
 use prism::miner::memory_pool::MemoryPool;
 use prism::handler::new_validated_block;
@@ -69,6 +69,13 @@ fn integration() {
             }
         }};
     }
+    macro_rules! random_transaction_block_0_input {
+        () => {{
+            transaction_block!(
+                vec![Transaction{input:vec![], output:(0..3).map(|_|tx_generator::generate_random_output()).collect(), authorization:vec![]}]
+            )
+        }};
+    }
 
     // start test
     assert_eq!(blockchain.unreferred_transaction().len(),0);
@@ -79,12 +86,8 @@ fn integration() {
     ico(vec![wallet_address], &utxodb,&wallet).unwrap();
     let ico_number = wallet.balance().unwrap();
 
-    let transaction_1 = transaction_block!(
-            vec![Transaction{input:vec![], output:(0..3).map(|_|tx_generator::generate_random_output()).collect(), authorization:vec![]}]
-            );
-    let transaction_2 = transaction_block!(
-            vec![Transaction{input:vec![], output:(0..3).map(|_|tx_generator::generate_random_output()).collect(), authorization:vec![]}]
-            );
+    let transaction_1 = random_transaction_block_0_input!();
+    let transaction_2 = random_transaction_block_0_input!();
     handle_block!(transaction_1);
     handle_block!(transaction_2);
     assert_eq!(blockchain.unreferred_transaction().len(),2);
@@ -109,9 +112,11 @@ fn integration() {
     parent_hash = proposer_2.hash();
 
     //voters vote for proposer_2, and it becomes new leader
+    let mut voter_parent_to_fork = vec![];
     for chain_number in 0..config::NUM_VOTER_CHAINS {
         let v = voter_block!(chain_number, blockchain.best_voter(chain_number as usize), vec![proposer_2.hash()]);
         handle_block!(v);
+        voter_parent_to_fork.push(v);
     }
 
     for t in unwrap_transaction!(transaction_1) {
@@ -128,9 +133,7 @@ fn integration() {
     }
 
     //grow the proposer tree and add transaction blocks
-    let transaction_3 = transaction_block!(
-        vec![Transaction{input:vec![], output:(0..3).map(|_|tx_generator::generate_random_output()).collect(), authorization:vec![]}]
-        );
+    let transaction_3 = random_transaction_block_0_input!();
     handle_block!(transaction_3);
     let proposer_3 = proposer_block!(vec![], vec![transaction_3.hash()]);
     handle_block!(proposer_3);
@@ -193,4 +196,161 @@ fn integration() {
         }
     }
     assert_eq!(wallet.balance().unwrap(), value_4+ico_number);
+
+    let transaction_5 = random_transaction_block_0_input!();
+    let transaction_6 = random_transaction_block_0_input!();
+    handle_block!(transaction_5);
+    handle_block!(transaction_6);
+    let proposer_5 = proposer_block!(vec![], vec![transaction_5.hash()]);
+    parent_hash = proposer_5.hash();
+    let proposer_6 = proposer_block!(vec![], vec![transaction_6.hash()]);
+    parent_hash = proposer_6.hash();
+    handle_block!(proposer_5);
+    handle_block!(proposer_6);
+    //test proposer_6 is leader but proposer_5 is not, ledger should not grow
+    //although this may fail validation
+    for chain_number in 0..config::NUM_VOTER_CHAINS {
+        let v = voter_block!(chain_number, blockchain.best_voter(chain_number as usize), vec![proposer_6.hash()]);
+        handle_block!(v);
+    }
+//    println!("{:?}",blockchain.proposer_transaction_in_ledger(10).unwrap());
+//    for t in unwrap_transaction!(transaction_5) {
+//        let hash = t.hash();
+//        for index in 0..t.output.len() {
+//            assert!(!utxodb.contains(&CoinId{hash, index: index as u32}).unwrap());
+//        }
+//    }
+//    for t in unwrap_transaction!(transaction_6) {
+//        let hash = t.hash();
+//        for index in 0..t.output.len() {
+//            assert!(!utxodb.contains(&CoinId{hash, index: index as u32}).unwrap());
+//        }
+//    }
+    for chain_number in 0..config::NUM_VOTER_CHAINS {
+        let v = voter_block!(chain_number, blockchain.best_voter(chain_number as usize), vec![proposer_5.hash()]);
+        handle_block!(v);
+    }
+    for t in unwrap_transaction!(transaction_5) {
+        let hash = t.hash();
+        for index in 0..t.output.len() {
+            assert!(utxodb.contains(&CoinId{hash, index: index as u32}).unwrap());
+        }
+    }
+    for t in unwrap_transaction!(transaction_6) {
+        let hash = t.hash();
+        for index in 0..t.output.len() {
+            assert!(utxodb.contains(&CoinId{hash, index: index as u32}).unwrap());
+        }
+    }
+    let transaction_7 = random_transaction_block_0_input!();
+    handle_block!(transaction_7);
+    let proposer_7 = proposer_block!(vec![], vec![transaction_7.hash()]);
+    handle_block!(proposer_7);
+    parent_hash = proposer_7.hash();
+
+    //TODO: the expression below depend on confirm algorithm
+    let not_enough_vote = config::NUM_VOTER_CHAINS/2-1;
+    for chain_number in 0..not_enough_vote {
+        let v = voter_block!(chain_number, blockchain.best_voter(chain_number as usize), vec![proposer_7.hash()]);
+        handle_block!(v);
+    }
+    for t in unwrap_transaction!(transaction_7) {
+        let hash = t.hash();
+        for index in 0..t.output.len() {
+            assert!(!utxodb.contains(&CoinId{hash, index: index as u32}).unwrap());
+        }
+    }
+    for chain_number in not_enough_vote..config::NUM_VOTER_CHAINS {
+        let v = voter_block!(chain_number, blockchain.best_voter(chain_number as usize), vec![proposer_7.hash()]);
+        handle_block!(v);
+    }
+    for t in unwrap_transaction!(transaction_7) {
+        let hash = t.hash();
+        for index in 0..t.output.len() {
+            assert!(utxodb.contains(&CoinId{hash, index: index as u32}).unwrap());
+        }
+    }
+
+    //test wallet create_transaction
+    let receiver: H256 = [9u8;32].into();
+    let payment = wallet.create_transaction(receiver, value_4-1).unwrap();
+    let transaction_8 = transaction_block!(vec![payment.clone()]);
+    handle_block!(transaction_8);
+    let proposer_8 = proposer_block!(vec![], vec![transaction_8.hash()]);
+    handle_block!(proposer_8);
+    parent_hash = proposer_8.hash();
+    for chain_number in 0..config::NUM_VOTER_CHAINS {
+        let v = voter_block!(chain_number, blockchain.best_voter(chain_number as usize), vec![proposer_8.hash()]);
+        handle_block!(v);
+    }
+    for t in unwrap_transaction!(transaction_8) {
+        let hash = t.hash();
+        for index in 0..t.output.len() {
+            assert!(utxodb.contains(&CoinId{hash, index: index as u32}).unwrap());
+        }
+    }
+    assert_eq!(wallet.balance().unwrap(), 1+ico_number);
+
+    //forking on voter chains, but fork length is equal to main chain length, so nothing happens
+    for chain_number in 0..config::NUM_VOTER_CHAINS {
+        let v = voter_block!(chain_number, voter_parent_to_fork[chain_number as usize].hash(), vec![]);
+        handle_block!(v);
+        let v = voter_block!(chain_number, v.hash(), vec![]);
+        handle_block!(v);
+        let v = voter_block!(chain_number, v.hash(), vec![]);
+        handle_block!(v);
+        let v = voter_block!(chain_number, v.hash(), vec![]);
+        handle_block!(v);
+        let v = voter_block!(chain_number, v.hash(), vec![]);
+        handle_block!(v);
+    }
+    for t in unwrap_transaction!(transaction_8) {
+        let hash = t.hash();
+        for index in 0..t.output.len() {
+            assert!(utxodb.contains(&CoinId{hash, index: index as u32}).unwrap());
+        }
+    }
+    assert_eq!(wallet.balance().unwrap(), 1+ico_number);
+
+    //longer forking on voter chains, rollback should happen, and history should be changed
+    parent_hash = proposer_2.hash();
+    let transaction_9 = random_transaction_block_0_input!();
+    handle_block!(transaction_9);
+    let proposer_9 = proposer_block!(vec![], vec![transaction_9.hash()]);
+    handle_block!(proposer_9);
+    parent_hash = proposer_9.hash();
+    for chain_number in 0..config::NUM_VOTER_CHAINS {
+        let v = voter_block!(chain_number, voter_parent_to_fork[chain_number as usize].hash(), vec![]);
+        handle_block!(v);
+        let v = voter_block!(chain_number, v.hash(), vec![]);
+        handle_block!(v);
+        let v = voter_block!(chain_number, v.hash(), vec![]);
+        handle_block!(v);
+        let v = voter_block!(chain_number, v.hash(), vec![]);
+        handle_block!(v);
+        let v = voter_block!(chain_number, v.hash(), vec![]);
+        handle_block!(v);
+        let v = voter_block!(chain_number, v.hash(), vec![proposer_9.hash()]);
+        handle_block!(v);
+    }
+    for t in unwrap_transaction!(transaction_2) {
+        let hash = t.hash();
+        for index in 0..t.output.len() {
+            assert!(utxodb.contains(&CoinId{hash, index: index as u32}).unwrap());
+        }
+    }
+    for t in unwrap_transaction!(transaction_3) {
+        let hash = t.hash();
+        for index in 0..t.output.len() {
+            assert!(!utxodb.contains(&CoinId{hash, index: index as u32}).unwrap());
+        }
+    }
+    for t in unwrap_transaction!(transaction_9) {
+        let hash = t.hash();
+        for index in 0..t.output.len() {
+            assert!(utxodb.contains(&CoinId{hash, index: index as u32}).unwrap());
+        }
+    }
+
+
 }
