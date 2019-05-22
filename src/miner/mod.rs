@@ -205,6 +205,7 @@ impl Context {
                 //if the mined block is an empty tx block, we ignore it, and go straight to next mining loop
                 match &mined_block.content {
                     Content::Transaction(content) => {
+                        // TODO: recover these lines
                         //                        if content.transactions.is_empty() {
                         //                            continue;
                         //                        }

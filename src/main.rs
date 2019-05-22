@@ -8,16 +8,10 @@ use prism::miner::memory_pool::MemoryPool;
 use prism::utxodb::UtxoDatabase;
 use prism::visualization::Server as VisualizationServer;
 use prism::wallet::Wallet;
+use prism::api::Server as ApiServer;
 use std::net;
 use std::process;
 use std::sync::Arc;
-
-const DEFAULT_IP: &str = "127.0.0.1";
-const DEFAULT_P2P_PORT: u16 = 6000;
-const DEFAULT_BLOCKDB: &str = "/tmp/prism-blocks.rocksdb";
-const DEFAULT_UTXODB: &str = "/tmp/prism-utxo.rocksdb";
-const DEFAULT_BLOCKCHAIN: &str = "/tmp/prism-blockchain.rocksdb";
-const DEFAULT_WALLET: &str = "/tmp/prism-wallet.rocksdb";
 
 fn main() {
     // parse command line arguments
@@ -25,15 +19,15 @@ fn main() {
      (version: "0.1")
      (about: "Prism blockchain full client")
      (@arg verbose: -v ... "Increases the verbosity of logging")
-     (@arg peer_ip: --ip [IP] "Sets the IP address to listen to peers")
-     (@arg peer_port: --port [PORT] "Sets the port to listen to peers")
+     (@arg peer_addr: --p2p [ADDR] default_value("127.0.0.1:6000") "Sets the IP address and the port of the P2P server")
+     (@arg api_addr: --api [ADDR] default_value("127.0.0.1:7000") "Sets the IP address and the port of the API server")
      (@arg visualization: --visual [ADDR] "Enables the visualization server at the given address and port")
-     (@arg mine: -m --mine "Enables the CPU miner to mine blocks")
+     (@arg mine: -m --mine "Starts the CPU miner as the client starts")
      (@arg known_peer: -c --connect ... [PEER] "Sets the peers to connect to")
-     (@arg block_db: --blockdb [PATH] "Sets the path of the block database")
-     (@arg utxo_db: --utxodb [PATH] "Sets the path of the UTXO database")
-     (@arg blockchain_db: --blockchaindb [PATH] "Sets the path of the blockchain database")
-     (@arg wallet_db: --walletdb [PATH] "Sets the path of the wallet")
+     (@arg block_db: --blockdb [PATH] default_value("/tmp/prism-blocks.rocksdb") "Sets the path of the block database")
+     (@arg utxo_db: --utxodb [PATH] default_value("/tmp/prism-utxo.rocksdb") "Sets the path of the UTXO database")
+     (@arg blockchain_db: --blockchaindb [PATH] default_value("/tmp/prism-blockchain.rocksdb") "Sets the path of the blockchain database")
+     (@arg wallet_db: --walletdb [PATH] default_value("/tmp/prism-wallet.rocksdb") "Sets the path of the wallet")
     )
     .get_matches();
 
@@ -46,31 +40,19 @@ fn main() {
     let mempool = Arc::new(std::sync::Mutex::new(mempool));
 
     // init block database
-    let blockdb = match matches.value_of("block_db") {
-        Some(path) => BlockDatabase::new(&path).unwrap(),
-        None => BlockDatabase::new(&DEFAULT_BLOCKDB).unwrap(),
-    };
+    let blockdb = BlockDatabase::new(&matches.value_of("block_db").unwrap()).unwrap();
     let blockdb = Arc::new(blockdb);
 
     // init utxo database
-    let utxodb = match matches.value_of("utxo_db") {
-        Some(path) => UtxoDatabase::new(&path).unwrap(),
-        None => UtxoDatabase::new(&DEFAULT_UTXODB).unwrap(),
-    };
+    let utxodb = UtxoDatabase::new(&matches.value_of("utxo_db").unwrap()).unwrap();
     let utxodb = Arc::new(utxodb);
 
     // init blockchain database
-    let blockchain = match matches.value_of("blockchain_db") {
-        Some(path) => BlockChain::new(&path).unwrap(),
-        None => BlockChain::new(&DEFAULT_BLOCKCHAIN).unwrap(),
-    };
+    let blockchain = BlockChain::new(&matches.value_of("blockchain_db").unwrap()).unwrap();
     let blockchain = Arc::new(blockchain);
 
     // init wallet database
-    let wallet = match matches.value_of("wallet_db") {
-        Some(path) => Wallet::new(&path).unwrap(),
-        None => Wallet::new(&DEFAULT_WALLET).unwrap(),
-    };
+    let wallet = Wallet::new(&matches.value_of("wallet_db").unwrap()).unwrap();
     let wallet = Arc::new(wallet);
 
     // start visualization server
@@ -86,27 +68,21 @@ fn main() {
         None => {}
     }
 
-    // parse server ip and port
-    let peer_ip = match matches.value_of("peer_ip") {
-        Some(ip) => ip.parse::<net::IpAddr>().unwrap_or_else(|e| {
-            error!("Error parsing P2P IP address: {}", e);
+    // parse p2p server address
+    let p2p_addr = matches.value_of("peer_addr").unwrap().parse::<net::SocketAddr>().unwrap_or_else(|e| {
+            error!("Error parsing P2P server address: {}", e);
             process::exit(1);
-        }),
-        None => DEFAULT_IP.parse::<net::IpAddr>().unwrap(),
-    };
-    let peer_port = match matches.value_of("peer_port") {
-        Some(port) => port.parse::<u16>().unwrap_or_else(|e| {
-            error!("Error parsing P2P port: {}", e);
+    });
+
+    // parse api server address
+    let api_addr = matches.value_of("api_addr").unwrap().parse::<net::SocketAddr>().unwrap_or_else(|e| {
+            error!("Error parsing API server address: {}", e);
             process::exit(1);
-        }),
-        None => DEFAULT_P2P_PORT,
-    };
-    let peer_socket_addr = net::SocketAddr::new(peer_ip, peer_port);
+    });
 
     // init server and miner
-    info!("Starting P2P server at {}", peer_socket_addr);
     let (server, miner) = prism::start(
-        peer_socket_addr,
+        p2p_addr,
         &blockdb,
         &utxodb,
         &blockchain,
@@ -136,6 +112,9 @@ fn main() {
     if matches.is_present("mine") {
         miner.start();
     }
+
+    // start the API server
+    ApiServer::start(api_addr, &wallet, &server, &mempool);
 
     loop {
         std::thread::park();
