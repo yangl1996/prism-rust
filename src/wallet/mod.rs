@@ -210,32 +210,32 @@ impl Wallet {
 #[cfg(test)]
 pub mod tests {
     use super::Wallet;
-    use crate::transaction::{Input, CoinId, tests as tx_generator};
+    use crate::transaction::{Input, CoinId};
+    use crate::transaction::tests::generate_random_coinid;
     use crate::crypto::hash::H256;
 
-    /*
     #[test]
-    fn all_pub_functions() {
+    fn wallet() {
         let w = Wallet::new(std::path::Path::new("/tmp/walletdb_test.rocksdb")).unwrap();
         assert_eq!(w.balance().unwrap(), 0);
-        assert!(w.get_an_address().is_err());
-        assert!(w.get_a_pubkey().is_err());
-        assert!(w.create_transaction(H256::default(), 1).is_err());
-        w.generate_keypair().unwrap();
-        let addr = w.get_an_address().unwrap();
-        // create 10*10 coins
+        assert_eq!(w.addresses().unwrap().len(), 0);
+        let addr = w.generate_keypair().unwrap();
+        assert_eq!(w.addresses().unwrap(), vec![addr]);
+
+        // give the test address 10 x 10 coins
         let mut ico: Vec<Input> = vec![];
         for _ in 0..10 {
             ico.push(
                 Input{
                     value: 10,
                     owner: addr,
-                    coin: tx_generator::generate_random_coinid(),
+                    coin: generate_random_coinid(),
                 });
         }
-        w.update(&ico,&[]).unwrap();
+        w.apply_diff(&ico,&[]).unwrap();
         assert_eq!(w.balance().unwrap(), 100);
-        //test create_transaction
+
+        // generate transactions
         let tx = w.create_transaction(H256::default(), 19).unwrap();
         assert_eq!(tx.input.len(),2);
         assert_eq!(tx.input[0].value,10);
@@ -245,10 +245,10 @@ pub mod tests {
         assert_eq!(tx.output[0].value,19);
         assert_eq!(tx.output[1].recipient,addr);
         assert_eq!(tx.output[1].value,1);
-        //test remove coin
-        w.update(&[],&ico).unwrap();
+
+        // remove coins
+        w.apply_diff(&[],&ico).unwrap();
         assert_eq!(w.balance().unwrap(), 0);
     }
-    */
 
 }

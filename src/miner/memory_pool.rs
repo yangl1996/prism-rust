@@ -179,8 +179,8 @@ pub mod tests {
             value: first_tx.output[0].value,
             owner: first_tx.output[0].recipient,
         }];
-        //although for now we don't want to add tx into mempool if it's inputs are also in mempool
-        //let's add them and test remove
+        // although for now we don't want to add tx into mempool if it's inputs are also in mempool
+        // let's add them and test remove
         for i in 1..=20 {
             let tx = Transaction {
                 input: input.clone(),
@@ -198,7 +198,7 @@ pub mod tests {
                 owner: tx.output[0].recipient,
             }];
         }
-        //one remove should remove all correlated transactions
+        // one remove should remove all correlated transactions
         pool.remove_by_input(&Input {
             coin: CoinId {
                 hash: first_tx.hash(),
@@ -220,18 +220,17 @@ pub mod tests {
             v.push(tx.hash());
             pool.insert(tx);
         }
-        //test the fifo property: we get the first i txs.
+        // test the fifo property: we get the first i txs.
         for i in 0..20 {
             assert_eq!(
                 pool.get_transactions(i)
                     .iter()
                     .map(|tx| tx.hash())
                     .collect::<Vec<H256>>()[..],
-                v[..i]
+                v[..i as usize]
             )
         }
-        //if we pass in a larger integer, we get all transactions in mempool.
+        // if we pass in a larger integer, we get all transactions in mempool.
         assert_eq!(pool.get_transactions(25).len(), 20);
     }
-
 }
