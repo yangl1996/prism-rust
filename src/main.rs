@@ -13,10 +13,12 @@ use prism::network::server;
 use prism::network::worker;
 use prism::experiment::transaction_generator::TransactionGenerator;
 use prism::miner;
+use prism::crypto::hash::Hashable;
 use std::net;
 use std::process;
 use std::sync::Arc;
 use std::sync::mpsc;
+use std::io::{self, Write};
 
 fn main() {
     // parse command line arguments
@@ -33,8 +35,29 @@ fn main() {
      (@arg utxo_db: --utxodb [PATH] default_value("/tmp/prism-utxo.rocksdb") "Sets the path of the UTXO database")
      (@arg blockchain_db: --blockchaindb [PATH] default_value("/tmp/prism-blockchain.rocksdb") "Sets the path of the blockchain database")
      (@arg wallet_db: --walletdb [PATH] default_value("/tmp/prism-wallet.rocksdb") "Sets the path of the wallet")
+     (@arg init_fund_addr: --("fund-addr") ... [HASH] "Endows the given address an initial fund")
+     (@arg load_key_path: --("load-key") ... [PATH] "Loads a key pair into the wallet from the given address")
+     (@subcommand keygen =>
+      (about: "Generates Prism wallet key pair")
+      (@arg display_address: --addr "Prints the address of the key pair to STDERR")
+     )
     )
     .get_matches();
+
+    // match subcommands
+    match matches.subcommand() {
+        ("keygen", Some(m)) => {
+            let keypair = prism::crypto::sign::KeyPair::random();
+            let base64_encoded = base64::encode(&keypair.pkcs8_bytes);
+            println!("{}", base64_encoded);
+            if m.is_present("display_address") {
+                let addr = keypair.public_key().hash();
+                eprintln!("{}", addr);
+            }
+            return;
+        }
+        _ => {}
+    }
 
     // init logger
     let verbosity = matches.occurrences_of("verbose") as usize;
