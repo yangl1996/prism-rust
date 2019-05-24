@@ -52,6 +52,7 @@ for (( i = 0; i < $num_nodes; i++ )); do
 	pid="$!"
 	pids="$pids $pid"
 	echo "Node $i started as process $pid"
+	sleep 1
 done
 
 for pid in $pids; do
