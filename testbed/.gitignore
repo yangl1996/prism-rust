@@ -1,3 +1,5 @@
+*.addr
+*.pkcs8
 log
 instances.txt
 nodes.txt
