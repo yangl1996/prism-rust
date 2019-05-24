@@ -13,12 +13,13 @@ use prism::network::server;
 use prism::network::worker;
 use prism::experiment::transaction_generator::TransactionGenerator;
 use prism::miner;
-use prism::crypto::hash::Hashable;
+use prism::crypto::hash::{H256, Hashable};
 use std::net;
 use std::process;
 use std::sync::Arc;
 use std::sync::mpsc;
 use std::io::{self, Write};
+use std::convert::TryInto;
 
 fn main() {
     // parse command line arguments
@@ -52,7 +53,8 @@ fn main() {
             println!("{}", base64_encoded);
             if m.is_present("display_address") {
                 let addr = keypair.public_key().hash();
-                eprintln!("{}", addr);
+                let base64_encoded = base64::encode(&addr);
+                eprintln!("{}", base64_encoded);
             }
             return;
         }
@@ -109,6 +111,25 @@ fn main() {
                 }
             }
         }
+    }
+
+    // fund the given addresses
+    if let Some(fund_addrs) = matches.values_of("init_fund_addr") {
+        let mut addrs = vec![];
+        for addr in fund_addrs {
+            let decoded = match base64::decode(&addr.trim()) {
+                Ok(d) => d,
+                Err(e) => {
+                    error!("Error decoding address {}: {}", &addr.trim(), e);
+                    process::exit(1);
+                }
+            };
+            let addr_bytes: [u8; 32] = (&decoded[0..32]).try_into().unwrap();
+            let hash: H256 = addr_bytes.into();
+            addrs.push(hash);
+        }
+        info!("Funding {} addresses with initial coins", addrs.len());
+        prism::ico(&addrs, &utxodb, &wallet);
     }
 
     // parse p2p server address

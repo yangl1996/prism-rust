@@ -32,43 +32,27 @@ use std::sync::{mpsc, Arc, Mutex};
 use transaction::{CoinId, Input, Output, Transaction};
 use wallet::Wallet;
 
-/// Gives 100 coins of 100 worth to every public key.
+/// Gives 100 coins of 100 worth to every given address.
 pub fn ico(
-    pub_keys: Vec<PubKey>, // public keys of all the ico recipients
+    recipients: &[crypto::hash::H256], // addresses of all the ico recipients
     utxodb: &Arc<UtxoDatabase>,
     wallet: &Arc<Wallet>,
 ) -> Result<(), rocksdb::Error> {
     let funding = Transaction {
         input: vec![],
-        output: pub_keys
+        output: recipients
             .iter()
-            .map(|pub_key| {
+            .map(|recipient| {
                 (0..100).map(move |_| Output {
                     value: 100,
-                    recipient: pub_key.hash().clone(),
+                    recipient: recipient.clone(),
                 })
             })
             .flatten()
             .collect(),
         authorization: vec![],
     };
-    let mut funding_coins: Vec<Input> = vec![];
-    let transaction_hash = funding.hash();
-    for (idx, output) in funding.output.iter().enumerate() {
-        let id = CoinId {
-            hash: transaction_hash,
-            index: idx as u32,
-        };
-        utxodb
-            .db
-            .put(serialize(&id).unwrap(), serialize(&output).unwrap())?;
-        let coin = Input {
-            coin: id,
-            value: output.value,
-            owner: output.recipient,
-        };
-        funding_coins.push(coin);
-    }
-    wallet.apply_diff(&funding_coins, &vec![]).unwrap();
+    let diff = utxodb.apply_diff(&[funding], &[]).unwrap();
+    wallet.apply_diff(&diff.0, &diff.1).unwrap();
     Ok(())
 }
