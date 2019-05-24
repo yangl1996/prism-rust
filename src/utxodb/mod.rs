@@ -100,7 +100,7 @@ impl UtxoDatabase {
                     valid = false;
                 }
             }
-            
+
             if valid {
                 // remove the input
                 for input in &t.input {

@@ -1,13 +1,13 @@
+use crate::handler::new_transaction;
 use crate::miner::memory_pool::MemoryPool;
 use crate::network::server::Handle as ServerHandle;
-use crate::wallet::Wallet;
 use crate::transaction;
+use crate::wallet::Wallet;
+use log::{debug, error, info, trace};
+use rand::Rng;
+use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use std::time;
-use std::sync::{Arc, Mutex, mpsc};
-use rand::Rng;
-use crate::handler::new_transaction;
-use log::{debug, error, info, trace};
 
 pub enum ControlSignal {
     Start,
@@ -21,7 +21,7 @@ pub enum ArrivalDistribution {
 }
 
 pub struct UniformArrival {
-    pub interval: u64   // ms
+    pub interval: u64, // ms
 }
 
 pub enum ValueDistribution {
@@ -49,24 +49,19 @@ pub struct TransactionGenerator {
 }
 
 impl TransactionGenerator {
-    pub fn new(wallet: &Arc<Wallet>, server: &ServerHandle, mempool: &Arc<Mutex<MemoryPool>>) -> (Self, mpsc::Sender<ControlSignal>) {
+    pub fn new(
+        wallet: &Arc<Wallet>,
+        server: &ServerHandle,
+        mempool: &Arc<Mutex<MemoryPool>>,
+    ) -> (Self, mpsc::Sender<ControlSignal>) {
         let (tx, rx) = mpsc::channel();
         let instance = Self {
             wallet: Arc::clone(wallet),
             server: server.clone(),
             mempool: Arc::clone(mempool),
             control_chan: rx,
-            arrival_distribution: ArrivalDistribution::Uniform(
-                UniformArrival {
-                    interval: 100,
-                }
-            ),
-            value_distribution: ValueDistribution::Uniform(
-                UniformValue {
-                    min: 50,
-                    max: 100,
-                }
-            ),
+            arrival_distribution: ArrivalDistribution::Uniform(UniformArrival { interval: 100 }),
+            value_distribution: ValueDistribution::Uniform(UniformValue { min: 50, max: 100 }),
             state: State::Paused,
         };
         return (instance, tx);
@@ -98,16 +93,16 @@ impl TransactionGenerator {
             loop {
                 // check the current state and try to receive control message
                 match self.state {
-                    State::Run => {
-                        match self.control_chan.try_recv() {
-                            Ok(signal) => {
-                                self.handle_control_signal(signal);
-                                continue;
-                            }
-                            Err(mpsc::TryRecvError::Empty) => {}
-                            Err(mpsc::TryRecvError::Disconnected) => panic!("Transaction generator control channel detached"),
+                    State::Run => match self.control_chan.try_recv() {
+                        Ok(signal) => {
+                            self.handle_control_signal(signal);
+                            continue;
                         }
-                    }
+                        Err(mpsc::TryRecvError::Empty) => {}
+                        Err(mpsc::TryRecvError::Disconnected) => {
+                            panic!("Transaction generator control channel detached")
+                        }
+                    },
                     State::Paused => {
                         // block until we get a signal
                         let signal = self.control_chan.recv().unwrap();
@@ -116,9 +111,7 @@ impl TransactionGenerator {
                     }
                 }
                 let value: u64 = match &self.value_distribution {
-                    ValueDistribution::Uniform(d) => {
-                        rng.gen_range(d.min, d.max)
-                    }
+                    ValueDistribution::Uniform(d) => rng.gen_range(d.min, d.max),
                 };
                 let transaction = self.wallet.create_transaction(addr, value);
                 match transaction {
@@ -130,9 +123,7 @@ impl TransactionGenerator {
                     }
                 };
                 let interval: u64 = match &self.arrival_distribution {
-                    ArrivalDistribution::Uniform(d) => {
-                        d.interval
-                    }
+                    ArrivalDistribution::Uniform(d) => d.interval,
                 };
                 let interval = time::Duration::from_millis(interval);
                 thread::sleep(interval);

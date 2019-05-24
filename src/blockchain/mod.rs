@@ -2,6 +2,7 @@ use crate::block::{Block, Content};
 use crate::config::*;
 use crate::crypto::hash::{Hashable, H256};
 
+use bigint::uint::U256;
 use bincode::{deserialize, serialize};
 use log::{debug, info, trace};
 use rocksdb::{ColumnFamilyDescriptor, Options, WriteBatch, DB};
@@ -20,6 +21,8 @@ const PROPOSER_LEADER_SEQUENCE_CF: &str = "PROPOSER_LEADER_SEQUENCE"; // level (
 const PROPOSER_LEDGER_ORDER_CF: &str = "PROPOSER_LEDGER_ORDER"; // level (u64) to the list of proposer blocks confirmed
                                                                 // by this level, including the leader itself. The list
                                                                 // is in the order that those blocks should live in the ledger.
+const PROPOSER_BLOCK_TIMESTAMP_CF: &str = "PROPOSER_BLOCK_TIMESTAMP"; // Timestamp of proposer blocks mined on levels which are integer multiples DIFFICULTY_CHANGE_INTERVAL.
+const MINING_DIFFICULTY_CF: &str = "MINING_DIFFICULTY"; // Mining difficulty if mined on proposer parents.
 
 // Column family names for graph neighbors
 const PARENT_NEIGHBOR_CF: &str = "GRAPH_PARENT_NEIGHBOR"; // the proposer parent of a block
@@ -60,6 +63,10 @@ impl BlockChain {
             ColumnFamilyDescriptor::new(PROPOSER_LEADER_SEQUENCE_CF, Options::default());
         let proposer_ledger_order_cf =
             ColumnFamilyDescriptor::new(PROPOSER_LEDGER_ORDER_CF, Options::default());
+        let proposer_block_timestamp_cf =
+            ColumnFamilyDescriptor::new(PROPOSER_BLOCK_TIMESTAMP_CF, Options::default());
+        let mining_difficulty_cf =
+            ColumnFamilyDescriptor::new(MINING_DIFFICULTY_CF, Options::default());
 
         let mut proposer_tree_level_option = Options::default();
         proposer_tree_level_option.set_merge_operator(
@@ -122,6 +129,8 @@ impl BlockChain {
             proposer_ledger_order_cf,
             proposer_tree_level_cf,
             proposer_node_vote_cf,
+            mining_difficulty_cf,
+            proposer_block_timestamp_cf,
             parent_neighbor_cf,
             vote_neighbor_cf,
             voter_parent_neighbor_cf,
@@ -167,6 +176,7 @@ impl BlockChain {
         let proposer_ledger_order_cf = db.db.cf_handle(PROPOSER_LEDGER_ORDER_CF).unwrap();
         let proposer_ref_neighbor_cf = db.db.cf_handle(PROPOSER_REF_NEIGHBOR_CF).unwrap();
         let transaction_ref_neighbor_cf = db.db.cf_handle(TRANSACTION_REF_NEIGHBOR_CF).unwrap();
+        let mining_difficulty_cf = db.db.cf_handle(MINING_DIFFICULTY_CF).unwrap();
 
         // insert genesis blocks
         let mut wb = WriteBatch::default();
@@ -182,6 +192,11 @@ impl BlockChain {
             serialize(&(0 as u64)).unwrap(),
             serialize(&(*PROPOSER_GENESIS_HASH)).unwrap(),
         )?;
+        wb.put_cf(
+            mining_difficulty_cf,
+            serialize(&(*PROPOSER_GENESIS_HASH)).unwrap(),
+            serialize(&(*INITIAL_DIFFICULTY)).unwrap(),
+        );
         let mut proposer_best = db.proposer_best.lock().unwrap();
         proposer_best.0 = *PROPOSER_GENESIS_HASH;
         drop(proposer_best);
@@ -268,6 +283,8 @@ impl BlockChain {
         let proposer_ref_neighbor_cf = self.db.cf_handle(PROPOSER_REF_NEIGHBOR_CF).unwrap();
         let proposer_leader_sequence_cf = self.db.cf_handle(PROPOSER_LEADER_SEQUENCE_CF).unwrap();
         let proposer_ledger_order_cf = self.db.cf_handle(PROPOSER_LEDGER_ORDER_CF).unwrap();
+        let proposer_block_timestamp_cf = self.db.cf_handle(PROPOSER_BLOCK_TIMESTAMP_CF).unwrap();
+        let mining_difficulty_cf = self.db.cf_handle(MINING_DIFFICULTY_CF).unwrap();
 
         let mut wb = WriteBatch::default();
 
@@ -327,13 +344,87 @@ impl BlockChain {
                     serialize(&self_level).unwrap(),
                     serialize(&block_hash).unwrap(),
                 )?;
+                // set the mining difficulty
+                let parent_difficulty: H256 = deserialize(
+                    &self
+                        .db
+                        .get_cf(mining_difficulty_cf, serialize(&parent_hash).unwrap())?
+                        .unwrap(),
+                )
+                .unwrap();
+                if self_level % DIFFICULTY_CHANGE_INTERVAL != 0 {
+                    wb.put_cf(
+                        mining_difficulty_cf,
+                        serialize(&block_hash).unwrap(),
+                        serialize(&parent_difficulty).unwrap(),
+                    );
+                } else {
+                    let mut ancestor_hash = parent_hash.clone();
+                    // get (DIFFICULTY_CHANGE_INTERVAL-1)^th ancestor
+                    for _ in 0..DIFFICULTY_CHANGE_INTERVAL - 2 {
+                        //TODO: FIXME:
+                        ancestor_hash = deserialize(
+                            &self
+                                .db
+                                .get_cf(parent_neighbor_cf, serialize(&ancestor_hash).unwrap())?
+                                .unwrap(),
+                        )
+                        .unwrap();
+                    }
+                    let ancestor_timestamp: u64 = deserialize(
+                        &self
+                            .db
+                            .get_cf(
+                                proposer_block_timestamp_cf,
+                                serialize(&ancestor_hash).unwrap(),
+                            )?
+                            .unwrap(),
+                    )
+                    .unwrap();
+                    let previous_epoch_difficulty: [u8; 32] = (&parent_difficulty).into();
+                    let previous_epoch_difficulty_u256 = U256::from_big_endian(&previous_epoch_difficulty);
+
+                    // calculate the
+                    let previous_epoch_mining_rate = U256::from(
+                        (((DIFFICULTY_CHANGE_INTERVAL - 1) as f32) * 10000000.0
+                            / ((block.header.timestamp - ancestor_timestamp) as f32))
+                            as u64,
+                    );
+                    let mut current_epoch_difficulty_u256 = (previous_epoch_difficulty_u256 / previous_epoch_mining_rate)
+                        * U256::from((CHAIN_MINING_RATE * 10000000.0) as u64);
+
+                    if current_epoch_difficulty_u256 < previous_epoch_difficulty_u256 {
+                        current_epoch_difficulty_u256 =
+                            std::cmp::max(previous_epoch_difficulty_u256 / U256::from(2), current_epoch_difficulty_u256)
+                    } else {
+                        current_epoch_difficulty_u256 =
+                            std::cmp::min(previous_epoch_difficulty_u256 * U256::from(2), current_epoch_difficulty_u256)
+                    }
+                    let current_epoch_difficulty_raw: [u8; 32] = current_epoch_difficulty_u256.into();
+                    let current_epoch_difficulty: H256 = (&current_epoch_difficulty_raw).into();
+                    println!(
+                        "Level {}. Old difficulty {} New difficulty {}. Prev epoch mining rate {}",
+                        self_level, parent_difficulty, current_epoch_difficulty, previous_epoch_mining_rate
+                    );
+                    wb.put_cf(
+                        mining_difficulty_cf,
+                        serialize(&block_hash).unwrap(),
+                        serialize(&current_epoch_difficulty).unwrap(),
+                    );
+                }
+                // add the timestamp
+                wb.put_cf(
+                    proposer_block_timestamp_cf,
+                    serialize(&block_hash).unwrap(),
+                    serialize(&block.header.timestamp).unwrap(),
+                );
                 // set best block info
                 let mut proposer_best = self.proposer_best.lock().unwrap();
                 if self_level > proposer_best.1 {
                     proposer_best.0 = block_hash;
                     proposer_best.1 = self_level;
                 }
-                trace!(
+                info!(
                     "Inserted: Proposer_block={:.8}; Level={}; n_tx_refs={}; timestamp={}; size={} KB",
                     block_hash,
                     self_level,
@@ -397,9 +488,9 @@ impl BlockChain {
                 // set the voted level to be until proposer parent
                 let proposer_parent_level: u64 = deserialize(
                     &self
-                    .db
-                    .get_cf(proposer_node_level_cf, serialize(&parent_hash).unwrap())?
-                    .unwrap(),
+                        .db
+                        .get_cf(proposer_node_level_cf, serialize(&parent_hash).unwrap())?
+                        .unwrap(),
                 )
                 .unwrap();
                 wb.put_cf(
@@ -609,7 +700,8 @@ impl BlockChain {
                         if new_leader != existing_leader {
                             trace!(
                                 "Confirmed leader block at level {} at time {}",
-                                level, block.header.timestamp
+                                level,
+                                block.header.timestamp
                             );
                             match new_leader {
                                 None => wb.delete_cf(
@@ -808,16 +900,27 @@ impl BlockChain {
                 )
                 .unwrap();
                 trace!(
-                "Inserted: Tx_block={:.8};  Level={}; n_txs={}; timestamp={}; size={} KB",
-                block_hash,
-                parent_level,
-                content.transactions.len(),
-                block.header.timestamp,
-                (block.get_bytes() as f32)/1000.0
+                    "Inserted: Tx_block={:.8};  Level={}; n_txs={}; timestamp={}; size={} KB",
+                    block_hash,
+                    parent_level,
+                    content.transactions.len(),
+                    block.header.timestamp,
+                    (block.get_bytes() as f32) / 1000.0
                 );
                 return Ok((vec![], vec![]));
             }
         }
+    }
+
+    pub fn get_proposer_difficulty(&self, block_hash: &H256) -> Result<H256> {
+        let mining_difficulty_cf = self.db.cf_handle(MINING_DIFFICULTY_CF).unwrap();
+        let difficulty: H256 = deserialize(
+            &self
+                .db
+                .get_cf(mining_difficulty_cf, serialize(block_hash).unwrap())?
+                .unwrap(),
+        ).unwrap();
+        return Ok(difficulty);
     }
 
     pub fn best_proposer(&self) -> H256 {
@@ -2101,8 +2204,8 @@ mod tests {
     }
 
     #[test]
-    fn merge_operator_h256_vec() {
-        let db = BlockChain::new("/tmp/prism_test_blockchain_merge_op_h256_vec.rocksdb").unwrap();
+    fn merge_operator_u256_vec() {
+        let db = BlockChain::new("/tmp/prism_test_blockchain_merge_op_u256_vec.rocksdb").unwrap();
         let cf = db.db.cf_handle(PARENT_NEIGHBOR_CF).unwrap();
 
         // merge with an nonexistent entry

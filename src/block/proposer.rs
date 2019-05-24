@@ -26,7 +26,7 @@ impl Content {
 
     /// Return the size in bytes
     pub fn get_bytes(&self) -> u32 {
-        return (self.transaction_refs.len()*32+self.proposer_refs.len()*32) as u32;
+        return (self.transaction_refs.len() * 32 + self.proposer_refs.len() * 32) as u32;
     }
 }
 
@@ -57,6 +57,6 @@ pub fn genesis() -> Block {
         vec![],
         BlockContent::Proposer(content),
         all_zero,
-        *DEFAULT_DIFFICULTY,
+        *INITIAL_DIFFICULTY,
     );
 }

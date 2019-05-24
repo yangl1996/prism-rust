@@ -5,11 +5,13 @@ extern crate hex_literal;
 #[macro_use]
 extern crate lazy_static;
 
+pub mod api;
 pub mod block;
 pub mod blockchain;
 pub mod blockdb;
 pub mod config;
 pub mod crypto;
+pub mod experiment;
 pub mod handler;
 pub mod miner;
 pub mod network;
@@ -18,8 +20,6 @@ pub mod utxodb;
 pub mod validation;
 pub mod visualization;
 pub mod wallet;
-pub mod api;
-pub mod experiment;
 
 use crate::utxodb::UtxoDatabase;
 use bincode::serialize;

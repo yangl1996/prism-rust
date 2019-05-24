@@ -69,24 +69,25 @@ impl Server {
                 let blockdb = Arc::clone(&server.blockdb);
                 let utxodb = Arc::clone(&server.utxodb);
                 thread::spawn(move || {
-                    let split_url: Vec<&str> = req.url().trim_start_matches("/").split("/").collect();
-                    let limit: u64 = split_url.get(1).map_or(100,|&s|s.parse().unwrap_or(100));
+                    let split_url: Vec<&str> =
+                        req.url().trim_start_matches("/").split("/").collect();
+                    let limit: u64 = split_url.get(1).map_or(100, |&s| s.parse().unwrap_or(100));
                     match split_url[0] {
                         "blockchain.json" => serve_dynamic_file!(
-                        req,
-                        match blockchain.dump(limit) {
-                            Ok(dump) => dump,
-                            Err(_) => "Blockchain Dump error".to_string(),
-                        },
-                        "application/json",
-                        addr
-                    ),
+                            req,
+                            match blockchain.dump(limit) {
+                                Ok(dump) => dump,
+                                Err(_) => "Blockchain Dump error".to_string(),
+                            },
+                            "application/json",
+                            addr
+                        ),
                         "ledger.json" => serve_dynamic_file!(
-                        req,
-                        dump_ledger(&blockchain, &blockdb, &utxodb, limit),
-                        "application/json",
-                        addr
-                    ),
+                            req,
+                            dump_ledger(&blockchain, &blockdb, &utxodb, limit),
+                            "application/json",
+                            addr
+                        ),
                         "cytoscape.min.js" => {
                             serve_static_file!(req, "cytoscape.js", "application/javascript")
                         }
@@ -96,19 +97,21 @@ impl Server {
                         "cytoscape-dagre.js" => {
                             serve_static_file!(req, "cytoscape-dagre.js", "application/javascript")
                         }
-                        "bootstrap.min.css" => serve_static_file!(req, "bootstrap.min.css", "text/css"),
+                        "bootstrap.min.css" => {
+                            serve_static_file!(req, "bootstrap.min.css", "text/css")
+                        }
                         "blockchain_vis.js" => serve_dynamic_file!(
-                        req,
-                        include_str!("blockchain_vis.js"),
-                        "application/javascript",
-                        addr
-                    ),
+                            req,
+                            include_str!("blockchain_vis.js"),
+                            "application/javascript",
+                            addr
+                        ),
                         "visualize-blockchain" => serve_dynamic_file!(
-                        req,
-                        include_str!("blockchain_vis.html"),
-                        "text/html",
-                        addr
-                    ),
+                            req,
+                            include_str!("blockchain_vis.html"),
+                            "text/html",
+                            addr
+                        ),
                         //                    "ledger_vis.js" => serve_dynamic_file!(
                         //                        req,
                         //                        include_str!("ledger_vis.js"),
@@ -118,7 +121,9 @@ impl Server {
                         //                    "visualize-ledger" => {
                         //                        serve_dynamic_file!(req, include_str!("ledger_vis.html"), "text/html", addr)
                         //                    }
-                        "" => serve_dynamic_file!(req, include_str!("index.html"), "text/html", addr),
+                        "" => {
+                            serve_dynamic_file!(req, include_str!("index.html"), "text/html", addr)
+                        }
                         _ => {
                             let content_type = "Content-Type: text/html".parse::<Header>().unwrap();
                             let resp = Response::from_string(include_str!("404.html"))

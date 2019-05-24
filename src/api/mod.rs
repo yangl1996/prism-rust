@@ -1,15 +1,15 @@
 use crate::experiment::transaction_generator;
-use crate::wallet::Wallet;
-use crate::network::server::Handle as ServerHandle;
 use crate::miner::memory_pool::MemoryPool;
-use std::sync::{Arc, mpsc, Mutex};
+use crate::network::server::Handle as ServerHandle;
+use crate::wallet::Wallet;
+use log::info;
+use std::collections::HashMap;
+use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use tiny_http::Header;
 use tiny_http::Response;
 use tiny_http::Server as HTTPServer;
-use std::collections::HashMap;
 use url::Url;
-use log::{info};
 
 pub struct Server {
     transaction_generator_handle: mpsc::Sender<transaction_generator::ControlSignal>,
@@ -36,7 +36,13 @@ macro_rules! respond {
 }
 
 impl Server {
-    pub fn start(addr: std::net::SocketAddr, wallet: &Arc<Wallet>, server: &ServerHandle, mempool: &Arc<Mutex<MemoryPool>>, txgen_control_chan: mpsc::Sender<transaction_generator::ControlSignal>) {
+    pub fn start(
+        addr: std::net::SocketAddr,
+        wallet: &Arc<Wallet>,
+        server: &ServerHandle,
+        mempool: &Arc<Mutex<MemoryPool>>,
+        txgen_control_chan: mpsc::Sender<transaction_generator::ControlSignal>,
+    ) {
         let handle = HTTPServer::http(&addr).unwrap();
         let server = Self {
             handle: handle,
@@ -60,15 +66,28 @@ impl Server {
                             let control_signal = transaction_generator::ControlSignal::Start;
                             match transaction_generator_handle.send(control_signal) {
                                 Ok(()) => respond!(req, true, "ok"),
-                                Err(e) => respond!(req, false, format!("error sending control signal to transaction generator: {}", e)),
+                                Err(e) => respond!(
+                                    req,
+                                    false,
+                                    format!(
+                                        "error sending control signal to transaction generator: {}",
+                                        e
+                                    )
+                                ),
                             }
-                            
                         }
                         "/transaction-generator/stop" => {
                             let control_signal = transaction_generator::ControlSignal::Stop;
                             match transaction_generator_handle.send(control_signal) {
                                 Ok(()) => respond!(req, true, "ok"),
-                                Err(e) => respond!(req, false, format!("error sending control signal to transaction generator: {}", e)),
+                                Err(e) => respond!(
+                                    req,
+                                    false,
+                                    format!(
+                                        "error sending control signal to transaction generator: {}",
+                                        e
+                                    )
+                                ),
                             }
                         }
                         "/transaction-generator/set-arrival-distribution" => {
@@ -87,10 +106,14 @@ impl Server {
                                         Some(v) => match v.parse::<u64>() {
                                             Ok(v) => v,
                                             Err(e) => {
-                                                respond!(req, false, format!("error parsing interval: {}", e));
+                                                respond!(
+                                                    req,
+                                                    false,
+                                                    format!("error parsing interval: {}", e)
+                                                );
                                                 return;
                                             }
-                                        }
+                                        },
                                         None => {
                                             respond!(req, false, "missing interval");
                                             return;
@@ -98,8 +121,8 @@ impl Server {
                                     };
                                     transaction_generator::ArrivalDistribution::Uniform(
                                         transaction_generator::UniformArrival {
-                                            interval: interval
-                                        }
+                                            interval: interval,
+                                        },
                                     )
                                 }
                                 d => {
@@ -107,10 +130,20 @@ impl Server {
                                     return;
                                 }
                             };
-                            let control_signal = transaction_generator::ControlSignal::SetArrivalDistribution(distribution);
+                            let control_signal =
+                                transaction_generator::ControlSignal::SetArrivalDistribution(
+                                    distribution,
+                                );
                             match transaction_generator_handle.send(control_signal) {
                                 Ok(()) => respond!(req, true, "ok"),
-                                Err(e) => respond!(req, false, format!("error sending control signal to transaction generator: {}", e)),
+                                Err(e) => respond!(
+                                    req,
+                                    false,
+                                    format!(
+                                        "error sending control signal to transaction generator: {}",
+                                        e
+                                    )
+                                ),
                             }
                         }
                         "/transaction-generator/set-value-distribution" => {
@@ -129,10 +162,14 @@ impl Server {
                                         Some(v) => match v.parse::<u64>() {
                                             Ok(v) => v,
                                             Err(e) => {
-                                                respond!(req, false, format!("error parsing min: {}", e));
+                                                respond!(
+                                                    req,
+                                                    false,
+                                                    format!("error parsing min: {}", e)
+                                                );
                                                 return;
                                             }
-                                        }
+                                        },
                                         None => {
                                             respond!(req, false, "missing min");
                                             return;
@@ -142,24 +179,29 @@ impl Server {
                                         Some(v) => match v.parse::<u64>() {
                                             Ok(v) => v,
                                             Err(e) => {
-                                                respond!(req, false, format!("error parsing max: {}", e));
+                                                respond!(
+                                                    req,
+                                                    false,
+                                                    format!("error parsing max: {}", e)
+                                                );
                                                 return;
                                             }
-                                        }
+                                        },
                                         None => {
                                             respond!(req, false, "missing max");
                                             return;
                                         }
                                     };
                                     if min > max {
-                                        respond!(req, false, format!("min value is bigger than max value"));
+                                        respond!(
+                                            req,
+                                            false,
+                                            format!("min value is bigger than max value")
+                                        );
                                         return;
                                     }
                                     transaction_generator::ValueDistribution::Uniform(
-                                        transaction_generator::UniformValue {
-                                            min: min,
-                                            max: max,
-                                        }
+                                        transaction_generator::UniformValue { min: min, max: max },
                                     )
                                 }
                                 d => {
@@ -167,21 +209,34 @@ impl Server {
                                     return;
                                 }
                             };
-                            let control_signal = transaction_generator::ControlSignal::SetValueDistribution(distribution);
+                            let control_signal =
+                                transaction_generator::ControlSignal::SetValueDistribution(
+                                    distribution,
+                                );
                             match transaction_generator_handle.send(control_signal) {
                                 Ok(()) => respond!(req, true, "ok"),
-                                Err(e) => respond!(req, false, format!("error sending control signal to transaction generator: {}", e)),
+                                Err(e) => respond!(
+                                    req,
+                                    false,
+                                    format!(
+                                        "error sending control signal to transaction generator: {}",
+                                        e
+                                    )
+                                ),
                             }
                         }
                         _ => {
-                            let content_type = "Content-Type: application/json".parse::<Header>().unwrap();
+                            let content_type =
+                                "Content-Type: application/json".parse::<Header>().unwrap();
                             let payload = ApiResponse {
                                 success: false,
                                 message: "endpoint not found".to_string(),
                             };
-                            let resp = Response::from_string(serde_json::to_string_pretty(&payload).unwrap())
-                                .with_header(content_type)
-                                .with_status_code(404);
+                            let resp = Response::from_string(
+                                serde_json::to_string_pretty(&payload).unwrap(),
+                            )
+                            .with_header(content_type)
+                            .with_status_code(404);
                             req.respond(resp).unwrap();
                         }
                     }

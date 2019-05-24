@@ -133,8 +133,8 @@ pub mod tests {
     use super::MemoryPool;
 
     use crate::crypto::hash::{Hashable, H256};
-    use crate::transaction::{Transaction, Input, CoinId};
     use crate::transaction::tests as tx_generator;
+    use crate::transaction::{CoinId, Input, Transaction};
 
     #[test]
     fn insert_remove_transactions() {

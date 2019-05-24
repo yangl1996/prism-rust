@@ -34,10 +34,9 @@ pub struct Input {
     pub owner: Address,
 }
 
-
 impl Input {
     pub fn get_bytes(&self) -> u32 {
-        return self.coin.get_bytes()+8+32;
+        return self.coin.get_bytes() + 8 + 32;
     }
 }
 
@@ -51,13 +50,11 @@ pub struct Output {
     pub recipient: Address,
 }
 
-
 impl Output {
     pub fn get_bytes(&self) -> u32 {
-        return 8+32;
+        return 8 + 32;
     }
 }
-
 
 /// A Prism transaction. It takes a set of existing coins (inputs) and transforms them into a set
 /// of coins (outputs).
@@ -87,7 +84,6 @@ impl Transaction {
         return total_bytes;
     }
 }
-
 
 impl Hashable for Transaction {
     fn hash(&self) -> H256 {
@@ -133,7 +129,7 @@ impl Authorization {
 pub mod tests {
     use super::*;
     use crate::crypto::hash::tests::generate_random_hash;
-    use rand::{RngCore, Rng};
+    use rand::{Rng, RngCore};
 
     pub fn generate_random_coinid() -> CoinId {
         let mut rng = rand::thread_rng();
@@ -163,8 +159,12 @@ pub mod tests {
     pub fn generate_random_transaction() -> Transaction {
         let mut rng = rand::thread_rng();
         Transaction {
-            input: (0..rng.gen_range(1,5)).map(|_|generate_random_input()).collect(),
-            output: (0..rng.gen_range(1,5)).map(|_|generate_random_output()).collect(),
+            input: (0..rng.gen_range(1, 5))
+                .map(|_| generate_random_input())
+                .collect(),
+            output: (0..rng.gen_range(1, 5))
+                .map(|_| generate_random_output())
+                .collect(),
             authorization: vec![],
         }
     }

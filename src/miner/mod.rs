@@ -98,7 +98,7 @@ pub fn new(
         proposer_parent_hash: H256::default(),
         content: vec![],
         content_merkle_tree_root: H256::default(),
-        difficulty: *DEFAULT_DIFFICULTY,
+        difficulty: *INITIAL_DIFFICULTY,
         operating_state: OperatingState::Paused,
         server: server.clone(),
     };
@@ -364,16 +364,18 @@ impl Context {
     /// Calculate the difficulty for the block to be mined
     // TODO: shall we make a dedicated type for difficulty?
     fn get_difficulty(&self, block_hash: &H256) -> H256 {
-        // Get the header of the block corresponding to block_hash
-        match self.db.get(block_hash).unwrap() {
-            // extract difficulty
-            Some(b) => {
-                return b.header.difficulty;
-            }
-            None => {
-                return *DEFAULT_DIFFICULTY;
-            }
-        }
+        //TODO: Remove unwrap
+        return self.blockchain.get_proposer_difficulty(block_hash).unwrap();
+//        // Get the header of the block corresponding to block_hash
+//        match self.db.get(block_hash).unwrap() {
+//            // extract difficulty
+//            Some(b) => {
+//                return b.header.difficulty;
+//            }
+//            None => {
+//                return *INITIAL_DIFFICULTY;
+//            }
+//        }
     }
 }
 
@@ -408,7 +410,7 @@ mod tests {
         handle.step();
         let block1 = receiver.recv().unwrap();
         handle.exit();
-        assert_eq!(block1.header.difficulty, DEFAULT_DIFFICULTY);
+        assert_eq!(block1.header.difficulty, INITIAL_DIFFICULTY);
     }
     */
 
@@ -483,7 +485,7 @@ mod tests {
         let (_ctx_update_s, ctx_update_r) = channel();
         let (ctx, _handle) = new(&tx_mempool, &blockchain, &db, ctx_update_r);
 
-        let big_difficulty = U256::from_big_endian(&DEFAULT_DIFFICULTY);
+        let big_difficulty = U256::from_big_endian(&INITIAL_DIFFICULTY);
 
         let mut big_hash: U256;
         let big_proposer_range: U256 = PROPOSER_MINING_RANGE.into();

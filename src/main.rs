@@ -2,21 +2,21 @@
 extern crate clap;
 
 use log::{debug, error, info};
+use prism::api::Server as ApiServer;
 use prism::blockchain::BlockChain;
 use prism::blockdb::BlockDatabase;
+use prism::experiment::transaction_generator::TransactionGenerator;
+use prism::miner;
 use prism::miner::memory_pool::MemoryPool;
+use prism::network::server;
+use prism::network::worker;
 use prism::utxodb::UtxoDatabase;
 use prism::visualization::Server as VisualizationServer;
 use prism::wallet::Wallet;
-use prism::api::Server as ApiServer;
-use prism::network::server;
-use prism::network::worker;
-use prism::experiment::transaction_generator::TransactionGenerator;
-use prism::miner;
 use std::net;
 use std::process;
-use std::sync::Arc;
 use std::sync::mpsc;
+use std::sync::Arc;
 
 fn main() {
     // parse command line arguments
@@ -61,16 +61,24 @@ fn main() {
     let wallet = Arc::new(wallet);
 
     // parse p2p server address
-    let p2p_addr = matches.value_of("peer_addr").unwrap().parse::<net::SocketAddr>().unwrap_or_else(|e| {
+    let p2p_addr = matches
+        .value_of("peer_addr")
+        .unwrap()
+        .parse::<net::SocketAddr>()
+        .unwrap_or_else(|e| {
             error!("Error parsing P2P server address: {}", e);
             process::exit(1);
-    });
+        });
 
     // parse api server address
-    let api_addr = matches.value_of("api_addr").unwrap().parse::<net::SocketAddr>().unwrap_or_else(|e| {
+    let api_addr = matches
+        .value_of("api_addr")
+        .unwrap()
+        .parse::<net::SocketAddr>()
+        .unwrap_or_else(|e| {
             error!("Error parsing API server address: {}", e);
             process::exit(1);
-    });
+        });
 
     // create channels between server and worker, worker and miner, miner and worker
     let (msg_tx, msg_rx) = mpsc::channel();
@@ -81,11 +89,29 @@ fn main() {
     server_ctx.start().unwrap();
 
     // start the worker
-    let worker_ctx = worker::new(4, msg_rx, &blockchain, &blockdb, &utxodb, &wallet, &mempool, ctx_tx, &server);
+    let worker_ctx = worker::new(
+        4,
+        msg_rx,
+        &blockchain,
+        &blockdb,
+        &utxodb,
+        &wallet,
+        &mempool,
+        ctx_tx,
+        &server,
+    );
     worker_ctx.start();
 
     // start the miner
-    let (miner_ctx, miner) = miner::new(&mempool, &blockchain, &utxodb, &wallet, &blockdb, ctx_rx, &server);
+    let (miner_ctx, miner) = miner::new(
+        &mempool,
+        &blockchain,
+        &utxodb,
+        &wallet,
+        &blockdb,
+        ctx_rx,
+        &server,
+    );
     miner_ctx.start();
 
     // connect to known peers

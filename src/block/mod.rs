@@ -59,7 +59,9 @@ impl Block {
     }
 
     pub fn get_bytes(&self) -> u32 {
-        return self.header.get_bytes()+self.content.get_bytes()+(self.sortition_proof.len()*32) as u32;
+        return self.header.get_bytes()
+            + self.content.get_bytes()
+            + (self.sortition_proof.len() * 32) as u32;
     }
 }
 
@@ -91,7 +93,6 @@ impl Hashable for Content {
         }
     }
 }
-
 
 impl Content {
     fn get_bytes(&self) -> u32 {
