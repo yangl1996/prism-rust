@@ -84,7 +84,7 @@ pub fn new(
     wallet: &Arc<Wallet>,
     db: &Arc<BlockDatabase>,
     ctx_update_source: Receiver<ContextUpdateSignal>,
-    server: ServerHandle,
+    server: &ServerHandle,
 ) -> (Context, Handle) {
     let (signal_chan_sender, signal_chan_receiver) = channel();
     let ctx = Context {
@@ -100,7 +100,7 @@ pub fn new(
         content_merkle_tree_root: H256::default(),
         difficulty: *DEFAULT_DIFFICULTY,
         operating_state: OperatingState::Paused,
-        server: server,
+        server: server.clone(),
     };
 
     let handle = Handle {
@@ -205,9 +205,10 @@ impl Context {
                 //if the mined block is an empty tx block, we ignore it, and go straight to next mining loop
                 match &mined_block.content {
                     Content::Transaction(content) => {
-                        if content.transactions.is_empty() {
-                            continue;
-                        }
+                        // TODO: recover these lines
+                        //                        if content.transactions.is_empty() {
+                        //                            continue;
+                        //                        }
                     }
                     _ => (),
                 }
@@ -221,7 +222,7 @@ impl Context {
                     &self.utxodb,
                     &self.wallet,
                 );
-                debug!("Mined block {:.8}", mined_block.hash());
+                //                debug!("Mined block {:.8}", mined_block.hash());
                 // TODO: Only update block contents if relevant parent
                 self.update_context();
                 header = self.create_header();
@@ -292,7 +293,7 @@ impl Context {
             .collect();
         // get mutex of mempool and get all required data
         let mempool = self.tx_mempool.lock().unwrap();
-        let transactions = mempool.get_transactions(TX_BLOCK_SIZE);
+        let transactions = mempool.get_transactions(TRANSACTION_BLOCK_TX_LIMIT);
         drop(mempool);
 
         // update the contents and the parents based on current view
@@ -335,21 +336,22 @@ impl Context {
         let big_hash = U256::from_big_endian(hash);
         let difficulty_raw: [u8; 32] = (&self.difficulty).into();
         let big_difficulty = U256::from_big_endian(&difficulty_raw);
-        let big_proposer_rate: U256 = PROPOSER_MINING_RATE.into();
-        let big_transaction_rate: U256 = TRANSACTION_MINING_RATE.into();
+        let total_mining_range: U256 = TOTAL_MINING_RANGE.into();
+        let big_proposer_range: U256 = PROPOSER_MINING_RANGE.into();
+        let big_transaction_range: U256 = TRANSACTION_MINING_RANGE.into();
 
-        if big_hash < big_difficulty / 100.into() * big_proposer_rate {
-            // transaction block
+        if big_hash < big_difficulty / total_mining_range * big_proposer_range {
+            // proposer block
             return PROPOSER_INDEX;
         } else if big_hash
-            < big_difficulty / 100.into() * (big_transaction_rate + big_proposer_rate)
+            < big_difficulty / total_mining_range * (big_transaction_range + big_proposer_range)
         {
-            // proposer block
+            // transaction block
             return TRANSACTION_INDEX;
         } else if big_hash < big_difficulty {
             // voter index, figure out which voter tree we are in
             let voter_id =
-                (big_hash - big_transaction_rate - big_proposer_rate) % NUM_VOTER_CHAINS.into();
+                (big_hash - big_transaction_range - big_proposer_range) % NUM_VOTER_CHAINS.into();
             return voter_id.as_u32() + FIRST_VOTER_INDEX;
         } else {
             panic!(
@@ -484,8 +486,8 @@ mod tests {
         let big_difficulty = U256::from_big_endian(&DEFAULT_DIFFICULTY);
 
         let mut big_hash: U256;
-        let big_proposer_rate: U256 = PROPOSER_MINING_RATE.into();
-        let big_transaction_rate: U256 = TRANSACTION_MINING_RATE.into();
+        let big_proposer_range: U256 = PROPOSER_MINING_RANGE.into();
+        let big_transaction_range: U256 = TRANSACTION_MINING_RANGE.into();
 
         let mut hash: [u8; 32];
         let mut sortition_id: u32;
@@ -496,28 +498,28 @@ mod tests {
         assert_eq!(sortition_id, PROPOSER_INDEX);
 
         // Set the hash to just below the boundary between tx and proposer blocks
-        big_hash = big_difficulty / 100.into() * big_proposer_rate - 1.into();
+        big_hash = big_difficulty / 100.into() * big_proposer_range - 1.into();
         hash = big_hash.into();
         sortition_id = ctx.get_sortition_id(&hash);
         assert_eq!(sortition_id, PROPOSER_INDEX);
 
         // Proposer blocks
         // Set the hash to just above the boundary between tx and proposer blocks
-        big_hash = big_difficulty / 100.into() * big_proposer_rate;
+        big_hash = big_difficulty / 100.into() * big_proposer_range;
         hash = big_hash.into();
         sortition_id = ctx.get_sortition_id(&hash);
         assert_eq!(sortition_id, TRANSACTION_INDEX);
 
         // Set the hash to just below the boundary between tx and voter blocks
         big_hash =
-            big_difficulty / 100.into() * (big_transaction_rate + big_proposer_rate) - 1.into();
+            big_difficulty / 100.into() * (big_transaction_range + big_proposer_range) - 1.into();
         hash = big_hash.into();
         sortition_id = ctx.get_sortition_id(&hash);
         assert_eq!(sortition_id, TRANSACTION_INDEX);
 
         // Voter blocks
         // Set the hash to just above the boundary between tx and voter blocks
-        big_hash = big_difficulty / 100.into() * (big_transaction_rate + big_proposer_rate);
+        big_hash = big_difficulty / 100.into() * (big_transaction_range + big_proposer_range);
         hash = big_hash.into();
         sortition_id = ctx.get_sortition_id(&hash);
         assert_eq!(sortition_id, FIRST_VOTER_INDEX);

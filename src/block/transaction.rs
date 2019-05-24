@@ -13,6 +13,15 @@ impl Content {
     pub fn new(transactions: Vec<Transaction>) -> Self {
         Self { transactions }
     }
+
+    /// Return the size in bytes
+    pub fn get_bytes(&self) -> u32 {
+        let mut total_bytes = 0;
+        for tx in self.transactions.iter() {
+            total_bytes += tx.get_bytes();
+        }
+        return total_bytes;
+    }
 }
 
 impl Hashable for Content {

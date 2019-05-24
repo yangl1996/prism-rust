@@ -1,6 +1,6 @@
+use super::buffer::BlockBuffer;
 use super::message::{self, Message};
 use super::peer;
-use super::buffer::BlockBuffer;
 use crate::block::Block;
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
@@ -14,9 +14,9 @@ use crate::utxodb::UtxoDatabase;
 use crate::validation::{check_block, BlockResult};
 use crate::wallet::Wallet;
 use log::{debug, info};
+use std::collections::HashSet;
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
-use std::collections::HashSet;
 
 #[derive(Clone)]
 pub struct Context {
@@ -41,7 +41,7 @@ pub fn new(
     wallet: &Arc<Wallet>,
     mempool: &Arc<Mutex<MemoryPool>>,
     ctx_update_sink: mpsc::Sender<ContextUpdateSignal>,
-    server: ServerHandle,
+    server: &ServerHandle,
 ) -> Context {
     let ctx = Context {
         msg_chan: Arc::new(Mutex::new(msg_src)),
@@ -52,7 +52,7 @@ pub fn new(
         wallet: Arc::clone(wallet),
         mempool: Arc::clone(mempool),
         context_update_chan: ctx_update_sink,
-        server: server,
+        server: server.clone(),
         buffer: Arc::new(BlockBuffer::new()),
     };
     return ctx;
@@ -178,7 +178,10 @@ impl Context {
                                 );
                                 let mut resolved_by_current = self.buffer.satisfy(block.hash());
                                 if !resolved_by_current.is_empty() {
-                                    debug!("Resolved dependency for {} buffered blocks", resolved_by_current.len());
+                                    debug!(
+                                        "Resolved dependency for {} buffered blocks",
+                                        resolved_by_current.len()
+                                    );
                                 }
                                 to_process.append(&mut resolved_by_current);
                             }
@@ -202,6 +205,12 @@ impl Context {
                     self.context_update_chan
                         .send(ContextUpdateSignal::NewContent)
                         .unwrap();
+                }
+                Message::Bootstrap(after) => {
+                    debug!("Asked for all blocks after {}", &after);
+                    for batch in self.blockdb.blocks_after(&after, 500) {
+                        peer.write(Message::Blocks(batch));
+                    }
                 }
             }
         }

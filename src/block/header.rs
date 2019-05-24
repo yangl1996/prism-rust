@@ -37,6 +37,12 @@ impl Header {
             difficulty,
         }
     }
+
+    /// Return the size in bytes
+    pub fn get_bytes(&self) -> u32 {
+        return 32+8+4+32+32+32
+    }
+
 }
 
 impl Hashable for Header {

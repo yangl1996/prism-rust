@@ -12,7 +12,7 @@ use std::sync::{Mutex, mpsc};
 use std::net::{SocketAddr, IpAddr, Ipv4Addr};
 use prism::block::tests::{proposer_block, voter_block, transaction_block};
 use prism::block::Content;
-use prism::ico;
+use prism::experiment::ico;
 #[test]
 fn integration() {
     // create the db and ds
@@ -24,7 +24,7 @@ fn integration() {
 
     let wallet = Wallet::new("/tmp/prism_test_integration_walletdb.rocksdb").unwrap();
     wallet.generate_keypair().unwrap();
-    let wallet_address = wallet.get_an_address().unwrap();
+    let wallet_address = wallet.addresses().unwrap()[0];
     let mempool = Mutex::new(MemoryPool::new());
 
     let (msg_tx, _msg_rx) = mpsc::channel();
@@ -93,7 +93,7 @@ fn integration() {
     assert_eq!(wallet.balance().unwrap(), 0);
 
     //test ico
-    ico(vec![wallet_address], &utxodb,&wallet).unwrap();
+    ico(&[wallet_address], &utxodb, &wallet).unwrap();
     let ico_number = wallet.balance().unwrap();
 
     let transaction_1 = random_transaction_block_0_input!();

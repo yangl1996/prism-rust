@@ -19,13 +19,14 @@ pub fn new_validated_block(
     utxodb: &UtxoDatabase,
     wallet: &Wallet,
 ) {
+    // TODO: here mempool acts as a global lock. This is a dirty fix for data race in utxodb.
+    let mut mempool = mempool.lock().unwrap();
     // insert the new block into the blockdb
     blockdb.insert(&block).unwrap();
 
     // if this block is a transaction, remove transactions from mempool
     match &block.content {
         Content::Transaction(content) => {
-            let mut mempool = mempool.lock().unwrap();
             for tx in &content.transactions {
                 mempool.remove_by_hash(&tx.hash());
                 // the inputs have been used here, so remove all transactions in the mempool that
@@ -34,7 +35,6 @@ pub fn new_validated_block(
                     mempool.remove_by_input(input);
                 }
             }
-            drop(mempool);
         }
         _ => (),
     };
@@ -65,7 +65,8 @@ pub fn new_validated_block(
     }
 
     let coin_diff = utxodb.apply_diff(&add, &remove).unwrap();
-    wallet.update(&coin_diff.0, &coin_diff.1).unwrap();
+    wallet.apply_diff(&coin_diff.0, &coin_diff.1).unwrap();
+    drop(mempool);
 
     // tell the neighbors that we have a new block
     server.broadcast(message::Message::NewBlockHashes(vec![block.hash()]));
