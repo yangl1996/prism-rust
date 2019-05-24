@@ -76,6 +76,13 @@ impl Wallet {
         Ok(k)
     }
 
+    pub fn load_keypair(&self, keypair: KeyPair) -> Result<Address> {
+        let cf = self.db.cf_handle(KEYPAIR_CF).unwrap();
+        let addr: Address = keypair.public_key().hash();
+        self.db.put_cf(cf, &addr, &keypair.pkcs8_bytes)?;
+        Ok(addr)
+    }
+
     /// Get the list of addresses for which we have a key pair
     pub fn addresses(&self) -> Result<Vec<Address>> {
         let cf = self.db.cf_handle(KEYPAIR_CF).unwrap();

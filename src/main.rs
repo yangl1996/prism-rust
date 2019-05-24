@@ -83,6 +83,34 @@ fn main() {
     let wallet = Wallet::new(&matches.value_of("wallet_db").unwrap()).unwrap();
     let wallet = Arc::new(wallet);
 
+    // load wallet keys
+    if let Some(wallet_keys) = matches.values_of("load_key_path") {
+        for key_path in wallet_keys {
+            let content = match std::fs::read_to_string(&key_path) {
+                Ok(c) => c,
+                Err(e) => {
+                    error!("Error loading key pair at {}: {}", &key_path, &e);
+                    process::exit(1);
+                }
+            };
+            let decoded = match base64::decode(&content.trim()) {
+                Ok(d) => d,
+                Err(e) => {
+                    error!("Error decoding key pair at {}: {}", &key_path, &e);
+                    process::exit(1);
+                }
+            };
+            let keypair = prism::crypto::sign::KeyPair::from_pkcs8(decoded);
+            match wallet.load_keypair(keypair) {
+                Ok(a) => info!("Loaded key pair for address {}", &a),
+                Err(e) => {
+                    error!("Error loading key pair into wallet: {}", &e);
+                    process::exit(1);
+                }
+            }
+        }
+    }
+
     // parse p2p server address
     let p2p_addr = matches.value_of("peer_addr").unwrap().parse::<net::SocketAddr>().unwrap_or_else(|e| {
             error!("Error parsing P2P server address: {}", e);
