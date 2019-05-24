@@ -667,88 +667,86 @@ impl BlockChain {
                         }
 
                         // recompute the ledger
-                        for level in change_begin.. {
-                            if *ledger_tip != level - 1 {
-                                // make sure the ledger is continuous
-                                break;
-                            }
-                            let leader: Option<H256> = match self.db.get_cf(
-                                proposer_leader_sequence_cf,
-                                serialize(&(level as u64)).unwrap(),
-                            )? {
-                                None => None,
-                                Some(d) => Some(deserialize(&d).unwrap()),
-                            };
-                            match leader {
-                                None => {
-                                    break;
-                                }
-                                Some(leader) => {
-                                    // Get the collection of confirmed blocks by doing a DFS, so
-                                    // that we preserve the reference order (i.e. the blocks that
-                                    // is referred earlier appears in the front). We will then sort
-                                    // the list (stable sort) according to the level, so we get a
-                                    // total ordering by level and break ties by reference order.
+                        if change_begin <= *ledger_tip + 1 {
+                            for level in change_begin.. {
+                                let leader: Option<H256> = match self.db.get_cf(
+                                    proposer_leader_sequence_cf,
+                                    serialize(&(level as u64)).unwrap(),
+                                )? {
+                                    None => None,
+                                    Some(d) => Some(deserialize(&d).unwrap()),
+                                };
+                                match leader {
+                                    None => {
+                                        break;
+                                    }
+                                    Some(leader) => {
+                                        // Get the collection of confirmed blocks by doing a DFS, so
+                                        // that we preserve the reference order (i.e. the blocks that
+                                        // is referred earlier appears in the front). We will then sort
+                                        // the list (stable sort) according to the level, so we get a
+                                        // total ordering by level and break ties by reference order.
 
-                                    let mut ledger: Vec<(H256, u64)> = vec![];
-                                    let mut stack: Vec<H256> = vec![leader];
+                                        let mut ledger: Vec<(H256, u64)> = vec![];
+                                        let mut stack: Vec<H256> = vec![leader];
 
-                                    // Start DFS
-                                    while let Some(top) = stack.pop() {
-                                        // See whether this block is in the unconfirmed list. If
-                                        // so, remove it. Otherwise, just pass this block.
-                                        if !unconfirmed_proposer.remove(&top) {
-                                            continue;
+                                        // Start DFS
+                                        while let Some(top) = stack.pop() {
+                                            // See whether this block is in the unconfirmed list. If
+                                            // so, remove it. Otherwise, just pass this block.
+                                            if !unconfirmed_proposer.remove(&top) {
+                                                continue;
+                                            }
+
+                                            // Get info of this block.
+                                            let level: u64 = deserialize(
+                                                &self
+                                                    .db
+                                                    .get_cf(
+                                                        proposer_node_level_cf,
+                                                        serialize(&top).unwrap(),
+                                                    )?
+                                                    .unwrap(),
+                                            )
+                                            .unwrap();
+                                            let refs: Vec<H256> = deserialize(
+                                                &self
+                                                    .db
+                                                    .get_cf(
+                                                        proposer_ref_neighbor_cf,
+                                                        serialize(&top).unwrap(),
+                                                    )?
+                                                    .unwrap(),
+                                            )
+                                            .unwrap();
+
+                                            // Insert into the ledger.
+                                            ledger.push((top, level));
+
+                                            // Search all referenced blocks. Note that we need to
+                                            // reverse the order of the refs: we want the front
+                                            // of the reference list to be searched first, so we need
+                                            // to make sure it appears at the top of the stack.
+                                            for ref_hash in refs.iter().rev() {
+                                                stack.push(*ref_hash);
+                                            }
                                         }
 
-                                        // Get info of this block.
-                                        let level: u64 = deserialize(
-                                            &self
-                                                .db
-                                                .get_cf(
-                                                    proposer_node_level_cf,
-                                                    serialize(&top).unwrap(),
-                                                )?
-                                                .unwrap(),
-                                        )
-                                        .unwrap();
-                                        let refs: Vec<H256> = deserialize(
-                                            &self
-                                                .db
-                                                .get_cf(
-                                                    proposer_ref_neighbor_cf,
-                                                    serialize(&top).unwrap(),
-                                                )?
-                                                .unwrap(),
-                                        )
-                                        .unwrap();
+                                        // Stable sort the ledger according to level
+                                        ledger.sort_by_cached_key(|k| k.1);
 
-                                        // Insert into the ledger.
-                                        ledger.push((top, level));
-
-                                        // Search all referenced blocks. Note that we need to
-                                        // reverse the order of the refs: we want the front
-                                        // of the reference list to be searched first, so we need
-                                        // to make sure it appears at the top of the stack.
-                                        for ref_hash in refs.iter().rev() {
-                                            stack.push(*ref_hash);
+                                        // Write the new ledger
+                                        let ledger: Vec<H256> = ledger.iter().map(|x| x.0).collect();
+                                        wb.put_cf(
+                                            proposer_ledger_order_cf,
+                                            serialize(&(level as u64)).unwrap(),
+                                            serialize(&ledger).unwrap(),
+                                        )?;
+                                        for block in &ledger {
+                                            added.push(*block);
                                         }
+                                        *ledger_tip = level;
                                     }
-
-                                    // Stable sort the ledger according to level
-                                    ledger.sort_by_cached_key(|k| k.1);
-
-                                    // Write the new ledger
-                                    let ledger: Vec<H256> = ledger.iter().map(|x| x.0).collect();
-                                    wb.put_cf(
-                                        proposer_ledger_order_cf,
-                                        serialize(&(level as u64)).unwrap(),
-                                        serialize(&ledger).unwrap(),
-                                    )?;
-                                    for block in &ledger {
-                                        added.push(*block);
-                                    }
-                                    *ledger_tip = level;
                                 }
                             }
                         }
