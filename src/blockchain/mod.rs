@@ -668,6 +668,10 @@ impl BlockChain {
 
                         // recompute the ledger
                         for level in change_begin.. {
+                            if *ledger_tip != level - 1 {
+                                // make sure the ledger is continuous
+                                break;
+                            }
                             let leader: Option<H256> = match self.db.get_cf(
                                 proposer_leader_sequence_cf,
                                 serialize(&(level as u64)).unwrap(),
@@ -677,8 +681,6 @@ impl BlockChain {
                             };
                             match leader {
                                 None => {
-                                    // mark that the ledger lasts till the previous level
-                                    *ledger_tip = level - 1;
                                     break;
                                 }
                                 Some(leader) => {
@@ -746,6 +748,7 @@ impl BlockChain {
                                     for block in &ledger {
                                         added.push(*block);
                                     }
+                                    *ledger_tip = level;
                                 }
                             }
                         }
