@@ -177,8 +177,9 @@ fn main() {
         }
     }
 
-    // TODO: make it a seaprate API
-    wallet.generate_keypair().unwrap();
+    if wallet.addresses().unwrap().len() == 0 {
+        wallet.generate_keypair().unwrap();
+    }
 
     // start the transaction generator
     let (txgen_ctx, txgen_control_chan) = TransactionGenerator::new(&wallet, &server, &mempool);
