@@ -129,7 +129,7 @@ fn main() {
             addrs.push(hash);
         }
         info!("Funding {} addresses with initial coins", addrs.len());
-        prism::ico(&addrs, &utxodb, &wallet);
+        prism::experiment::ico(&addrs, &utxodb, &wallet);
     }
 
     // parse p2p server address
