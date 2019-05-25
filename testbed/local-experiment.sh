@@ -8,7 +8,34 @@ fi
 trap kill_prism INT
 
 function kill_prism() {
+	echo "Collecting experiment data"
+	end_time=`date +%s`
+	elapsed=`expr $end_time - $start_time`
+
+	generated=0
+	generated_bytes=0
+	generate_failures=0
+
+	echo "------ Results ------"
+	for (( i = 0; i < $num_nodes; i++ )); do
+		port=`expr $api_port + $i`
+		url="localhost:${port}/telematics/snapshot"
+		result=`curl $url 2> /dev/null`
+		generated=`expr $generated + $(echo $result | jq .[$'"generated_transactions"'])`
+		generated_bytes=`expr $generated_bytes + $(echo $result | jq .[$'"generated_transaction_bytes"'])`
+		generate_failures=`expr $generate_failures + $(echo $result | jq .[$'"generate_transaction_failures"'])`
+		confirmed=`echo $result | jq .[$'"confirmed_transactions"']`
+		confirmed_bytes=`echo $result | jq .[$'"confirmed_transaction_bytes"']`
+		echo "Node $i Transaction Confirmation: $(expr $confirmed / $elapsed) Tx/s"
+		echo "Node $i Transaction Confirmation: $(expr $confirmed_bytes / $elapsed) B/s"
+	done
+	echo "Transaction Generation: $(expr $generated / $elapsed) Tx/s"
+	echo "Transaction Generation: $(expr $generated_bytes / $elapsed) B/s"
+	echo "Generation Failures: $generate_failures"
+	echo "---------------------"
+
 	for pid in $pids; do
+		echo "Killing $pid"
 		kill $pid
 	done
 }
@@ -76,6 +103,7 @@ for (( i = 0; i < $num_nodes; i++ )); do
 	fi
 done
 
+start_time=`date +%s`
 echo "Running experiment, ^C to stop"
 
 for pid in $pids; do
