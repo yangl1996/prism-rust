@@ -18,7 +18,7 @@ pub fn ico(
         output: recipients
             .iter()
             .map(|recipient| {
-                (0..100).map(move |_| Output {
+                (0..50000).map(move |_| Output {
                     value: 100,
                     recipient: recipient.clone(),
                 })

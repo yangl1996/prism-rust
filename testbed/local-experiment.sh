@@ -36,6 +36,7 @@ vis_port=8000
 
 pids=""
 
+echo "Starting ${num_nodes} Prism nodes"
 for (( i = 0; i < $num_nodes; i++ )); do
 	p2p=`expr $p2p_port + $i`
 	api=`expr $api_port + $i`
@@ -54,6 +55,28 @@ for (( i = 0; i < $num_nodes; i++ )); do
 	echo "Node $i started as process $pid"
 	sleep 1
 done
+
+echo "Waiting 10 seconds for the nodes to start"
+sleep 10
+
+echo "Starting transaction generation of each node"
+for (( i = 0; i < $num_nodes; i++ )); do
+	port=`expr $api_port + $i`
+	url="localhost:${port}/transaction-generator/set-arrival-distribution?interval=10&distribution=uniform"
+	curl "$url" &> /dev/null
+	if [ "$?" -ne 0 ]; then
+		echo "Failed to set transaction rate for node $i"
+		exit 1
+	fi
+	url="localhost:${port}/transaction-generator/start"
+	curl "$url" &> /dev/null
+	if [ "$?" -ne 0 ]; then
+		echo "Failed to start transaction generation for node $i"
+		exit 1
+	fi
+done
+
+echo "Running experiment, ^C to stop"
 
 for pid in $pids; do
 	wait $pid
