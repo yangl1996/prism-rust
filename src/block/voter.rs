@@ -3,6 +3,7 @@ use super::Content as BlockContent;
 use crate::config::*;
 use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::merkle::MerkleTree;
+use crate::experiment::performance_counter::PayloadSize;
 
 /// The content of a voter block.
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
@@ -24,10 +25,12 @@ impl Content {
             votes,
         }
     }
+}
 
-    /// Return the size in bytes
-    pub fn get_bytes(&self) -> u32 {
-        return (2+32+self.votes.len()*32) as u32;
+impl PayloadSize for Content {
+    fn size(&self) -> usize {
+        return std::mem::size_of::<u16>() + std::mem::size_of::<H256>() + 
+               self.votes.len() * std::mem::size_of::<H256>();
     }
 }
 

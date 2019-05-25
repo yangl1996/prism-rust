@@ -1,4 +1,5 @@
 pub mod transaction_generator;
+pub mod performance_counter;
 
 use crate::utxodb::UtxoDatabase;
 use std::sync::Arc;

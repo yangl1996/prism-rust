@@ -1,6 +1,7 @@
 use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::sign::{KeyPair, PubKey, Signable, Signature};
 use bincode::serialize;
+use crate::experiment::performance_counter::PayloadSize;
 
 /// A unique identifier of a transaction output, a.k.a. a coin.
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -11,11 +12,6 @@ pub struct CoinId {
     pub index: u32,
 }
 
-impl CoinId {
-    pub fn get_bytes(&self) -> u32 {
-        return 36;
-    }
-}
 /// An address of a user. It is the SHA256 hash of the user's public key.
 pub type Address = H256;
 
@@ -35,12 +31,6 @@ pub struct Input {
 }
 
 
-impl Input {
-    pub fn get_bytes(&self) -> u32 {
-        return self.coin.get_bytes()+8+32;
-    }
-}
-
 /// An output of a transaction.
 // TODO: coinbase output (transaction fee). Maybe we don't need that in this case.
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -49,13 +39,6 @@ pub struct Output {
     pub value: u64,
     /// The address of the recipient of this output coin.
     pub recipient: Address,
-}
-
-
-impl Output {
-    pub fn get_bytes(&self) -> u32 {
-        return 8+32;
-    }
 }
 
 
@@ -71,20 +54,12 @@ pub struct Transaction {
     pub authorization: Vec<Authorization>,
 }
 
-impl Transaction {
+impl PayloadSize for Transaction {
     /// Return the size in bytes
-    pub fn get_bytes(&self) -> u32 {
-        let mut total_bytes = 0;
-        for input in self.input.iter() {
-            total_bytes += input.get_bytes();
-        }
-        for output in self.output.iter() {
-            total_bytes += output.get_bytes();
-        }
-        for authorization in self.authorization.iter() {
-            total_bytes += authorization.get_bytes();
-        }
-        return total_bytes;
+    fn size(&self) -> usize {
+        return self.input.len() * std::mem::size_of::<Input>()
+             + self.output.len() * std::mem::size_of::<Output>()
+             + self.authorization.len() * std::mem::size_of::<Authorization>();
     }
 }
 
@@ -120,13 +95,6 @@ pub struct Authorization {
     pub pubkey: PubKey,
     /// The signature of the transaction input and output
     pub signature: Signature,
-}
-
-impl Authorization {
-    /// Return the size in bytes
-    pub fn get_bytes(&self) -> u32 {
-        return 64;
-    }
 }
 
 #[cfg(test)]

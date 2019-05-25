@@ -333,14 +333,6 @@ impl BlockChain {
                     proposer_best.0 = block_hash;
                     proposer_best.1 = self_level;
                 }
-                trace!(
-                    "Inserted: Proposer_block={:.8}; Level={}; n_tx_refs={}; timestamp={}; size={} KB",
-                    block_hash,
-                    self_level,
-                    content.transaction_refs.len(),
-                    block.header.timestamp,
-                    (block.get_bytes() as f64)/1000.0
-                );
 
                 // mark this new proposer block as unconfirmed
                 let mut unconfirmed_proposer = self.unconfirmed_proposer.lock().unwrap();
@@ -417,15 +409,6 @@ impl BlockChain {
                     voter_best.0 = block_hash;
                     voter_best.1 = self_level;
                 }
-                trace!(
-                    "Inserted: Voter_block={:.8}; Chain={}; Level={}; n_votes={}; timestamp={}; size={} KB",
-                    block_hash,
-                    self_chain,
-                    self_level,
-                    content.votes.len(),
-                    block.header.timestamp,
-                    (block.get_bytes() as f64)/1000.0
-                );
 
                 // update vote levels
                 // only update if we are the main chain
@@ -607,10 +590,6 @@ impl BlockChain {
                         };
 
                         if new_leader != existing_leader {
-                            trace!(
-                                "Confirmed leader block at level {} at time {}",
-                                level, block.header.timestamp
-                            );
                             match new_leader {
                                 None => wb.delete_cf(
                                     proposer_leader_sequence_cf,
@@ -810,14 +789,6 @@ impl BlockChain {
                         .unwrap(),
                 )
                 .unwrap();
-                trace!(
-                "Inserted: Tx_block={:.8};  Level={}; n_txs={}; timestamp={}; size={} KB",
-                block_hash,
-                parent_level,
-                content.transactions.len(),
-                block.header.timestamp,
-                (block.get_bytes() as f32)/1000.0
-                );
                 return Ok((vec![], vec![]));
             }
         }

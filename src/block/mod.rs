@@ -3,6 +3,7 @@ pub mod proposer;
 pub mod transaction;
 pub mod voter;
 use crate::crypto::hash::{Hashable, H256};
+use crate::experiment::performance_counter::PayloadSize;
 
 /// A block in the Prism blockchain.
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -57,16 +58,20 @@ impl Block {
             sortition_proof,
         }
     }
-
-    pub fn get_bytes(&self) -> u32 {
-        return self.header.get_bytes()+self.content.get_bytes()+(self.sortition_proof.len()*32) as u32;
-    }
 }
 
 impl Hashable for Block {
     fn hash(&self) -> H256 {
         // TODO: we are only hashing the header here.
         return self.header.hash();
+    }
+}
+
+impl PayloadSize for Block {
+    fn size(&self) -> usize {
+        return std::mem::size_of::<header::Header>()
+             + self.content.size()
+             + self.sortition_proof.len() * std::mem::size_of::<H256>();
     }
 }
 
@@ -92,13 +97,13 @@ impl Hashable for Content {
     }
 }
 
-
-impl Content {
-    fn get_bytes(&self) -> u32 {
+impl PayloadSize for Content {
+    fn size(&self) -> usize {
+        // TODO: we are not counting the 2 bits that are used to store block type
         match self {
-            Content::Transaction(c) => c.get_bytes(),
-            Content::Proposer(c) => c.get_bytes(),
-            Content::Voter(c) => c.get_bytes(),
+            Content::Transaction(c) => c.size(),
+            Content::Proposer(c) => c.size(),
+            Content::Voter(c) => c.size(),
         }
     }
 }
