@@ -1,4 +1,5 @@
 use crate::experiment::transaction_generator;
+use crate::experiment::performance_counter::Counter as PerformanceCounter;
 use crate::wallet::Wallet;
 use crate::network::server::Handle as ServerHandle;
 use crate::miner::memory_pool::MemoryPool;
@@ -13,6 +14,7 @@ use log::{info};
 
 pub struct Server {
     transaction_generator_handle: mpsc::Sender<transaction_generator::ControlSignal>,
+    perf_counter: Arc<PerformanceCounter>,
     handle: HTTPServer,
 }
 
@@ -36,11 +38,12 @@ macro_rules! respond {
 }
 
 impl Server {
-    pub fn start(addr: std::net::SocketAddr, wallet: &Arc<Wallet>, server: &ServerHandle, mempool: &Arc<Mutex<MemoryPool>>, txgen_control_chan: mpsc::Sender<transaction_generator::ControlSignal>) {
+    pub fn start(addr: std::net::SocketAddr, wallet: &Arc<Wallet>, server: &ServerHandle, mempool: &Arc<Mutex<MemoryPool>>, txgen_control_chan: mpsc::Sender<transaction_generator::ControlSignal>, perf_counter: &Arc<PerformanceCounter>) {
         let handle = HTTPServer::http(&addr).unwrap();
         let server = Self {
             handle: handle,
             transaction_generator_handle: txgen_control_chan,
+            perf_counter: Arc::clone(perf_counter),
         };
         thread::spawn(move || {
             for req in server.handle.incoming_requests() {

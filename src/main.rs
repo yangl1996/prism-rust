@@ -134,7 +134,7 @@ fn main() {
             addrs.push(hash);
         }
         info!("Funding {} addresses with initial coins", addrs.len());
-        prism::experiment::ico(&addrs, &utxodb, &wallet);
+        prism::experiment::ico(&addrs, &utxodb, &wallet).unwrap();
     }
 
     // parse p2p server address
@@ -158,11 +158,11 @@ fn main() {
     server_ctx.start().unwrap();
 
     // start the worker
-    let worker_ctx = worker::new(4, msg_rx, &blockchain, &blockdb, &utxodb, &wallet, &mempool, ctx_tx, &server);
+    let worker_ctx = worker::new(4, msg_rx, &blockchain, &blockdb, &utxodb, &wallet, &mempool, ctx_tx, &server, &perf_counter);
     worker_ctx.start();
 
     // start the miner
-    let (miner_ctx, miner) = miner::new(&mempool, &blockchain, &utxodb, &wallet, &blockdb, ctx_rx, &server);
+    let (miner_ctx, miner) = miner::new(&mempool, &blockchain, &utxodb, &wallet, &blockdb, ctx_rx, &server, &perf_counter);
     miner_ctx.start();
 
     // connect to known peers
@@ -187,11 +187,11 @@ fn main() {
     }
 
     // start the transaction generator
-    let (txgen_ctx, txgen_control_chan) = TransactionGenerator::new(&wallet, &server, &mempool);
+    let (txgen_ctx, txgen_control_chan) = TransactionGenerator::new(&wallet, &server, &mempool, &perf_counter);
     txgen_ctx.start();
 
     // start the API server
-    ApiServer::start(api_addr, &wallet, &server, &mempool, txgen_control_chan);
+    ApiServer::start(api_addr, &wallet, &server, &mempool, txgen_control_chan, &perf_counter);
 
     // start the miner into running mode
     // TODO: make it a separate API

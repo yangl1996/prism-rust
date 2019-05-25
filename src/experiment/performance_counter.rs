@@ -1,11 +1,15 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 use crate::transaction::Transaction;
+use crate::wallet::WalletError;
 
 pub trait PayloadSize {
     fn size(&self) -> usize;
 }
 
 pub struct Counter {
+    generated_transactions: AtomicUsize,
+    generated_transaction_bytes: AtomicUsize,
+    generate_transaction_failures: AtomicUsize,
     confirmed_transactions: AtomicUsize,
     confirmed_transaction_bytes: AtomicUsize,
     processed_proposer_blocks: AtomicUsize,
@@ -18,6 +22,9 @@ pub struct Counter {
 
 #[derive(Serialize)]
 pub struct Snapshot {
+    pub generated_transactions: usize,
+    pub generated_transaction_bytes: usize,
+    pub generate_transaction_failures: usize,
     pub confirmed_transactions: usize,
     pub confirmed_transaction_bytes: usize,
     pub processed_proposer_blocks: usize,
@@ -31,6 +38,9 @@ pub struct Snapshot {
 impl Counter {
     pub fn new() -> Self {
         return Self {
+            generated_transactions: AtomicUsize::new(0),
+            generated_transaction_bytes: AtomicUsize::new(0),
+            generate_transaction_failures: AtomicUsize::new(0),
             confirmed_transactions: AtomicUsize::new(0),
             confirmed_transaction_bytes: AtomicUsize::new(0),
             processed_proposer_blocks: AtomicUsize::new(0),
@@ -42,13 +52,28 @@ impl Counter {
         }
     }
 
-    pub fn record_confirmed_transaction(&self, t: &Transaction) {
+    pub fn record_confirm_transaction(&self, t: &Transaction) {
         self.confirmed_transactions.fetch_add(1, Ordering::Relaxed);
         self.confirmed_transaction_bytes.fetch_add(t.size(), Ordering::Relaxed);
     }
 
+    pub fn record_generate_transaction(&self, t: &Result<Transaction, WalletError>) {
+        match t {
+            Ok(t) => {
+                self.generated_transactions.fetch_add(1, Ordering::Relaxed);
+                self.generated_transaction_bytes.fetch_add(t.size(), Ordering::Relaxed);
+            }
+            Err(_) => {
+                self.generate_transaction_failures.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+    }
+
     pub fn snapshot(&self) -> Snapshot {
         return Snapshot {
+            generated_transactions: self.generated_transactions.load(Ordering::Relaxed),
+            generated_transaction_bytes: self.generated_transaction_bytes.load(Ordering::Relaxed),
+            generate_transaction_failures: self.generate_transaction_failures.load(Ordering::Relaxed),
             confirmed_transactions: self.confirmed_transactions.load(Ordering::Relaxed),
             confirmed_transaction_bytes: self.confirmed_transaction_bytes.load(Ordering::Relaxed),
             processed_proposer_blocks: self.processed_proposer_blocks.load(Ordering::Relaxed),

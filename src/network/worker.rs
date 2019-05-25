@@ -17,6 +17,7 @@ use log::{debug, info};
 use std::collections::HashSet;
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
+use crate::experiment::performance_counter::Counter as PerformanceCounter;
 
 #[derive(Clone)]
 pub struct Context {
@@ -30,6 +31,7 @@ pub struct Context {
     context_update_chan: mpsc::Sender<ContextUpdateSignal>,
     server: ServerHandle,
     buffer: Arc<BlockBuffer>,
+    perf_counter: Arc<PerformanceCounter>,
 }
 
 pub fn new(
@@ -42,6 +44,7 @@ pub fn new(
     mempool: &Arc<Mutex<MemoryPool>>,
     ctx_update_sink: mpsc::Sender<ContextUpdateSignal>,
     server: &ServerHandle,
+    perf_counter: &Arc<PerformanceCounter>,
 ) -> Context {
     let ctx = Context {
         msg_chan: Arc::new(Mutex::new(msg_src)),
@@ -54,6 +57,7 @@ pub fn new(
         context_update_chan: ctx_update_sink,
         server: server.clone(),
         buffer: Arc::new(BlockBuffer::new()),
+        perf_counter: Arc::clone(perf_counter),
     };
     return ctx;
 }
@@ -175,6 +179,7 @@ impl Context {
                                     &self.server,
                                     &self.utxodb,
                                     &self.wallet,
+                                    &self.perf_counter,
                                 );
                                 let mut resolved_by_current = self.buffer.satisfy(block.hash());
                                 if !resolved_by_current.is_empty() {
