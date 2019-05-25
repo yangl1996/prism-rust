@@ -12,6 +12,7 @@ use prism::api::Server as ApiServer;
 use prism::network::server;
 use prism::network::worker;
 use prism::experiment::transaction_generator::TransactionGenerator;
+use prism::experiment::performance_counter::Counter as PerformanceCounter;
 use prism::miner;
 use prism::crypto::hash::{H256, Hashable};
 use std::net;
@@ -64,6 +65,10 @@ fn main() {
     // init logger
     let verbosity = matches.occurrences_of("verbose") as usize;
     stderrlog::new().verbosity(verbosity).init().unwrap();
+
+    // init performance counter
+    let perf_counter = PerformanceCounter::new();
+    let perf_counter = Arc::new(perf_counter);  // TODO: check whether we need this
 
     // init mempool
     let mempool = MemoryPool::new();
