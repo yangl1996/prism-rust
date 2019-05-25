@@ -1,2 +1,4 @@
 language: rust
+script:
+        - cargo test --verbose --features test-utilities
 cache: cargo
