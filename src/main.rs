@@ -118,25 +118,6 @@ fn main() {
         }
     }
 
-    // fund the given addresses
-    if let Some(fund_addrs) = matches.values_of("init_fund_addr") {
-        let mut addrs = vec![];
-        for addr in fund_addrs {
-            let decoded = match base64::decode(&addr.trim()) {
-                Ok(d) => d,
-                Err(e) => {
-                    error!("Error decoding address {}: {}", &addr.trim(), e);
-                    process::exit(1);
-                }
-            };
-            let addr_bytes: [u8; 32] = (&decoded[0..32]).try_into().unwrap();
-            let hash: H256 = addr_bytes.into();
-            addrs.push(hash);
-        }
-        info!("Funding {} addresses with initial coins", addrs.len());
-        prism::experiment::ico(&addrs, &utxodb, &wallet).unwrap();
-    }
-
     // parse p2p server address
     let p2p_addr = matches.value_of("peer_addr").unwrap().parse::<net::SocketAddr>().unwrap_or_else(|e| {
             error!("Error parsing P2P server address: {}", e);
@@ -182,6 +163,26 @@ fn main() {
         }
     }
 
+    // fund the given addresses
+    if let Some(fund_addrs) = matches.values_of("init_fund_addr") {
+        let mut addrs = vec![];
+        for addr in fund_addrs {
+            let decoded = match base64::decode(&addr.trim()) {
+                Ok(d) => d,
+                Err(e) => {
+                    error!("Error decoding address {}: {}", &addr.trim(), e);
+                    process::exit(1);
+                }
+            };
+            let addr_bytes: [u8; 32] = (&decoded[0..32]).try_into().unwrap();
+            let hash: H256 = addr_bytes.into();
+            addrs.push(hash);
+        }
+        info!("Funding {} addresses with initial coins", addrs.len());
+        prism::experiment::ico(&addrs, &utxodb, &wallet).unwrap();
+    }
+
+    // create wallet key pair if there is none
     if wallet.addresses().unwrap().len() == 0 {
         wallet.generate_keypair().unwrap();
     }

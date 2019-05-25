@@ -12,6 +12,8 @@ pub struct Counter {
     generate_transaction_failures: AtomicUsize,
     confirmed_transactions: AtomicUsize,
     confirmed_transaction_bytes: AtomicUsize,
+    deconfirmed_transactions: AtomicUsize,
+    deconfirmed_transaction_bytes: AtomicUsize,
     processed_proposer_blocks: AtomicUsize,
     processed_proposer_block_bytes: AtomicUsize,
     processed_voter_blocks: AtomicUsize,
@@ -27,6 +29,8 @@ pub struct Snapshot {
     pub generate_transaction_failures: usize,
     pub confirmed_transactions: usize,
     pub confirmed_transaction_bytes: usize,
+    pub deconfirmed_transactions: usize,
+    pub deconfirmed_transaction_bytes: usize,
     pub processed_proposer_blocks: usize,
     pub processed_proposer_block_bytes: usize,
     pub processed_voter_blocks: usize,
@@ -43,6 +47,8 @@ impl Counter {
             generate_transaction_failures: AtomicUsize::new(0),
             confirmed_transactions: AtomicUsize::new(0),
             confirmed_transaction_bytes: AtomicUsize::new(0),
+            deconfirmed_transactions: AtomicUsize::new(0),
+            deconfirmed_transaction_bytes: AtomicUsize::new(0),
             processed_proposer_blocks: AtomicUsize::new(0),
             processed_proposer_block_bytes: AtomicUsize::new(0),
             processed_voter_blocks: AtomicUsize::new(0),
@@ -55,6 +61,11 @@ impl Counter {
     pub fn record_confirm_transaction(&self, t: &Transaction) {
         self.confirmed_transactions.fetch_add(1, Ordering::Relaxed);
         self.confirmed_transaction_bytes.fetch_add(t.size(), Ordering::Relaxed);
+    }
+
+    pub fn record_deconfirm_transaction(&self, t: &Transaction) {
+        self.deconfirmed_transactions.fetch_add(1, Ordering::Relaxed);
+        self.deconfirmed_transaction_bytes.fetch_add(t.size(), Ordering::Relaxed);
     }
 
     pub fn record_generate_transaction(&self, t: &Result<Transaction, WalletError>) {
@@ -76,6 +87,8 @@ impl Counter {
             generate_transaction_failures: self.generate_transaction_failures.load(Ordering::Relaxed),
             confirmed_transactions: self.confirmed_transactions.load(Ordering::Relaxed),
             confirmed_transaction_bytes: self.confirmed_transaction_bytes.load(Ordering::Relaxed),
+            deconfirmed_transactions: self.deconfirmed_transactions.load(Ordering::Relaxed),
+            deconfirmed_transaction_bytes: self.deconfirmed_transaction_bytes.load(Ordering::Relaxed),
             processed_proposer_blocks: self.processed_proposer_blocks.load(Ordering::Relaxed),
             processed_proposer_block_bytes: self.processed_proposer_block_bytes.load(Ordering::Relaxed),
             processed_voter_blocks: self.processed_voter_blocks.load(Ordering::Relaxed),
