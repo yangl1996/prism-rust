@@ -74,7 +74,8 @@ fn integration() {
             for t in unwrap_transaction ! ($block) {
                 let hash = t.hash();
                 for index in 0..t.output.len() {
-                    assert_eq ! ($bool, utxodb.contains( & CoinId{hash, index: index as u32}).unwrap());
+                    assert_eq ! (utxodb.contains( & CoinId{hash, index: index as u32}).unwrap(), $bool,
+                    "for tx {:?} output index {}, error in utxo, should be {}",hash,index,$bool);
                 }
             }
         }};
@@ -307,32 +308,76 @@ fn integration() {
     check_transaction_output!(transaction_1, true);
     check_transaction_output!(transaction_2, true);
     check_transaction_output!(transaction_3, false);
+    check_transaction_output!(transaction_4, false);
+    check_transaction_output!(transaction_5, false);
+    check_transaction_output!(transaction_6, false);
+    check_transaction_output!(transaction_7, false);
+    check_transaction_output!(transaction_8, false);
     check_transaction_output!(transaction_9, true);
     check_transaction_output!(transaction_invalid, false);
+    println!("and value in tx 4 is {}",value_4);
+    //see whether wallet balance rollback
+    assert_eq!(wallet.balance().unwrap(), ico_number);
 
     //on this fork (proposer_9) we grow the proposer tree and ledger
     let transaction_10 = random_transaction_block_0_input!();
     handle_block!(transaction_10);
-    //we also refer proposer_8 on another fork
-    let proposer_10 = proposer_block!(vec![proposer_8.hash()], vec![transaction_10.hash()]);
+    //we create proposers on the fork to a length, also refer proposer_8 on another fork
+    let proposer_10 = proposer_block!();
     handle_block!(proposer_10);
-    assert_eq!(blockchain.unreferred_proposer().len(),1);
-    assert!(blockchain.unreferred_proposer().contains(&proposer_10.hash()));
-    assert_eq!(blockchain.unreferred_transaction().len(),0);
     parent_hash = proposer_10.hash();
+    let proposer_11 = proposer_block!();
+    handle_block!(proposer_11);
+    parent_hash = proposer_11.hash();
+    let proposer_12 = proposer_block!();
+    handle_block!(proposer_12);
+    parent_hash = proposer_12.hash();
+    let proposer_13 = proposer_block!();
+    handle_block!(proposer_13);
+    parent_hash = proposer_13.hash();
+    let proposer_14 = proposer_block!();
+    handle_block!(proposer_14);
+    parent_hash = proposer_14.hash();
+    let proposer_15 = proposer_block!(vec![proposer_8.hash()], vec![transaction_10.hash()]);
+    handle_block!(proposer_15);
+    parent_hash = proposer_15.hash();
+    assert_eq!(blockchain.unreferred_proposer().len(),1);
+    assert!(blockchain.unreferred_proposer().contains(&proposer_15.hash()));
+    assert_eq!(blockchain.unreferred_transaction().len(),0);
     for chain_number in 0..config::NUM_VOTER_CHAINS {
-        let v = voter_block!(chain_number, blockchain.best_voter(chain_number as usize), vec![proposer_10.hash()]);
+        let v = voter_block!(chain_number, blockchain.best_voter(chain_number as usize), vec![
+        proposer_10.hash(),proposer_11.hash(),proposer_12.hash(),proposer_13.hash(),proposer_14.hash(),proposer_15.hash()]);
         handle_block!(v);
         //the fork becomes the best
         assert_eq!(v.hash(), blockchain.best_voter(chain_number as usize));
     }
-    println!("tx 2: {:?}", transaction_2.hash());
-    println!("tx 4: {:?}", transaction_4.hash());
+    println!("tx block 2: {:?}", transaction_2.hash());
+    for t in unwrap_transaction!(transaction_2) {
+        println!("\tcontains tx: {:?}", t.hash());
+        for i in &t.input {
+            println!("\t\tinput: {:?}", i);
+        }
+    }
+    println!("tx block 3: {:?}", transaction_3.hash());
+    for t in unwrap_transaction!(transaction_3) {
+        println!("\tcontains tx: {:?}", t.hash());
+        for i in &t.input {
+            println!("\t\tinput: {:?}", i);
+        }
+    }
+    println!("tx block 4: {:?}", transaction_4.hash());
+    for t in unwrap_transaction!(transaction_4) {
+        println!("\tcontains tx: {:?}", t.hash());
+        for i in &t.input {
+            println!("\t\tinput: {:?}", i);
+        }
+    }
+
     println!("{:?}",blockchain.proposer_transaction_in_ledger(10).unwrap());
     check_transaction_output!(transaction_1, true);
-    check_transaction_output!(transaction_2, false);//remember tx 4 spends tx 2
+    check_transaction_output!(transaction_2, false);//tx 4 spends outputs of tx 2
     check_transaction_output!(transaction_3, true);
-    check_transaction_output!(transaction_4, true);
+    //check_transaction_output!(transaction_4, true);//we don't check transaction 4 since we may spend it in transaction 8
     check_transaction_output!(transaction_5, true);
     check_transaction_output!(transaction_6, true);
     check_transaction_output!(transaction_7, true);
@@ -340,6 +385,7 @@ fn integration() {
     check_transaction_output!(transaction_9, true);
     check_transaction_output!(transaction_10, true);
     check_transaction_output!(transaction_invalid, false);
+    assert_eq!(wallet.balance().unwrap(), 1+ico_number);
 
 }
 
