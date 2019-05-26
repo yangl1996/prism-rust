@@ -111,6 +111,9 @@ function prepare_payload
 		echo "Copying binaries for $id"
 		mkdir -p payload/$id
 		cp -r binary payload/$id/binary
+		mkdir -p payload/$id/scripts
+		cp scripts/start-prism.sh payload/$id/scripts/start-prism.sh
+		cp scripts/stop-prism.sh payload/$id/scripts/stop-prism.sh
 	done
 	python3 scripts/gen_prism_payload.py instances.txt $1
 	tput setaf 2
@@ -123,20 +126,14 @@ function sync_payload_single
 	rsync -r payload/$1/ $1:/home/ubuntu/payload
 }
 
-function install_deps_single
+function start_prism_single
 {
-	ssh $1 -- 'mkdir -p /home/ubuntu/log'
-	ssh $1 -- 'bash /home/ubuntu/payload/bootstrap.sh &>/home/ubuntu/log/deps.log'
+	ssh $1 -- 'mkdir -p /home/ubuntu/log && bash /home/ubuntu/payload/scripts/start-prism.sh &>/home/ubuntu/log/start.log'
 }
 
-function start_scorex_single
+function stop_prism_single
 {
-	ssh $1 -- 'bash /home/ubuntu/payload/start-scorex.sh &>/home/ubuntu/log/start.log'
-}
-
-function stop_scorex_single
-{
-	ssh $1 -- 'bash /home/ubuntu/payload/stop-scorex.sh &>/home/ubuntu/log/stop.log'
+	ssh $1 -- 'bash /home/ubuntu/payload/scripts/stop-prism.sh &>/home/ubuntu/log/stop.log'
 }
 
 function execute_on_all
@@ -247,7 +244,6 @@ case "$1" in
 		  gen-payload topo      Generate scripts and configuration files
 		  build			Build the Prism client binary
 		  sync-payload          Synchronize payload to remote servers
-		  install-deps          Install dependencies on remote servers
 		  start-prism           Start Prism nodes on each remote server
 		  stop-prism            Stop Prism nodes on each remote server
 
@@ -268,12 +264,10 @@ case "$1" in
 		build_prism ;;
 	sync-payload)
 		execute_on_all sync_payload ;;
-	install-deps)
-		execute_on_all install_deps ;;
-	start-scorex)
-		execute_on_all start_scorex ;;
-	stop-scorex)
-		execute_on_all stop_scorex ;;
+	start-prism)
+		execute_on_all start_prism ;;
+	stop-prism)
+		execute_on_all stop_prism ;;
 	run-all)
 		run_on_all "${@:2}" ;;
 	ssh)
