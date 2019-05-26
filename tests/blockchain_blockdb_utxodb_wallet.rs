@@ -315,7 +315,6 @@ fn integration() {
     check_transaction_output!(transaction_8, false);
     check_transaction_output!(transaction_9, true);
     check_transaction_output!(transaction_invalid, false);
-    println!("and value in tx 4 is {}",value_4);
     //see whether wallet balance rollback
     assert_eq!(wallet.balance().unwrap(), ico_number);
 
@@ -351,29 +350,7 @@ fn integration() {
         //the fork becomes the best
         assert_eq!(v.hash(), blockchain.best_voter(chain_number as usize));
     }
-    println!("tx block 2: {:?}", transaction_2.hash());
-    for t in unwrap_transaction!(transaction_2) {
-        println!("\tcontains tx: {:?}", t.hash());
-        for i in &t.input {
-            println!("\t\tinput: {:?}", i);
-        }
-    }
-    println!("tx block 3: {:?}", transaction_3.hash());
-    for t in unwrap_transaction!(transaction_3) {
-        println!("\tcontains tx: {:?}", t.hash());
-        for i in &t.input {
-            println!("\t\tinput: {:?}", i);
-        }
-    }
-    println!("tx block 4: {:?}", transaction_4.hash());
-    for t in unwrap_transaction!(transaction_4) {
-        println!("\tcontains tx: {:?}", t.hash());
-        for i in &t.input {
-            println!("\t\tinput: {:?}", i);
-        }
-    }
 
-    println!("{:?}",blockchain.proposer_transaction_in_ledger(10).unwrap());
     check_transaction_output!(transaction_1, true);
     check_transaction_output!(transaction_2, false);//tx 4 spends outputs of tx 2
     check_transaction_output!(transaction_3, true);
