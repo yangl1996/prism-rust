@@ -1,6 +1,7 @@
 #!/bin/bash
 
 mkdir -p /home/ubuntu/log
+rm -rf /tmp/prism*
 
 echo "Launching Prism nodes"
 for script in /home/ubuntu/payload/prism-payload/*.sh; do
