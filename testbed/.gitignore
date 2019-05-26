@@ -1,4 +1,5 @@
 *.addr
+binary
 *.json
 *.pkcs8
 log

@@ -70,6 +70,18 @@ function stop_instances
 	tput sgr0
 }
 
+function build_prism
+{
+	echo "Copying local repository to build machine"
+	rsync -ar ../Cargo.toml prism:~/prism/
+	rsync -ar ../src prism:~/prism/
+	echo "Building Prism binary"
+	ssh prism -- 'cd ~/prism && /home/prism/.cargo/bin/cargo build' &> log/prism_build.log
+	tput setaf 2
+	echo "Finished"
+	tput sgr0
+}
+
 function prepare_payload
 {
 	# $1: topology file to use
@@ -81,7 +93,11 @@ function prepare_payload
 	fi
 	echo "Deleting existing files"
 	rm -rf payload
+	rm -rf binary
 	mkdir -p payload
+	mkdir -p binary
+	echo "Download binaries"
+	scp prism:/home/prism/prism/target/debug/prism binary/prism
 	local instances=`cat instances.txt`
 	local instance_ids=""
 	for instance in $instances ;
@@ -92,6 +108,9 @@ function prepare_payload
 		IFS=',' read -r id ip lan <<< "$instance"
 		echo "Generating config files for $id"
 		python3 scripts/gen_etcd_config.py $id $lan instances.txt
+		echo "Copying binaries for $id"
+		mkdir -p payload/$id
+		cp -r binary payload/$id/binary
 	done
 	python3 scripts/gen_prism_payload.py instances.txt $1
 	tput setaf 2
@@ -226,6 +245,7 @@ case "$1" in
 		Run Experiment
 
 		  gen-payload topo      Generate scripts and configuration files
+		  build			Build the Prism client binary
 		  sync-payload          Synchronize payload to remote servers
 		  install-deps          Install dependencies on remote servers
 		  start-prism           Start Prism nodes on each remote server
@@ -244,6 +264,8 @@ case "$1" in
 		stop_instances ;;
 	gen-payload)
 		prepare_payload $2 ;;
+	build)
+		build_prism ;;
 	sync-payload)
 		execute_on_all sync_payload ;;
 	install-deps)
