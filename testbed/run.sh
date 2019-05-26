@@ -92,15 +92,8 @@ function prepare_payload
 		IFS=',' read -r id ip lan <<< "$instance"
 		echo "Generating config files for $id"
 		python3 scripts/gen_etcd_config.py $id $lan instances.txt
-		cp scripts/bootstrap.sh payload/$id/bootstrap.sh
-		cp scripts/bootstrap-etcd.sh payload/$id/bootstrap-etcd.sh
-		cp scripts/bootstrap-sbt.sh payload/$id/bootstrap-sbt.sh
-		cp scripts/bootstrap-scorex.sh payload/$id/bootstrap-scorex.sh
-		cp scripts/start-scorex.sh payload/$id/start-scorex.sh
-		cp scripts/stop-scorex.sh payload/$id/stop-scorex.sh
-		cp scripts/get-scorex-perf.sh payload/$id/get-scorex-perf.sh
 	done
-	python3 scripts/gen_scorex_config.py instances.txt $1
+	python3 scripts/gen_prism_payload.py instances.txt $1
 	tput setaf 2
 	echo "Payload written"
 	tput sgr0
@@ -242,7 +235,6 @@ case "$1" in
 
 		  run-all cmd           Run command on all instances
 		  ssh i                 SSH to the i-th server (1-based index)
-		  show node api         Query the API of a node
 		  scp i src dst         Copy file from remote
 		EOF
 		;;
@@ -260,14 +252,10 @@ case "$1" in
 		execute_on_all start_scorex ;;
 	stop-scorex)
 		execute_on_all stop_scorex ;;
-	get-perf)
-		collect_data get_performance_metrics ;;
 	run-all)
 		run_on_all "${@:2}" ;;
 	ssh)
 		ssh_to_server $2 ;;
-	show)
-		query_api $2 $3 ;;
 	scp)
 		scp_from_server $2 $3 $4 ;;
 	*)

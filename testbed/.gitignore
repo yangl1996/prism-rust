@@ -1,4 +1,5 @@
 *.addr
+*.json
 *.pkcs8
 log
 instances.txt
