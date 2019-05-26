@@ -21,6 +21,8 @@ use std::sync::Arc;
 use std::sync::mpsc;
 use std::io::{self, Write};
 use std::convert::TryInto;
+use std::thread;
+use std::time;
 
 fn main() {
     // parse command line arguments
@@ -148,19 +150,32 @@ fn main() {
 
     // connect to known peers
     if let Some(known_peers) = matches.values_of("known_peer") {
-        for peer in known_peers {
-            let addr = match peer.parse::<net::SocketAddr>() {
-                Ok(x) => x,
-                Err(e) => {
-                    error!("Error parsing peer address {}: {}", &peer, e);
-                    continue;
+        let known_peers: Vec<String> = known_peers.map(|x| x.to_owned()).collect();
+        let server = server.clone();
+        thread::spawn(move || {
+            for peer in known_peers {
+                loop {
+                    let addr = match peer.parse::<net::SocketAddr>() {
+                        Ok(x) => x,
+                        Err(e) => {
+                            error!("Error parsing peer address {}: {}", &peer, e);
+                            break;
+                        }
+                    };
+                    match server.connect(addr) {
+                        Ok(_) => {
+                            info!("Connected to outgoing peer {}", &addr);
+                            break;
+                        }
+                        Err(e) => {
+                            error!("Error connecting to peer {}: {}", addr, e);
+                            thread::sleep(time::Duration::from_millis(800));
+                            continue;
+                        }
+                    }
                 }
-            };
-            match server.connect(addr) {
-                Ok(_) => info!("Connected to outgoing peer {}", &addr),
-                Err(e) => error!("Error connecting to peer {}: {}", addr, e),
             }
-        }
+        });
     }
 
     // fund the given addresses
