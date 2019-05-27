@@ -162,6 +162,37 @@ function execute_on_all
 	tput sgr0
 }
 
+function get_performance_single
+{
+	curl -s http://$3:$4/telematics/snapshot
+}
+
+function start_transactions_single
+{
+	curl -s "http://$3:$4/transaction-generator/set-arrival-distribution?interval=0&distribution=uniform"
+	curl -s "http://$3:$4/transaction-generator/start"
+}
+
+function query_api 
+{
+	# $1: which data to get
+	mkdir -p data
+	local nodes=`cat nodes.txt`
+	local pids=''
+	for node in $nodes; do
+		local name
+		local host
+		local pubip
+		local apiport
+		IFS=',' read -r name host pubip _ _ apiport _ <<< "$node"
+		$1_single $name $host $pubip $apiport > "data/${name}_$1.txt" &
+		pids="$pids $!"
+	done
+	for pid in $pids; do
+		wait $pid
+	done
+}
+
 function run_on_all
 {
 	# $@: command to run
@@ -228,6 +259,20 @@ function scp_from_server
 	scp -r ${id}:${2} $3
 }
 
+function run_experiment
+{
+	echo "Starting Prism nodes"
+	execute_on_all start_prism
+	echo "All nodes started, starting transaction generation"
+	query_api start_transactions
+	echo "Running experiment for $1 seconds"
+	sleep $1
+	query_api get_performance
+	echo "Stopping all nodes"
+	execute_on_all stop_prism
+	python3 scripts/process_results.py nodes.txt $1
+}
+
 mkdir -p log
 case "$1" in
 	help)
@@ -246,6 +291,11 @@ case "$1" in
 		  sync-payload          Synchronize payload to remote servers
 		  start-prism           Start Prism nodes on each remote server
 		  stop-prism            Stop Prism nodes on each remote server
+		  run-exp time          Run the experiment for the given time 
+
+		Collect Data
+		  
+		  get-perf              Get performance data
 
 		Connect to Testbed
 
@@ -268,6 +318,10 @@ case "$1" in
 		execute_on_all start_prism ;;
 	stop-prism)
 		execute_on_all stop_prism ;;
+	run-exp)
+		run_experiment $2 ;;
+	get-perf)
+		query_api get_performance ;;
 	run-all)
 		run_on_all "${@:2}" ;;
 	ssh)
