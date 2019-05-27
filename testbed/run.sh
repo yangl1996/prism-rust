@@ -76,7 +76,7 @@ function build_prism
 	rsync -ar ../Cargo.toml prism:~/prism/
 	rsync -ar ../src prism:~/prism/
 	echo "Building Prism binary"
-	ssh prism -- 'cd ~/prism && /home/prism/.cargo/bin/cargo build && strip /home/prism/target/debug/prism' &> log/prism_build.log
+	ssh prism -- 'cd ~/prism && /home/prism/.cargo/bin/cargo build && strip /home/prism/prism/target/debug/prism' &> log/prism_build.log
 	tput setaf 2
 	echo "Finished"
 	tput sgr0
