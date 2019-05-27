@@ -305,7 +305,7 @@ impl Context {
                                     mio::PollOpt::edge(),
                                 )?;
                             }
-                            _ => panic!(),
+                            _ => unimplemented!(),
                         }
                     }
                 }
