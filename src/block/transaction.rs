@@ -1,6 +1,7 @@
 use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::merkle::MerkleTree;
 use crate::transaction::Transaction;
+use crate::experiment::performance_counter::PayloadSize;
 
 /// The content of a transaction block.
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
@@ -13,14 +14,15 @@ impl Content {
     pub fn new(transactions: Vec<Transaction>) -> Self {
         Self { transactions }
     }
+}
 
-    /// Return the size in bytes
-    pub fn get_bytes(&self) -> u32 {
-        let mut total_bytes = 0;
-        for tx in self.transactions.iter() {
-            total_bytes += tx.get_bytes();
+impl PayloadSize for Content {
+    fn size(&self) -> usize {
+        let mut total = 0;
+        for t in &self.transactions {
+            total += t.size();
         }
-        return total_bytes;
+        return total;
     }
 }
 

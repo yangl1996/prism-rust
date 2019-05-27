@@ -70,6 +70,18 @@ function stop_instances
 	tput sgr0
 }
 
+function build_prism
+{
+	echo "Copying local repository to build machine"
+	rsync -ar ../Cargo.toml prism:~/prism/
+	rsync -ar ../src prism:~/prism/
+	echo "Building Prism binary"
+	ssh prism -- 'cd ~/prism && /home/prism/.cargo/bin/cargo build && strip /home/prism/prism/target/debug/prism' &> log/prism_build.log
+	tput setaf 2
+	echo "Finished"
+	tput sgr0
+}
+
 function prepare_payload
 {
 	# $1: topology file to use
@@ -81,7 +93,11 @@ function prepare_payload
 	fi
 	echo "Deleting existing files"
 	rm -rf payload
+	rm -rf binary
 	mkdir -p payload
+	mkdir -p binary
+	echo "Download binaries"
+	scp prism:/home/prism/prism/target/debug/prism binary/prism
 	local instances=`cat instances.txt`
 	local instance_ids=""
 	for instance in $instances ;
@@ -92,15 +108,14 @@ function prepare_payload
 		IFS=',' read -r id ip lan <<< "$instance"
 		echo "Generating config files for $id"
 		python3 scripts/gen_etcd_config.py $id $lan instances.txt
-		cp scripts/bootstrap.sh payload/$id/bootstrap.sh
-		cp scripts/bootstrap-etcd.sh payload/$id/bootstrap-etcd.sh
-		cp scripts/bootstrap-sbt.sh payload/$id/bootstrap-sbt.sh
-		cp scripts/bootstrap-scorex.sh payload/$id/bootstrap-scorex.sh
-		cp scripts/start-scorex.sh payload/$id/start-scorex.sh
-		cp scripts/stop-scorex.sh payload/$id/stop-scorex.sh
-		cp scripts/get-scorex-perf.sh payload/$id/get-scorex-perf.sh
+		echo "Copying binaries for $id"
+		mkdir -p payload/$id
+		cp -r binary payload/$id/binary
+		mkdir -p payload/$id/scripts
+		cp scripts/start-prism.sh payload/$id/scripts/start-prism.sh
+		cp scripts/stop-prism.sh payload/$id/scripts/stop-prism.sh
 	done
-	python3 scripts/gen_scorex_config.py instances.txt $1
+	python3 scripts/gen_prism_payload.py instances.txt $1
 	tput setaf 2
 	echo "Payload written"
 	tput sgr0
@@ -111,20 +126,14 @@ function sync_payload_single
 	rsync -r payload/$1/ $1:/home/ubuntu/payload
 }
 
-function install_deps_single
+function start_prism_single
 {
-	ssh $1 -- 'mkdir -p /home/ubuntu/log'
-	ssh $1 -- 'bash /home/ubuntu/payload/bootstrap.sh &>/home/ubuntu/log/deps.log'
+	ssh $1 -- 'mkdir -p /home/ubuntu/log && bash /home/ubuntu/payload/scripts/start-prism.sh &>/home/ubuntu/log/start.log'
 }
 
-function start_scorex_single
+function stop_prism_single
 {
-	ssh $1 -- 'bash /home/ubuntu/payload/start-scorex.sh &>/home/ubuntu/log/start.log'
-}
-
-function stop_scorex_single
-{
-	ssh $1 -- 'bash /home/ubuntu/payload/stop-scorex.sh &>/home/ubuntu/log/stop.log'
+	ssh $1 -- 'bash /home/ubuntu/payload/scripts/stop-prism.sh &>/home/ubuntu/log/stop.log'
 }
 
 function execute_on_all
@@ -151,6 +160,37 @@ function execute_on_all
 	tput setaf 2
 	echo "Finished"
 	tput sgr0
+}
+
+function get_performance_single
+{
+	curl -s http://$3:$4/telematics/snapshot
+}
+
+function start_transactions_single
+{
+	curl -s "http://$3:$4/transaction-generator/set-arrival-distribution?interval=0&distribution=uniform"
+	curl -s "http://$3:$4/transaction-generator/start"
+}
+
+function query_api 
+{
+	# $1: which data to get
+	mkdir -p data
+	local nodes=`cat nodes.txt`
+	local pids=''
+	for node in $nodes; do
+		local name
+		local host
+		local pubip
+		local apiport
+		IFS=',' read -r name host pubip _ _ apiport _ <<< "$node"
+		$1_single $name $host $pubip $apiport > "data/${name}_$1.txt" &
+		pids="$pids $!"
+	done
+	for pid in $pids; do
+		wait $pid
+	done
 }
 
 function run_on_all
@@ -219,6 +259,20 @@ function scp_from_server
 	scp -r ${id}:${2} $3
 }
 
+function run_experiment
+{
+	echo "Starting Prism nodes"
+	execute_on_all start_prism
+	echo "All nodes started, starting transaction generation"
+	query_api start_transactions
+	echo "Running experiment for $1 seconds"
+	sleep $1
+	query_api get_performance
+	echo "Stopping all nodes"
+	execute_on_all stop_prism
+	python3 scripts/process_results.py nodes.txt $1
+}
+
 mkdir -p log
 case "$1" in
 	help)
@@ -233,16 +287,20 @@ case "$1" in
 		Run Experiment
 
 		  gen-payload topo      Generate scripts and configuration files
+		  build			Build the Prism client binary
 		  sync-payload          Synchronize payload to remote servers
-		  install-deps          Install dependencies on remote servers
 		  start-prism           Start Prism nodes on each remote server
 		  stop-prism            Stop Prism nodes on each remote server
+		  run-exp time          Run the experiment for the given time 
+
+		Collect Data
+		  
+		  get-perf              Get performance data
 
 		Connect to Testbed
 
 		  run-all cmd           Run command on all instances
 		  ssh i                 SSH to the i-th server (1-based index)
-		  show node api         Query the API of a node
 		  scp i src dst         Copy file from remote
 		EOF
 		;;
@@ -252,22 +310,22 @@ case "$1" in
 		stop_instances ;;
 	gen-payload)
 		prepare_payload $2 ;;
+	build)
+		build_prism ;;
 	sync-payload)
 		execute_on_all sync_payload ;;
-	install-deps)
-		execute_on_all install_deps ;;
-	start-scorex)
-		execute_on_all start_scorex ;;
-	stop-scorex)
-		execute_on_all stop_scorex ;;
+	start-prism)
+		execute_on_all start_prism ;;
+	stop-prism)
+		execute_on_all stop_prism ;;
+	run-exp)
+		run_experiment $2 ;;
 	get-perf)
-		collect_data get_performance_metrics ;;
+		query_api get_performance ;;
 	run-all)
 		run_on_all "${@:2}" ;;
 	ssh)
 		ssh_to_server $2 ;;
-	show)
-		query_api $2 $3 ;;
 	scp)
 		scp_from_server $2 $3 $4 ;;
 	*)

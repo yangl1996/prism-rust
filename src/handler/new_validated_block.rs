@@ -8,6 +8,7 @@ use crate::network::server::Handle as ServerHandle;
 use crate::transaction::Transaction;
 use crate::utxodb::UtxoDatabase;
 use crate::wallet::Wallet;
+use crate::experiment::performance_counter::Counter as PerformanceCounter;
 use std::sync::Mutex;
 
 pub fn new_validated_block(
@@ -18,6 +19,7 @@ pub fn new_validated_block(
     server: &ServerHandle,
     utxodb: &UtxoDatabase,
     wallet: &Wallet,
+    perf_counter: &PerformanceCounter,
 ) {
     // TODO: here mempool acts as a global lock. This is a dirty fix for data race in utxodb.
     let mut mempool = mempool.lock().unwrap();
@@ -62,6 +64,13 @@ pub fn new_validated_block(
         };
         let mut transactions = content.transactions.clone();
         remove.append(&mut transactions);
+    }
+
+    for transaction in &add {
+        perf_counter.record_confirm_transaction(&transaction);
+    }
+    for transaction in &remove {
+        perf_counter.record_deconfirm_transaction(&transaction);
     }
 
     let coin_diff = utxodb.apply_diff(&add, &remove).unwrap();

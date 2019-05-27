@@ -3,6 +3,7 @@ use super::Content as BlockContent;
 use crate::config::*;
 use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::merkle::MerkleTree;
+use crate::experiment::performance_counter::PayloadSize;
 
 /// The content of a proposer block.
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
@@ -23,10 +24,11 @@ impl Content {
             proposer_refs,
         }
     }
+}
 
-    /// Return the size in bytes
-    pub fn get_bytes(&self) -> u32 {
-        return (self.transaction_refs.len()*32+self.proposer_refs.len()*32) as u32;
+impl PayloadSize for Content {
+    fn size(&self) -> usize {
+        return std::mem::size_of::<H256>() * (self.transaction_refs.len() + self.proposer_refs.len());
     }
 }
 

@@ -7,12 +7,24 @@
 3. Place the SSH key at `~/.ssh/prism.pem`
 4. Place this line `Include config.d/prism` at the beginning of `~/.ssh/config`
 5. Execute `mkdir -p ~/.ssh/config.d`
+6. Start a local Ubuntu 18.04 VM that has Rust toolchain, `clang`, `build-essential` installed,
+   is accessible by `ssh prism`, and can read the Github repository (preferably through SSH
+   agent forwarding)
 
 ## Usage
 
 Run `./run.sh help` to view a list of available commands.
 
-### Log Files
+## Experiment Flow
+
+1. `cd` to `testbed/`
+2. Run `python3 scripts/generate_topo.py <NUM NODES> clique > clique.json`
+3. Run `./run.sh build` to build the Prism binary
+4. Run `./run.sh gen-payload clique.json` to generate the payload
+5. Run `./run.sh sync-payload` to synchronize the payload to remote machines
+6. Run `./run.sh run-exp <DURATION>` to run the experiment
+
+## Log Files
 
 instances.txt records the EC2 instances that are started in the following
 format:

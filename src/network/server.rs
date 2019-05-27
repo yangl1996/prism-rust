@@ -138,8 +138,8 @@ impl Context {
                                 Ok(req) => {
                                     match req {
                                         ControlSignal::ConnectNewPeer(req) => {
-                                            let handle = self.connect(&req.addr)?;
-                                            req.result_chan.send(Ok(handle)).unwrap();
+                                            let handle = self.connect(&req.addr);
+                                            req.result_chan.send(handle).unwrap();
                                         }
                                         ControlSignal::BroadcastMessage(msg) => {
                                             // TODO: slab iteration is slow. use a hashset to keep

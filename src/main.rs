@@ -12,6 +12,7 @@ use prism::api::Server as ApiServer;
 use prism::network::server;
 use prism::network::worker;
 use prism::experiment::transaction_generator::TransactionGenerator;
+use prism::experiment::performance_counter::Counter as PerformanceCounter;
 use prism::miner;
 use prism::crypto::hash::{H256, Hashable};
 use std::net;
@@ -20,6 +21,8 @@ use std::sync::Arc;
 use std::sync::mpsc;
 use std::io::{self, Write};
 use std::convert::TryInto;
+use std::thread;
+use std::time;
 
 fn main() {
     // parse command line arguments
@@ -64,6 +67,10 @@ fn main() {
     // init logger
     let verbosity = matches.occurrences_of("verbose") as usize;
     stderrlog::new().verbosity(verbosity).init().unwrap();
+
+    // init performance counter
+    let perf_counter = PerformanceCounter::new();
+    let perf_counter = Arc::new(perf_counter);  // TODO: check whether we need this
 
     // init mempool
     let mempool = MemoryPool::new();
@@ -113,25 +120,6 @@ fn main() {
         }
     }
 
-    // fund the given addresses
-    if let Some(fund_addrs) = matches.values_of("init_fund_addr") {
-        let mut addrs = vec![];
-        for addr in fund_addrs {
-            let decoded = match base64::decode(&addr.trim()) {
-                Ok(d) => d,
-                Err(e) => {
-                    error!("Error decoding address {}: {}", &addr.trim(), e);
-                    process::exit(1);
-                }
-            };
-            let addr_bytes: [u8; 32] = (&decoded[0..32]).try_into().unwrap();
-            let hash: H256 = addr_bytes.into();
-            addrs.push(hash);
-        }
-        info!("Funding {} addresses with initial coins", addrs.len());
-        prism::experiment::ico(&addrs, &utxodb, &wallet);
-    }
-
     // parse p2p server address
     let p2p_addr = matches.value_of("peer_addr").unwrap().parse::<net::SocketAddr>().unwrap_or_else(|e| {
             error!("Error parsing P2P server address: {}", e);
@@ -153,40 +141,73 @@ fn main() {
     server_ctx.start().unwrap();
 
     // start the worker
-    let worker_ctx = worker::new(4, msg_rx, &blockchain, &blockdb, &utxodb, &wallet, &mempool, ctx_tx, &server);
+    let worker_ctx = worker::new(4, msg_rx, &blockchain, &blockdb, &utxodb, &wallet, &mempool, ctx_tx, &server, &perf_counter);
     worker_ctx.start();
 
     // start the miner
-    let (miner_ctx, miner) = miner::new(&mempool, &blockchain, &utxodb, &wallet, &blockdb, ctx_rx, &server);
+    let (miner_ctx, miner) = miner::new(&mempool, &blockchain, &utxodb, &wallet, &blockdb, ctx_rx, &server, &perf_counter);
     miner_ctx.start();
 
     // connect to known peers
     if let Some(known_peers) = matches.values_of("known_peer") {
-        for peer in known_peers {
-            let addr = match peer.parse::<net::SocketAddr>() {
-                Ok(x) => x,
-                Err(e) => {
-                    error!("Error parsing peer address {}: {}", &peer, e);
-                    continue;
+        let known_peers: Vec<String> = known_peers.map(|x| x.to_owned()).collect();
+        let server = server.clone();
+        thread::spawn(move || {
+            for peer in known_peers {
+                loop {
+                    let addr = match peer.parse::<net::SocketAddr>() {
+                        Ok(x) => x,
+                        Err(e) => {
+                            error!("Error parsing peer address {}: {}", &peer, e);
+                            break;
+                        }
+                    };
+                    match server.connect(addr) {
+                        Ok(_) => {
+                            info!("Connected to outgoing peer {}", &addr);
+                            break;
+                        }
+                        Err(e) => {
+                            error!("Error connecting to peer {}: {}", addr, e);
+                            thread::sleep(time::Duration::from_millis(800));
+                            continue;
+                        }
+                    }
                 }
-            };
-            match server.connect(addr) {
-                Ok(_) => info!("Connected to outgoing peer {}", &addr),
-                Err(e) => error!("Error connecting to peer {}: {}", addr, e),
             }
-        }
+        });
     }
 
+    // fund the given addresses
+    if let Some(fund_addrs) = matches.values_of("init_fund_addr") {
+        let mut addrs = vec![];
+        for addr in fund_addrs {
+            let decoded = match base64::decode(&addr.trim()) {
+                Ok(d) => d,
+                Err(e) => {
+                    error!("Error decoding address {}: {}", &addr.trim(), e);
+                    process::exit(1);
+                }
+            };
+            let addr_bytes: [u8; 32] = (&decoded[0..32]).try_into().unwrap();
+            let hash: H256 = addr_bytes.into();
+            addrs.push(hash);
+        }
+        info!("Funding {} addresses with initial coins", addrs.len());
+        prism::experiment::ico(&addrs, &utxodb, &wallet).unwrap();
+    }
+
+    // create wallet key pair if there is none
     if wallet.addresses().unwrap().len() == 0 {
         wallet.generate_keypair().unwrap();
     }
 
     // start the transaction generator
-    let (txgen_ctx, txgen_control_chan) = TransactionGenerator::new(&wallet, &server, &mempool);
+    let (txgen_ctx, txgen_control_chan) = TransactionGenerator::new(&wallet, &server, &mempool, &perf_counter);
     txgen_ctx.start();
 
     // start the API server
-    ApiServer::start(api_addr, &wallet, &server, &mempool, txgen_control_chan);
+    ApiServer::start(api_addr, &wallet, &server, &mempool, txgen_control_chan, &perf_counter);
 
     // start the miner into running mode
     // TODO: make it a separate API
