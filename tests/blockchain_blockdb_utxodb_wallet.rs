@@ -7,6 +7,7 @@ use prism::transaction::{Transaction, tests as tx_generator, CoinId, Input, Outp
 use prism::miner::memory_pool::MemoryPool;
 use prism::handler::new_validated_block;
 use prism::network::server;
+use prism::experiment::performance_counter::Counter as PerformanceCounter;
 use prism::config;
 use std::sync::{Mutex, mpsc};
 use std::net::{SocketAddr, IpAddr, Ipv4Addr};
@@ -26,6 +27,7 @@ fn integration() {
     wallet.generate_keypair().unwrap();
     let wallet_address = wallet.addresses().unwrap()[0];
     let mempool = Mutex::new(MemoryPool::new());
+    let perf_counter = PerformanceCounter::new();
 
     let (msg_tx, _msg_rx) = mpsc::channel();
     let (_ctx, server) = server::new(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 10999),msg_tx).expect("fail at creating server");
@@ -57,7 +59,7 @@ fn integration() {
     }
     macro_rules! handle_block {
         ( $block:expr ) => {{
-            new_validated_block(&$block, &mempool, &blockdb, &blockchain, &server, &utxodb, &wallet);
+            new_validated_block(&$block, &mempool, &blockdb, &blockchain, &server, &utxodb, &wallet, &perf_counter);
         }};
     }
     macro_rules! unwrap_transaction {
