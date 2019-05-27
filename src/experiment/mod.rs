@@ -2,7 +2,6 @@ pub mod transaction_generator;
 pub mod performance_counter;
 
 use crate::utxodb::UtxoDatabase;
-use std::sync::Arc;
 use crate::transaction::{CoinId, Input, Output, Transaction};
 use crate::wallet::Wallet;
 use crate::crypto::hash::H256;
@@ -11,8 +10,8 @@ use crate::crypto::hash::H256;
 /// Gives 100 coins of 100 worth to every given address.
 pub fn ico(
     recipients: &[H256], // addresses of all the ico recipients
-    utxodb: &Arc<UtxoDatabase>,
-    wallet: &Arc<Wallet>,
+    utxodb: &UtxoDatabase,
+    wallet: &Wallet,
 ) -> Result<(), rocksdb::Error> {
     let funding = Transaction {
         input: vec![],

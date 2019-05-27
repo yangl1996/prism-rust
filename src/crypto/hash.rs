@@ -108,7 +108,7 @@ impl PartialOrd for H256 {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-utilities"))]
 pub mod tests {
     use super::Hashable;
     use super::H256;

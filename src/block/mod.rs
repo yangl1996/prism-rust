@@ -107,3 +107,44 @@ impl PayloadSize for Content {
         }
     }
 }
+
+#[cfg(any(test, feature = "test-utilities"))]
+pub mod tests {
+
+    use super::*;
+    use crate::config;
+    use rand::Rng;
+    use crate::transaction::Transaction;
+
+    macro_rules! random_nonce {
+        () => {{
+            let mut rng = rand::thread_rng();
+            let random_u32: u32 = rng.gen();
+            random_u32
+        }};
+    }
+
+    pub fn proposer_block(parent: H256, timestamp: u64, proposer_refs: Vec<H256>, transaction_refs: Vec<H256>) -> Block {
+        Block::new(parent, timestamp, random_nonce!(), [0u8;32].into(), vec![],
+        Content::Proposer(proposer::Content {
+            transaction_refs,
+            proposer_refs,
+        }), [0u8;32], *config::DEFAULT_DIFFICULTY)
+    }
+
+    pub fn voter_block(parent: H256, timestamp: u64, chain_number: u16, voter_parent: H256, votes: Vec<H256>) -> Block {
+        Block::new(parent, timestamp, random_nonce!(), [0u8;32].into(), vec![],
+        Content::Voter(voter::Content {
+            chain_number,
+            voter_parent,
+            votes,
+        }), [0u8;32], *config::DEFAULT_DIFFICULTY)
+    }
+
+    pub fn transaction_block(parent: H256, timestamp: u64, transactions: Vec<Transaction>) -> Block {
+        Block::new(parent, timestamp, random_nonce!(), [0u8;32].into(), vec![],
+        Content::Transaction(transaction::Content {
+            transactions,
+        }), [0u8;32], *config::DEFAULT_DIFFICULTY)
+    }
+}

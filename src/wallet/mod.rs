@@ -116,10 +116,6 @@ impl Wallet {
     pub fn apply_diff(&self, add: &[Input], remove: &[Input]) -> Result<()> {
         let mut batch = rocksdb::WriteBatch::default();
         let cf = self.db.cf_handle(COIN_CF).unwrap();
-        for coin in remove {
-            let key = serialize(&coin.coin).unwrap();
-            batch.delete_cf(cf, &key)?;
-        }
         for coin in add {
             // TODO: it's so funny that we have to do this for every added coin
             if self.contains_keypair(&coin.owner)? {
@@ -131,6 +127,10 @@ impl Wallet {
                 let val = serialize(&output).unwrap();
                 batch.put_cf(cf, &key, &val)?;
             }
+        }
+        for coin in remove {
+            let key = serialize(&coin.coin).unwrap();
+            batch.delete_cf(cf, &key)?;
         }
         self.db.write(batch)?;
         Ok(())

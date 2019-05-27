@@ -97,7 +97,7 @@ pub struct Authorization {
     pub signature: Signature,
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-utilities"))]
 pub mod tests {
     use super::*;
     use crate::crypto::hash::tests::generate_random_hash;
@@ -115,7 +115,7 @@ pub mod tests {
         let mut rng = rand::thread_rng();
         Input {
             coin: generate_random_coinid(),
-            value: rng.next_u64(),
+            value: rng.gen_range(1,100),
             owner: generate_random_hash(),
         }
     }
@@ -123,7 +123,7 @@ pub mod tests {
     pub fn generate_random_output() -> Output {
         let mut rng = rand::thread_rng();
         Output {
-            value: rng.next_u64(),
+            value: rng.gen_range(1,100),
             recipient: generate_random_hash(),
         }
     }
