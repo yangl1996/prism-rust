@@ -7,6 +7,7 @@ use std::thread;
 use tiny_http::Header;
 use tiny_http::Response;
 use tiny_http::Server as HTTPServer;
+use url::Url;
 
 pub struct Server {
     blockchain: Arc<BlockChain>,
@@ -49,6 +50,19 @@ macro_rules! serve_dynamic_file {
     }};
 }
 
+macro_rules! respond_result {
+    ( $req:expr, $success:expr, $message:expr ) => {{
+        let content_type = "Content-Type: application/json".parse::<Header>().unwrap();
+        let payload = ApiResponse {
+            success: $success,
+            message: $message.to_string(),
+        };
+        let resp = Response::from_string(serde_json::to_string_pretty(&payload).unwrap())
+            .with_header(content_type);
+        $req.respond(resp).unwrap();
+    }};
+}
+
 impl Server {
     pub fn start(
         addr: std::net::SocketAddr,
@@ -69,10 +83,33 @@ impl Server {
                 let blockdb = Arc::clone(&server.blockdb);
                 let utxodb = Arc::clone(&server.utxodb);
                 thread::spawn(move || {
-                    let split_url: Vec<&str> = req.url().trim_start_matches("/").split("/").collect();
-                    let limit: u64 = split_url.get(1).map_or(100,|&s|s.parse().unwrap_or(100));
-                    match split_url[0] {
-                        "blockchain.json" => serve_dynamic_file!(
+                    // a valid url requires a base
+                    let base_url = Url::parse(&format!("http://{}/", &addr)).unwrap();
+                    let url = match base_url.join(req.url()) {
+                        Ok(u) => u,
+                        Err(e) => {
+                            let content_type = "Content-Type: text/html".parse::<Header>().unwrap();
+                            let resp = Response::from_string(include_str!("404.html"))
+                                .with_header(content_type)
+                                .with_status_code(404);
+                            match req.respond(resp) {
+                                Ok(_) => {}
+                                Err(_) => {}
+                            };
+                            return;
+                        }
+                    };
+                    let limit: u64 = {
+                        const DEFAULT: u64 = 100;
+                        match url.query() {
+                            Some(s) => {
+                                s.trim_start_matches("limit=").parse().unwrap_or(DEFAULT)
+                            },
+                            None => DEFAULT,
+                        }
+                    };
+                    match url.path() {
+                        "/blockchain.json" => serve_dynamic_file!(
                         req,
                         match blockchain.dump(limit) {
                             Ok(dump) => dump,
@@ -81,44 +118,44 @@ impl Server {
                         "application/json",
                         addr
                     ),
-                        "ledger.json" => serve_dynamic_file!(
+                        "/ledger.json" => serve_dynamic_file!(
                         req,
                         dump_ledger(&blockchain, &blockdb, &utxodb, limit),
                         "application/json",
                         addr
                     ),
-                        "cytoscape.min.js" => {
+                        "/cytoscape.min.js" => {
                             serve_static_file!(req, "cytoscape.js", "application/javascript")
                         }
-                        "dagre.min.js" => {
+                        "/dagre.min.js" => {
                             serve_static_file!(req, "dagre.min.js", "application/javascript")
                         }
-                        "cytoscape-dagre.js" => {
+                        "/cytoscape-dagre.js" => {
                             serve_static_file!(req, "cytoscape-dagre.js", "application/javascript")
                         }
-                        "bootstrap.min.css" => serve_static_file!(req, "bootstrap.min.css", "text/css"),
-                        "blockchain_vis.js" => serve_dynamic_file!(
+                        "/bootstrap.min.css" => serve_static_file!(req, "bootstrap.min.css", "text/css"),
+                        "/blockchain_vis.js" => serve_dynamic_file!(
                         req,
                         include_str!("blockchain_vis.js"),
                         "application/javascript",
                         addr
                     ),
-                        "visualize-blockchain" => serve_dynamic_file!(
+                        "/visualize-blockchain" => serve_dynamic_file!(
                         req,
                         include_str!("blockchain_vis.html"),
                         "text/html",
                         addr
                     ),
-                        //                    "ledger_vis.js" => serve_dynamic_file!(
+                        //                    "/ledger_vis.js" => serve_dynamic_file!(
                         //                        req,
                         //                        include_str!("ledger_vis.js"),
                         //                        "application/javascript",
                         //                        addr
                         //                    ),
-                        //                    "visualize-ledger" => {
+                        //                    "/visualize-ledger" => {
                         //                        serve_dynamic_file!(req, include_str!("ledger_vis.html"), "text/html", addr)
                         //                    }
-                        "" => serve_dynamic_file!(req, include_str!("index.html"), "text/html", addr),
+                        "/" => serve_dynamic_file!(req, include_str!("index.html"), "text/html", addr),
                         _ => {
                             let content_type = "Content-Type: text/html".parse::<Header>().unwrap();
                             let resp = Response::from_string(include_str!("404.html"))
