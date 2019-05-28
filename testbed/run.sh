@@ -121,6 +121,11 @@ function prepare_payload
 	tput sgr0
 }
 
+function remove_payload_single
+{
+	ssh $1 -- 'rm -rf /home/ubuntu/payload'
+}
+
 function sync_payload_single
 {
 	rsync -r payload/$1/ $1:/home/ubuntu/payload
@@ -331,6 +336,7 @@ case "$1" in
 	build)
 		build_prism ;;
 	sync-payload)
+		execute_on_all remove_payload
 		execute_on_all sync_payload ;;
 	start-prism)
 		execute_on_all start_prism ;;
