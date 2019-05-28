@@ -5,6 +5,7 @@ use mio::{self, net};
 use mio_extras::channel;
 use std::sync::mpsc;
 use std::thread;
+use std::time;
 
 const MAX_INCOMING_CLIENT: usize = 256;
 const MAX_EVENT: usize = 1024;
@@ -14,15 +15,16 @@ pub fn new(
     msg_sink: mpsc::Sender<(message::Message, peer::Handle)>,
 ) -> std::io::Result<(Context, Handle)> {
     let (control_signal_sender, control_signal_receiver) = channel::channel();
+    let handle = Handle {
+        control_chan: control_signal_sender,
+    };
     let ctx = Context {
         peers: slab::Slab::new(),
         addr: addr,
         poll: mio::Poll::new()?,
         control_chan: control_signal_receiver,
         new_msg_chan: msg_sink,
-    };
-    let handle = Handle {
-        control_chan: control_signal_sender,
+        handle: handle.clone(),
     };
     return Ok((ctx, handle));
 }
@@ -33,6 +35,7 @@ pub struct Context {
     poll: mio::Poll,
     control_chan: channel::Receiver<ControlSignal>,
     new_msg_chan: mpsc::Sender<(message::Message, peer::Handle)>,
+    handle: Handle,
 }
 
 impl Context {
@@ -48,7 +51,7 @@ impl Context {
     }
 
     /// Register a TCP stream in the event loop, and initialize peer context.
-    fn register(&mut self, stream: net::TcpStream) -> std::io::Result<peer::Handle> {
+    fn register(&mut self, stream: net::TcpStream, direction: peer::Direction) -> std::io::Result<peer::Handle> {
         // get a new slot in the connection set
         let vacant = self.peers.vacant_entry();
         let key: usize = vacant.key();
@@ -71,7 +74,7 @@ impl Context {
             mio::Ready::readable(),
             mio::PollOpt::edge(),
         )?;
-        let (ctx, handle) = peer::new(stream)?;
+        let (ctx, handle) = peer::new(stream, direction)?;
 
         // register the writer queue
         self.poll.register(
@@ -91,7 +94,7 @@ impl Context {
         // we need to estabilsh a stdlib tcp stream, since we need it to block
         let stream = std::net::TcpStream::connect(addr)?;
         let mio_stream = net::TcpStream::from_stream(stream)?;
-        return self.register(mio_stream);
+        return self.register(mio_stream, peer::Direction::Outgoing);
     }
 
     /// The main event loop of the server.
@@ -168,7 +171,7 @@ impl Context {
                             match server.accept() {
                                 Ok((stream, client_addr)) => {
                                     debug!("New incoming connection from {}", client_addr);
-                                    match self.register(stream) {
+                                    match self.register(stream, peer::Direction::Incoming) {
                                         Ok(_) => {
                                             info!("New incoming peer {}", client_addr);
                                         }
@@ -206,7 +209,30 @@ impl Context {
                                             Ok(ReadResult::EOF) => {
                                                 // EOF, remove it from the connections set
                                                 info!("Peer {} dropped connection", peer.addr);
+                                                let peer_addr = peer.addr;
+                                                let peer_direction = peer.direction;
                                                 self.peers.remove(peer_id);
+                                                match peer_direction {
+                                                    peer::Direction::Outgoing => {
+                                                        let server = self.handle.clone();
+                                                        thread::spawn(move || {
+                                                            loop {
+                                                                thread::sleep(time::Duration::from_millis(1000));
+                                                                info!("trying to reconnect to peer {}", &peer_addr);
+                                                                match server.connect(peer_addr) {
+                                                                    Ok(_) => {
+                                                                        info!("reconnected to peer {}", &peer_addr);
+                                                                        break;
+                                                                    }
+                                                                    Err(e) => {
+                                                                        warn!("error connecting to peer {}, retrying in one second: {}", &peer_addr, e);
+                                                                    }
+                                                                }
+                                                            }
+                                                        });
+                                                    }
+                                                    _ => {}
+                                                }
                                                 break;
                                             }
                                             Ok(ReadResult::Continue) => {
@@ -228,7 +254,30 @@ impl Context {
                                                         peer.addr, e
                                                     );
                                                     // TODO: we did not shutdown the stream. Cool?
+                                                    let peer_addr = peer.addr;
+                                                    let peer_direction = peer.direction;
                                                     self.peers.remove(peer_id);
+                                                    match peer_direction {
+                                                        peer::Direction::Outgoing => {
+                                                            let server = self.handle.clone();
+                                                            thread::spawn(move || {
+                                                                loop {
+                                                                    thread::sleep(time::Duration::from_millis(1000));
+                                                                    info!("trying to reconnect to peer {}", &peer_addr);
+                                                                    match server.connect(peer_addr) {
+                                                                        Ok(_) => {
+                                                                            info!("reconnected to peer {}", &peer_addr);
+                                                                            break;
+                                                                        }
+                                                                        Err(e) => {
+                                                                            warn!("error connecting to peer {}, retrying in one second: {}", &peer_addr, e);
+                                                                        }
+                                                                    }
+                                                                }
+                                                            });
+                                                        }
+                                                        _ => {}
+                                                    }
                                                     break;
                                                 }
                                             }
@@ -261,7 +310,30 @@ impl Context {
                                         Ok(WriteResult::EOF) => {
                                             // EOF, remove it from the connections set
                                             info!("Peer {} dropped connection", peer.addr);
+                                            let peer_addr = peer.addr;
+                                            let peer_direction = peer.direction;
                                             self.peers.remove(peer_id);
+                                            match peer_direction {
+                                                peer::Direction::Outgoing => {
+                                                    let server = self.handle.clone();
+                                                    thread::spawn(move || {
+                                                        loop {
+                                                            thread::sleep(time::Duration::from_millis(1000));
+                                                            info!("trying to reconnect to peer {}", &peer_addr);
+                                                            match server.connect(peer_addr) {
+                                                                Ok(_) => {
+                                                                    info!("reconnected to peer {}", &peer_addr);
+                                                                    break;
+                                                                }
+                                                                Err(e) => {
+                                                                    warn!("error connecting to peer {}, retrying in one second: {}", &peer_addr, e);
+                                                                }
+                                                            }
+                                                        }
+                                                    });
+                                                }
+                                                _ => {}
+                                            }
                                             continue; // continue event loop
                                         }
                                         Ok(WriteResult::ChanClosed) => {
@@ -286,7 +358,30 @@ impl Context {
                                                     peer.addr, e
                                                 );
                                                 // TODO: we did not shutdown the stream. Cool?
+                                                let peer_addr = peer.addr;
+                                                let peer_direction = peer.direction;
                                                 self.peers.remove(peer_id);
+                                                match peer_direction {
+                                                    peer::Direction::Outgoing => {
+                                                        let server = self.handle.clone();
+                                                        thread::spawn(move || {
+                                                            loop {
+                                                                thread::sleep(time::Duration::from_millis(1000));
+                                                                info!("trying to reconnect to peer {}", &peer_addr);
+                                                                match server.connect(peer_addr) {
+                                                                    Ok(_) => {
+                                                                        info!("reconnected to peer {}", &peer_addr);
+                                                                        break;
+                                                                    }
+                                                                    Err(e) => {
+                                                                        warn!("error connecting to peer {}, retrying in one second: {}", &peer_addr, e);
+                                                                    }
+                                                                }
+                                                            }
+                                                        });
+                                                    }
+                                                    _ => {}
+                                                }
                                                 continue; // continue event loop
                                             }
                                         }
