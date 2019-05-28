@@ -61,11 +61,12 @@ impl UtxoDatabase {
                     hash: transaction_hash,
                     index: idx as u32,
                 };
-                if self.db.get(serialize(&id).unwrap())?.is_none() {
+                let id_ser = serialize(&id).unwrap();
+                if self.db.get(&id_ser)?.is_none() {
                     valid = false;
                     break;
                 }
-                batch.delete(serialize(&id).unwrap())?;
+                batch.delete(&id_ser)?;
                 let coin = Input {
                     coin: id,
                     value: out.value,
@@ -99,11 +100,12 @@ impl UtxoDatabase {
             // use batch for the transaction
             let mut batch = rocksdb::WriteBatch::default();
             for input in &t.input {
-                if self.db.get(serialize(&input.coin).unwrap())?.is_none() {
+                let id_ser = serialize(&input.coin).unwrap();
+                if self.db.get(&id_ser)?.is_none() {
                     valid = false;
                     break;
                 }
-                batch.delete(serialize(&input.coin).unwrap())?;
+                batch.delete(&id_ser)?;
             }
 
             if valid {
