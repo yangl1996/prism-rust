@@ -271,6 +271,23 @@ function run_experiment
 	echo "Stopping all nodes"
 	execute_on_all stop_prism
 	python3 scripts/process_results.py nodes.txt $1
+	tput bel
+}
+
+function read_log
+{
+	local nodes=`cat nodes.txt`
+	local pids=''
+	for node in $nodes; do
+		local name
+		local host
+		local pubip
+		local apiport
+		IFS=',' read -r name host pubip _ _ apiport _ <<< "$node"
+		if [ $name == $1 ]; then
+			ssh $host -- cat "/home/ubuntu/log/$name.log" | less
+		fi
+	done
 }
 
 mkdir -p log
@@ -302,6 +319,7 @@ case "$1" in
 		  run-all cmd           Run command on all instances
 		  ssh i                 SSH to the i-th server (1-based index)
 		  scp i src dst         Copy file from remote
+		  read-log node         Read the log of the given node
 		EOF
 		;;
 	start-instances)
@@ -328,6 +346,8 @@ case "$1" in
 		ssh_to_server $2 ;;
 	scp)
 		scp_from_server $2 $3 $4 ;;
+	read-log)
+		read_log $2 ;;
 	*)
 		tput setaf 1
 		echo "Unrecognized subcommand '$1'"
