@@ -4,6 +4,8 @@ use crate::transaction::{Address, Authorization, CoinId, Input, Output, Transact
 use bincode::{deserialize, serialize};
 use std::{error, fmt};
 use std::convert::TryInto;
+use std::sync::Mutex;
+use std::collections::HashMap;
 
 pub const COIN_CF: &str = "COIN";
 pub const KEYPAIR_CF: &str = "KEYPAIR";     // &Address to &KeyPairPKCS8
@@ -14,6 +16,8 @@ pub type Result<T> = std::result::Result<T, WalletError>;
 pub struct Wallet {
     /// The underlying RocksDB handle.
     db: rocksdb::DB,
+    /// Keep key pair (in pkcs8 bytes) in memory for performance, it's duplicated in database as well.
+    key_pair: Mutex<HashMap<Address, Vec<u8>>>,
 }
 
 #[derive(Debug)]
@@ -58,7 +62,7 @@ impl Wallet {
         db_opts.create_missing_column_families(true);
         db_opts.create_if_missing(true);
         let handle = rocksdb::DB::open_cf_descriptors(&db_opts, path, vec![coin_cf, keypair_cf])?;
-        return Ok(Self { db: handle });
+        return Ok(Self { db: handle, key_pair: Mutex::new(HashMap::new()) });
     }
 
     pub fn new<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
@@ -73,6 +77,8 @@ impl Wallet {
         let k: Address = keypair.public_key().hash();
         let v = keypair.pkcs8_bytes;
         self.db.put_cf(cf, &k, &v)?;
+        let mut key_pair = self.key_pair.lock().unwrap();
+        key_pair.insert(k,v);
         Ok(k)
     }
 
@@ -80,45 +86,41 @@ impl Wallet {
         let cf = self.db.cf_handle(KEYPAIR_CF).unwrap();
         let addr: Address = keypair.public_key().hash();
         self.db.put_cf(cf, &addr, &keypair.pkcs8_bytes)?;
+        let mut key_pair = self.key_pair.lock().unwrap();
+        key_pair.insert(addr,keypair.pkcs8_bytes);
         Ok(addr)
     }
 
     /// Get the list of addresses for which we have a key pair
     pub fn addresses(&self) -> Result<Vec<Address>> {
-        let cf = self.db.cf_handle(KEYPAIR_CF).unwrap();
-        let mut iter = self.db.iterator_cf(cf, rocksdb::IteratorMode::Start)?;
-        let mut addrs = vec![];
-        if let Some((k, _)) = iter.next() {
-            let addr_bytes: [u8; 32] = (&k[0..32]).try_into().unwrap();
-            let addr: Address = addr_bytes.into();
-            addrs.push(addr);
-        }
+        let key_pair = self.key_pair.lock().unwrap();
+        let addrs = key_pair.keys().cloned().collect();
         Ok(addrs)
     }
 
     fn keypair(&self, addr: &Address) -> Result<KeyPair> {
-        let cf = self.db.cf_handle(KEYPAIR_CF).unwrap();
-        if let Some(v) = self.db.get_cf(cf, &addr)? {
-            let keypair = KeyPair::from_pkcs8(v.to_vec());
-            return Ok(keypair);
+        let key_pair = self.key_pair.lock().unwrap();
+        if let Some(v) = key_pair.get(addr) {
+            return Ok(KeyPair::from_pkcs8(v.clone()));
         }
         Err(WalletError::MissingKeyPair)
     }
 
-    fn contains_keypair(&self, addr: &Address) -> Result<bool> {
-        let cf = self.db.cf_handle(KEYPAIR_CF).unwrap();
-        if let Some(_) = self.db.get_cf(cf, &addr)? {
-            return Ok(true);
+    fn contains_keypair(&self, addr: &Address) -> bool {
+        let key_pair = self.key_pair.lock().unwrap();
+        if key_pair.contains_key(addr) {
+            return true;
         }
-        Ok(false)
+        false
     }
+
 
     pub fn apply_diff(&self, add: &[Input], remove: &[Input]) -> Result<()> {
         let mut batch = rocksdb::WriteBatch::default();
         let cf = self.db.cf_handle(COIN_CF).unwrap();
         for coin in add {
             // TODO: it's so funny that we have to do this for every added coin
-            if self.contains_keypair(&coin.owner)? {
+            if self.contains_keypair(&coin.owner) {
                 let output = Output {
                     value: coin.value,
                     recipient: coin.owner,

@@ -48,46 +48,47 @@ impl UtxoDatabase {
         for t in removed.iter().rev() {
             // remove the output
             let transaction_hash = t.hash();
-            let num_outputs = t.output.len();
 
             // NOTE: we only undo the transaction if the outputs are there (it means that the
             // transaction was valid when we added it)
             let mut valid = true;
-            for idx in 0..num_outputs {
+            let mut removed_coins_t: Vec<Input> = vec![];
+            // use batch for the transaction
+            let mut batch = rocksdb::WriteBatch::default();
+
+            for (idx, out) in t.output.iter().enumerate() {
                 let id = CoinId {
                     hash: transaction_hash,
                     index: idx as u32,
                 };
                 if self.db.get(serialize(&id).unwrap())?.is_none() {
                     valid = false;
+                    break;
                 }
+                batch.delete(serialize(&id).unwrap())?;
+                let coin = Input {
+                    coin: id,
+                    value: out.value,
+                    owner: out.recipient,
+                };
+                removed_coins_t.push(coin);
             }
 
             if valid {
                 // remove the outputs
-                for idx in 0..num_outputs {
-                    let id = CoinId {
-                        hash: transaction_hash,
-                        index: idx as u32,
-                    };
-                    self.db.delete(serialize(&id).unwrap())?;
-                    let coin = Input {
-                        coin: id,
-                        value: t.output[idx].value,
-                        owner: t.output[idx].recipient,
-                    };
-                    removed_coins.push(coin);
-                }
+                removed_coins.append(&mut removed_coins_t);
                 // add back the input
                 for input in &t.input {
                     let out = Output {
                         value: input.value,
                         recipient: input.owner,
                     };
-                    self.db
+                    batch
                         .put(serialize(&input.coin).unwrap(), serialize(&out).unwrap())?;
                     added_coins.push(input.clone());
                 }
+                //write the transaction as a batch
+                self.db.write(batch)?;
             }
         }
 
@@ -95,19 +96,18 @@ impl UtxoDatabase {
         for t in added.iter() {
             // NOTE: we only add the transaction if the inputs are valid and are unspent
             let mut valid = true;
+            // use batch for the transaction
+            let mut batch = rocksdb::WriteBatch::default();
             for input in &t.input {
                 if self.db.get(serialize(&input.coin).unwrap())?.is_none() {
                     valid = false;
+                    break;
                 }
+                batch.delete(serialize(&input.coin).unwrap())?;
             }
-            
-            if valid {
-                // remove the input
-                for input in &t.input {
-                    self.db.delete(serialize(&input.coin).unwrap())?;
-                    removed_coins.push(input.clone());
-                }
 
+            if valid {
+                removed_coins.extend(&t.input);
                 // add the output
                 let transaction_hash = t.hash();
                 for (idx, output) in t.output.iter().enumerate() {
@@ -115,7 +115,7 @@ impl UtxoDatabase {
                         hash: transaction_hash,
                         index: idx as u32,
                     };
-                    self.db
+                    batch
                         .put(serialize(&id).unwrap(), serialize(&output).unwrap())?;
                     let coin = Input {
                         coin: id,
@@ -124,6 +124,8 @@ impl UtxoDatabase {
                     };
                     added_coins.push(coin);
                 }
+                //write the transaction as a batch
+                self.db.write(batch)?;
             }
         }
         return Ok((added_coins, removed_coins));
