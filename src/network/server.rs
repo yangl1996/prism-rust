@@ -203,6 +203,9 @@ impl Context {
                                 let readiness = event.readiness();
                                 if readiness.is_readable() {
                                     // we are using edge-triggered events, loop until block
+                                    if !self.peers.contains(peer_id) {
+                                        continue;
+                                    }
                                     let peer = &mut self.peers[peer_id];
                                     loop {
                                         match peer.reader.read() {
@@ -285,6 +288,9 @@ impl Context {
                                     }
                                 }
                                 if readiness.is_writable() {
+                                    if !self.peers.contains(peer_id) {
+                                        continue;
+                                    }
                                     let peer = &mut self.peers[peer_id];
                                     match peer.writer.write() {
                                         Ok(WriteResult::Complete) => {
