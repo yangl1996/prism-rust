@@ -168,8 +168,8 @@ fn main() {
                             break;
                         }
                         Err(e) => {
-                            error!("Error connecting to peer {}: {}", addr, e);
-                            thread::sleep(time::Duration::from_millis(800));
+                            error!("Error connecting to peer {}, retrying in one second: {}", addr, e);
+                            thread::sleep(time::Duration::from_millis(1000));
                             continue;
                         }
                     }
