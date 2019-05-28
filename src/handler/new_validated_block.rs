@@ -21,6 +21,7 @@ pub fn new_validated_block(
     wallet: &Wallet,
     perf_counter: &PerformanceCounter,
 ) {
+    perf_counter.record_process_block(&block);
     // TODO: here mempool acts as a global lock. This is a dirty fix for data race in utxodb.
     let mut mempool = mempool.lock().unwrap();
     // insert the new block into the blockdb

@@ -1,5 +1,7 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 use crate::transaction::Transaction;
+use crate::block::Block;
+use crate::block::Content as BlockContent;
 use crate::wallet::WalletError;
 
 pub trait PayloadSize {
@@ -55,6 +57,23 @@ impl Counter {
             processed_voter_block_bytes: AtomicUsize::new(0),
             processed_transaction_blocks: AtomicUsize::new(0),
             processed_transaction_block_bytes: AtomicUsize::new(0),
+        }
+    }
+
+    pub fn record_process_block(&self, b: &Block) {
+        match b.content {
+            BlockContent::Transaction(_) => {
+                self.processed_transaction_blocks.fetch_add(1, Ordering::Relaxed);
+                self.processed_transaction_block_bytes.fetch_add(b.size(), Ordering::Relaxed);
+            }
+            BlockContent::Voter(_) => {
+                self.processed_voter_blocks.fetch_add(1, Ordering::Relaxed);
+                self.processed_voter_block_bytes.fetch_add(b.size(), Ordering::Relaxed);
+            }
+            BlockContent::Proposer(_) => {
+                self.processed_proposer_blocks.fetch_add(1, Ordering::Relaxed);
+                self.processed_proposer_block_bytes.fetch_add(b.size(), Ordering::Relaxed);
+            }
         }
     }
 

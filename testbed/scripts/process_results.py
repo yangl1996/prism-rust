@@ -11,32 +11,57 @@ with open(nodes_file) as f:
         i = line.rstrip().split(",")
         nodes.append(i)
 
-tx_gen = {};
-tx_gen_bytes = {};
 tx_gen_fails = 0;
-tx_confirmed = {};
-tx_confirmed_bytes = {};
+data = {}
 
 for node in nodes:
     name = node[0]
     with open("data/{}_get_performance.txt".format(name)) as f:
         perf = json.load(f)
-        tx_gen[name] = perf['generated_transactions']
-        tx_gen_bytes[name] = perf['generated_transaction_bytes']
+        data[name] = perf
         tx_gen_fails += perf['generate_transaction_failures']
-        tx_confirmed[name] = perf['confirmed_transactions']
-        tx_confirmed_bytes[name] = perf['confirmed_transaction_bytes']
 
-print("Transaction generation")
-for node in nodes:
-    name = node[0]
-    print("{:.2f} Tx/s\t({:.2f} B/s) at {}".format(tx_gen[name] / duration, tx_gen_bytes[name]/duration, name))
-print("{:.2f} Tx/s\t({:.2f} B/s) total".format(reduce((lambda x, y: x + y), tx_gen.values()) / duration, reduce((lambda x, y: x + y), tx_gen_bytes.values()) / duration))
+def print_node_results(display_name, metrics, reduction):
+    print(display_name)
+    for node in nodes:
+        name = node[0]
+        result_string = '{}: '.format(name)
+        results = []
+        for m in metrics:
+            field = m[0]
+            unit = m[1]
+            result = "{:.2f} {}/s".format(data[name][field] / duration, unit)
+            results.append(result)
+        result_string += '\t'.join(results)
+        print(result_string)
 
-print("Transaction confirmation")
-for node in nodes:
-    name = node[0]
-    print("{:.2f} Tx/s\t({:.2f} B/s) at {}".format(tx_confirmed[name] / duration, tx_confirmed_bytes[name] / duration, name))
-print("{:.2f} Tx/s\t({:.2f} B/s) average".format(reduce((lambda x, y: x + y), tx_confirmed.values()) / duration / len(nodes), reduce((lambda x, y: x+ y), tx_confirmed_bytes.values()) / duration / len(nodes), name))
+    results = []
+    for m in metrics:
+        field = m[0]
+        unit = m[1]
+        if reduction=='sum':
+            reduced = 0
+            for node in nodes:
+                name = node[0]
+                reduced += data[name][field]
+            result = "{:.2f} {}/s".format(reduced / duration, unit)
+            results.append(result)
+            result_string = "Total: "
+        elif reduction=='average':
+            reduced = 0
+            for node in nodes:
+                name = node[0]
+                reduced += data[name][field]
+            result = "{:.2f} {}/s".format(reduced / duration / len(nodes), unit)
+            results.append(result)
+            result_string = "Average: "
+    result_string += '\t'.join(results)
+    print(result_string)
+
+print_node_results("Transaction generation", [('generated_transactions', 'Txs'), ('generated_transaction_bytes', 'B')], 'sum')
+print_node_results("Transaction confirmation", [('confirmed_transactions', 'Txs'), ('confirmed_transaction_bytes', 'B')], 'average')
+print_node_results("Block processed (proposer, voter, transaction)", [('processed_proposer_blocks', 'Blks'), ('processed_voter_blocks', 'Blks'), ('processed_transaction_blocks', 'Blks')], 'average')
 
 print("Transaction generation failures: {:.2f} Txs".format(tx_gen_fails))
+
+
