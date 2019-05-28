@@ -22,6 +22,12 @@ pub struct Counter {
     processed_voter_block_bytes: AtomicUsize,
     processed_transaction_blocks: AtomicUsize,
     processed_transaction_block_bytes: AtomicUsize,
+    mined_proposer_blocks: AtomicUsize,
+    mined_proposer_block_bytes: AtomicUsize,
+    mined_voter_blocks: AtomicUsize,
+    mined_voter_block_bytes: AtomicUsize,
+    mined_transaction_blocks: AtomicUsize,
+    mined_transaction_block_bytes: AtomicUsize,
 }
 
 #[derive(Serialize)]
@@ -39,6 +45,12 @@ pub struct Snapshot {
     pub processed_voter_block_bytes: usize,
     pub processed_transaction_blocks: usize,
     pub processed_transaction_block_bytes: usize,
+    pub mined_proposer_blocks: usize,
+    pub mined_proposer_block_bytes: usize,
+    pub mined_voter_blocks: usize,
+    pub mined_voter_block_bytes: usize,
+    pub mined_transaction_blocks: usize,
+    pub mined_transaction_block_bytes: usize,
 }
 
 impl Counter {
@@ -57,6 +69,12 @@ impl Counter {
             processed_voter_block_bytes: AtomicUsize::new(0),
             processed_transaction_blocks: AtomicUsize::new(0),
             processed_transaction_block_bytes: AtomicUsize::new(0),
+            mined_proposer_blocks: AtomicUsize::new(0),
+            mined_proposer_block_bytes: AtomicUsize::new(0),
+            mined_voter_blocks: AtomicUsize::new(0),
+            mined_voter_block_bytes: AtomicUsize::new(0),
+            mined_transaction_blocks: AtomicUsize::new(0),
+            mined_transaction_block_bytes: AtomicUsize::new(0),
         }
     }
 
@@ -73,6 +91,23 @@ impl Counter {
             BlockContent::Proposer(_) => {
                 self.processed_proposer_blocks.fetch_add(1, Ordering::Relaxed);
                 self.processed_proposer_block_bytes.fetch_add(b.size(), Ordering::Relaxed);
+            }
+        }
+    }
+
+    pub fn record_mine_block(&self, b: &Block) {
+        match b.content {
+            BlockContent::Transaction(_) => {
+                self.mined_transaction_blocks.fetch_add(1, Ordering::Relaxed);
+                self.mined_transaction_block_bytes.fetch_add(b.size(), Ordering::Relaxed);
+            }
+            BlockContent::Voter(_) => {
+                self.mined_voter_blocks.fetch_add(1, Ordering::Relaxed);
+                self.mined_voter_block_bytes.fetch_add(b.size(), Ordering::Relaxed);
+            }
+            BlockContent::Proposer(_) => {
+                self.mined_proposer_blocks.fetch_add(1, Ordering::Relaxed);
+                self.mined_proposer_block_bytes.fetch_add(b.size(), Ordering::Relaxed);
             }
         }
     }
@@ -114,6 +149,12 @@ impl Counter {
             processed_voter_block_bytes: self.processed_voter_block_bytes.load(Ordering::Relaxed),
             processed_transaction_blocks: self.processed_transaction_blocks.load(Ordering::Relaxed),
             processed_transaction_block_bytes: self.processed_transaction_block_bytes.load(Ordering::Relaxed),
+            mined_proposer_blocks: self.mined_proposer_blocks.load(Ordering::Relaxed),
+            mined_proposer_block_bytes: self.mined_proposer_block_bytes.load(Ordering::Relaxed),
+            mined_voter_blocks: self.mined_voter_blocks.load(Ordering::Relaxed),
+            mined_voter_block_bytes: self.mined_voter_block_bytes.load(Ordering::Relaxed),
+            mined_transaction_blocks: self.mined_transaction_blocks.load(Ordering::Relaxed),
+            mined_transaction_block_bytes: self.mined_transaction_block_bytes.load(Ordering::Relaxed),
         };
     }
 }

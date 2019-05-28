@@ -216,6 +216,7 @@ impl Context {
                     }
                     _ => (),
                 }
+                self.perf_counter.record_mine_block(&mined_block);
                 // Release block to the network
                 new_validated_block(
                     &mined_block,
