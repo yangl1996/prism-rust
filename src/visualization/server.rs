@@ -50,19 +50,6 @@ macro_rules! serve_dynamic_file {
     }};
 }
 
-macro_rules! respond_result {
-    ( $req:expr, $success:expr, $message:expr ) => {{
-        let content_type = "Content-Type: application/json".parse::<Header>().unwrap();
-        let payload = ApiResponse {
-            success: $success,
-            message: $message.to_string(),
-        };
-        let resp = Response::from_string(serde_json::to_string_pretty(&payload).unwrap())
-            .with_header(content_type);
-        $req.respond(resp).unwrap();
-    }};
-}
-
 impl Server {
     pub fn start(
         addr: std::net::SocketAddr,
@@ -102,9 +89,7 @@ impl Server {
                     let limit: u64 = {
                         const DEFAULT: u64 = 100;
                         match url.query() {
-                            Some(s) => {
-                                s.trim_start_matches("limit=").parse().unwrap_or(DEFAULT)
-                            },
+                            Some(s) => s.trim_start_matches("limit=").parse().unwrap_or(DEFAULT),
                             None => DEFAULT,
                         }
                     };
