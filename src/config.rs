@@ -39,7 +39,7 @@ lazy_static! {
     pub static ref DEFAULT_DIFFICULTY: H256 = {
         let mut raw: [u8; 32] = [255; 32];
         raw[0] = 0;
-        raw[1] = 1;
+        raw[1] = 25;
         raw.into()
     };
 

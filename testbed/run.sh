@@ -181,6 +181,7 @@ function start_transactions_single
 {
 	curl -s "http://$3:$4/transaction-generator/set-arrival-distribution?interval=0&distribution=uniform"
 	curl -s "http://$3:$4/transaction-generator/start"
+	curl -s "http://$3:$4/miner/start"
 }
 
 function query_api 
