@@ -99,6 +99,29 @@ impl Server {
                                 Err(e) => respond_result!(req, false, format!("error sending control signal to transaction generator: {}", e)),
                             }
                         }
+                        "/transaction-generator/step" => {
+                            let params = url.query_pairs();
+                            let params: HashMap<_, _> = params.into_owned().collect();
+                            let step_count = match params.get("count") {
+                                Some(v) => v,
+                                None => {
+                                    respond_result!(req, false, "missing step count");
+                                    return;
+                                }
+                            };
+                            let step_count = match step_count.parse::<u64>() {
+                                Ok(v) => v,
+                                Err(e) => {
+                                    respond_result!(req, false, format!("error parsing step count: {}", e));
+                                    return;
+                                }
+                            };
+                            let control_signal = transaction_generator::ControlSignal::Step(step_count);
+                            match transaction_generator_handle.send(control_signal) {
+                                Ok(()) => respond_result!(req, true, "ok"),
+                                Err(e) => respond_result!(req, false, format!("error sending control signal to transaction generator: {}", e)),
+                            }
+                        }
                         "/transaction-generator/set-arrival-distribution" => {
                             let params = url.query_pairs();
                             let params: HashMap<_, _> = params.into_owned().collect();
