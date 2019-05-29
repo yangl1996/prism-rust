@@ -16,6 +16,8 @@ pub struct Counter {
     confirmed_transaction_bytes: AtomicUsize,
     deconfirmed_transactions: AtomicUsize,
     deconfirmed_transaction_bytes: AtomicUsize,
+    confirmed_transaction_blocks: AtomicUsize,
+    deconfirmed_transaction_blocks: AtomicUsize,
     processed_proposer_blocks: AtomicUsize,
     processed_proposer_block_bytes: AtomicUsize,
     processed_voter_blocks: AtomicUsize,
@@ -39,6 +41,8 @@ pub struct Snapshot {
     pub confirmed_transaction_bytes: usize,
     pub deconfirmed_transactions: usize,
     pub deconfirmed_transaction_bytes: usize,
+    pub confirmed_transaction_blocks: usize,
+    pub deconfirmed_transaction_blocks: usize,
     pub processed_proposer_blocks: usize,
     pub processed_proposer_block_bytes: usize,
     pub processed_voter_blocks: usize,
@@ -63,6 +67,8 @@ impl Counter {
             confirmed_transaction_bytes: AtomicUsize::new(0),
             deconfirmed_transactions: AtomicUsize::new(0),
             deconfirmed_transaction_bytes: AtomicUsize::new(0),
+            confirmed_transaction_blocks: AtomicUsize::new(0),
+            deconfirmed_transaction_blocks: AtomicUsize::new(0),
             processed_proposer_blocks: AtomicUsize::new(0),
             processed_proposer_block_bytes: AtomicUsize::new(0),
             processed_voter_blocks: AtomicUsize::new(0),
@@ -112,6 +118,14 @@ impl Counter {
         }
     }
 
+    pub fn record_confirm_transaction_blocks(&self, num_blocks: usize) {
+        self.confirmed_transaction_blocks.fetch_add(num_blocks, Ordering::Relaxed);
+    }
+
+    pub fn record_deconfirm_transaction_blocks(&self, num_blocks: usize) {
+        self.deconfirmed_transaction_blocks.fetch_add(num_blocks, Ordering::Relaxed);
+    }
+
     pub fn record_confirm_transaction(&self, t: &Transaction) {
         self.confirmed_transactions.fetch_add(1, Ordering::Relaxed);
         self.confirmed_transaction_bytes.fetch_add(t.size(), Ordering::Relaxed);
@@ -143,6 +157,8 @@ impl Counter {
             confirmed_transaction_bytes: self.confirmed_transaction_bytes.load(Ordering::Relaxed),
             deconfirmed_transactions: self.deconfirmed_transactions.load(Ordering::Relaxed),
             deconfirmed_transaction_bytes: self.deconfirmed_transaction_bytes.load(Ordering::Relaxed),
+            confirmed_transaction_blocks: self.confirmed_transaction_blocks.load(Ordering::Relaxed),
+            deconfirmed_transaction_blocks: self.deconfirmed_transaction_blocks.load(Ordering::Relaxed),
             processed_proposer_blocks: self.processed_proposer_blocks.load(Ordering::Relaxed),
             processed_proposer_block_bytes: self.processed_proposer_block_bytes.load(Ordering::Relaxed),
             processed_voter_blocks: self.processed_voter_blocks.load(Ordering::Relaxed),

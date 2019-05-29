@@ -121,6 +121,16 @@ function prepare_payload
 	tput sgr0
 }
 
+function remove_payload_single
+{
+	ssh $1 -- 'rm -rf /home/ubuntu/payload'
+}
+
+function install_perf_single
+{
+	ssh $1 -- 'sudo apt-get update -y && sudo apt-get install linux-tools-aws -y && sudo apt-get install linux-tools-4.15.0-1021-aws -y'
+}
+
 function sync_payload_single
 {
 	rsync -r payload/$1/ $1:/home/ubuntu/payload
@@ -300,6 +310,7 @@ case "$1" in
 
 		  start-instances n     Start n EC2 instances
 		  stop-instances        Terminate EC2 instances
+		  install-tools         Install tools
 
 		Run Experiment
 
@@ -326,11 +337,14 @@ case "$1" in
 		start_instances $2 ;;
 	stop-instances)
 		stop_instances ;;
+	install-tools)
+		execute_on_all install_perf ;;
 	gen-payload)
 		prepare_payload $2 ;;
 	build)
 		build_prism ;;
 	sync-payload)
+		execute_on_all remove_payload
 		execute_on_all sync_payload ;;
 	start-prism)
 		execute_on_all start_prism ;;

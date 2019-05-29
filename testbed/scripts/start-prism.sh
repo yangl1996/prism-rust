@@ -9,6 +9,7 @@ rm -rf /tmp/prism*
 
 echo "Launching Prism nodes"
 for script in /home/ubuntu/payload/prism-payload/*.sh; do
+	[ -f "$script" ] || continue
 	node_name=`basename $script .sh`
 	echo "Launching $node_name"
 	nohup bash $script &> /home/ubuntu/log/$node_name.log &
@@ -17,6 +18,7 @@ done
 
 echo "Waiting for API server to start"
 for script in /home/ubuntu/payload/prism-payload/*.sh; do
+	[ -f "$script" ] || continue
 	node_name=`basename $script .sh`
 	wait_for_line /home/ubuntu/log/$node_name.log 'API server listening'
 	echo "Node $node_name started"

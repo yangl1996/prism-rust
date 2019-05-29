@@ -152,7 +152,7 @@ impl WriteContext {
     }
 }
 
-pub fn new(stream: mio::net::TcpStream) -> std::io::Result<(Context, Handle)> {
+pub fn new(stream: mio::net::TcpStream, direction: Direction) -> std::io::Result<(Context, Handle)> {
     let reader_stream = stream.try_clone()?;
     let writer_stream = stream.try_clone()?;
     let addr = stream.peer_addr()?;
@@ -184,8 +184,15 @@ pub fn new(stream: mio::net::TcpStream) -> std::io::Result<(Context, Handle)> {
         reader: read_ctx,
         writer: write_ctx,
         handle: handle.clone(),
+        direction: direction
     };
     return Ok((ctx, handle));
+}
+
+#[derive(Copy, Clone)]
+pub enum Direction {
+    Incoming,
+    Outgoing,
 }
 
 pub struct Context {
@@ -194,6 +201,7 @@ pub struct Context {
     pub reader: ReadContext,
     pub writer: WriteContext,
     pub handle: Handle,
+    pub direction: Direction,
 }
 
 #[derive(Clone)]
