@@ -33,7 +33,6 @@ fn main() {
      (@arg peer_addr: --p2p [ADDR] default_value("127.0.0.1:6000") "Sets the IP address and the port of the P2P server")
      (@arg api_addr: --api [ADDR] default_value("127.0.0.1:7000") "Sets the IP address and the port of the API server")
      (@arg visualization: --visual [ADDR] "Enables the visualization server at the given address and port")
-     (@arg mine: -m --mine "Starts the CPU miner as the client starts")
      (@arg known_peer: -c --connect ... [PEER] "Sets the peers to connect to")
      (@arg block_db: --blockdb [PATH] default_value("/tmp/prism-blocks.rocksdb") "Sets the path of the block database")
      (@arg utxo_db: --utxodb [PATH] default_value("/tmp/prism-utxo.rocksdb") "Sets the path of the UTXO database")
@@ -207,13 +206,7 @@ fn main() {
     txgen_ctx.start();
 
     // start the API server
-    ApiServer::start(api_addr, &wallet, &server, &mempool, txgen_control_chan, &perf_counter);
-
-    // start the miner into running mode
-    // TODO: make it a separate API
-    if matches.is_present("mine") {
-        miner.start();
-    }
+    ApiServer::start(api_addr, &wallet, &server, &miner, &mempool, txgen_control_chan, &perf_counter);
 
     // start the visualization server
     match matches.value_of("visualization") {

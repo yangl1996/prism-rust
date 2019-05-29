@@ -72,7 +72,7 @@ for (( i = 0; i < $num_nodes; i++ )); do
 	p2p=`expr $p2p_port + $i`
 	api=`expr $api_port + $i`
 	vis=`expr $vis_port + $i`
-	command="$binary_path --p2p 127.0.0.1:${p2p} --api 127.0.0.1:${api} --visual 127.0.0.1:${vis} --blockdb /tmp/prism-${i}-blockdb.rocksdb --blockchaindb /tmp/prism-${i}-blockchaindb.rocksdb --utxodb /tmp/prism-${i}-utxodb.rocksdb --walletdb /tmp/prism-${i}-wallet.rocksdb --mine -vv --load-key ${i}.pkcs8"
+	command="$binary_path --p2p 127.0.0.1:${p2p} --api 127.0.0.1:${api} --visual 127.0.0.1:${vis} --blockdb /tmp/prism-${i}-blockdb.rocksdb --blockchaindb /tmp/prism-${i}-blockchaindb.rocksdb --utxodb /tmp/prism-${i}-utxodb.rocksdb --walletdb /tmp/prism-${i}-wallet.rocksdb -vv --load-key ${i}.pkcs8"
 
 	for (( j = 0; j < $i; j++ )); do
 		peer_port=`expr $p2p_port + $j`
@@ -93,7 +93,7 @@ for (( i = 0; i < $num_nodes; i++ )); do
 	echo "Node $i started"
 done
 
-echo "Starting transaction generation of each node"
+echo "Starting transaction generation and mining on each node"
 for (( i = 0; i < $num_nodes; i++ )); do
 	port=`expr $api_port + $i`
 	url="localhost:${port}/transaction-generator/set-arrival-distribution?interval=0&distribution=uniform"
@@ -106,6 +106,12 @@ for (( i = 0; i < $num_nodes; i++ )); do
 	curl "$url" &> /dev/null
 	if [ "$?" -ne 0 ]; then
 		echo "Failed to start transaction generation for node $i"
+		exit 1
+	fi
+	url="localhost:${port}/miner/start"
+	curl "$url" &> /dev/null
+	if [ "$?" -ne 0 ]; then
+		echo "Failed to start mining for node $i"
 		exit 1
 	fi
 done

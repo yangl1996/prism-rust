@@ -3,6 +3,7 @@ use crate::experiment::performance_counter::Counter as PerformanceCounter;
 use crate::wallet::Wallet;
 use crate::network::server::Handle as ServerHandle;
 use crate::miner::memory_pool::MemoryPool;
+use crate::miner::Handle as MinerHandle;
 use std::sync::{Arc, mpsc, Mutex};
 use std::thread;
 use tiny_http::Header;
@@ -16,6 +17,7 @@ pub struct Server {
     transaction_generator_handle: mpsc::Sender<transaction_generator::ControlSignal>,
     perf_counter: Arc<PerformanceCounter>,
     handle: HTTPServer,
+    miner: MinerHandle,
 }
 
 #[derive(Serialize)]
@@ -47,17 +49,19 @@ macro_rules! respond_json {
 }
 
 impl Server {
-    pub fn start(addr: std::net::SocketAddr, wallet: &Arc<Wallet>, server: &ServerHandle, mempool: &Arc<Mutex<MemoryPool>>, txgen_control_chan: mpsc::Sender<transaction_generator::ControlSignal>, perf_counter: &Arc<PerformanceCounter>) {
+    pub fn start(addr: std::net::SocketAddr, wallet: &Arc<Wallet>, server: &ServerHandle, miner: &MinerHandle, mempool: &Arc<Mutex<MemoryPool>>, txgen_control_chan: mpsc::Sender<transaction_generator::ControlSignal>, perf_counter: &Arc<PerformanceCounter>) {
         let handle = HTTPServer::http(&addr).unwrap();
         let server = Self {
             handle: handle,
             transaction_generator_handle: txgen_control_chan,
             perf_counter: Arc::clone(perf_counter),
+            miner: miner.clone(),
         };
         thread::spawn(move || {
             for req in server.handle.incoming_requests() {
                 let transaction_generator_handle = server.transaction_generator_handle.clone();
                 let perf_counter = Arc::clone(&server.perf_counter);
+                let miner = server.miner.clone();
                 thread::spawn(move || {
                     // a valid url requires a base
                     let base_url = Url::parse(&format!("http://{}/", &addr)).unwrap();
@@ -69,6 +73,14 @@ impl Server {
                         }
                     };
                     match url.path() {
+                        "/miner/start" => {
+                            miner.start();
+                            respond_result!(req, true, "ok");
+                        }
+                        "/miner/step" => {
+                            miner.step();
+                            respond_result!(req, true, "ok");
+                        }
                         "/telematics/snapshot" => {
                             respond_json!(req, perf_counter.snapshot());
                         }
@@ -82,6 +94,29 @@ impl Server {
                         }
                         "/transaction-generator/stop" => {
                             let control_signal = transaction_generator::ControlSignal::Stop;
+                            match transaction_generator_handle.send(control_signal) {
+                                Ok(()) => respond_result!(req, true, "ok"),
+                                Err(e) => respond_result!(req, false, format!("error sending control signal to transaction generator: {}", e)),
+                            }
+                        }
+                        "/transaction-generator/step" => {
+                            let params = url.query_pairs();
+                            let params: HashMap<_, _> = params.into_owned().collect();
+                            let step_count = match params.get("count") {
+                                Some(v) => v,
+                                None => {
+                                    respond_result!(req, false, "missing step count");
+                                    return;
+                                }
+                            };
+                            let step_count = match step_count.parse::<u64>() {
+                                Ok(v) => v,
+                                Err(e) => {
+                                    respond_result!(req, false, format!("error parsing step count: {}", e));
+                                    return;
+                                }
+                            };
+                            let control_signal = transaction_generator::ControlSignal::Step(step_count);
                             match transaction_generator_handle.send(control_signal) {
                                 Ok(()) => respond_result!(req, true, "ok"),
                                 Err(e) => respond_result!(req, false, format!("error sending control signal to transaction generator: {}", e)),

@@ -44,6 +44,8 @@ pub fn new_validated_block(
 
     // insert the new block into the blockchain
     let diff = chain.insert_block(&block).unwrap();
+    perf_counter.record_confirm_transaction_blocks(diff.0.len());
+    perf_counter.record_deconfirm_transaction_blocks(diff.1.len());
 
     // gather the transaction diff and apply on utxo database
     let mut add: Vec<Transaction> = vec![];

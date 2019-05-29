@@ -12,6 +12,7 @@ use log::{debug, error, info, trace};
 
 pub enum ControlSignal {
     Start,
+    Step(u64),
     Stop,
     SetArrivalDistribution(ArrivalDistribution),
     SetValueDistribution(ValueDistribution),
@@ -35,8 +36,9 @@ pub struct UniformValue {
 }
 
 enum State {
-    Run,
+    Continuous,
     Paused,
+    Step(u64),
 }
 
 pub struct TransactionGenerator {
@@ -78,12 +80,16 @@ impl TransactionGenerator {
     fn handle_control_signal(&mut self, signal: ControlSignal) {
         match signal {
             ControlSignal::Start => {
-                self.state = State::Run;
+                self.state = State::Continuous;
                 info!("Transaction generator started");
             }
             ControlSignal::Stop => {
                 self.state = State::Paused;
                 info!("Transaction generator paused");
+            }
+            ControlSignal::Step(num) => {
+                self.state = State::Step(num);
+                info!("Transaction generator started to generate {} transactions", num);
             }
             ControlSignal::SetArrivalDistribution(new) => {
                 self.arrival_distribution = new;
@@ -102,7 +108,7 @@ impl TransactionGenerator {
             loop {
                 // check the current state and try to receive control message
                 match self.state {
-                    State::Run => {
+                    State::Continuous | State::Step(_) => {
                         match self.control_chan.try_recv() {
                             Ok(signal) => {
                                 self.handle_control_signal(signal);
@@ -129,6 +135,14 @@ impl TransactionGenerator {
                 match transaction {
                     Ok(t) => {
                         new_transaction(t, &self.mempool, &self.server);
+                        // if we are in stepping mode, decrease the step count
+                        if let State::Step(step_count) = self.state {
+                            if step_count - 1 == 0 {
+                                self.state = State::Paused;
+                            } else {
+                                self.state = State::Step(step_count - 1);
+                            }
+                        }
                     }
                     Err(e) => {
                         trace!("Failed to generate transaction: {}", e);

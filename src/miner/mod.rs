@@ -74,6 +74,7 @@ pub struct Context {
     perf_counter: Arc<PerformanceCounter>
 }
 
+#[derive(Clone)]
 pub struct Handle {
     // Channel for sending signal to the miner thread
     control_chan: Sender<ControlSignal>,

@@ -59,9 +59,10 @@ def print_node_results(display_name, metrics, reduction):
     print(result_string)
 
 print_node_results("Transaction generation", [('generated_transactions', 'Txs'), ('generated_transaction_bytes', 'B')], 'sum')
+print_node_results("Transaction Block confirmation", [('confirmed_transaction_blocks', 'Blks')], 'average')
 print_node_results("Transaction confirmation", [('confirmed_transactions', 'Txs'), ('confirmed_transaction_bytes', 'B')], 'average')
 print_node_results("Block processed (proposer, voter, transaction)", [('processed_proposer_blocks', 'Blks'), ('processed_voter_blocks', 'Blks'), ('processed_transaction_blocks', 'Blks')], 'average')
-print_node_results("Block mined (proposer, voter, transaction)", [('mined_proposer_blocks', 'Blks'), ('mined_voter_blocks', 'Blks'), ('mined_transaction_blocks', 'Blks')], 'average')
+print_node_results("Block mined (proposer, voter, transaction)", [('mined_proposer_blocks', 'Blks'), ('mined_voter_blocks', 'Blks'), ('mined_transaction_blocks', 'Blks')], 'sum')
 
 print("Transaction generation failures: {:.2f} Txs".format(tx_gen_fails))
 
