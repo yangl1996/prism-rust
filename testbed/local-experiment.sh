@@ -93,7 +93,7 @@ for (( i = 0; i < $num_nodes; i++ )); do
 	echo "Node $i started"
 done
 
-echo "Starting transaction generation of each node"
+echo "Starting transaction generation and mining on each node"
 for (( i = 0; i < $num_nodes; i++ )); do
 	port=`expr $api_port + $i`
 	url="localhost:${port}/transaction-generator/set-arrival-distribution?interval=0&distribution=uniform"
@@ -106,6 +106,12 @@ for (( i = 0; i < $num_nodes; i++ )); do
 	curl "$url" &> /dev/null
 	if [ "$?" -ne 0 ]; then
 		echo "Failed to start transaction generation for node $i"
+		exit 1
+	fi
+	url="localhost:${port}/miner/start"
+	curl "$url" &> /dev/null
+	if [ "$?" -ne 0 ]; then
+		echo "Failed to start mining for node $i"
 		exit 1
 	fi
 done
