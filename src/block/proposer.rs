@@ -34,12 +34,14 @@ impl PayloadSize for Content {
 
 impl Hashable for Content {
     fn hash(&self) -> H256 {
-        // TODO: include proposer merkle tree
         // TODO: why do we need a merkle tree here? simply hashing all the bytes is much faster and
         // more straightforward.
         let tx_merkle_tree = MerkleTree::new(&self.transaction_refs);
-        let _prop_merkle_tree = MerkleTree::new(&self.proposer_refs);
-        return tx_merkle_tree.root();
+        let prop_merkle_tree = MerkleTree::new(&self.proposer_refs);
+        let mut bytes = [0u8;64];
+        bytes[..32].copy_from_slice(tx_merkle_tree.root().as_ref());
+        bytes[32..64].copy_from_slice(prop_merkle_tree.root().as_ref());
+        return ring::digest::digest(&ring::digest::SHA256, &bytes).into();
     }
 }
 
