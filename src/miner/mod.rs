@@ -12,7 +12,7 @@ use crate::handler::new_validated_block;
 use crate::network::server::Handle as ServerHandle;
 use crate::utxodb::UtxoDatabase;
 use crate::wallet::Wallet;
-use crate::experiment::performance_counter::Counter as PerformanceCounter;
+use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 use log::{debug, info};
 
 use memory_pool::MemoryPool;
@@ -71,7 +71,6 @@ pub struct Context {
     difficulty: H256,
     operating_state: OperatingState,
     server: ServerHandle,
-    perf_counter: Arc<PerformanceCounter>
 }
 
 #[derive(Clone)]
@@ -88,7 +87,6 @@ pub fn new(
     db: &Arc<BlockDatabase>,
     ctx_update_source: Receiver<ContextUpdateSignal>,
     server: &ServerHandle,
-    perf_counter: &Arc<PerformanceCounter>
 ) -> (Context, Handle) {
     let (signal_chan_sender, signal_chan_receiver) = channel();
     let ctx = Context {
@@ -105,7 +103,6 @@ pub fn new(
         difficulty: *DEFAULT_DIFFICULTY,
         operating_state: OperatingState::Paused,
         server: server.clone(),
-        perf_counter: Arc::clone(perf_counter)
     };
 
     let handle = Handle {
@@ -217,7 +214,7 @@ impl Context {
                     }
                     _ => (),
                 }
-                self.perf_counter.record_mine_block(&mined_block);
+                PERFORMANCE_COUNTER.record_mine_block(&mined_block);
                 // Release block to the network
                 new_validated_block(
                     &mined_block,
@@ -227,7 +224,6 @@ impl Context {
                     &self.server,
                     &self.utxodb,
                     &self.wallet,
-                    &self.perf_counter,
                 );
                 //                debug!("Mined block {:.8}", mined_block.hash());
                 // TODO: Only update block contents if relevant parent

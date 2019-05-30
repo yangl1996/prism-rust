@@ -4,6 +4,12 @@ use crate::block::Block;
 use crate::block::Content as BlockContent;
 use crate::wallet::WalletError;
 
+lazy_static! {
+    pub static ref PERFORMANCE_COUNTER: Counter = {
+        Counter::new()
+    };
+}
+
 pub trait PayloadSize {
     fn size(&self) -> usize;
 }

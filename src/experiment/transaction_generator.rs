@@ -2,7 +2,7 @@ use crate::miner::memory_pool::MemoryPool;
 use crate::network::server::Handle as ServerHandle;
 use crate::wallet::Wallet;
 use crate::transaction;
-use crate::experiment::performance_counter::Counter as PerformanceCounter;
+use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 use std::thread;
 use std::time;
 use std::sync::{Arc, Mutex, mpsc};
@@ -43,7 +43,6 @@ enum State {
 
 pub struct TransactionGenerator {
     wallet: Arc<Wallet>,
-    perf_counter: Arc<PerformanceCounter>,
     server: ServerHandle,
     mempool: Arc<Mutex<MemoryPool>>,
     control_chan: mpsc::Receiver<ControlSignal>,
@@ -53,11 +52,10 @@ pub struct TransactionGenerator {
 }
 
 impl TransactionGenerator {
-    pub fn new(wallet: &Arc<Wallet>, server: &ServerHandle, mempool: &Arc<Mutex<MemoryPool>>, perf_counter: &Arc<PerformanceCounter>) -> (Self, mpsc::Sender<ControlSignal>) {
+    pub fn new(wallet: &Arc<Wallet>, server: &ServerHandle, mempool: &Arc<Mutex<MemoryPool>>) -> (Self, mpsc::Sender<ControlSignal>) {
         let (tx, rx) = mpsc::channel();
         let instance = Self {
             wallet: Arc::clone(wallet),
-            perf_counter: Arc::clone(perf_counter),
             server: server.clone(),
             mempool: Arc::clone(mempool),
             control_chan: rx,
@@ -131,7 +129,7 @@ impl TransactionGenerator {
                     }
                 };
                 let transaction = self.wallet.create_transaction(addr, value);
-                self.perf_counter.record_generate_transaction(&transaction);
+                PERFORMANCE_COUNTER.record_generate_transaction(&transaction);
                 match transaction {
                     Ok(t) => {
                         new_transaction(t, &self.mempool, &self.server);

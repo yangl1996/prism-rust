@@ -1,5 +1,5 @@
 use crate::experiment::transaction_generator;
-use crate::experiment::performance_counter::Counter as PerformanceCounter;
+use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 use crate::wallet::Wallet;
 use crate::network::server::Handle as ServerHandle;
 use crate::miner::memory_pool::MemoryPool;
@@ -15,7 +15,6 @@ use log::{info};
 
 pub struct Server {
     transaction_generator_handle: mpsc::Sender<transaction_generator::ControlSignal>,
-    perf_counter: Arc<PerformanceCounter>,
     handle: HTTPServer,
     miner: MinerHandle,
 }
@@ -49,18 +48,16 @@ macro_rules! respond_json {
 }
 
 impl Server {
-    pub fn start(addr: std::net::SocketAddr, wallet: &Arc<Wallet>, server: &ServerHandle, miner: &MinerHandle, mempool: &Arc<Mutex<MemoryPool>>, txgen_control_chan: mpsc::Sender<transaction_generator::ControlSignal>, perf_counter: &Arc<PerformanceCounter>) {
+    pub fn start(addr: std::net::SocketAddr, wallet: &Arc<Wallet>, server: &ServerHandle, miner: &MinerHandle, mempool: &Arc<Mutex<MemoryPool>>, txgen_control_chan: mpsc::Sender<transaction_generator::ControlSignal>) {
         let handle = HTTPServer::http(&addr).unwrap();
         let server = Self {
             handle: handle,
             transaction_generator_handle: txgen_control_chan,
-            perf_counter: Arc::clone(perf_counter),
             miner: miner.clone(),
         };
         thread::spawn(move || {
             for req in server.handle.incoming_requests() {
                 let transaction_generator_handle = server.transaction_generator_handle.clone();
-                let perf_counter = Arc::clone(&server.perf_counter);
                 let miner = server.miner.clone();
                 thread::spawn(move || {
                     // a valid url requires a base
@@ -82,7 +79,7 @@ impl Server {
                             respond_result!(req, true, "ok");
                         }
                         "/telematics/snapshot" => {
-                            respond_json!(req, perf_counter.snapshot());
+                            respond_json!(req, PERFORMANCE_COUNTER.snapshot());
                         }
                         "/transaction-generator/start" => {
                             let control_signal = transaction_generator::ControlSignal::Start;

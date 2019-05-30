@@ -8,7 +8,7 @@ use crate::network::server::Handle as ServerHandle;
 use crate::transaction::Transaction;
 use crate::utxodb::UtxoDatabase;
 use crate::wallet::Wallet;
-use crate::experiment::performance_counter::Counter as PerformanceCounter;
+use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 use std::sync::Mutex;
 
 pub fn new_validated_block(
@@ -19,9 +19,8 @@ pub fn new_validated_block(
     server: &ServerHandle,
     utxodb: &UtxoDatabase,
     wallet: &Wallet,
-    perf_counter: &PerformanceCounter,
 ) {
-    perf_counter.record_process_block(&block);
+    PERFORMANCE_COUNTER.record_process_block(&block);
     // TODO: here mempool acts as a global lock. This is a dirty fix for data race in utxodb.
     let mut mempool = mempool.lock().unwrap();
     // insert the new block into the blockdb
@@ -44,8 +43,8 @@ pub fn new_validated_block(
 
     // insert the new block into the blockchain
     let diff = chain.insert_block(&block).unwrap();
-    perf_counter.record_confirm_transaction_blocks(diff.0.len());
-    perf_counter.record_deconfirm_transaction_blocks(diff.1.len());
+    PERFORMANCE_COUNTER.record_confirm_transaction_blocks(diff.0.len());
+    PERFORMANCE_COUNTER.record_deconfirm_transaction_blocks(diff.1.len());
 
     // gather the transaction diff and apply on utxo database
     let mut add: Vec<Transaction> = vec![];
@@ -70,10 +69,10 @@ pub fn new_validated_block(
     }
 
     for transaction in &add {
-        perf_counter.record_confirm_transaction(&transaction);
+        PERFORMANCE_COUNTER.record_confirm_transaction(&transaction);
     }
     for transaction in &remove {
-        perf_counter.record_deconfirm_transaction(&transaction);
+        PERFORMANCE_COUNTER.record_deconfirm_transaction(&transaction);
     }
 
     let coin_diff = utxodb.apply_diff(&add, &remove).unwrap();

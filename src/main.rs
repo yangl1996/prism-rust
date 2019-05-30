@@ -67,10 +67,6 @@ fn main() {
     let verbosity = matches.occurrences_of("verbose") as usize;
     stderrlog::new().verbosity(verbosity).init().unwrap();
 
-    // init performance counter
-    let perf_counter = PerformanceCounter::new();
-    let perf_counter = Arc::new(perf_counter);  // TODO: check whether we need this
-
     // init mempool
     let mempool = MemoryPool::new();
     let mempool = Arc::new(std::sync::Mutex::new(mempool));
@@ -140,11 +136,11 @@ fn main() {
     server_ctx.start().unwrap();
 
     // start the worker
-    let worker_ctx = worker::new(4, msg_rx, &blockchain, &blockdb, &utxodb, &wallet, &mempool, ctx_tx, &server, &perf_counter);
+    let worker_ctx = worker::new(4, msg_rx, &blockchain, &blockdb, &utxodb, &wallet, &mempool, ctx_tx, &server);
     worker_ctx.start();
 
     // start the miner
-    let (miner_ctx, miner) = miner::new(&mempool, &blockchain, &utxodb, &wallet, &blockdb, ctx_rx, &server, &perf_counter);
+    let (miner_ctx, miner) = miner::new(&mempool, &blockchain, &utxodb, &wallet, &blockdb, ctx_rx, &server);
     miner_ctx.start();
 
     // connect to known peers
@@ -202,11 +198,11 @@ fn main() {
     }
 
     // start the transaction generator
-    let (txgen_ctx, txgen_control_chan) = TransactionGenerator::new(&wallet, &server, &mempool, &perf_counter);
+    let (txgen_ctx, txgen_control_chan) = TransactionGenerator::new(&wallet, &server, &mempool);
     txgen_ctx.start();
 
     // start the API server
-    ApiServer::start(api_addr, &wallet, &server, &miner, &mempool, txgen_control_chan, &perf_counter);
+    ApiServer::start(api_addr, &wallet, &server, &miner, &mempool, txgen_control_chan);
 
     // start the visualization server
     match matches.value_of("visualization") {
