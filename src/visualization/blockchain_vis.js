@@ -42,7 +42,7 @@ var cy = cytoscape({
 			}
 		},
 		{
-			selector: 'node[type="voter"]',
+			selector: 'node[type="Voter"]',
 			style: {
 				'shape': 'rectangle',
 				'width': 'label',
@@ -54,7 +54,19 @@ var cy = cytoscape({
 			}
 		},
 		{
-			selector: 'node[type="proposer"]',
+            selector: 'node[type="OrphanVoter"]',
+            style: {
+                'shape': 'rectangle',
+                'width': 'label',
+                'height': 'label',
+                'text-halign': 'center',
+                'text-valign': 'center',
+                'background-color': '#E1E1E1',
+                'label': 'data(disp)'
+            }
+        },
+		{
+			selector: 'node[type="Proposer"]',
 			style: {
 				'shape': 'rectangle',
 				'width': 'label',
@@ -123,7 +135,7 @@ function handle_data(data) {
 			data: {
 				id: hash,
 				disp: v['level']+':'+short_hash,
-				type: 'proposer',
+				type: 'Proposer',
 			}
 		};
 		cy.add(new_node);
@@ -160,12 +172,17 @@ function handle_data(data) {
             } else {
                 prefix = '';
             }
+            if (v['status'] == 'Orphan') {
+                voter_type = 'OrphanVoter';
+            } else {
+                voter_type = 'Voter';
+            }
 			new_node = {
 				group: "nodes",
 				data: {
 					id: hash,
 					disp: prefix + short_hash,
-					type: 'voter',
+					type: voter_type,
 				}
 			};
 			cy.add(new_node);
