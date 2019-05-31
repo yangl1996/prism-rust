@@ -146,6 +146,9 @@ impl Context {
                 }
                 Message::Blocks(blocks) => {
                     debug!("Got {} blocks", blocks.len());
+                    for block in &blocks {
+                        PERFORMANCE_COUNTER.record_receive_block(&block);
+                    }
                     let mut to_process: Vec<Block> = blocks;
                     let mut to_request: Vec<H256> = vec![];
                     while let Some(block) = to_process.pop() {
