@@ -657,6 +657,7 @@ impl BlockChain {
                                 };
                                 match leader {
                                     None => {
+                                        *ledger_tip = level - 1;
                                         break;
                                     }
                                     Some(leader) => {
@@ -724,7 +725,6 @@ impl BlockChain {
                                         for block in &ledger {
                                             added.push(*block);
                                         }
-                                        *ledger_tip = level;
                                     }
                                 }
                             }
@@ -898,6 +898,9 @@ impl BlockChain {
     pub fn proposer_transaction_in_ledger(&self, limit: u64) -> Result<Vec<(H256, Vec<H256>)>> {
         let ledger_tip_ = self.ledger_tip.lock().unwrap();
         let ledger_tip = *ledger_tip_;
+        // TODO: get snapshot here doesn't ensure consistency of snapshot, since we use multiple write batch in `insert_block`
+        // and the ledger_tip lock doesn't ensure it either.
+        let snapshot = self.db.snapshot();
         drop(ledger_tip_);
 
         let ledger_bottom: u64 = match ledger_tip > limit {
@@ -911,8 +914,7 @@ impl BlockChain {
         let mut ledger: Vec<(H256, Vec<H256>)> = vec![];
 
         for level in ledger_bottom..=ledger_tip {
-            match self
-                .db
+            match snapshot
                 .get_cf(proposer_ledger_order_cf, serialize(&level).unwrap())?
             {
                 None => unreachable!("level <= ledger tip should have leader"),
@@ -924,7 +926,7 @@ impl BlockChain {
         }
 
         for hash in &proposer_in_ledger {
-            let blocks: Vec<H256> = match self.db.get_cf(transaction_ref_neighbor_cf, serialize(&hash).unwrap())? {
+            let blocks: Vec<H256> = match snapshot.get_cf(transaction_ref_neighbor_cf, serialize(&hash).unwrap())? {
                 None => unreachable!("proposer in ledger should have transaction ref in database (even for empty ref)"),
                 Some(d) => deserialize(&d).unwrap(),
             };
@@ -1004,6 +1006,9 @@ impl BlockChain {
         // get the ledger tip and bottom, for processing ledger
         let ledger_tip_ = self.ledger_tip.lock().unwrap();
         let ledger_tip = *ledger_tip_;
+        // TODO: get snapshot here doesn't ensure consistency of snapshot, since we use multiple write batch in `insert_block`
+        // and the ledger_tip lock doesn't ensure it either.
+        let snapshot = self.db.snapshot();
         drop(ledger_tip_);
         let ledger_bottom: u64 = match ledger_tip > limit {
             true => ledger_tip - limit,
@@ -1033,8 +1038,7 @@ impl BlockChain {
 
         // proposer tree
         for level in ledger_bottom.. {
-            match self
-                .db
+            match snapshot
                 .get_cf(proposer_tree_level_cf, serialize(&level).unwrap())?
             {
                 Some(d) => {
@@ -1049,8 +1053,7 @@ impl BlockChain {
         for (level, blocks) in proposer_tree.iter() {
             for block in blocks {
                 // get parent edges
-                match self
-                    .db
+                match snapshot
                     .get_cf(parent_neighbor_cf, serialize(block).unwrap())?
                 {
                     Some(d) => {
@@ -1064,8 +1067,7 @@ impl BlockChain {
                     None => {}
                 }
                 // get proposer node info
-                match self
-                    .db
+                match snapshot
                     .get_cf(proposer_node_vote_cf, serialize(block).unwrap())?
                 {
                     Some(d) => {
@@ -1115,8 +1117,7 @@ impl BlockChain {
             let lowest = voter_lowest.get(chain).expect("should've computed lowest level");
             while level >= *lowest {
                 // voter info
-                let deepest_vote_level: u64 = match self
-                    .db
+                let deepest_vote_level: u64 = match snapshot
                     .get_cf(voter_node_voted_level_cf, serialize(&voter_block).unwrap())?
                     {
                         Some(d) => deserialize(&d).unwrap(),
@@ -1142,8 +1143,7 @@ impl BlockChain {
                     }
                 }
                 // voter parent
-                match self
-                    .db
+                match snapshot
                     .get_cf(voter_parent_neighbor_cf, serialize(&voter_block).unwrap())?
                     {
                         Some(d) => {
@@ -1170,14 +1170,13 @@ impl BlockChain {
                 let hash: H256 = deserialize(k.as_ref()).unwrap();
                 let voter_block = hash.to_string();
                 let chain: u16 = deserialize(v.as_ref()).unwrap();
-                let level: u64 = match self.db.get_cf(voter_node_level_cf, k.as_ref())? {
+                let level: u64 = match snapshot.get_cf(voter_node_level_cf, k.as_ref())? {
                     Some(d) => deserialize(&d).unwrap(),
                     None => unreachable!("voter should have level"),
                 };
                 let lowest = voter_lowest.get(chain as usize).expect("should've computed lowest level");
                 if level >= *lowest && !voter_nodes.contains_key(&voter_block) {
-                    let deepest_vote_level: u64 = match self
-                        .db
+                    let deepest_vote_level: u64 = match snapshot
                         .get_cf(voter_node_voted_level_cf, k.as_ref())?
                         {
                             Some(d) => deserialize(&d).unwrap(),
@@ -1193,7 +1192,7 @@ impl BlockChain {
                         },
                     );
                     // vote edges
-                    match self.db.get_cf(voter_neighbor_cf, k.as_ref())? {
+                    match snapshot.get_cf(voter_neighbor_cf, k.as_ref())? {
                         Some(d) => {
                             let votes: Vec<H256> = deserialize(&d).unwrap();
                             for vote in &votes {
@@ -1207,8 +1206,7 @@ impl BlockChain {
                         None => unreachable!("voter block should have votes level in database"),
                     }
                     // voter parent
-                    match self
-                        .db
+                    match snapshot
                         .get_cf(voter_parent_neighbor_cf, k.as_ref())?
                         {
                             Some(d) => {
@@ -1227,8 +1225,7 @@ impl BlockChain {
 
         // proposer leader
         for level in proposer_tree.keys() {
-            match self
-                .db
+            match snapshot
                 .get_cf(proposer_leader_sequence_cf, serialize(level).unwrap())?
             {
                 Some(d) => {
@@ -1244,7 +1241,7 @@ impl BlockChain {
 
         // ledger
         for level in ledger_bottom..=ledger_tip {
-            match self.db.get_cf(
+            match snapshot.get_cf(
                 proposer_ledger_order_cf,
                 serialize(&(level as u64)).unwrap(),
             )? {
@@ -1257,7 +1254,7 @@ impl BlockChain {
         }
 
         for hash in &proposer_in_ledger {
-            match self.db.get_cf(transaction_ref_neighbor_cf, serialize(&hash).unwrap())? {
+            match snapshot.get_cf(transaction_ref_neighbor_cf, serialize(&hash).unwrap())? {
                 Some(d) => {
                     let blocks: Vec<H256> = deserialize(&d).unwrap();
                     let mut blocks = blocks.into_iter().map(|h|h.to_string()).collect();
@@ -1267,6 +1264,7 @@ impl BlockChain {
             }
         }
 
+        // TODO: transaction_unreferred may be inconsistent with other things
         let transaction_unreferred_ = self.unreferred_transaction.lock().unwrap();
         let transaction_unreferred: Vec<String> = transaction_unreferred_
             .iter()
