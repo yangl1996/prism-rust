@@ -66,7 +66,7 @@ var cy = cytoscape({
             }
         },
 		{
-			selector: 'node[type="Proposer"]',
+			selector: 'node[type="LeaderProposer"]',
 			style: {
 				'shape': 'rectangle',
 				'width': 'label',
@@ -77,6 +77,18 @@ var cy = cytoscape({
 				'label': 'data(disp)'
 			}
 		},
+		{
+            selector: 'node[type="Proposer"]',
+            style: {
+                'shape': 'rectangle',
+                'width': 'label',
+                'height': 'label',
+                'text-halign': 'center',
+                'text-valign': 'center',
+                'background-color': '#E1E1E1',
+                'label': 'data(disp)'
+            }
+        },
 		{
 			selector: 'edge',
 			style: {
@@ -129,13 +141,17 @@ function handle_data(data) {
 	for (hash in data['proposer_nodes']) {
 		v = data['proposer_nodes'][hash];
 		short_hash = hash.substring(58, 64);
-
+        if (v['status'] == 'Leader') {
+            proposer_type = 'LeaderProposer';
+        } else {
+            proposer_type = 'Proposer';
+        }
 		new_node = {
 			group: "nodes",
 			data: {
 				id: hash,
-				disp: v['level']+':'+short_hash,
-				type: 'Proposer',
+				disp: v['level']+':'+short_hash+' ('+v['votes']+')',
+				type: proposer_type,
 			}
 		};
 		cy.add(new_node);
