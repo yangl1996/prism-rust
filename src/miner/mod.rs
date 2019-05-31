@@ -18,6 +18,7 @@ use log::{debug, info};
 use memory_pool::MemoryPool;
 use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
 use std::time::SystemTime;
+use std::time;
 
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -30,7 +31,7 @@ use bigint::uint::U256;
 
 #[derive(PartialEq)]
 enum ControlSignal {
-    Start,
+    Start(u64), // the number controls the interval between block generation
     Step,
     Exit,
 }
@@ -48,7 +49,7 @@ pub enum ContextUpdateSignal {
 #[derive(PartialEq)]
 enum OperatingState {
     Paused,
-    Run,
+    Run(u64),
     Step,
     ShutDown,
 }
@@ -117,8 +118,8 @@ impl Handle {
         self.control_chan.send(ControlSignal::Exit).unwrap();
     }
 
-    pub fn start(&self) {
-        self.control_chan.send(ControlSignal::Start).unwrap();
+    pub fn start(&self, interval: u64) {
+        self.control_chan.send(ControlSignal::Start(interval)).unwrap();
     }
 
     pub fn step(&self) {
@@ -143,9 +144,9 @@ impl Context {
                 info!("Miner shutting down");
                 self.operating_state = OperatingState::ShutDown;
             }
-            ControlSignal::Start => {
-                info!("Miner starting in continuous mode");
-                self.operating_state = OperatingState::Run;
+            ControlSignal::Start(i) => {
+                info!("Miner starting in continuous mode with interval {}", i);
+                self.operating_state = OperatingState::Run(i);
             }
             ControlSignal::Step => {
                 info!("Miner starting in stepping mode");
@@ -232,6 +233,13 @@ impl Context {
                 // if we are stepping, pause the miner loop
                 if self.operating_state == OperatingState::Step {
                     self.operating_state = OperatingState::Paused;
+                }
+            }
+
+            if let OperatingState::Run(i) = self.operating_state {
+                if i != 0 {
+                    let interval = time::Duration::from_millis(i);
+                    thread::sleep(interval);
                 }
             }
         }
