@@ -10,7 +10,7 @@
 	<script>
 function limitChanged() {
     var limit = document.getElementsByName("limit")[0].value;
-	loadJSON("http://SERVER_IP_ADDR:SERVER_PORT_NUMBER/blockchain.json?limit="+limit, handle_data, handle_error);
+	loadJSON("/blockchain.json?limit="+limit, handle_data, handle_error);
 }
 	</script>
 		<div>Limit: <input type="number" name="limit" value="100"/>

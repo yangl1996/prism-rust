@@ -213,4 +213,4 @@ function handle_data(data) {
 	}
 }
 
-loadJSON("http://SERVER_IP_ADDR:SERVER_PORT_NUMBER/blockchain.json", handle_data, handle_error);
+loadJSON("/blockchain.json", handle_data, handle_error);
