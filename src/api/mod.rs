@@ -87,7 +87,21 @@ impl Server {
                                     return;
                                 }
                             };
-                            miner.start(interval);
+                            let lazy = match params.get("lazy") {
+                                Some(v) => v,
+                                None => {
+                                    respond_result!(req, false, "missing lazy switch");
+                                    return;
+                                }
+                            };
+                            let lazy = match lazy.parse::<bool>() {
+                                Ok(v) => v,
+                                Err(e) => {
+                                    respond_result!(req, false, format!("error parsing lazy switch: {}", e));
+                                    return;
+                                }
+                            };
+                            miner.start(interval, lazy);
                             respond_result!(req, true, "ok");
                         }
                         "/miner/step" => {
