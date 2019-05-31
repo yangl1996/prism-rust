@@ -93,7 +93,10 @@ impl UtxoDatabase {
                 //write the transaction as a batch
                 self.db.write(batch)?;
 
-                PERFORMANCE_COUNTER.record_deconfirm_transaction(&t);
+                // TODO: it's a hack. The purpose is to ignore ICO transaction
+                if !t.input.is_empty() {
+                    PERFORMANCE_COUNTER.record_deconfirm_transaction(&t);
+                }
             }
         }
 
@@ -135,7 +138,9 @@ impl UtxoDatabase {
                 //write the transaction as a batch
                 self.db.write(batch)?;
 
-                PERFORMANCE_COUNTER.record_confirm_transaction(&t);
+                if !t.input.is_empty() {
+                    PERFORMANCE_COUNTER.record_confirm_transaction(&t);
+                }
             }
         }
         return Ok((added_coins, removed_coins));
