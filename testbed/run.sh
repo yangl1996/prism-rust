@@ -277,6 +277,7 @@ function run_experiment
 	echo "All nodes started, starting transaction generation"
 	query_api start_transactions
 	echo "Running experiment for $1 seconds"
+	echo "$1" > experiment.txt
 	sleep $1
 	query_api get_performance
 	echo "Stopping all nodes"
@@ -371,7 +372,9 @@ case "$1" in
 	run-exp)
 		run_experiment $2 ;;
 	get-perf)
-		query_api get_performance ;;
+		query_api get_performance
+		exp_time=`cat experiment.txt`
+		python3 scripts/process_results.py nodes.txt $exp_time ;;
 	show-vis)
 		show_visualization $2 ;;
 	run-all)
