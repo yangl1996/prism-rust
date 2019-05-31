@@ -933,7 +933,7 @@ impl BlockChain {
         Ok(ledger)
     }
 
-    pub fn dump(&self, limit: u64) -> Result<String> {
+    pub fn dump(&self, limit: u64, display_fork: bool) -> Result<String> {
         /// Struct to hold blockchain data to be dumped
         #[derive(Serialize)]
         struct Dump {
@@ -986,7 +986,7 @@ impl BlockChain {
         #[derive(Serialize)]
         enum VoterStatus {
             OnMainChain,
-            //            Orphan,
+            Orphan,
         }
 
         let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
@@ -997,6 +997,9 @@ impl BlockChain {
         let voter_node_voted_level_cf = self.db.cf_handle(VOTER_NODE_VOTED_LEVEL_CF).unwrap();
         let proposer_ledger_order_cf = self.db.cf_handle(PROPOSER_LEDGER_ORDER_CF).unwrap();
         let transaction_ref_neighbor_cf = self.db.cf_handle(TRANSACTION_REF_NEIGHBOR_CF).unwrap();
+        let voter_node_chain_cf = self.db.cf_handle(VOTER_NODE_CHAIN_CF).unwrap();
+        let voter_node_level_cf = self.db.cf_handle(VOTER_NODE_LEVEL_CF).unwrap();
+        let voter_neighbor_cf = self.db.cf_handle(VOTE_NEIGHBOR_CF).unwrap();
 
         // get the ledger tip and bottom, for processing ledger
         let ledger_tip_ = self.ledger_tip.lock().unwrap();
@@ -1011,7 +1014,7 @@ impl BlockChain {
         let mut voter_lowest: Vec<u64> = vec![];
         // get voter best blocks and levels, this is from memory
         let mut voter_longest: Vec<(H256, u64)> = vec![];
-        for (_chain_num, voter_chain) in self.voter_best.iter().enumerate() {
+        for voter_chain in self.voter_best.iter() {
             let longest = voter_chain.lock().unwrap();
             voter_longest.push((longest.0, longest.1));
             voter_lowest.push(longest.1);
@@ -1077,19 +1080,17 @@ impl BlockChain {
                         );
 
                         // get voter edges
-                        for (chain_num, level) in &votes {
-                            if let Some(lowest) = voter_lowest.get_mut(*chain_num as usize) {
-                                if *lowest > *level {
-                                    *lowest = *level;
-                                }
-                            } else {
-                                unreachable!();
+                        for (chain, level) in &votes {
+                            let lowest = voter_lowest.get_mut(*chain as usize).expect("should've computed lowest level");
+                            if *lowest > *level {
+                                *lowest = *level;
                             }
+
                             // cache the votes
-                            if let Some(v) = vote_cache.get_mut(&(*chain_num, *level)) {
+                            if let Some(v) = vote_cache.get_mut(&(*chain, *level)) {
                                 v.push(*block);
                             } else {
-                                vote_cache.insert((*chain_num, *level), vec![*block]);
+                                vote_cache.insert((*chain, *level), vec![*block]);
                             }
                         }
                     }
@@ -1108,42 +1109,42 @@ impl BlockChain {
         }
 
         // one pass of voters. get voter info, voter parent, and vote edges. notice the votes are cached
-        for (chain_num, longest) in voter_longest.iter().enumerate() {
+        for (chain, longest) in voter_longest.iter().enumerate() {
             let mut voter_block = longest.0;
             let mut level = longest.1;
-            if let Some(lowest) = voter_lowest.get(chain_num) {
-                while level >= *lowest {
-                    // voter info
-                    let deepest_vote_level: u64 = match self
-                        .db
-                        .get_cf(voter_node_voted_level_cf, serialize(&voter_block).unwrap())?
+            let lowest = voter_lowest.get(chain).expect("should've computed lowest level");
+            while level >= *lowest {
+                // voter info
+                let deepest_vote_level: u64 = match self
+                    .db
+                    .get_cf(voter_node_voted_level_cf, serialize(&voter_block).unwrap())?
                     {
                         Some(d) => deserialize(&d).unwrap(),
-                        _ => unreachable!("voter block should have voted level in database"),
+                        None => unreachable!("voter block should have voted level in database"),
                     };
-                    voter_nodes.insert(
-                        voter_block.to_string(),
-                        Voter {
-                            chain: chain_num as u16,
-                            level,
-                            status: VoterStatus::OnMainChain,
-                            deepest_vote_level,
-                        },
-                    );
-                    // vote edges
-                    if let Some(votes) = vote_cache.get(&(chain_num as u16, level)) {
-                        for vote in votes {
-                            edges.push(Edge {
-                                from: voter_block.to_string(),
-                                to: vote.to_string(),
-                                edgetype: EdgeType::VoterToProposerVote,
-                            });
-                        }
+                voter_nodes.insert(
+                    voter_block.to_string(),
+                    Voter {
+                        chain: chain as u16,
+                        level,
+                        status: VoterStatus::OnMainChain,
+                        deepest_vote_level,
+                    },
+                );
+                // vote edges
+                if let Some(votes) = vote_cache.get(&(chain as u16, level)) {
+                    for vote in votes {
+                        edges.push(Edge {
+                            from: voter_block.to_string(),
+                            to: vote.to_string(),
+                            edgetype: EdgeType::VoterToProposerVote,
+                        });
                     }
-                    // voter parent
-                    match self
-                        .db
-                        .get_cf(voter_parent_neighbor_cf, serialize(&voter_block).unwrap())?
+                }
+                // voter parent
+                match self
+                    .db
+                    .get_cf(voter_parent_neighbor_cf, serialize(&voter_block).unwrap())?
                     {
                         Some(d) => {
                             let parent: H256 = deserialize(&d).unwrap();
@@ -1159,6 +1160,67 @@ impl BlockChain {
                             break; // if no parent, must break the while loop
                         }
                     }
+            }
+        }
+
+        // use iterator to find voter fork and orphan voters, may be slow
+        if display_fork {
+            let iter = self.db.iterator_cf(voter_node_chain_cf, rocksdb::IteratorMode::Start)?;
+            for (k,v) in iter {
+                let hash: H256 = deserialize(k.as_ref()).unwrap();
+                let voter_block = hash.to_string();
+                let chain: u16 = deserialize(v.as_ref()).unwrap();
+                let level: u64 = match self.db.get_cf(voter_node_level_cf, k.as_ref())? {
+                    Some(d) => deserialize(&d).unwrap(),
+                    None => unreachable!("voter should have level"),
+                };
+                let lowest = voter_lowest.get(chain as usize).expect("should've computed lowest level");
+                if level >= *lowest && !voter_nodes.contains_key(&voter_block) {
+                    let deepest_vote_level: u64 = match self
+                        .db
+                        .get_cf(voter_node_voted_level_cf, k.as_ref())?
+                        {
+                            Some(d) => deserialize(&d).unwrap(),
+                            None => unreachable!("voter block should have voted level in database"),
+                        };
+                    voter_nodes.insert(
+                        voter_block.clone(),
+                        Voter {
+                            chain,
+                            level,
+                            status: VoterStatus::Orphan,
+                            deepest_vote_level,
+                        },
+                    );
+                    // vote edges
+                    match self.db.get_cf(voter_neighbor_cf, k.as_ref())? {
+                        Some(d) => {
+                            let votes: Vec<H256> = deserialize(&d).unwrap();
+                            for vote in &votes {
+                                edges.push(Edge {
+                                    from: voter_block.clone(),
+                                    to: vote.to_string(),
+                                    edgetype: EdgeType::VoterToProposerVote,
+                                });
+                            }
+                        }
+                        None => unreachable!("voter block should have votes level in database"),
+                    }
+                    // voter parent
+                    match self
+                        .db
+                        .get_cf(voter_parent_neighbor_cf, k.as_ref())?
+                        {
+                            Some(d) => {
+                                let parent: H256 = deserialize(&d).unwrap();
+                                edges.push(Edge {
+                                    from: voter_block.clone(),
+                                    to: parent.to_string(),
+                                    edgetype: EdgeType::VoterToVoterParent,
+                                });
+                            }
+                            None => {}
+                        }
                 }
             }
         }
@@ -1186,22 +1248,22 @@ impl BlockChain {
                 proposer_ledger_order_cf,
                 serialize(&(level as u64)).unwrap(),
             )? {
-                None => unreachable!("level <= ledger tip should have leader"),
                 Some(d) => {
                     let mut blocks: Vec<H256> = deserialize(&d).unwrap();
                     proposer_in_ledger.append(&mut blocks);
                 }
+                None => unreachable!("level <= ledger tip should have leader"),
             }
         }
 
         for hash in &proposer_in_ledger {
             match self.db.get_cf(transaction_ref_neighbor_cf, serialize(&hash).unwrap())? {
-                None => unreachable!("proposer in ledger should have transaction ref in database (even for empty ref)"),
                 Some(d) => {
                     let blocks: Vec<H256> = deserialize(&d).unwrap();
                     let mut blocks = blocks.into_iter().map(|h|h.to_string()).collect();
                     transaction_in_ledger.append(&mut blocks);
                 }
+                None => unreachable!("proposer in ledger should have transaction ref in database (even for empty ref)"),
             }
         }
 
@@ -2195,6 +2257,6 @@ mod tests {
             H256::default(),
         );
         db.insert_block(&new_voter_block).unwrap();
-        println!("{}", db.dump(100).unwrap());
+        println!("{}", db.dump(100, true).unwrap());
     }
 }

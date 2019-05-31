@@ -8,6 +8,7 @@ use tiny_http::Header;
 use tiny_http::Response;
 use tiny_http::Server as HTTPServer;
 use url::Url;
+use std::collections::HashMap;
 
 pub struct Server {
     blockchain: Arc<BlockChain>,
@@ -79,24 +80,21 @@ impl Server {
                             let resp = Response::from_string(include_str!("404.html"))
                                 .with_header(content_type)
                                 .with_status_code(404);
-                            match req.respond(resp) {
-                                Ok(_) => {}
-                                Err(_) => {}
-                            };
+                            req.respond(resp).expect("respond error");
                             return;
                         }
                     };
+                    let params = url.query_pairs();
+                    let params: HashMap<_, _> = params.into_owned().collect();
+                    let display_fork: bool = params.get("fork").map_or(false, |s|s.parse::<bool>().unwrap_or(false));
                     let limit: u64 = {
                         const DEFAULT: u64 = 100;
-                        match url.query() {
-                            Some(s) => s.trim_start_matches("limit=").parse().unwrap_or(DEFAULT),
-                            None => DEFAULT,
-                        }
+                        params.get("limit").map_or(DEFAULT, |s| s.parse::<u64>().unwrap_or(DEFAULT))
                     };
                     match url.path() {
                         "/blockchain.json" => serve_dynamic_file!(
                         req,
-                        match blockchain.dump(limit) {
+                        match blockchain.dump(limit, display_fork) {
                             Ok(dump) => dump,
                             Err(_) => "Blockchain Dump error".to_string(),
                         },
@@ -146,10 +144,7 @@ impl Server {
                             let resp = Response::from_string(include_str!("404.html"))
                                 .with_header(content_type)
                                 .with_status_code(404);
-                            match req.respond(resp) {
-                                Ok(_) => {}  //do something?
-                                Err(_) => {} //do something?
-                            }
+                            req.respond(resp).expect("respond error");
                         }
                     }
                 });
