@@ -180,8 +180,8 @@ function get_performance_single
 function start_transactions_single
 {
 	curl -s "http://$3:$4/transaction-generator/set-arrival-distribution?interval=0&distribution=uniform"
-	curl -s "http://$3:$4/transaction-generator/start"
-	curl -s "http://$3:$4/miner/start"
+	curl -s "http://$3:$4/transaction-generator/step?count=10"
+	curl -s "http://$3:$4/miner/start?interval=300&lazy=true"
 }
 
 function query_api 
@@ -301,6 +301,22 @@ function read_log
 	done
 }
 
+function show_visualization
+{
+	local nodes=`cat nodes.txt`
+	local pids=''
+	for node in $nodes; do
+		local name
+		local host
+		local pubip
+		local visport 
+		IFS=',' read -r name host pubip _ _ _ visport <<< "$node"
+		if [ $name == $1 ]; then
+			open "http://$pubip:$visport/"
+		fi
+	done
+}
+
 mkdir -p log
 case "$1" in
 	help)
@@ -325,6 +341,7 @@ case "$1" in
 		Collect Data
 		  
 		  get-perf              Get performance data
+		  show-vis              Open the visualization page for the given node
 
 		Connect to Testbed
 
@@ -355,6 +372,8 @@ case "$1" in
 		run_experiment $2 ;;
 	get-perf)
 		query_api get_performance ;;
+	show-vis)
+		show_visualization $2 ;;
 	run-all)
 		run_on_all "${@:2}" ;;
 	ssh)
