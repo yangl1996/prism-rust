@@ -296,7 +296,7 @@ impl Context {
     /// Create a header object from the current miner view
     fn create_header(&self) -> Header {
         let nonce: u32 = 0; // we will update this value in-place when mining
-        let timestamp: u64 = get_time();
+        let timestamp: u128= get_time();
         let content_root = self.content_merkle_tree_root;
         let extra_content: [u8; 32] = [0; 32]; // TODO: Add miner id?
         return Header::new(
@@ -419,11 +419,11 @@ impl Context {
 }
 
 /// Get the current UNIX timestamp
-fn get_time() -> u64 {
+fn get_time() -> u128 {
     let cur_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH);
     match cur_time {
         Ok(v) => {
-            return v.as_secs();
+            return v.as_millis();
         }
         Err(e) => println!("Error parsing time: {:?}", e),
     }
