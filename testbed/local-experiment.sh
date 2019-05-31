@@ -9,6 +9,17 @@ function wait_for_line() {
 	tail -F -n1000 $1 | grep -q "$2"
 }
 
+function wait_for_line_bsd() {
+	# $1: file to watch, $2: line to watch
+	while true; do
+		cat $1 | grep -q "$2"
+		if [ "$?" -eq 0 ]; then
+			break
+		fi
+		sleep 0.2
+	done
+}
+
 trap kill_prism INT
 
 function kill_prism() {
@@ -83,20 +94,20 @@ for (( i = 0; i < $num_nodes; i++ )); do
 	$command &> ${i}.log &
 	pid="$!"
 	pids="$pids $pid"
-	wait_for_line "$i.log" 'P2P server listening'
+	wait_for_line_bsd "$i.log" 'P2P server listening'
 	echo "Node $i started as process $pid"
 done
 
 echo "Waiting for all nodes to start"
 for (( i = 0; i < $num_nodes; i++ )); do
-	wait_for_line "$i.log" 'API server listening'
+	wait_for_line_bsd "$i.log" 'API server listening'
 	echo "Node $i started"
 done
 
 echo "Starting transaction generation and mining on each node"
 for (( i = 0; i < $num_nodes; i++ )); do
 	port=`expr $api_port + $i`
-	url="localhost:${port}/transaction-generator/set-arrival-distribution?interval=0&distribution=uniform"
+	url="localhost:${port}/transaction-generator/set-arrival-distribution?interval=100&distribution=uniform"
 	curl "$url" &> /dev/null
 	if [ "$?" -ne 0 ]; then
 		echo "Failed to set transaction rate for node $i"
@@ -108,7 +119,7 @@ for (( i = 0; i < $num_nodes; i++ )); do
 		echo "Failed to start transaction generation for node $i"
 		exit 1
 	fi
-	url="localhost:${port}/miner/start"
+	url="localhost:${port}/miner/start?interval=200&lazy=true"
 	curl "$url" &> /dev/null
 	if [ "$?" -ne 0 ]; then
 		echo "Failed to start mining for node $i"

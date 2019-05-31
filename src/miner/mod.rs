@@ -18,6 +18,7 @@ use log::{debug, info};
 use memory_pool::MemoryPool;
 use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
 use std::time::SystemTime;
+use std::time;
 
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -30,7 +31,7 @@ use bigint::uint::U256;
 
 #[derive(PartialEq)]
 enum ControlSignal {
-    Start,
+    Start(u64, bool), // the number controls the interval between block generation
     Step,
     Exit,
 }
@@ -48,7 +49,7 @@ pub enum ContextUpdateSignal {
 #[derive(PartialEq)]
 enum OperatingState {
     Paused,
-    Run,
+    Run(u64, bool),
     Step,
     ShutDown,
 }
@@ -117,8 +118,8 @@ impl Handle {
         self.control_chan.send(ControlSignal::Exit).unwrap();
     }
 
-    pub fn start(&self) {
-        self.control_chan.send(ControlSignal::Start).unwrap();
+    pub fn start(&self, interval: u64, lazy: bool) {
+        self.control_chan.send(ControlSignal::Start(interval, lazy)).unwrap();
     }
 
     pub fn step(&self) {
@@ -143,9 +144,9 @@ impl Context {
                 info!("Miner shutting down");
                 self.operating_state = OperatingState::ShutDown;
             }
-            ControlSignal::Start => {
-                info!("Miner starting in continuous mode");
-                self.operating_state = OperatingState::Run;
+            ControlSignal::Start(i, l) => {
+                info!("Miner starting in continuous mode with interval {} and lazy mode {}", i, l);
+                self.operating_state = OperatingState::Run(i, l);
             }
             ControlSignal::Step => {
                 info!("Miner starting in stepping mode");
@@ -205,33 +206,70 @@ impl Context {
                 // Create a block
                 let mined_block: Block = self.assemble_block(header);
                 //if the mined block is an empty tx block, we ignore it, and go straight to next mining loop
-                match &mined_block.content {
-                    Content::Transaction(content) => {
-                        // TODO: recover these lines
-                        //                        if content.transactions.is_empty() {
-                        //                            continue;
-                        //                        }
+                let skip: bool = {
+                    if let OperatingState::Run(_, lazy) = self.operating_state {
+                        if lazy {
+                            let empty = {
+                                match &mined_block.content {
+                                    Content::Transaction(content) => {
+                                        if content.transactions.is_empty() {
+                                            true
+                                        } else {
+                                            false
+                                        }
+                                    }
+                                    Content::Voter(content) => {
+                                        if content.votes.is_empty() {
+                                            true
+                                        } else {
+                                            false
+                                        }
+                                    }
+                                    Content::Proposer(content) => {
+                                        if content.transaction_refs.is_empty() && content.proposer_refs.is_empty() {
+                                            true
+                                        } else {
+                                            false
+                                        }
+                                    }
+                                }
+                            };
+                            empty
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
                     }
-                    _ => (),
+                };
+
+                if !skip {
+                    PERFORMANCE_COUNTER.record_mine_block(&mined_block);
+                    // Release block to the network
+                    new_validated_block(
+                        &mined_block,
+                        &self.tx_mempool,
+                        &self.db,
+                        &self.blockchain,
+                        &self.server,
+                        &self.utxodb,
+                        &self.wallet,
+                    );
+                    //                debug!("Mined block {:.8}", mined_block.hash());
+                    // TODO: Only update block contents if relevant parent
+                    // if we are stepping, pause the miner loop
+                    if self.operating_state == OperatingState::Step {
+                        self.operating_state = OperatingState::Paused;
+                    }
                 }
-                PERFORMANCE_COUNTER.record_mine_block(&mined_block);
-                // Release block to the network
-                new_validated_block(
-                    &mined_block,
-                    &self.tx_mempool,
-                    &self.db,
-                    &self.blockchain,
-                    &self.server,
-                    &self.utxodb,
-                    &self.wallet,
-                );
-                //                debug!("Mined block {:.8}", mined_block.hash());
-                // TODO: Only update block contents if relevant parent
                 self.update_context();
                 header = self.create_header();
-                // if we are stepping, pause the miner loop
-                if self.operating_state == OperatingState::Step {
-                    self.operating_state = OperatingState::Paused;
+            }
+
+            if let OperatingState::Run(i, _) = self.operating_state {
+                if i != 0 {
+                    let interval = time::Duration::from_millis(i);
+                    thread::sleep(interval);
                 }
             }
         }

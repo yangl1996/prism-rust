@@ -11,7 +11,7 @@
 function limitChanged() {
     var limit = document.getElementsByName("limit")[0].value;
     var fork = document.getElementsByName("fork")[0].checked;
-	loadJSON("http://SERVER_IP_ADDR:SERVER_PORT_NUMBER/blockchain.json?limit="+limit+"&fork="+fork, handle_data, handle_error);
+	loadJSON("/blockchain.json?limit="+limit+"&fork="+fork, handle_data, handle_error);
 }
 	</script>
 		<div>Limit: <input type="number" name="limit" value="100"/>

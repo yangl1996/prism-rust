@@ -180,8 +180,8 @@ function get_performance_single
 function start_transactions_single
 {
 	curl -s "http://$3:$4/transaction-generator/set-arrival-distribution?interval=0&distribution=uniform"
-	curl -s "http://$3:$4/transaction-generator/start"
-	curl -s "http://$3:$4/miner/start"
+	curl -s "http://$3:$4/transaction-generator/step?count=10"
+	curl -s "http://$3:$4/miner/start?interval=300&lazy=true"
 }
 
 function query_api 
@@ -277,6 +277,7 @@ function run_experiment
 	echo "All nodes started, starting transaction generation"
 	query_api start_transactions
 	echo "Running experiment for $1 seconds"
+	echo "$1" > experiment.txt
 	sleep $1
 	query_api get_performance
 	echo "Stopping all nodes"
@@ -297,6 +298,22 @@ function read_log
 		IFS=',' read -r name host pubip _ _ apiport _ <<< "$node"
 		if [ $name == $1 ]; then
 			ssh $host -- cat "/home/ubuntu/log/$name.log" | less
+		fi
+	done
+}
+
+function show_visualization
+{
+	local nodes=`cat nodes.txt`
+	local pids=''
+	for node in $nodes; do
+		local name
+		local host
+		local pubip
+		local visport 
+		IFS=',' read -r name host pubip _ _ _ visport <<< "$node"
+		if [ $name == $1 ]; then
+			open "http://$pubip:$visport/"
 		fi
 	done
 }
@@ -325,6 +342,7 @@ case "$1" in
 		Collect Data
 		  
 		  get-perf              Get performance data
+		  show-vis              Open the visualization page for the given node
 
 		Connect to Testbed
 
@@ -354,7 +372,11 @@ case "$1" in
 	run-exp)
 		run_experiment $2 ;;
 	get-perf)
-		query_api get_performance ;;
+		query_api get_performance
+		exp_time=`cat experiment.txt`
+		python3 scripts/process_results.py nodes.txt $exp_time ;;
+	show-vis)
+		show_visualization $2 ;;
 	run-all)
 		run_on_all "${@:2}" ;;
 	ssh)

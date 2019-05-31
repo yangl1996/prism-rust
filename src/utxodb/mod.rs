@@ -2,6 +2,7 @@ use crate::crypto::hash::Hashable;
 use crate::transaction::{CoinId, Input, Output, Transaction};
 use bincode::serialize;
 use rocksdb::{Options, DB};
+use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 
 pub struct UtxoDatabase {
     pub db: rocksdb::DB, // coin id to output
@@ -91,6 +92,11 @@ impl UtxoDatabase {
                 }
                 //write the transaction as a batch
                 self.db.write(batch)?;
+
+                // TODO: it's a hack. The purpose is to ignore ICO transaction
+                if !t.input.is_empty() {
+                    PERFORMANCE_COUNTER.record_deconfirm_transaction(&t);
+                }
             }
         }
 
@@ -131,6 +137,10 @@ impl UtxoDatabase {
                 }
                 //write the transaction as a batch
                 self.db.write(batch)?;
+
+                if !t.input.is_empty() {
+                    PERFORMANCE_COUNTER.record_confirm_transaction(&t);
+                }
             }
         }
         return Ok((added_coins, removed_coins));

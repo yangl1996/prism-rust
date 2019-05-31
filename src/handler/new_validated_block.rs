@@ -68,13 +68,6 @@ pub fn new_validated_block(
         remove.append(&mut transactions);
     }
 
-    for transaction in &add {
-        PERFORMANCE_COUNTER.record_confirm_transaction(&transaction);
-    }
-    for transaction in &remove {
-        PERFORMANCE_COUNTER.record_deconfirm_transaction(&transaction);
-    }
-
     let coin_diff = utxodb.apply_diff(&add, &remove).unwrap();
     wallet.apply_diff(&coin_diff.0, &coin_diff.1).unwrap();
     drop(mempool);
