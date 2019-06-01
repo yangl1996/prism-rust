@@ -212,6 +212,78 @@ impl Wallet {
             ..unsigned
         })
     }
+
+    /// Create multiple transactions at once
+    pub fn create_transactions(&self, recipient_value: &[(Address, u64)]) -> Result<Vec<Transaction>> {
+        let mut result: Vec<Transaction> = vec![];
+        let mut coins_to_remove: Vec<Input> = vec![];
+        let cf = self.db.cf_handle(COIN_CF).unwrap();
+        let mut iter = self.db.raw_iterator_cf(cf)?;
+        iter.seek_to_first();
+        for (recipient,value) in recipient_value {
+            let mut coins_to_use: Vec<Input> = vec![];
+            let mut value_sum = 0u64;
+            // iterate through our wallet
+            while iter.valid() {
+                let coin_id: CoinId = bincode::deserialize(&iter.key().unwrap()).unwrap();
+                let coin_data: Output = bincode::deserialize(&iter.value().unwrap()).unwrap();
+                iter.next();
+                value_sum += coin_data.value;
+                coins_to_use.push(Input {
+                    coin: coin_id,
+                    value: coin_data.value,
+                    owner: coin_data.recipient,
+                }); // coins that will be used for this transaction
+                if value_sum >= *value {
+                    // if we already have enough money, break
+                    break;
+                }
+            }
+            if value_sum < *value {
+                // we don't have enough money in wallet
+                return Err(WalletError::InsufficientBalance);
+            }
+            // if we have enough money in our wallet, create tx
+            // add coins_to_use to a vector and remove them at the end
+            coins_to_remove.extend(&coins_to_use);
+            // create the output
+            let mut output = vec![Output { recipient: *recipient, value: *value }];
+            if value_sum > *value {
+                // transfer the remaining value back to self
+                let recipient = self.addresses()?[0];
+                output.push(Output {
+                    recipient,
+                    value: value_sum - *value,
+                });
+            }
+
+            let mut owners: Vec<Address> = coins_to_use.iter().map(|input| input.owner).collect();
+            let unsigned = Transaction {
+                input: coins_to_use,
+                output: output,
+                authorization: vec![],
+            };
+            let mut authorization = vec![];
+            owners.sort_unstable();
+            owners.dedup();
+            for owner in owners.iter() {
+                let keypair = self.keypair(&owner)?;
+                authorization.push(Authorization {
+                    pubkey: keypair.public_key(),
+                    signature: unsigned.sign(&keypair),
+                });
+            }
+
+            result.push(Transaction {
+                authorization,
+                ..unsigned
+            });
+        }
+        // remove used coin from wallet
+        self.apply_diff(&[], &coins_to_remove)?;
+
+        Ok(result)
+    }
 }
 
 
@@ -229,7 +301,8 @@ pub mod tests {
         assert_eq!(w.addresses().unwrap().len(), 0);
         let addr = w.generate_keypair().unwrap();
         assert_eq!(w.addresses().unwrap(), vec![addr]);
-
+        assert!(w.create_transaction(H256::default(), 1).is_err());
+        assert!(w.create_transactions(&[(H256::default(), 1)]).is_err());
         // give the test address 10 x 10 coins
         let mut ico: Vec<Input> = vec![];
         for _ in 0..10 {
@@ -254,6 +327,21 @@ pub mod tests {
         assert_eq!(tx.output[1].recipient,addr);
         assert_eq!(tx.output[1].value,1);
 
+        let txs = w.create_transactions(&[(H256::default(), 8);4]).unwrap();
+        assert_eq!(txs.len(),4);
+        for i in 0..4usize {
+            assert_eq!(txs[i].input.len(), 1);
+            assert_eq!(txs[i].input[0].value, 10);
+            assert_eq!(txs[i].output.len(), 2);
+            assert_eq!(txs[i].output[0].recipient,H256::default());
+            assert_eq!(txs[i].output[0].value, 8);
+            assert_eq!(txs[i].output[1].recipient,addr);
+            assert_eq!(txs[i].output[1].value, 2);
+        }
+        for i in 1..4usize {
+            // these transactions would use different coins
+            assert_ne!(txs[0].input[0].coin, txs[i].input[0].coin);
+        }
         // remove coins
         w.apply_diff(&[],&ico).unwrap();
         assert_eq!(w.balance().unwrap(), 0);
