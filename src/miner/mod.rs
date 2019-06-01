@@ -269,7 +269,7 @@ impl Context {
 
             if let OperatingState::Run(i, _) = self.operating_state {
                 if i != 0 {
-                    let interval_dist = rand::distributions::Exp::new(i as f64);
+                    let interval_dist = rand::distributions::Exp::new(1.0 / (i as f64));
                     let interval = interval_dist.sample(&mut rng);
                     let interval = time::Duration::from_micros(interval as u64);
                     thread::sleep(interval);

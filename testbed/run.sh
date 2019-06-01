@@ -181,12 +181,12 @@ function start_transactions_single
 {
 	curl -s "http://$3:$4/transaction-generator/set-arrival-distribution?interval=0&distribution=uniform"
 	curl -s "http://$3:$4/transaction-generator/step?count=10"
-	curl -s "http://$3:$4/miner/start?lambda=300000&lazy=true"
+	curl -s "http://$3:$4/miner/start?lambda=200000&lazy=true"
 }
 
 function query_api 
 {
-	# $1: which data to get
+	# $1: which data to get, $2: delay between nodes
 	mkdir -p data
 	local nodes=`cat nodes.txt`
 	local pids=''
@@ -198,6 +198,9 @@ function query_api
 		IFS=',' read -r name host pubip _ _ apiport _ <<< "$node"
 		$1_single $name $host $pubip $apiport > "data/${name}_$1.txt" &
 		pids="$pids $!"
+		if [ "$2" -ne "0" ]; then
+			sleep $2
+		fi
 	done
 	for pid in $pids; do
 		wait $pid
@@ -313,7 +316,7 @@ function show_performance
 		stop_timestamp=`date +%s`
 	fi
 	duration=`expr $stop_timestamp - $start_timestamp`
-	query_api get_performance
+	query_api get_performance 0
 	echo "Experiment started for $duration seconds"
 	python3 scripts/process_results.py nodes.txt $duration
 }
@@ -338,7 +341,7 @@ function run_experiment
 	echo "Starting Prism nodes"
 	start_prism
 	echo "All nodes started, starting transaction generation"
-	query_api start_transactions
+	query_api start_transactions 1
 	echo "Running experiment for $1 seconds"
 	sleep $1
 	show_performance
