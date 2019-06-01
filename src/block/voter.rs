@@ -38,8 +38,11 @@ impl Hashable for Content {
     fn hash(&self) -> H256 {
         // TODO: we are hashing in a merkle tree. why do we need so?
         let merkle_tree = MerkleTree::new(&self.votes);
-        // TODO: Add chain number and voter_parent_hash in the hash
-        return merkle_tree.root();
+        let mut bytes = [0u8;66];
+        bytes[..2].copy_from_slice(&self.chain_number.to_be_bytes());
+        bytes[2..34].copy_from_slice(self.voter_parent.as_ref());
+        bytes[34..66].copy_from_slice(merkle_tree.root().as_ref());
+        return ring::digest::digest(&ring::digest::SHA256, &bytes).into();
     }
 }
 
