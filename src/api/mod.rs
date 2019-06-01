@@ -73,17 +73,17 @@ impl Server {
                         "/miner/start" => {
                             let params = url.query_pairs();
                             let params: HashMap<_, _> = params.into_owned().collect();
-                            let interval = match params.get("interval") {
+                            let lambda = match params.get("lambda") {
                                 Some(v) => v,
                                 None => {
-                                    respond_result!(req, false, "missing interval");
+                                    respond_result!(req, false, "missing lambda");
                                     return;
                                 }
                             };
-                            let interval = match interval.parse::<u64>() {
+                            let lambda = match lambda.parse::<u64>() {
                                 Ok(v) => v,
                                 Err(e) => {
-                                    respond_result!(req, false, format!("error parsing interval: {}", e));
+                                    respond_result!(req, false, format!("error parsing lambda: {}", e));
                                     return;
                                 }
                             };
@@ -101,7 +101,7 @@ impl Server {
                                     return;
                                 }
                             };
-                            miner.start(interval, lazy);
+                            miner.start(lambda, lazy);
                             respond_result!(req, true, "ok");
                         }
                         "/miner/step" => {

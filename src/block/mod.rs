@@ -22,7 +22,7 @@ impl Block {
     /// Create a new block.
     pub fn new(
         parent: H256,
-        timestamp: u64,
+        timestamp: u128,
         nonce: u32,
         content_root: H256,
         sortition_proof: Vec<H256>,
@@ -124,7 +124,7 @@ pub mod tests {
         }};
     }
 
-    pub fn proposer_block(parent: H256, timestamp: u64, proposer_refs: Vec<H256>, transaction_refs: Vec<H256>) -> Block {
+    pub fn proposer_block(parent: H256, timestamp: u128, proposer_refs: Vec<H256>, transaction_refs: Vec<H256>) -> Block {
         Block::new(parent, timestamp, random_nonce!(), [0u8;32].into(), vec![],
         Content::Proposer(proposer::Content {
             transaction_refs,
@@ -132,7 +132,7 @@ pub mod tests {
         }), [0u8;32], *config::DEFAULT_DIFFICULTY)
     }
 
-    pub fn voter_block(parent: H256, timestamp: u64, chain_number: u16, voter_parent: H256, votes: Vec<H256>) -> Block {
+    pub fn voter_block(parent: H256, timestamp: u128, chain_number: u16, voter_parent: H256, votes: Vec<H256>) -> Block {
         Block::new(parent, timestamp, random_nonce!(), [0u8;32].into(), vec![],
         Content::Voter(voter::Content {
             chain_number,
@@ -141,7 +141,7 @@ pub mod tests {
         }), [0u8;32], *config::DEFAULT_DIFFICULTY)
     }
 
-    pub fn transaction_block(parent: H256, timestamp: u64, transactions: Vec<Transaction>) -> Block {
+    pub fn transaction_block(parent: H256, timestamp: u128, transactions: Vec<Transaction>) -> Block {
         Block::new(parent, timestamp, random_nonce!(), [0u8;32].into(), vec![],
         Content::Transaction(transaction::Content {
             transactions,

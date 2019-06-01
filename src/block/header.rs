@@ -7,7 +7,7 @@ pub struct Header {
     /// Hash of the parent proposer block.
     pub parent: H256,
     /// Block creation time in UNIX format.
-    pub timestamp: u64,
+    pub timestamp: u128,
     /// Proof of work nonce.
     pub nonce: u32,
     /// Merkle root of the block content.
@@ -22,7 +22,7 @@ impl Header {
     /// Create a new block header.
     pub fn new(
         parent: H256,
-        timestamp: u64,
+        timestamp: u128,
         nonce: u32,
         content_root: H256,
         extra_content: [u8; 32],

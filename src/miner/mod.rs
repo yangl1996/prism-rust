@@ -22,6 +22,7 @@ use std::time;
 
 use std::sync::{Arc, Mutex};
 use std::thread;
+use rand::distributions::Distribution;
 
 extern crate rand; // 0.6.0
 use rand::Rng;
@@ -31,7 +32,7 @@ use bigint::uint::U256;
 
 #[derive(PartialEq)]
 enum ControlSignal {
-    Start(u64, bool), // the number controls the interval between block generation
+    Start(u64, bool), // the number controls the lambda of interval between block generation
     Step,
     Exit,
 }
@@ -268,7 +269,9 @@ impl Context {
 
             if let OperatingState::Run(i, _) = self.operating_state {
                 if i != 0 {
-                    let interval = time::Duration::from_millis(i);
+                    let interval_dist = rand::distributions::Exp::new(1.0 / (i as f64));
+                    let interval = interval_dist.sample(&mut rng);
+                    let interval = time::Duration::from_micros(interval as u64);
                     thread::sleep(interval);
                 }
             }
@@ -296,7 +299,7 @@ impl Context {
     /// Create a header object from the current miner view
     fn create_header(&self) -> Header {
         let nonce: u32 = 0; // we will update this value in-place when mining
-        let timestamp: u64 = get_time();
+        let timestamp: u128= get_time();
         let content_root = self.content_merkle_tree_root;
         let extra_content: [u8; 32] = [0; 32]; // TODO: Add miner id?
         return Header::new(
@@ -419,11 +422,11 @@ impl Context {
 }
 
 /// Get the current UNIX timestamp
-fn get_time() -> u64 {
+fn get_time() -> u128 {
     let cur_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH);
     match cur_time {
         Ok(v) => {
-            return v.as_secs();
+            return v.as_millis();
         }
         Err(e) => println!("Error parsing time: {:?}", e),
     }
