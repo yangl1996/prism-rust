@@ -343,6 +343,8 @@ impl BlockChain {
                 drop(unreferred_transactions);
                 drop(proposer_best);
                 drop(unconfirmed_proposers);
+                info!("Adding proposer block {} at timestamp {} at level {}", block_hash, block.header.timestamp, self_level);
+
                 return Ok((vec![], vec![]));
             }
             Content::Voter(content) => {
@@ -386,12 +388,12 @@ impl BlockChain {
                         let mut from = previous_best;
                         while to_level > from_level {
                             unreachable!("to_level should always be equal to from_level");
-                            let votes: Vec<H256> = get_value!(vote_neighbor_cf, to);
-                            for vote in votes {
-                                added.push((vote, to_level));
-                            }
-                            to = get_value!(voter_parent_neighbor_cf, to);
-                            to_level -= 1;
+//                            let votes: Vec<H256> = get_value!(vote_neighbor_cf, to);
+//                            for vote in votes {
+//                                added.push((vote, to_level));
+//                            }
+//                            to = get_value!(voter_parent_neighbor_cf, to);
+//                            to_level -= 1;
                         }
 
                         // trace back both from chain and to chain until they reach the same block
@@ -402,7 +404,7 @@ impl BlockChain {
                                 added.push((vote, to_level));
                             }
                             to = get_value!(voter_parent_neighbor_cf, to);
-                            to_level -= 1;
+//                            to_level -= 1;
 
                             // trace back from chain
                             let votes: Vec<H256> = get_value!(vote_neighbor_cf, from);
@@ -410,7 +412,7 @@ impl BlockChain {
                                 removed.push((vote, from_level));
                             }
                             from = get_value!(voter_parent_neighbor_cf, from);
-                            from_level -= 1;
+//                            from_level -= 1;
                         }
                     }
                     // track which proposer levels did we touch. BTreeSet stores the elements in
@@ -497,12 +499,17 @@ impl BlockChain {
 
                         if new_leader != existing_leader {
                             match new_leader {
-                                None => wb.delete_cf(
-                                    proposer_leader_sequence_cf,
-                                    serialize(&(*level as u64)).unwrap(),
-                                )?,
-                                Some(new_leader) =>
-                                    put_value!(wb, proposer_leader_sequence_cf, (*level as u64), new_leader),
+                                None => {
+                                    wb.delete_cf(
+                                        proposer_leader_sequence_cf,
+                                        serialize(&(*level as u64)).unwrap(),
+                                    )?;
+                                    info!("UnConfirmed leader block {:?} at timestamp {} at level {}", existing_leader, block.header.timestamp, level);
+                                }
+                                Some(new_leader) => {
+                                    put_value!(wb, proposer_leader_sequence_cf, (*level as u64), new_leader);
+                                    info!("Confirmed leader block {} at timestamp {} at level {}", new_leader, block.header.timestamp, level);
+                                }
                             };
                             if change_begin.is_none() {
                                 change_begin = Some(*level);
@@ -544,6 +551,8 @@ impl BlockChain {
                                         unconfirmed_proposers.insert(*block);
                                         removed.push(*block);
                                     }
+                                    info!("UnConfirmed ledger by original leader block {} at timestamp {} at level {}", original_ledger.last().unwrap(), block.header.timestamp, level);
+
                                 }
                             }
                         }
@@ -564,6 +573,8 @@ impl BlockChain {
                                         break;
                                     }
                                     Some(leader) => {
+                                        info!("Confirming ledger via leader block {} at timestamp {} at level {}", leader, block.header.timestamp, level);
+
                                         // Get the collection of confirmed blocks by doing a DFS, so
                                         // that we preserve the reference order (i.e. the blocks that
                                         // is referred earlier appears in the front). We will then sort
