@@ -31,7 +31,7 @@ fn integration() {
     let (_ctx, server) = server::new(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 10999),msg_tx).expect("fail at creating server");
 
     // this section we define the timestamp and macros that increment timestamp automatically
-    let mut timestamp: u64 = 0;
+    let mut timestamp: u128 = 0;
     let mut parent_hash = blockchain.best_proposer();
     macro_rules! proposer_block {
         ( $proposer_refs:expr, $transaction_refs:expr ) => {{
