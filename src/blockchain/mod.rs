@@ -917,18 +917,18 @@ impl BlockChain {
             match snapshot
                 .get_cf(proposer_ledger_order_cf, serialize(&level).unwrap())?
             {
-                None => unreachable!("level <= ledger tip should have leader"),
                 Some(d) => {
                     let mut blocks: Vec<H256> = deserialize(&d).unwrap();
                     proposer_in_ledger.append(&mut blocks);
                 }
+                None => unreachable!("level <= ledger tip should exist in proposer_ledger_order_cf"),
             }
         }
 
         for hash in &proposer_in_ledger {
             let blocks: Vec<H256> = match snapshot.get_cf(transaction_ref_neighbor_cf, serialize(&hash).unwrap())? {
-                None => unreachable!("proposer in ledger should have transaction ref in database (even for empty ref)"),
                 Some(d) => deserialize(&d).unwrap(),
+                None => unreachable!("proposer in ledger should have transaction ref in database (even for empty ref)"),
             };
             ledger.push((*hash, blocks));
         }
@@ -1249,7 +1249,7 @@ impl BlockChain {
                     let mut blocks: Vec<H256> = deserialize(&d).unwrap();
                     proposer_in_ledger.append(&mut blocks);
                 }
-                None => unreachable!("level <= ledger tip should have leader"),
+                None => unreachable!("level <= ledger tip should exist in proposer_ledger_order_cf"),
             }
         }
 
