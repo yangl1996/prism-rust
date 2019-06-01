@@ -1165,7 +1165,7 @@ impl BlockChain {
 
         // use iterator to find voter fork and orphan voters, may be slow
         if display_fork {
-            let iter = self.db.iterator_cf(voter_node_chain_cf, rocksdb::IteratorMode::Start)?;
+            let iter = snapshot.iterator_cf(voter_node_chain_cf, rocksdb::IteratorMode::Start)?;
             for (k,v) in iter {
                 let hash: H256 = deserialize(k.as_ref()).unwrap();
                 let voter_block = hash.to_string();
