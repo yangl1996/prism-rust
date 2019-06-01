@@ -314,8 +314,8 @@ impl Context {
         // get mutex of blockchain and get all required data
         self.proposer_parent_hash = self.blockchain.best_proposer();
         self.difficulty = self.get_difficulty(&self.proposer_parent_hash);
-        let transaction_block_refs = self.blockchain.unreferred_transaction();
-        let mut proposer_block_refs = self.blockchain.unreferred_proposer();
+        let transaction_block_refs = self.blockchain.unreferred_transactions();
+        let mut proposer_block_refs = self.blockchain.unreferred_proposers();
         proposer_block_refs
             .iter()
             .position(|item| *item == self.proposer_parent_hash)
