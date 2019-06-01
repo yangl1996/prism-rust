@@ -151,7 +151,7 @@ impl TransactionGenerator {
                         d.interval
                     }
                 };
-                let interval = time::Duration::from_millis(interval);
+                let interval = time::Duration::from_micros(interval);
                 thread::sleep(interval);
             }
         });

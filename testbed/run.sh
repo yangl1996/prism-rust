@@ -181,7 +181,7 @@ function start_transactions_single
 {
 	curl -s "http://$3:$4/transaction-generator/set-arrival-distribution?interval=0&distribution=uniform"
 	curl -s "http://$3:$4/transaction-generator/step?count=10"
-	curl -s "http://$3:$4/miner/start?interval=300&lazy=true"
+	curl -s "http://$3:$4/miner/start?lambda=300000&lazy=true"
 }
 
 function query_api 
@@ -270,22 +270,6 @@ function scp_from_server
 	scp -r ${id}:${2} $3
 }
 
-function run_experiment
-{
-	echo "Starting Prism nodes"
-	execute_on_all start_prism
-	echo "All nodes started, starting transaction generation"
-	query_api start_transactions
-	echo "Running experiment for $1 seconds"
-	echo "$1" > experiment.txt
-	sleep $1
-	query_api get_performance
-	echo "Stopping all nodes"
-	execute_on_all stop_prism
-	python3 scripts/process_results.py nodes.txt $1
-	tput bel
-}
-
 function read_log
 {
 	local nodes=`cat nodes.txt`
@@ -316,6 +300,52 @@ function show_visualization
 			open "http://$pubip:$visport/"
 		fi
 	done
+}
+
+function show_performance
+{
+	start_time_line=`cat experiment.txt | grep START`
+	read -r _ start_timestamp <<< "$start_time_line"
+	if cat experiment.txt | grep STOP; then
+		stop_time_line=`cat experiment.txt | grep STOP`
+		read -r _ stop_timestamp <<< "$stop_time_line"
+	else
+		stop_timestamp=`date +%s`
+	fi
+	duration=`expr $stop_timestamp - $start_timestamp`
+	query_api get_performance
+	echo "Experiment started for $duration seconds"
+	python3 scripts/process_results.py nodes.txt $duration
+}
+
+function start_prism
+{
+	execute_on_all start_prism
+	start_time=`date +%s`
+	rm -f experiment.txt
+	echo "START $start_time" >> experiment.txt
+}
+
+function stop_prism
+{
+	execute_on_all stop_prism
+	stop_time=`date +%s`
+	echo "STOP $stop_time" >> experiment.txt
+}
+
+function run_experiment
+{
+	echo "Starting Prism nodes"
+	start_prism
+	echo "All nodes started, starting transaction generation"
+	query_api start_transactions
+	echo "Running experiment for $1 seconds"
+	sleep $1
+	show_performance
+	echo "Stopping all nodes"
+	execute_on_all stop_prism
+	python3 scripts/process_results.py nodes.txt $1
+	tput bel
 }
 
 mkdir -p log
@@ -366,15 +396,13 @@ case "$1" in
 		execute_on_all remove_payload
 		execute_on_all sync_payload ;;
 	start-prism)
-		execute_on_all start_prism ;;
+		start_prism ;;
 	stop-prism)
-		execute_on_all stop_prism ;;
+		stop_prism ;;
 	run-exp)
 		run_experiment $2 ;;
 	get-perf)
-		query_api get_performance
-		exp_time=`cat experiment.txt`
-		python3 scripts/process_results.py nodes.txt $exp_time ;;
+		show_performance ;;
 	show-vis)
 		show_visualization $2 ;;
 	run-all)

@@ -22,6 +22,7 @@ use std::time;
 
 use std::sync::{Arc, Mutex};
 use std::thread;
+use rand::distributions::Distribution;
 
 extern crate rand; // 0.6.0
 use rand::Rng;
@@ -31,7 +32,7 @@ use bigint::uint::U256;
 
 #[derive(PartialEq)]
 enum ControlSignal {
-    Start(u64, bool), // the number controls the interval between block generation
+    Start(u64, bool), // the number controls the lambda of interval between block generation
     Step,
     Exit,
 }
@@ -268,7 +269,9 @@ impl Context {
 
             if let OperatingState::Run(i, _) = self.operating_state {
                 if i != 0 {
-                    let interval = time::Duration::from_millis(i);
+                    let interval_dist = rand::distributions::Exp::new(i as f64);
+                    let interval = interval_dist.sample(&mut rng);
+                    let interval = time::Duration::from_micros(interval as u64);
                     thread::sleep(interval);
                 }
             }
