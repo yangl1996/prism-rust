@@ -317,8 +317,8 @@ impl Context {
         // get mutex of blockchain and get all required data
         self.proposer_parent_hash = self.blockchain.best_proposer();
         self.difficulty = self.get_difficulty(&self.proposer_parent_hash);
-        let transaction_block_refs = self.blockchain.unreferred_transaction();
-        let mut proposer_block_refs = self.blockchain.unreferred_proposer();
+        let transaction_block_refs = self.blockchain.unreferred_transactions();
+        let mut proposer_block_refs = self.blockchain.unreferred_proposers();
         proposer_block_refs
             .iter()
             .position(|item| *item == self.proposer_parent_hash)
@@ -330,7 +330,7 @@ impl Context {
         let proposer_block_votes: Vec<Vec<H256>> = (0..NUM_VOTER_CHAINS)
             .map(|i| {
                 self.blockchain
-                    .unvoted_proposer(&voter_parent_hash[i as usize])
+                    .unvoted_proposer(&voter_parent_hash[i as usize], &self.proposer_parent_hash )
                     .unwrap()
                     .clone()
             })

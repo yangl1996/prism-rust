@@ -89,8 +89,8 @@ fn integration() {
     }
 
     // start test
-    assert_eq!(blockchain.unreferred_transaction().len(),0);
-    assert_eq!(blockchain.unreferred_proposer().len(),1);
+    assert_eq!(blockchain.unreferred_transactions().len(),0);
+    assert_eq!(blockchain.unreferred_proposers().len(),1);
     assert_eq!(wallet.balance().unwrap(), 0);
 
     //test ico
@@ -101,16 +101,16 @@ fn integration() {
     let transaction_2 = random_transaction_block_0_input!();
     handle_block!(transaction_1);
     handle_block!(transaction_2);
-    assert_eq!(blockchain.unreferred_transaction().len(),2);
-    assert!(blockchain.unreferred_transaction().contains(&transaction_1.hash()));
-    assert!(blockchain.unreferred_transaction().contains(&transaction_2.hash()));
+    assert_eq!(blockchain.unreferred_transactions().len(),2);
+    assert!(blockchain.unreferred_transactions().contains(&transaction_1.hash()));
+    assert!(blockchain.unreferred_transactions().contains(&transaction_2.hash()));
 
     //this proposer refers transaction blocks, and is to be referred by someone
     let proposer_1 = proposer_block!(vec![],vec![transaction_1.hash()]);
     handle_block!(proposer_1);
-    assert_eq!(blockchain.unreferred_transaction().len(),1);
-    assert_eq!(blockchain.unreferred_proposer().len(),1);
-    assert!(blockchain.unreferred_proposer().contains(&proposer_1.hash()));
+    assert_eq!(blockchain.unreferred_transactions().len(),1);
+    assert_eq!(blockchain.unreferred_proposers().len(),1);
+    assert!(blockchain.unreferred_proposers().contains(&proposer_1.hash()));
     assert_eq!(proposer_1.hash(), blockchain.best_proposer());
     //create empty proposer (for proposer tree forking)
     let proposer_1_empty = proposer_block!();
@@ -121,9 +121,9 @@ fn integration() {
     //this proposer refers previous proposer and transaction blocks
     let proposer_2 = proposer_block!(vec![proposer_1.hash()], vec![transaction_2.hash()]);
     handle_block!(proposer_2);
-    assert_eq!(blockchain.unreferred_transaction().len(),0);
-    assert_eq!(blockchain.unreferred_proposer().len(),1);
-    assert!(blockchain.unreferred_proposer().contains(&proposer_2.hash()));
+    assert_eq!(blockchain.unreferred_transactions().len(),0);
+    assert_eq!(blockchain.unreferred_proposers().len(),1);
+    assert!(blockchain.unreferred_proposers().contains(&proposer_2.hash()));
     assert_eq!(proposer_2.hash(), blockchain.best_proposer());
 
     //change the proposer parent
@@ -297,11 +297,11 @@ fn integration() {
         assert_eq!(v.hash(), blockchain.best_voter(chain_number as usize));
     }
     //check the result after rolling back
-    assert_eq!(blockchain.unreferred_proposer().len(),2);
-    //we have fork in proposer tree, and in one fork proposer_8, in another fork proposer_9, these are 2 unreferred_proposer
-    assert!(blockchain.unreferred_proposer().contains(&proposer_9.hash()));
-    assert!(blockchain.unreferred_proposer().contains(&proposer_8.hash()));
-    assert_eq!(blockchain.unreferred_transaction().len(),0);
+    assert_eq!(blockchain.unreferred_proposers().len(),2);
+    //we have fork in proposer tree, and in one fork proposer_8, in another fork proposer_9, these are 2 unreferred_proposers
+    assert!(blockchain.unreferred_proposers().contains(&proposer_9.hash()));
+    assert!(blockchain.unreferred_proposers().contains(&proposer_8.hash()));
+    assert_eq!(blockchain.unreferred_transactions().len(),0);
     //although proposer_9 is leader now, it is not best proposer
     assert_ne!(proposer_9.hash(), blockchain.best_proposer());
     //only the proposer fork with proposer_9 is in ledger
@@ -340,9 +340,9 @@ fn integration() {
     let proposer_15 = proposer_block!(vec![proposer_8.hash()], vec![transaction_10.hash()]);
     handle_block!(proposer_15);
     parent_hash = proposer_15.hash();
-    assert_eq!(blockchain.unreferred_proposer().len(),1);
-    assert!(blockchain.unreferred_proposer().contains(&proposer_15.hash()));
-    assert_eq!(blockchain.unreferred_transaction().len(),0);
+    assert_eq!(blockchain.unreferred_proposers().len(),1);
+    assert!(blockchain.unreferred_proposers().contains(&proposer_15.hash()));
+    assert_eq!(blockchain.unreferred_transactions().len(),0);
     for chain_number in 0..config::NUM_VOTER_CHAINS {
         let v = voter_block!(chain_number, blockchain.best_voter(chain_number as usize), vec![
         proposer_10.hash(),proposer_11.hash(),proposer_12.hash(),proposer_13.hash(),proposer_14.hash(),proposer_15.hash()]);
