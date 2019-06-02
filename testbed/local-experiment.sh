@@ -107,7 +107,7 @@ done
 echo "Starting transaction generation and mining on each node"
 for (( i = 0; i < $num_nodes; i++ )); do
 	port=`expr $api_port + $i`
-	url="localhost:${port}/transaction-generator/set-arrival-distribution?interval=100000&distribution=uniform"
+	url="localhost:${port}/transaction-generator/set-arrival-distribution?interval=1000&distribution=uniform"
 	curl "$url" &> /dev/null
 	if [ "$?" -ne 0 ]; then
 		echo "Failed to set transaction rate for node $i"
@@ -119,7 +119,7 @@ for (( i = 0; i < $num_nodes; i++ )); do
 		echo "Failed to start transaction generation for node $i"
 		exit 1
 	fi
-	url="localhost:${port}/miner/start?lambda=200000&lazy=true"
+	url="localhost:${port}/miner/start?lambda=200000&lazy=false"
 	curl "$url" &> /dev/null
 	if [ "$?" -ne 0 ]; then
 		echo "Failed to start mining for node $i"

@@ -533,10 +533,15 @@ impl BlockChain {
 
                                 if max_votes >= remaining_votes && !new_leader.is_none() { //TODO: is_none is not required?
                                     for (i, p_block) in proposer_blocks.iter().enumerate() {
-                                        if max_votes <= all_votes[i] + remaining_votes && *p_block != new_leader.unwrap() {
+                                        if max_votes < all_votes[i] + remaining_votes && *p_block != new_leader.unwrap() {
                                             new_leader = None;
                                             break;
                                         }
+                                        if max_votes == all_votes[i] + remaining_votes && *p_block != new_leader.unwrap() && *p_block < new_leader.unwrap() {
+                                            new_leader = None;
+                                            break;
+                                        }
+
                                     }
                                 } else {
                                     new_leader = None;

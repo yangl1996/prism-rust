@@ -34,6 +34,7 @@ pub fn get_missing_references(
 
 pub fn check_chain_number(content: &Content) -> bool {
     let chain_num = content.chain_number;
+
     if chain_num > config::NUM_VOTER_CHAINS {
         return false;
     } else {
@@ -45,6 +46,7 @@ pub fn check_levels_voted(
     content: &Content,
     blockchain: &BlockChain,
     blockdb: &BlockDatabase,
+    parent: H256
 ) -> bool {
     // get the deepest block voted by our parent
     let parent_block = blockdb.get(&content.voter_parent).unwrap().unwrap();
@@ -55,6 +57,13 @@ pub fn check_levels_voted(
         let voted = blockdb.get(proposer_vote).unwrap().unwrap();
         let level = blockchain.proposer_level(&voted.hash()).unwrap() as usize;
         if level != index + 1 + last_voted_level {
+            return false;
+        }
+    }
+
+    // check if the last voted block is same as parent block
+    if !content.votes..last().is_none() {
+        if parent != *content.votes.last().unwrap() {
             return false;
         }
     }

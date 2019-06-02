@@ -138,7 +138,7 @@ pub fn check_block(
             }
 
             // check whether all proposer levels deeper than the one our parent voted are voted
-            if !voter_block::check_levels_voted(&content, blockchain, blockdb) {
+            if !voter_block::check_levels_voted(&content, blockchain, blockdb, parent) {
                 return BlockResult::WrongVoteLevel;
             }
             */

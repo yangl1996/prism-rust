@@ -32,7 +32,7 @@ use bigint::uint::U256;
 
 #[derive(PartialEq)]
 enum ControlSignal {
-    Start(u64, bool), // the number controls the lambda of interval between block generation
+    Start(u64, bool), // the number controls the lambda of lambda between block generation
     Step,
     Exit,
 }
@@ -119,8 +119,8 @@ impl Handle {
         self.control_chan.send(ControlSignal::Exit).unwrap();
     }
 
-    pub fn start(&self, interval: u64, lazy: bool) {
-        self.control_chan.send(ControlSignal::Start(interval, lazy)).unwrap();
+    pub fn start(&self, lambda: u64, lazy: bool) {
+        self.control_chan.send(ControlSignal::Start(lambda, lazy)).unwrap();
     }
 
     pub fn step(&self) {
@@ -146,7 +146,7 @@ impl Context {
                 self.operating_state = OperatingState::ShutDown;
             }
             ControlSignal::Start(i, l) => {
-                info!("Miner starting in continuous mode with interval {} and lazy mode {}", i, l);
+                info!("Miner starting in continuous mode with lambda {} and lazy mode {}", i, l);
                 self.operating_state = OperatingState::Run(i, l);
             }
             ControlSignal::Step => {
@@ -269,10 +269,10 @@ impl Context {
 
             if let OperatingState::Run(i, _) = self.operating_state {
                 if i != 0 {
-                    let interval_dist = rand::distributions::Exp::new(1.0 / (i as f64));
-                    let interval = interval_dist.sample(&mut rng);
-                    let interval = time::Duration::from_micros(interval as u64);
-                    thread::sleep(interval);
+                    let lambda_dist = rand::distributions::Exp::new(1.0 / (i as f64));
+                    let lambda = lambda_dist.sample(&mut rng);
+                    let lambda = time::Duration::from_micros(lambda as u64);
+                    thread::sleep(lambda);
                 }
             }
         }
@@ -330,7 +330,7 @@ impl Context {
         let proposer_block_votes: Vec<Vec<H256>> = (0..NUM_VOTER_CHAINS)
             .map(|i| {
                 self.blockchain
-                    .unvoted_proposer(&voter_parent_hash[i as usize], &self.proposer_parent_hash )
+                    .unvoted_proposer(&voter_parent_hash[i as usize], &self.proposer_parent_hash)
                     .unwrap()
                     .clone()
             })
