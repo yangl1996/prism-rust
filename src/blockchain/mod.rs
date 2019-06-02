@@ -8,6 +8,7 @@ use rocksdb::{ColumnFamilyDescriptor, Options, WriteBatch, DB};
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::mem;
 use std::sync::Mutex;
+use std::time;
 
 // Column family names for node/chain metadata
 const PROPOSER_NODE_LEVEL_CF: &str = "PROPOSER_NODE_LEVEL"; // hash to node level (u64)
@@ -480,8 +481,13 @@ impl BlockChain {
 
                         let new_leader: Option<H256> = {
                             let mut new_leader: Option<H256> = None;
+
+                            let mut all_votes: Vec<u16> = vec![];
+                            let mut total_votes: u16 = 0;
+                            let mut max_votes: u16 = 0;
+
                             for p_block in &proposer_blocks {
-                                let votes: Vec<(u16, u64)> = match self
+                                let p_votes: Vec<(u16, u64)> = match self
                                     .db
                                     .get_cf(proposer_node_vote_cf, serialize(&p_block).unwrap())?
                                 {
@@ -489,11 +495,54 @@ impl BlockChain {
                                     Some(d) => deserialize(&d).unwrap(),
                                 };
 
-                                // check whether this p_block is the leader
-                                if votes.len() as u16 > NUM_VOTER_CHAINS / 2 + 1 {
+                                all_votes.push(p_votes.len() as u16);
+                                total_votes += p_votes.len() as u16;
+
+                                if max_votes < p_votes.len() as u16 {
+                                    max_votes = p_votes.len() as u16;
                                     new_leader = Some(*p_block);
                                 }
+
+                                if max_votes == p_votes.len() as u16 && !new_leader.is_none(){ //TODO: is_none is not required?
+                                    if *p_block < new_leader.unwrap() {
+                                        new_leader = Some(*p_block);
+                                    }
+                                }
+                                //TODO: handle max_votes == votes.len()
                             }
+                            // debugging only
+                            if NUM_VOTER_CHAINS < total_votes {
+                                for p_block in &proposer_blocks {
+                                    let votes: Vec<(u16, u64)> = match self
+                                        .db
+                                        .get_cf(proposer_node_vote_cf, serialize(&p_block).unwrap())?
+                                        {
+                                            None => vec![],
+                                            Some(d) => deserialize(&d).unwrap(),
+                                        };
+                                    print!("block: {}, votes: {}; ", p_block, votes.len());
+                                    for vote in votes.iter(){
+                                        print!(" ({}, {}) ", vote.0, vote.1);
+                                    }
+                                    println!("");
+
+                                }
+                                panic!("NUM_VOTER_CHAINS: {} total_votes:{}", NUM_VOTER_CHAINS, total_votes)
+                            } else {
+                                let remaining_votes = NUM_VOTER_CHAINS - total_votes;
+
+                                if max_votes >= remaining_votes && !new_leader.is_none() { //TODO: is_none is not required?
+                                    for (i, p_block) in proposer_blocks.iter().enumerate() {
+                                        if max_votes <= all_votes[i] + remaining_votes && *p_block != new_leader.unwrap() {
+                                            new_leader = None;
+                                            break;
+                                        }
+                                    }
+                                } else {
+                                    new_leader = None;
+                                }
+                            }
+
                             new_leader
                         };
 
@@ -508,10 +557,11 @@ impl BlockChain {
                                 }
                                 Some(new_leader) => {
                                     put_value!(wb, proposer_leader_sequence_cf, (*level as u64), new_leader);
-                                    info!("Confirmed leader block {} at timestamp {} at level {}", new_leader, block.header.timestamp, level);
+                                        info!("Confirmed leader block {} at timestamp {} at level {}", new_leader, block.header.timestamp, level);
                                 }
                             };
                             if change_begin.is_none() {
+                                info!("Change begin at {:?}", {change_begin});
                                 change_begin = Some(*level);
                             }
                         }
@@ -697,25 +747,30 @@ impl BlockChain {
 
     /// Get the list of unvoted proposer blocks that a voter chain should vote for, given the tip
     /// of the particular voter chain.
-    pub fn unvoted_proposer(&self, tip: &H256) -> Result<Vec<H256>> {
+    pub fn unvoted_proposer(&self, tip: &H256, proposer_parent_hash: &H256) -> Result<Vec<H256>> {
         let voter_node_voted_level_cf = self.db.cf_handle(VOTER_NODE_VOTED_LEVEL_CF).unwrap();
+        let proposer_node_level_cf = self.db.cf_handle(PROPOSER_NODE_LEVEL_CF).unwrap();
         let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
         // get the deepest voted level
-        let voted_level: u64 = deserialize(
+        let first_voted_level: u64 = deserialize(
             &self
                 .db
                 .get_cf(voter_node_voted_level_cf, serialize(&tip).unwrap())?
                 .unwrap(),
         )
-        .unwrap();
-        // get the deepest proposer level
-        let proposer_best = self.proposer_best.lock().unwrap();
-        let proposer_best_level = proposer_best.1;
-        drop(proposer_best);
+            .unwrap();
+
+        let last_voted_level: u64 = deserialize(
+            &self
+                .db
+                .get_cf(proposer_node_level_cf, serialize(&proposer_parent_hash).unwrap())?
+                .unwrap(),
+        )
+            .unwrap();
 
         // get the first block we heard on each proposer level
         let mut list: Vec<H256> = vec![];
-        for level in voted_level + 1..=proposer_best_level {
+        for level in first_voted_level + 1..=last_voted_level {
             let blocks: Vec<H256> = deserialize(
                 &self
                     .db
@@ -1196,7 +1251,9 @@ fn vote_vec_merge(
         let operation: (bool, u16, u64) = deserialize(op).unwrap();
         match operation.0 {
             true => {
-                existing.push((operation.1, operation.2));
+                if !existing.contains(&(operation.1, operation.2)) {
+                    existing.push((operation.1, operation.2));
+                }
             }
             false => {
                 match existing.iter().position(|&x| x.0 == operation.1) {
@@ -1221,7 +1278,9 @@ fn h256_vec_append_merge(
     };
     for op in operands {
         let new_hash: H256 = deserialize(op).unwrap();
-        existing.push(new_hash);
+        if !existing.contains(&new_hash) {
+            existing.push(new_hash);
+        }
     }
     let result: Vec<u8> = serialize(&existing).unwrap();
     return Some(result);

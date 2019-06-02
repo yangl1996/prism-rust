@@ -327,7 +327,7 @@ impl Context {
         let proposer_block_votes: Vec<Vec<H256>> = (0..NUM_VOTER_CHAINS)
             .map(|i| {
                 self.blockchain
-                    .unvoted_proposer(&voter_parent_hash[i as usize])
+                    .unvoted_proposer(&voter_parent_hash[i as usize], &self.proposer_parent_hash )
                     .unwrap()
                     .clone()
             })
