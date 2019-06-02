@@ -62,7 +62,7 @@ pub fn check_levels_voted(
     }
 
     // check if the last voted block is same as parent block
-    if !content.votes..last().is_none() {
+    if !content.votes.last().is_none() {
         if parent != *content.votes.last().unwrap() {
             return false;
         }
