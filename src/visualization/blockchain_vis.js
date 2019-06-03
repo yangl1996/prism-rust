@@ -184,7 +184,7 @@ function handle_data(data) {
 			short_hash = hash.substring(58, 64);
 
             if (v['level'] == lowest) {
-                prefix = v['level']+':';
+                prefix = data['voter_chain_number'][voter_idx]+v['level']+':';
             } else {
                 prefix = '';
             }

@@ -881,6 +881,7 @@ impl BlockChain {
             transaction_in_ledger: Vec<String>,
             transaction_unreferred: Vec<String>,
             proposer_in_ledger: Vec<String>,
+            voter_chain_number: Vec<String>,
         }
 
         #[derive(Serialize)]
@@ -935,9 +936,22 @@ impl BlockChain {
         let voter_node_level_cf = self.db.cf_handle(VOTER_NODE_LEVEL_CF).unwrap();
         let voter_neighbor_cf = self.db.cf_handle(VOTE_NEIGHBOR_CF).unwrap();
 
+        // for computing the lowest level for voter chains related to the 100 levels of proposer nodes
+        let mut voter_lowest: Vec<u64> = vec![];
+        // get voter best blocks and levels, this is from memory
+        let mut voter_longest: Vec<(H256, u64)> = vec![];
+        // total voter number for each chain (using db iteration)
+        let mut voter_number: Vec<u64> = vec![];
+
         // get the ledger tip and bottom, for processing ledger
         let ledger_tip_ = self.ledger_tip.lock().unwrap();
         let ledger_tip = *ledger_tip_;
+        for voter_chain in self.voter_best.iter() {
+            let longest = voter_chain.lock().unwrap();
+            voter_longest.push((longest.0, longest.1));
+            voter_lowest.push(longest.1);
+            voter_number.push(0);
+        }
         // TODO: get snapshot here doesn't ensure consistency of snapshot, since we use multiple write batch in `insert_block`
         // and the ledger_tip lock doesn't ensure it either.
         let snapshot = self.db.snapshot();
@@ -946,16 +960,6 @@ impl BlockChain {
             true => ledger_tip - limit,
             false => 0,
         };
-
-        // for computing the lowest level for voter chains related to the 100 levels of proposer nodes
-        let mut voter_lowest: Vec<u64> = vec![];
-        // get voter best blocks and levels, this is from memory
-        let mut voter_longest: Vec<(H256, u64)> = vec![];
-        for voter_chain in self.voter_best.iter() {
-            let longest = voter_chain.lock().unwrap();
-            voter_longest.push((longest.0, longest.1));
-            voter_lowest.push(longest.1);
-        }
 
         // memory cache for votes
         let mut vote_cache: HashMap<(u16, u64), Vec<H256>> = HashMap::new();
@@ -1102,6 +1106,7 @@ impl BlockChain {
                 let hash: H256 = deserialize(k.as_ref()).unwrap();
                 let voter_block = hash.to_string();
                 let chain: u16 = deserialize(v.as_ref()).unwrap();
+                voter_number[chain as usize] += 1;
                 let level: u64 = match snapshot.get_cf(voter_node_level_cf, k.as_ref())? {
                     Some(d) => deserialize(&d).unwrap(),
                     None => unreachable!("voter should have level"),
@@ -1204,6 +1209,15 @@ impl BlockChain {
             .collect();
         drop(transaction_unreferred_);
 
+        // voter numbers
+        let mut voter_chain_number: Vec<String> = vec![];
+        for (chain, longest) in voter_longest.iter().enumerate() {
+            if voter_number[chain]==0 {
+                voter_chain_number.push("".to_string());
+            } else {
+                voter_chain_number.push(format!("({}/{}) ",1+longest.1,voter_number[chain]));
+            }
+        }
         let proposer_levels: Vec<Vec<String>> = proposer_tree
             .into_iter()
             .map(|(_k, v)| v.into_iter().map(|h256| h256.to_string()).collect())
@@ -1236,6 +1250,7 @@ impl BlockChain {
             proposer_in_ledger,
             transaction_in_ledger,
             transaction_unreferred,
+            voter_chain_number,
         };
 
         Ok(serde_json::to_string_pretty(&dump).unwrap())
