@@ -1,4 +1,4 @@
-use super::ledger_dump::dump_ledger;
+use super::dump::{dump_ledger, dump_voter_timestamp};
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
 use crate::utxodb::UtxoDatabase;
@@ -104,6 +104,12 @@ impl Server {
                         "/ledger.json" => serve_dynamic_file!(
                         req,
                         dump_ledger(&blockchain, &blockdb, &utxodb, limit),
+                        "application/json",
+                        addr
+                    ),
+                        "/voter.json" => serve_dynamic_file!(
+                        req,
+                        dump_voter_timestamp(&blockchain, &blockdb),
                         "application/json",
                         addr
                     ),

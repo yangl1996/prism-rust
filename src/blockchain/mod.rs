@@ -5,7 +5,7 @@ use crate::crypto::hash::{Hashable, H256};
 use bincode::{deserialize, serialize};
 use log::{debug, info, trace};
 use rocksdb::{ColumnFamilyDescriptor, Options, WriteBatch, DB};
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet, BTreeMap};
 use std::mem;
 use std::sync::Mutex;
 use std::time;
@@ -867,13 +867,55 @@ impl BlockChain {
         Ok(ledger)
     }
 
+    pub fn proposer_bottom_tip(&self) -> Result<(H256, H256, u64)> {
+        let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
+        let proposer_bottom = match self.db.get_cf(proposer_tree_level_cf, serialize(&1u64).unwrap())? {
+            Some(d) => {
+                let blocks: Vec<H256> = deserialize(&d).unwrap();
+                blocks.into_iter().next()
+            }
+            None => None,
+        };
+        if let Some(proposer_bottom) = proposer_bottom {
+            let proposer_best = self.proposer_best.lock().unwrap();
+            return Ok((proposer_bottom,proposer_best.0,proposer_best.1));
+        } else {
+            return Ok((H256::default(),H256::default(),0));
+        }
+    }
+
+    pub fn voter_bottom_tip(&self) -> Result<Vec<(H256, H256, u64)>> {
+        let voter_node_chain_cf = self.db.cf_handle(VOTER_NODE_CHAIN_CF).unwrap();
+        let voter_node_level_cf = self.db.cf_handle(VOTER_NODE_LEVEL_CF).unwrap();
+        let iter = self.db.iterator_cf(voter_node_chain_cf, rocksdb::IteratorMode::Start)?;
+        // vector of pair (level-1 voter, best voter, best level)
+        let mut voters = vec![(H256::default(),H256::default(),0u64);self.voter_best.len()];
+        for (k,v) in iter {
+            let hash: H256 = deserialize(k.as_ref()).unwrap();
+            let chain: u16 = deserialize(v.as_ref()).unwrap();
+            let level: u64 = match self.db.get_cf(voter_node_level_cf, k.as_ref())? {
+                Some(d) => deserialize(&d).unwrap(),
+                None => unreachable!("voter should have level"),
+            };
+            if level == 1 {
+                voters[chain as usize].0 = hash;
+            }
+        }
+        for chain in 0..self.voter_best.len() {
+            let voter_best = self.voter_best[chain].lock().unwrap();
+            voters[chain as usize].1 = voter_best.0;
+            voters[chain as usize].2 = voter_best.1;
+        }
+        Ok(voters)
+    }
+
     pub fn dump(&self, limit: u64, display_fork: bool) -> Result<String> {
         /// Struct to hold blockchain data to be dumped
         #[derive(Serialize)]
         struct Dump {
             edges: Vec<Edge>,
             proposer_levels: Vec<Vec<String>>,
-            proposer_leaders: HashMap<u64, String>,
+            proposer_leaders: BTreeMap<u64, String>,
             voter_longest: Vec<String>,
             proposer_nodes: HashMap<String, Proposer>,
             voter_nodes: HashMap<String, Voter>,
@@ -882,6 +924,7 @@ impl BlockChain {
             transaction_unreferred: Vec<String>,
             proposer_in_ledger: Vec<String>,
             voter_chain_number: Vec<String>,
+            proposer_tree_number: String,
         }
 
         #[derive(Serialize)]
@@ -965,10 +1008,10 @@ impl BlockChain {
         let mut vote_cache: HashMap<(u16, u64), Vec<H256>> = HashMap::new();
 
         let mut edges: Vec<Edge> = vec![];
-        let mut proposer_tree: HashMap<u64, Vec<H256>> = HashMap::new();
+        let mut proposer_tree: BTreeMap<u64, Vec<H256>> = BTreeMap::new();
         let mut proposer_nodes: HashMap<String, Proposer> = HashMap::new();
         let mut voter_nodes: HashMap<String, Voter> = HashMap::new();
-        let mut proposer_leaders: HashMap<u64, String> = HashMap::new();
+        let mut proposer_leaders: BTreeMap<u64, String> = BTreeMap::new();
         let mut proposer_in_ledger: Vec<H256> = vec![];
         let mut transaction_in_ledger: Vec<String> = vec![];
 
@@ -1209,6 +1252,25 @@ impl BlockChain {
             .collect();
         drop(transaction_unreferred_);
 
+        // proposer number
+        let mut proposer_number: usize = 0;
+        let mut proposer_level: u64 = 0;
+        for level in 0u64.. {
+            match snapshot
+                .get_cf(proposer_tree_level_cf, serialize(&level).unwrap())?
+                {
+                    Some(d) => {
+                        let blocks: Vec<H256> = deserialize(&d).unwrap();
+                        proposer_number += blocks.len();
+                    }
+                    None => {
+                        proposer_level = level;
+                        break;
+                    },
+                }
+        }
+        let proposer_tree_number = format!("({}/{}) ",proposer_level,proposer_number);
+
         // voter numbers
         let mut voter_chain_number: Vec<String> = vec![];
         for (chain, longest) in voter_longest.iter().enumerate() {
@@ -1218,6 +1280,7 @@ impl BlockChain {
                 voter_chain_number.push(format!("({}/{}) ",1+longest.1,voter_number[chain]));
             }
         }
+
         let proposer_levels: Vec<Vec<String>> = proposer_tree
             .into_iter()
             .map(|(_k, v)| v.into_iter().map(|h256| h256.to_string()).collect())
@@ -1251,6 +1314,7 @@ impl BlockChain {
             transaction_in_ledger,
             transaction_unreferred,
             voter_chain_number,
+            proposer_tree_number,
         };
 
         Ok(serde_json::to_string_pretty(&dump).unwrap())
