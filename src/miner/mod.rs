@@ -32,7 +32,7 @@ use bigint::uint::U256;
 
 #[derive(PartialEq)]
 enum ControlSignal {
-    Start(u64, bool), // the number controls the lambda of lambda between block generation
+    Start(u64, bool), // the number controls the lambda of interval between block generation
     Step,
     Exit,
 }
@@ -269,10 +269,10 @@ impl Context {
 
             if let OperatingState::Run(i, _) = self.operating_state {
                 if i != 0 {
-                    let lambda_dist = rand::distributions::Exp::new(1.0 / (i as f64));
-                    let lambda = lambda_dist.sample(&mut rng);
-                    let lambda = time::Duration::from_micros(lambda as u64);
-                    thread::sleep(lambda);
+                    let interval_dist = rand::distributions::Exp::new(1.0 / (i as f64));
+                    let interval = interval_dist.sample(&mut rng);
+                    let interval = time::Duration::from_micros(interval as u64);
+                    thread::sleep(interval);
                 }
             }
         }
