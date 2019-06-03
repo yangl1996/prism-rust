@@ -38,34 +38,20 @@ impl BlockBuffer {
         let mut blocks = self.blocks.lock().unwrap();
         let mut depgraph = self.dependency_graph.lock().unwrap();
 
-        let mut resolved: Vec<H256> = vec![];
         let mut stack: Vec<H256> = vec![hash];
+        let mut resolved_blocks: Vec<Block> = vec![];
+
         while let Some(hash) = stack.pop() {
             // mark this block as resolved in the graph, and iterate through all of its dependends
             // to see whether we can unblock some (check whether we are the only neighbor)
             let dependents = depgraph.neighbors_directed(hash, Incoming);
             for node in dependents {
-                if depgraph.edges(node).count() == 1 {
+                if depgraph.edges(node).count() == 1 && blocks.contains_key(&node) {
                     stack.push(node);
+                    resolved_blocks.push(blocks.remove(&node).unwrap());
                 }
             }
-            if !depgraph.remove_node(hash) {
-                continue;
-            }
-            // add the current block as resolved
-            resolved.push(hash);
-        }
-
-        let mut resolved_blocks: Vec<Block> = vec![];
-        for hash in &resolved {
-            let block = match blocks.remove(hash) {
-                Some(b) => b,
-                None => {
-                    // This is possible when hash is of a block that we just received
-                    continue;
-                }
-            };
-            resolved_blocks.push(block);
+            depgraph.remove_node(hash);
         }
 
         drop(blocks);
