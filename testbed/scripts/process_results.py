@@ -74,6 +74,7 @@ print_node_results("Block processed (proposer, voter, transaction)", [('processe
 print_node_results("Block mined (proposer, voter, transaction)", [('mined_proposer_blocks', 'Blks'), ('mined_voter_blocks', 'Blks'), ('mined_transaction_blocks', 'Blks')], 'sum')
 print_node_results("Block propogation delay mean (proposer, voter, transaction)", [('proposer_block_delay_mean', 'ms'), ('voter_block_delay_mean', 'ms'), ('transaction_block_delay_mean', 'ms')], 'average', 'none')
 print_node_results("Block propogation delay variance (proposer, voter, transaction)", [('proposer_block_delay_variance', 'ms'), ('voter_block_delay_variance', 'ms'), ('transaction_block_delay_variance', 'ms')], 'average', 'none')
+print_node_results("Incoming message queue length", [('incoming_message_queue', 'Msgs')], 'average', 'none')
 
 print("Transaction generation failures: {:.2f} Txs".format(tx_gen_fails))
 
