@@ -130,6 +130,11 @@ done
 start_time=`date +%s`
 echo "Running experiment, ^C to stop"
 
+if [ $1 -ne 1 ]; then
+    echo "You can run the following command to compare two nodes' blockchain:"
+    echo "python3 compare_blockchain.py localhost:$vis_port/blockchain.json?limit=10000?fork=true localhost:`expr $vis_port + 1`/blockchain.json?limit=10000?fork=true"
+fi
+
 for pid in $pids; do
 	wait $pid
 done
