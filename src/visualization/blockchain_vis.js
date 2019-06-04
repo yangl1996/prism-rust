@@ -141,6 +141,13 @@ function handle_data(data) {
 	for (hash in data['proposer_nodes']) {
 		v = data['proposer_nodes'][hash];
 		short_hash = hash.substring(58, 64);
+
+		if (hash == data['proposer_levels'][0][0]) {
+		    prefix = data['proposer_tree_number'];
+		} else {
+		    prefix = '';
+		}
+
         if (v['status'] == 'Leader') {
             proposer_type = 'LeaderProposer';
         } else {
@@ -150,7 +157,7 @@ function handle_data(data) {
 			group: "nodes",
 			data: {
 				id: hash,
-				disp: v['level']+':'+short_hash+' ('+v['votes']+')',
+				disp: prefix + v['level']+':'+short_hash+' ('+v['votes']+')',
 				type: proposer_type,
 			}
 		};

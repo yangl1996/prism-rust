@@ -130,3 +130,38 @@ pub fn dump_ledger(
     };
     return serde_json::to_string_pretty(&dump).unwrap();
 }
+
+pub fn dump_voter_timestamp(blockchain: &BlockChain, blockdb: &BlockDatabase) -> String {
+    let proposer_bottom_tip = blockchain.proposer_bottom_tip().unwrap_or((H256::default(),H256::default(),0));
+    let voter_bottom_tip = blockchain.voter_bottom_tip().unwrap_or(vec![]);
+    let mut dump = vec![];
+    let bottom_timestamp = match blockdb.get(&proposer_bottom_tip.0).unwrap_or(None) {
+        Some(block) => block.header.timestamp,
+        _ => 0,
+    };
+    let tip_timestamp = match blockdb.get(&proposer_bottom_tip.1).unwrap_or(None) {
+        Some(block) => block.header.timestamp,
+        _ => 0,
+    };
+    if proposer_bottom_tip.2 > 1 && tip_timestamp != bottom_timestamp{
+        dump.push(format!("Proposer tree, {:6.3} s / {:3} level = {:10.3}", (tip_timestamp - bottom_timestamp) as f64/1000f64, proposer_bottom_tip.2 - 1, (tip_timestamp - bottom_timestamp) as f64/(proposer_bottom_tip.2 - 1) as f64/1000f64));
+    } else {
+        dump.push("Proposer tree only grows zero or one level.".to_string());
+    }
+    for (chain,(bottom, tip, level)) in voter_bottom_tip.iter().enumerate() {
+        let bottom_timestamp = match blockdb.get(bottom).unwrap_or(None) {
+            Some(block) => block.header.timestamp,
+            _ => 0,
+        };
+        let tip_timestamp = match blockdb.get(tip).unwrap_or(None) {
+            Some(block) => block.header.timestamp,
+            _ => 0,
+        };
+        if *level > 1 && tip_timestamp != bottom_timestamp{
+            dump.push(format!("Chain {:7}, {:6.3} s / {:3} level = {:10.3}", chain, (tip_timestamp - bottom_timestamp) as f64/1000f64, *level - 1, (tip_timestamp - bottom_timestamp) as f64/(*level - 1) as f64/1000f64));
+        } else {
+            dump.push(format!("Chain {:7} only grows zero or one level.",chain));
+        }
+    }
+    return serde_json::to_string_pretty(&dump).unwrap();
+}
