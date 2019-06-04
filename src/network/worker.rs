@@ -75,6 +75,7 @@ impl Context {
             let chan = self.msg_chan.lock().unwrap();
             let msg = chan.recv().unwrap();
             drop(chan);
+            PERFORMANCE_COUNTER.record_process_message();
             let (msg, peer) = msg;
             match msg {
                 Message::Ping(nonce) => {

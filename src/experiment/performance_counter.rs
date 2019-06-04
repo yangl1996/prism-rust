@@ -46,6 +46,7 @@ pub struct Counter {
     received_proposer_blocks: AtomicUsize,
     received_voter_blocks: AtomicUsize,
     received_transaction_blocks: AtomicUsize,
+    incoming_message_queue: AtomicUsize,
 }
 
 #[derive(Serialize)]
@@ -77,6 +78,7 @@ pub struct Snapshot {
     pub proposer_block_delay_variance: usize,
     pub voter_block_delay_variance: usize,
     pub transaction_block_delay_variance: usize,
+    pub incoming_message_queue: usize,
 }
 
 impl Counter {
@@ -112,7 +114,16 @@ impl Counter {
             received_proposer_blocks: AtomicUsize::new(0),
             received_voter_blocks: AtomicUsize::new(0),
             received_transaction_blocks: AtomicUsize::new(0),
+            incoming_message_queue: AtomicUsize::new(0),
         }
+    }
+
+    pub fn record_process_message(&self) {
+        self.incoming_message_queue.fetch_sub(1, Ordering::Relaxed);
+    }
+
+    pub fn record_receive_message(&self) {
+        self.incoming_message_queue.fetch_add(1, Ordering::Relaxed);
     }
 
     pub fn record_receive_block(&self, b: &Block) {
@@ -274,6 +285,7 @@ impl Counter {
             voter_block_delay_variance: voter_delay_variance,
             transaction_block_delay_mean: transaction_delay_mean,
             transaction_block_delay_variance: transaction_delay_variance,
+            incoming_message_queue: self.incoming_message_queue.load(Ordering::Relaxed),
         };
     }
 }
