@@ -338,7 +338,11 @@ impl BlockChain {
 
                 // mark this new proposer block as unconfirmed
                 let mut unconfirmed_proposers = self.unconfirmed_proposers.lock().unwrap();
-                unconfirmed_proposers.insert(block_hash);
+                //TODO: please review the following 4 lines for #76, or move these codes to some lines above?
+                let already_exits = self.contains_proposer(&block_hash).unwrap();
+                if !already_exits {
+                    unconfirmed_proposers.insert(block_hash);
+                }
                 self.db.write(wb)?;
                 drop(unreferred_proposers);
                 drop(unreferred_transactions);
