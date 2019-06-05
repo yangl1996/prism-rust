@@ -153,7 +153,7 @@ impl Context {
                     let mut to_request: Vec<H256> = vec![];
                     while let Some(block) = to_process.pop() {
                         let validation_result =
-                            check_block(&block, &self.chain, &self.blockdb, &self.utxodb);
+                            check_block(&block, &self.chain, &self.blockdb);
                         match validation_result {
                             BlockResult::MissingParent(p) => {
                                 debug!("Missing parent block for block {:.8}", block.hash());
