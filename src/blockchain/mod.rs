@@ -293,7 +293,7 @@ impl BlockChain {
 
         macro_rules! merge_value {
             ($cf:expr, $key:expr, $value:expr) => {{
-            wb.put_cf(
+            wb.merge_cf(
                 $cf,
                 serialize(&$key).unwrap(),
                 serialize(&$value).unwrap(),
@@ -486,12 +486,12 @@ impl BlockChain {
 
     /// Get the list of unvoted proposer blocks that a voter chain should vote for, given the tip
     /// of the particular voter chain.
-    pub fn unvoted_proposer(&self, tip: &H256, proposer_parent_hash: &H256) -> Result<Vec<H256>> {
+    pub fn unvoted_proposer(&self, tip: &H256, proposer_parent: &H256) -> Result<Vec<H256>> {
         let voter_node_voted_level_cf = self.db.cf_handle(VOTER_NODE_VOTED_LEVEL_CF).unwrap();
         let proposer_node_level_cf = self.db.cf_handle(PROPOSER_NODE_LEVEL_CF).unwrap();
         let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
         // get the deepest voted level
-        let first_voted_level: u64 = deserialize(
+        let first_vote_level: u64 = deserialize(
             &self
                 .db
                 .get_cf(voter_node_voted_level_cf, serialize(&tip).unwrap())?
@@ -499,17 +499,17 @@ impl BlockChain {
         )
             .unwrap();
 
-        let last_voted_level: u64 = deserialize(
+        let last_vote_level: u64 = deserialize(
             &self
                 .db
-                .get_cf(proposer_node_level_cf, serialize(&proposer_parent_hash).unwrap())?
+                .get_cf(proposer_node_level_cf, serialize(&proposer_parent).unwrap())?
                 .unwrap(),
         )
             .unwrap();
 
         // get the first block we heard on each proposer level
         let mut list: Vec<H256> = vec![];
-        for level in first_voted_level + 1..=last_voted_level {
+        for level in first_vote_level + 1..=last_vote_level {
             let blocks: Vec<H256> = deserialize(
                 &self
                     .db
