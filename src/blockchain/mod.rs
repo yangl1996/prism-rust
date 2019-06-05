@@ -254,21 +254,18 @@ impl BlockChain {
 
     /// Insert a new block into the ledger. Returns the list of added transaction blocks and
     /// removed transaction blocks.
-    pub fn insert_block(&self, block: &Block) -> Result<(())> {
+    pub fn insert_block(&self, block: &Block) -> Result<()> {
         // get cf handles
         let proposer_node_level_cf = self.db.cf_handle(PROPOSER_NODE_LEVEL_CF).unwrap();
         let voter_node_level_cf = self.db.cf_handle(VOTER_NODE_LEVEL_CF).unwrap();
         let voter_node_chain_cf = self.db.cf_handle(VOTER_NODE_CHAIN_CF).unwrap();
         let voter_node_voted_level_cf = self.db.cf_handle(VOTER_NODE_VOTED_LEVEL_CF).unwrap();
         let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
-        let proposer_node_vote_cf = self.db.cf_handle(PROPOSER_NODE_VOTE_CF).unwrap();
         let parent_neighbor_cf = self.db.cf_handle(PARENT_NEIGHBOR_CF).unwrap();
         let vote_neighbor_cf = self.db.cf_handle(VOTE_NEIGHBOR_CF).unwrap();
         let voter_parent_neighbor_cf = self.db.cf_handle(VOTER_PARENT_NEIGHBOR_CF).unwrap();
         let transaction_ref_neighbor_cf = self.db.cf_handle(TRANSACTION_REF_NEIGHBOR_CF).unwrap();
         let proposer_ref_neighbor_cf = self.db.cf_handle(PROPOSER_REF_NEIGHBOR_CF).unwrap();
-        let proposer_leader_sequence_cf = self.db.cf_handle(PROPOSER_LEADER_SEQUENCE_CF).unwrap();
-        let proposer_ledger_order_cf = self.db.cf_handle(PROPOSER_LEDGER_ORDER_CF).unwrap();
 
         let mut wb = WriteBatch::default();
 
@@ -387,6 +384,73 @@ impl BlockChain {
         }
         self.db.write(wb)?;
         return Ok(());
+    }
+
+    /// Given two voter blocks on the same chain, calculate the added and removed votes when
+    /// switching the main chain.
+    pub fn vote_diff(&self, from: H256, to: H256) -> Result<(Vec<(H256, u64)>, Vec<(H256, u64)>)> {
+        // get cf handles
+        let voter_node_level_cf = self.db.cf_handle(VOTER_NODE_LEVEL_CF).unwrap();
+        let vote_neighbor_cf = self.db.cf_handle(VOTE_NEIGHBOR_CF).unwrap();
+        let voter_parent_neighbor_cf = self.db.cf_handle(VOTER_PARENT_NEIGHBOR_CF).unwrap();
+        
+        macro_rules! get_value {
+            ($cf:expr, $key:expr) => {{
+                deserialize(
+                    &self
+                    .db
+                    .get_cf($cf, serialize(&$key).unwrap())?
+                    .unwrap(),
+                )
+                .unwrap()
+            }}
+        }
+
+        let mut to: H256 = to;
+        let mut from: H256 = from;
+
+        let mut to_level: u64 = get_value!(voter_node_level_cf, to);
+        let mut from_level: u64 = get_value!(voter_node_level_cf, from);
+
+        let mut added_votes: Vec<(H256, u64)> = vec![];
+        let mut removed_votes: Vec<(H256, u64)> = vec![];
+
+        // trace back the longer chain until the levels of the two tips are the same
+        while to_level != from_level {
+            if to_level > from_level {
+                let votes: Vec<H256> = get_value!(vote_neighbor_cf, to);
+                for vote in votes {
+                    added_votes.push((vote, to_level));
+                }
+                to = get_value!(voter_parent_neighbor_cf, to);
+                to_level -= 1;
+            }
+            else if to_level < from_level {
+                let votes: Vec<H256> = get_value!(vote_neighbor_cf, from);
+                for vote in votes {
+                    removed_votes.push((vote, from_level));
+                }
+                from = get_value!(voter_parent_neighbor_cf, from);
+                from_level -= 1;
+            }
+        }
+
+        while to != from {
+            let votes: Vec<H256> = get_value!(vote_neighbor_cf, to);
+            for vote in votes {
+                added_votes.push((vote, to_level));
+            }
+            to = get_value!(voter_parent_neighbor_cf, to);
+            to_level -= 1;
+
+            let votes: Vec<H256> = get_value!(vote_neighbor_cf, from);
+            for vote in votes {
+                removed_votes.push((vote, from_level));
+            }
+            from = get_value!(voter_parent_neighbor_cf, from);
+            from_level -= 1;
+        }
+        return Ok((added_votes, removed_votes));
     }
 
     pub fn best_proposer(&self) -> H256 {
