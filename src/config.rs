@@ -4,7 +4,7 @@ use crate::crypto::hash::H256;
 pub const NETWORK_CAPACITY: u32 = 500_000; // 0.5 MB/s == 4Mb/s. We will use 80% of capacity for the txs.
 pub const NETWORK_DELAY: f32 = 2.0; // 2 sec delay
 // Design parameters
-pub const NUM_VOTER_CHAINS: u16 = 11 as u16; //
+pub const NUM_VOTER_CHAINS: u16 = 100 as u16; //
 pub const TX_BLOCK_SIZE_BYTES: u32 = 64_000; //64KB
 
 // All the parameters below are function of the above parameters
