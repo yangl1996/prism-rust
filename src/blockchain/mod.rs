@@ -254,7 +254,7 @@ impl BlockChain {
 
     /// Insert a new block into the ledger. Returns the list of added transaction blocks and
     /// removed transaction blocks.
-    pub fn insert_block(&self, block: &Block) -> Result<(Vec<H256>, Vec<H256>)> {
+    pub fn insert_block(&self, block: &Block) -> Result<(())> {
         // get cf handles
         let proposer_node_level_cf = self.db.cf_handle(PROPOSER_NODE_LEVEL_CF).unwrap();
         let voter_node_level_cf = self.db.cf_handle(VOTER_NODE_LEVEL_CF).unwrap();
@@ -270,6 +270,8 @@ impl BlockChain {
         let proposer_leader_sequence_cf = self.db.cf_handle(PROPOSER_LEADER_SEQUENCE_CF).unwrap();
         let proposer_ledger_order_cf = self.db.cf_handle(PROPOSER_LEDGER_ORDER_CF).unwrap();
 
+        let mut wb = WriteBatch::default();
+
         macro_rules! get_value {
             ($cf:expr, $key:expr) => {{
                 deserialize(
@@ -283,8 +285,8 @@ impl BlockChain {
         }
 
         macro_rules! put_value {
-            ($wb:expr, $cf:expr, $key:expr, $value:expr) => {{
-            $wb.put_cf(
+            ($cf:expr, $key:expr, $value:expr) => {{
+            wb.put_cf(
                 $cf,
                 serialize(&$key).unwrap(),
                 serialize(&$value).unwrap(),
@@ -292,13 +294,20 @@ impl BlockChain {
             }}
         }
 
-
-        let mut wb = WriteBatch::default();
+        macro_rules! merge_value {
+            ($cf:expr, $key:expr, $value:expr) => {{
+            wb.put_cf(
+                $cf,
+                serialize(&$key).unwrap(),
+                serialize(&$value).unwrap(),
+            )?;
+            }}
+        }
 
         // insert parent link
         let block_hash = block.hash();
         let parent_hash = block.header.parent;
-        put_value!(wb, parent_neighbor_cf, block_hash, parent_hash);
+        put_value!(parent_neighbor_cf, block_hash, parent_hash);
 
         match &block.content {
             Content::Proposer(content) => {
@@ -317,18 +326,14 @@ impl BlockChain {
                 // note that the parent is the first proposer block that we refer
                 let mut refed_proposer: Vec<H256> = vec![parent_hash];
                 refed_proposer.extend(&content.proposer_refs);
-                put_value!(wb, proposer_ref_neighbor_cf, block_hash, refed_proposer);
-                put_value!(wb, transaction_ref_neighbor_cf, block_hash, content.transaction_refs);
+                put_value!(proposer_ref_neighbor_cf, block_hash, refed_proposer);
+                put_value!(transaction_ref_neighbor_cf, block_hash, content.transaction_refs);
                 // get current block level
                 let parent_level: u64 = get_value!(proposer_node_level_cf, parent_hash);
                 let self_level = parent_level + 1;
                 // set current block level
-                put_value!(wb, proposer_node_level_cf, block_hash, self_level);
-                wb.merge_cf(
-                    proposer_tree_level_cf,
-                    serialize(&self_level).unwrap(),
-                    serialize(&block_hash).unwrap(),
-                )?;
+                put_value!(proposer_node_level_cf, block_hash, self_level);
+                merge_value!(proposer_tree_level_cf, self_level, block_hash);
                 // set best block info
                 let mut proposer_best = self.proposer_best.lock().unwrap();
                 if self_level > proposer_best.1 {
@@ -339,32 +344,29 @@ impl BlockChain {
                 // mark this new proposer block as unconfirmed
                 let mut unconfirmed_proposers = self.unconfirmed_proposers.lock().unwrap();
                 unconfirmed_proposers.insert(block_hash);
-                self.db.write(wb)?;
                 drop(unreferred_proposers);
                 drop(unreferred_transactions);
                 drop(proposer_best);
                 drop(unconfirmed_proposers);
                 info!("Adding proposer block {} at timestamp {} at level {}", block_hash, block.header.timestamp, self_level);
-
-                return Ok((vec![], vec![]));
             }
             Content::Voter(content) => {
                 // add voter parent
                 let voter_parent_hash = content.voter_parent;
-                put_value!(wb, voter_parent_neighbor_cf, block_hash, voter_parent_hash);
+                put_value!(voter_parent_neighbor_cf, block_hash, voter_parent_hash);
                 // get current block level and chain number
                 let voter_parent_level: u64 = get_value!(voter_node_level_cf, voter_parent_hash);
                 let voter_parent_chain: u16 = get_value!(voter_node_chain_cf, voter_parent_hash);
                 let self_level = voter_parent_level + 1;
                 let self_chain = voter_parent_chain;
                 // set current block level and chain number
-                put_value!(wb, voter_node_level_cf, block_hash, self_level);
-                put_value!(wb, voter_node_chain_cf, block_hash, self_chain);
+                put_value!(voter_node_level_cf, block_hash, self_level);
+                put_value!(voter_node_chain_cf, block_hash, self_chain);
                 // add voted blocks and set deepest voted level
-                put_value!(wb, vote_neighbor_cf, block_hash, content.votes);
+                put_value!(vote_neighbor_cf, block_hash, content.votes);
                 // set the voted level to be until proposer parent
                 let proposer_parent_level: u64 = get_value!(proposer_node_level_cf, parent_hash);
-                put_value!(wb, voter_node_voted_level_cf, block_hash, proposer_parent_level);
+                put_value!(voter_node_voted_level_cf, block_hash, proposer_parent_level);
                 let mut voter_best = self.voter_best[self_chain as usize].lock().unwrap();
                 let previous_best = voter_best.0;
                 let previous_best_level = voter_best.1;
@@ -374,349 +376,17 @@ impl BlockChain {
                     voter_best.0 = block_hash;
                     voter_best.1 = self_level;
                 }
-
-                // update vote levels
-                // only update if we are the main chain
-                if self_level > previous_best_level {
-                    let mut added: Vec<(H256, u64)> = vec![];
-                    let mut removed: Vec<(H256, u64)> = vec![];
-                    // if it's a side chain, and we are now better than the previous best, then
-                    // we are now the new main chain.
-                    if voter_parent_hash != previous_best {
-                        let mut to_level = voter_parent_level;
-                        let mut from_level = previous_best_level;
-                        let mut to = voter_parent_hash;
-                        let mut from = previous_best;
-                        while to_level > from_level {
-                            unreachable!("to_level should always be equal to from_level");
-//                            let votes: Vec<H256> = get_value!(vote_neighbor_cf, to);
-//                            for vote in votes {
-//                                added.push((vote, to_level));
-//                            }
-//                            to = get_value!(voter_parent_neighbor_cf, to);
-//                            to_level -= 1;
-                        }
-
-                        // trace back both from chain and to chain until they reach the same block
-                        while to != from {
-                            // trace back to chain
-                            let votes: Vec<H256> = get_value!(vote_neighbor_cf, to);
-                            for vote in votes {
-                                added.push((vote, to_level));
-                            }
-                            to = get_value!(voter_parent_neighbor_cf, to);
-//                            to_level -= 1;
-
-                            // trace back from chain
-                            let votes: Vec<H256> = get_value!(vote_neighbor_cf, from);
-                            for vote in votes {
-                                removed.push((vote, from_level));
-                            }
-                            from = get_value!(voter_parent_neighbor_cf, from);
-//                            from_level -= 1;
-                        }
-                    }
-                    // track which proposer levels did we touch. BTreeSet stores the elements in
-                    // order, and its iterator will retain this order.
-                    let mut affected: BTreeSet<u64> = BTreeSet::new();
-                    for removed_vote in &removed {
-                        wb.merge_cf(
-                            proposer_node_vote_cf,
-                            serialize(&removed_vote.0).unwrap(),
-                            serialize(&(false, self_chain as u16, removed_vote.1)).unwrap(),
-                        )?;
-                        let proposer_level: u64 = get_value!(proposer_node_level_cf, removed_vote.0);
-                        affected.insert(proposer_level);
-                    }
-                    for added_vote in &added {
-                        wb.merge_cf(
-                            proposer_node_vote_cf,
-                            serialize(&added_vote.0).unwrap(),
-                            serialize(&(true, self_chain as u16, added_vote.1)).unwrap(),
-                        )?;
-                        let proposer_level: u64 = get_value!(proposer_node_level_cf, added_vote.0);
-                        affected.insert(proposer_level);
-                    }
-                    // finally add the new votes in this new block
-                    for added_vote in &content.votes {
-                        wb.merge_cf(
-                            proposer_node_vote_cf,
-                            serialize(&added_vote).unwrap(),
-                            serialize(&(true, self_chain as u16, self_level as u64)).unwrap(),
-                        )?;
-                        let proposer_level: u64 = get_value!(proposer_node_level_cf, added_vote);
-                        affected.insert(proposer_level);
-                    }
-
-                    // FIXME: this is ugly. We have an ongoing write batch `wb` that contains
-                    // updates to cf'es except leader sequence and ledger order (basically
-                    // all topological information). Now we are going to commit this batch and use
-                    // the data we just committed to update leader sequence and ledger order. To do
-                    // this, we create a new write batch still named `wb` and return early here.
-                    // It breaks the promise that all writes happens in this function are committed
-                    // in one batch. We need to fix it if we want concurrent access to blockchain.
-                    self.db.write(wb)?;
-                    let mut wb = WriteBatch::default();
-
-                    // track the smallest level whose leader has changed
-                    let mut change_begin: Option<u64> = None;
-
-                    // try to update the leader block of each touched proposer level
-                    for level in &affected {
-                        let proposer_blocks: Vec<H256> = match self
-                            .db
-                            .get_cf(proposer_tree_level_cf, serialize(&level).unwrap())?
-                        {
-                            None => continue,
-                            Some(d) => deserialize(&d).unwrap(),
-                        };
-
-                        let existing_leader: Option<H256> = match self.db.get_cf(
-                            proposer_leader_sequence_cf,
-                            serialize(&(*level as u64)).unwrap(),
-                        )? {
-                            None => None,
-                            Some(d) => Some(deserialize(&d).unwrap()),
-                        };
-
-                        let new_leader: Option<H256> = {
-                            let mut new_leader: Option<H256> = None;
-
-                            let mut all_votes: Vec<u16> = vec![];
-                            let mut total_votes: u16 = 0;
-                            let mut max_votes: u16 = 0;
-
-                            for p_block in &proposer_blocks {
-                                let p_votes: Vec<(u16, u64)> = match self
-                                    .db
-                                    .get_cf(proposer_node_vote_cf, serialize(&p_block).unwrap())?
-                                {
-                                    None => vec![],
-                                    Some(d) => deserialize(&d).unwrap(),
-                                };
-
-                                all_votes.push(p_votes.len() as u16);
-                                total_votes += p_votes.len() as u16;
-
-                                if max_votes < p_votes.len() as u16 {
-                                    max_votes = p_votes.len() as u16;
-                                    new_leader = Some(*p_block);
-                                }
-
-                                if max_votes == p_votes.len() as u16 && !new_leader.is_none(){ //TODO: is_none is not required?
-                                    if *p_block < new_leader.unwrap() {
-                                        new_leader = Some(*p_block);
-                                    }
-                                }
-                                //TODO: handle max_votes == votes.len()
-                            }
-                            // debugging only
-                            if NUM_VOTER_CHAINS < total_votes {
-                                for p_block in &proposer_blocks {
-                                    let votes: Vec<(u16, u64)> = match self
-                                        .db
-                                        .get_cf(proposer_node_vote_cf, serialize(&p_block).unwrap())?
-                                        {
-                                            None => vec![],
-                                            Some(d) => deserialize(&d).unwrap(),
-                                        };
-                                    print!("block: {}, votes: {}; ", p_block, votes.len());
-                                    for vote in votes.iter(){
-                                        print!(" ({}, {}) ", vote.0, vote.1);
-                                    }
-                                    println!("");
-
-                                }
-                                panic!("NUM_VOTER_CHAINS: {} total_votes:{}", NUM_VOTER_CHAINS, total_votes)
-                            } else {
-                                let remaining_votes = NUM_VOTER_CHAINS - total_votes;
-
-                                if max_votes >= remaining_votes && !new_leader.is_none() { //TODO: is_none is not required?
-                                    for (i, p_block) in proposer_blocks.iter().enumerate() {
-                                        if max_votes < all_votes[i] + remaining_votes && *p_block != new_leader.unwrap() {
-                                            new_leader = None;
-                                            break;
-                                        }
-                                        if max_votes == all_votes[i] + remaining_votes && *p_block != new_leader.unwrap() && *p_block < new_leader.unwrap() {
-                                            new_leader = None;
-                                            break;
-                                        }
-
-                                    }
-                                } else {
-                                    new_leader = None;
-                                }
-                            }
-
-                            new_leader
-                        };
-
-                        if new_leader != existing_leader {
-                            match new_leader {
-                                None => {
-                                    wb.delete_cf(
-                                        proposer_leader_sequence_cf,
-                                        serialize(&(*level as u64)).unwrap(),
-                                    )?;
-                                    info!("UnConfirmed leader block {:?} at timestamp {} at level {}", existing_leader, block.header.timestamp, level);
-                                }
-                                Some(new_leader) => {
-                                    put_value!(wb, proposer_leader_sequence_cf, (*level as u64), new_leader);
-                                        info!("Confirmed leader block {} at timestamp {} at level {}", new_leader, block.header.timestamp, level);
-                                }
-                            };
-                            if change_begin.is_none() {
-                                info!("Change begin at {:?}", {change_begin});
-                                change_begin = Some(*level);
-                            }
-                        }
-                    }
-
-                    // FIXME: yet another db commit. This commits the new leader blocks.
-                    self.db.write(wb)?;
-                    let mut wb = WriteBatch::default();
-
-                    // If change happens, recompute the ledger. First, retire all levels from the
-                    // current ledger tip all the way to the first touched level, by deconfirming
-                    // the blocks originally confirmed by those levels. Then, start confirming
-                    // blocks from the first touched level until we reach a level without current
-                    // leader block.
-                    if change_begin.is_some() {
-                        let change_begin = change_begin.unwrap();
-                        let mut ledger_tip = self.ledger_tip.lock().unwrap();
-                        let mut unconfirmed_proposers = self.unconfirmed_proposers.lock().unwrap();
-
-                        let mut removed: Vec<H256> = vec![]; // proposer blocks removed from the ledger
-                        let mut added: Vec<H256> = vec![]; // proposer blocks added to the ledger
-
-                        // deconfirm the blocks
-                        for level in change_begin..=*ledger_tip {
-                            match self.db.get_cf(
-                                proposer_ledger_order_cf,
-                                serialize(&(level as u64)).unwrap(),
-                            )? {
-                                None => unreachable!("Level {} should have a leader block", level),
-                                Some(d) => {
-                                    let original_ledger: Vec<H256> = deserialize(&d).unwrap();
-                                    wb.delete_cf(
-                                        proposer_ledger_order_cf,
-                                        serialize(&(level as u64)).unwrap(),
-                                    )?;
-                                    for block in &original_ledger {
-                                        unconfirmed_proposers.insert(*block);
-                                        removed.push(*block);
-                                    }
-                                    info!("UnConfirmed ledger by original leader block {} at timestamp {} at level {}", original_ledger.last().unwrap(), block.header.timestamp, level);
-
-                                }
-                            }
-                        }
-
-                        // recompute the ledger
-                        if change_begin <= *ledger_tip + 1 {
-                            for level in change_begin.. {
-                                let leader: Option<H256> = match self.db.get_cf(
-                                    proposer_leader_sequence_cf,
-                                    serialize(&(level as u64)).unwrap(),
-                                )? {
-                                    None => None,
-                                    Some(d) => Some(deserialize(&d).unwrap()),
-                                };
-                                match leader {
-                                    None => {
-                                        *ledger_tip = level - 1;
-                                        break;
-                                    }
-                                    Some(leader) => {
-                                        info!("Confirming ledger via leader block {} at timestamp {} at level {}", leader, block.header.timestamp, level);
-
-                                        // Get the collection of confirmed blocks by doing a DFS, so
-                                        // that we preserve the reference order (i.e. the blocks that
-                                        // is referred earlier appears in the front). We will then sort
-                                        // the list (stable sort) according to the level, so we get a
-                                        // total ordering by level and break ties by reference order.
-
-                                        let mut ledger: Vec<(H256, u64)> = vec![];
-                                        let mut stack: Vec<H256> = vec![leader];
-
-                                        // Start DFS
-                                        while let Some(top) = stack.pop() {
-                                            // See whether this block is in the unconfirmed list. If
-                                            // so, remove it. Otherwise, just pass this block.
-                                            if !unconfirmed_proposers.remove(&top) {
-                                                continue;
-                                            }
-
-                                            // Get info of this block.
-                                            let level: u64 = get_value!(proposer_node_level_cf, top);
-                                            let refs: Vec<H256> = get_value!(proposer_ref_neighbor_cf, top);
-
-                                            // Insert into the ledger.
-                                            ledger.push((top, level));
-
-                                            // Search all referenced blocks. Note that we need to
-                                            // reverse the order of the refs: we want the front
-                                            // of the reference list to be searched first, so we need
-                                            // to make sure it appears at the top of the stack.
-                                            for ref_hash in refs.iter().rev() {
-                                                stack.push(*ref_hash);
-                                            }
-                                        }
-
-                                        // Stable sort the ledger according to level
-                                        ledger.sort_by_cached_key(|k| k.1);
-
-                                        // Write the new ledger
-                                        let ledger: Vec<H256> = ledger.iter().map(|x| x.0).collect();
-                                        put_value!(wb, proposer_ledger_order_cf, (level as u64), ledger);
-                                        for block in &ledger {
-                                            added.push(*block);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        // commit the new ledger
-                        self.db.write(wb)?;
-
-                        // If we did touch the ledger, gather the diff of the ledger in the form of transaction blocks
-                        let mut removed_transaction: Vec<H256> = vec![];
-                        let mut added_transaction: Vec<H256> = vec![];
-                        for hash in removed {
-                            let mut transactions: Vec<H256> = get_value!(transaction_ref_neighbor_cf, hash);
-                            removed_transaction.append(&mut transactions);
-                        }
-                        for hash in added {
-                            let mut transactions: Vec<H256> = get_value!(transaction_ref_neighbor_cf, hash);
-                            added_transaction.append(&mut transactions);
-                        }
-
-                        drop(voter_best);
-                        drop(ledger_tip);
-                        drop(unconfirmed_proposers);
-                        return Ok((added_transaction, removed_transaction));
-                    } else {
-                        // If we didn't change any leader, and thus didn't touch the ledger
-                        self.db.write(wb)?;
-                        drop(voter_best);
-                        return Ok((vec![], vec![]));
-                    }
-                } else {
-                    // If we didn't update the votes.
-                    self.db.write(wb)?;
-                    drop(voter_best);
-                    return Ok((vec![], vec![]));
-                }
+                drop(voter_best);
             }
             Content::Transaction(content) => {
                 // mark itself as unreferred
                 let mut unreferred_transactions = self.unreferred_transactions.lock().unwrap();
                 unreferred_transactions.insert(block_hash);
                 drop(unreferred_transactions);
-                self.db.write(wb)?;
-                return Ok((vec![], vec![]));
             }
         }
+        self.db.write(wb)?;
+        return Ok(());
     }
 
     pub fn best_proposer(&self) -> H256 {
