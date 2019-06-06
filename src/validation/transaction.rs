@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use crate::crypto::hash::Hashable;
 use crate::transaction::{CoinId, Transaction};
 use crate::utxodb::UtxoDatabase;
@@ -53,6 +54,7 @@ pub fn check_signature(transaction: &Transaction) -> bool {
         input: transaction.input.clone(),
         output: transaction.output.clone(),
         authorization: vec![],
+        hash: RefCell::new(None),
     };
     let msg = bincode::serialize(&unsigned_transaction).unwrap();
     transaction

@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use crate::crypto::hash::Hashable;
 use crate::crypto::sign::{KeyPair, PubKey, Signable};
 use crate::transaction::{Address, Authorization, CoinId, Input, Output, Transaction};
@@ -195,6 +196,7 @@ impl Wallet {
             input: coins_to_use,
             output: output,
             authorization: vec![],
+            hash: RefCell::new(None),
         };
         let mut authorization = vec![];
         owners.sort_unstable();
@@ -262,6 +264,7 @@ impl Wallet {
                 input: coins_to_use,
                 output: output,
                 authorization: vec![],
+                hash: RefCell::new(None)
             };
             let mut authorization = vec![];
             owners.sort_unstable();

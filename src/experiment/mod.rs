@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 pub mod transaction_generator;
 pub mod performance_counter;
 
@@ -26,6 +27,7 @@ pub fn ico(
             .flatten()
             .collect(),
         authorization: vec![],
+        hash: RefCell::new(None)
     };
     let diff = utxodb.apply_diff(&[funding], &[]).unwrap();
     wallet.apply_diff(&diff.0, &diff.1).unwrap();
