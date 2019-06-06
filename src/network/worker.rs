@@ -178,8 +178,6 @@ impl Context {
                                     &self.blockdb,
                                     &self.chain,
                                     &self.server,
-                                    &self.utxodb,
-                                    &self.wallet,
                                 );
                                 let mut resolved_by_current = self.buffer.satisfy(block.hash());
                                 if !resolved_by_current.is_empty() {

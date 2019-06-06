@@ -253,8 +253,6 @@ impl Context {
                         &self.db,
                         &self.blockchain,
                         &self.server,
-                        &self.utxodb,
-                        &self.wallet,
                     );
                     //                debug!("Mined block {:.8}", mined_block.hash());
                     // TODO: Only update block contents if relevant parent

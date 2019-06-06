@@ -17,8 +17,6 @@ pub fn new_validated_block(
     blockdb: &BlockDatabase,
     chain: &BlockChain,
     server: &ServerHandle,
-    utxodb: &UtxoDatabase,
-    wallet: &Wallet,
 ) {
     PERFORMANCE_COUNTER.record_process_block(&block);
 

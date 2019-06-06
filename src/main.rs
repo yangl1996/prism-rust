@@ -15,6 +15,7 @@ use prism::experiment::transaction_generator::TransactionGenerator;
 use prism::experiment::performance_counter::Counter as PerformanceCounter;
 use prism::miner;
 use prism::crypto::hash::{H256, Hashable};
+use prism::handler::update_ledger;
 use std::net;
 use std::process;
 use std::sync::Arc;
@@ -114,6 +115,18 @@ fn main() {
             }
         }
     }
+
+    // start thread to update ledger
+    let blockdb_copy = Arc::clone(&blockdb);
+    let blockchain_copy = Arc::clone(&blockchain);
+    let utxodb_copy = Arc::clone(&utxodb);
+    let wallet_copy = Arc::clone(&wallet);
+    thread::spawn(move || {
+        loop {
+            update_ledger(&blockdb_copy, &blockchain_copy, &utxodb_copy, &wallet_copy);
+            thread::sleep(time::Duration::from_millis(1000));
+        }
+    });
 
     // parse p2p server address
     let p2p_addr = matches.value_of("peer_addr").unwrap().parse::<net::SocketAddr>().unwrap_or_else(|e| {
