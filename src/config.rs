@@ -1,20 +1,23 @@
 use crate::crypto::hash::H256;
 
 // Network parameters
-pub const NETWORK_CAPACITY: u32 = 500_000; // 0.5 MB/s == 4Mb/s. We will use 80% of capacity for the txs.
-pub const NETWORK_DELAY: f32 = 2.0; // 2 sec delay
+pub const NETWORK_CAPACITY: u32 = 2000_000; // the expected network usage in KByte/s
+pub const NETWORK_DELAY: f32 = 2.0; // the expected block propagation delay in seconds
+
 // Design parameters
-pub const NUM_VOTER_CHAINS: u16 = 100 as u16; //
-pub const TX_BLOCK_SIZE_BYTES: u32 = 64_000; //64KB
+pub const NUM_VOTER_CHAINS: u16 = 100 as u16; // more chains means better latency
+pub const TX_BLOCK_SIZE_BYTES: u32 = 64_000; // the maximum size of a transaction block
 
 // All the parameters below are function of the above parameters
-pub const TX_THROUGHPUT: u32 = NETWORK_CAPACITY*4/5; // .4 MB == 3.2 Mb.
-pub const CHAIN_MINING_RATE: f32 = 0.2/(NETWORK_DELAY); // Mining rate of each chain.
+pub const TX_THROUGHPUT: u32 = NETWORK_CAPACITY*4/5; // the network throughput that is expected to be used by transaction blocks
+pub const CHAIN_MINING_RATE: f32 = 0.2/(NETWORK_DELAY); // mining rate of the proposer chain and each voter chain in Blks/s
 
-//Ratio Prop::Total_Voter::Tx_block
+// Do not change from here
+
+// Mining rate ratio of Prop:Voter(total):Tx
 pub const RATIO: (f32, f32, f32) = (1.0, NUM_VOTER_CHAINS as f32, (TX_THROUGHPUT as f32)/((TX_BLOCK_SIZE_BYTES as f32)*CHAIN_MINING_RATE) ); 
 
-// Mining rates in percentages*100 of the total mining rate
+// Mining rates
 pub const TOTAL_MINING_RANGE: u32 = 10000; // This is only used for resolution
 pub const CHAIN_MINING_RANGE: u32 = ((TOTAL_MINING_RANGE as f32)/(RATIO.0+RATIO.1+RATIO.2)) as u32;
 // Total for the voter chains

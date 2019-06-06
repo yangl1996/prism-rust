@@ -203,9 +203,9 @@ function get_performance_single
 
 function start_transactions_single
 {
-	curl -s "http://$3:$4/transaction-generator/set-arrival-distribution?interval=100000&distribution=uniform"
+	curl -s "http://$3:$4/transaction-generator/set-arrival-distribution?interval=1000&distribution=uniform"
 	curl -s "http://$3:$4/transaction-generator/start"
-	curl -s "http://$3:$4/miner/start?lambda=1000000&lazy=false"
+	curl -s "http://$3:$4/miner/start?lambda=500000&lazy=false"
 }
 
 function query_api 
