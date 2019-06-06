@@ -334,7 +334,7 @@ impl BlockChain {
                 let parent_level: u64 = get_value!(proposer_node_level_cf, parent_hash);
                 let self_level = parent_level + 1;
                 // set current block level
-                put_value!(proposer_node_level_cf, block_hash, self_level);
+                put_value!(proposer_node_level_cf, block_hash, self_level as u64);
                 merge_value!(proposer_tree_level_cf, self_level, block_hash);
                 // set best block info
                 let mut proposer_best = self.proposer_best.lock().unwrap();
@@ -362,13 +362,13 @@ impl BlockChain {
                 let self_level = voter_parent_level + 1;
                 let self_chain = voter_parent_chain;
                 // set current block level and chain number
-                put_value!(voter_node_level_cf, block_hash, self_level);
-                put_value!(voter_node_chain_cf, block_hash, self_chain);
+                put_value!(voter_node_level_cf, block_hash, self_level as u64);
+                put_value!(voter_node_chain_cf, block_hash, self_chain as u16);
                 // add voted blocks and set deepest voted level
                 put_value!(vote_neighbor_cf, block_hash, content.votes);
                 // set the voted level to be until proposer parent
                 let proposer_parent_level: u64 = get_value!(proposer_node_level_cf, parent_hash);
-                put_value!(voter_node_voted_level_cf, block_hash, proposer_parent_level);
+                put_value!(voter_node_voted_level_cf, block_hash, proposer_parent_level as u64);
                 let mut voter_best = self.voter_best[self_chain as usize].lock().unwrap();
                 let previous_best = voter_best.0;
                 let previous_best_level = voter_best.1;
@@ -403,7 +403,7 @@ impl BlockChain {
         macro_rules! get_value {
             ($cf:expr, $key:expr) => {{
                 match self.db.get_cf($cf, serialize(&$key).unwrap())? {
-                    Some(raw) => deserialize(&raw).unwrap(),
+                    Some(raw) => Some(deserialize(&raw).unwrap()),
                     None => None,
                 }
             }}

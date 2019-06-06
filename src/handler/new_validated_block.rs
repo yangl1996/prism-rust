@@ -20,11 +20,6 @@ pub fn new_validated_block(
 ) {
     PERFORMANCE_COUNTER.record_process_block(&block);
 
-    // TODO: we should use blockchain as the ultimate authority to tell whether a block has been
-    // received
-    // insert the new block into the blockdb
-    blockdb.insert(&block).unwrap();
-
     // if this block is a transaction, remove transactions from mempool
     match &block.content {
         Content::Transaction(content) => {
@@ -44,6 +39,11 @@ pub fn new_validated_block(
 
     // insert the new block into the blockchain
     chain.insert_block(&block).unwrap();
+
+    // TODO: we should use blockchain as the ultimate authority to tell whether a block has been
+    // received
+    // insert the new block into the blockdb
+    blockdb.insert(&block).unwrap();
 
     // tell the neighbors that we have a new block
     server.broadcast(message::Message::NewBlockHashes(vec![block.hash()]));
