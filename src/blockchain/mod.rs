@@ -40,7 +40,8 @@ pub struct BlockChain {
     unreferred_transactions: Mutex<HashSet<H256>>,
     unreferred_proposers: Mutex<HashSet<H256>>,
     unconfirmed_proposers: Mutex<HashSet<H256>>,
-    ledger_tip: Mutex<u64>,
+    proposer_ledger_tip: Mutex<u64>,
+    voter_ledger_tips: Mutex<Vec<H256>>,
 }
 
 // Functions to edit the blockchain
@@ -145,7 +146,8 @@ impl BlockChain {
             unreferred_transactions: Mutex::new(HashSet::new()),
             unreferred_proposers: Mutex::new(HashSet::new()),
             unconfirmed_proposers: Mutex::new(HashSet::new()),
-            ledger_tip: Mutex::new(0),
+            proposer_ledger_tip: Mutex::new(0),
+            voter_ledger_tips: Mutex::new(vec![H256::default(); NUM_VOTER_CHAINS as usize]),
         };
 
         return Ok(blockchain_db);
@@ -212,6 +214,7 @@ impl BlockChain {
         )?;
 
         // voter genesis blocks
+        let mut voter_ledger_tips = db.voter_ledger_tips.lock().unwrap();
         for chain_num in 0..NUM_VOTER_CHAINS {
             wb.put_cf(
                 parent_neighbor_cf,
@@ -246,7 +249,9 @@ impl BlockChain {
             let mut voter_best = db.voter_best[chain_num as usize].lock().unwrap();
             voter_best.0 = VOTER_GENESIS_HASHES[chain_num as usize];
             drop(voter_best);
+            voter_ledger_tips[chain_num as usize] = VOTER_GENESIS_HASHES[chain_num as usize];
         }
+        drop(voter_ledger_tips);
         db.db.write(wb)?;
 
         return Ok(db);
@@ -384,6 +389,232 @@ impl BlockChain {
         }
         self.db.write(wb)?;
         return Ok(());
+    }
+
+    pub fn update_ledger(&self) -> Result<(Vec<H256>, Vec<H256>)> { 
+        let proposer_node_vote_cf = self.db.cf_handle(PROPOSER_NODE_VOTE_CF).unwrap();
+        let proposer_node_level_cf = self.db.cf_handle(PROPOSER_NODE_LEVEL_CF).unwrap();
+        let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
+        let proposer_leader_sequence_cf = self.db.cf_handle(PROPOSER_LEADER_SEQUENCE_CF).unwrap();
+        let proposer_ledger_order_cf = self.db.cf_handle(PROPOSER_LEDGER_ORDER_CF).unwrap();
+        let proposer_ref_neighbor_cf = self.db.cf_handle(PROPOSER_REF_NEIGHBOR_CF).unwrap();
+        let transaction_ref_neighbor_cf = self.db.cf_handle(TRANSACTION_REF_NEIGHBOR_CF).unwrap();
+
+        macro_rules! get_value {
+            ($cf:expr, $key:expr) => {{
+                match self.db.get_cf($cf, serialize(&$key).unwrap())? {
+                    Some(raw) => deserialize(&raw).unwrap(),
+                    None => None,
+                }
+            }}
+        }
+
+        // apply the vote diff while tracking the votes of which proposer levels are affected
+        let mut wb = WriteBatch::default();
+        macro_rules! merge_value {
+            ($cf:expr, $key:expr, $value:expr) => {{
+            wb.merge_cf(
+                $cf,
+                serialize(&$key).unwrap(),
+                serialize(&$value).unwrap(),
+            )?;
+            }}
+        }
+
+        let mut voter_ledger_tips = self.voter_ledger_tips.lock().unwrap();
+        let mut affected: BTreeSet<u64> = BTreeSet::new();
+
+        for chain_num in 0..NUM_VOTER_CHAINS {
+            // get the diff of votes on this voter chain
+            let from = voter_ledger_tips[chain_num as usize];
+            let to = self.voter_best[chain_num as usize].lock().unwrap().0;
+            voter_ledger_tips[chain_num as usize] = to;
+
+            let (added, removed) = self.vote_diff(from, to)?;
+
+            // apply the vote diff on the proposer main chain vote cf
+            for vote in &removed {
+                merge_value!(proposer_node_vote_cf, vote.0, (false, chain_num as u16, vote.1));
+                let proposer_level: u64 = get_value!(proposer_node_level_cf, vote.0).unwrap();
+                affected.insert(proposer_level);
+            }
+
+            for vote in &added {
+                merge_value!(proposer_node_vote_cf, vote.0, (true, chain_num as u16, vote.1));
+                let proposer_level: u64 = get_value!(proposer_node_level_cf, vote.0).unwrap();
+                affected.insert(proposer_level);
+            }
+        }
+        drop(voter_ledger_tips);
+        // commit the votes into the database
+        self.db.write(wb)?;
+
+        // recompute the leader of each level that was affected
+        let mut wb = WriteBatch::default();
+        macro_rules! merge_value {
+            ($cf:expr, $key:expr, $value:expr) => {{
+            wb.merge_cf(
+                $cf,
+                serialize(&$key).unwrap(),
+                serialize(&$value).unwrap(),
+            )?;
+            }}
+        }
+        macro_rules! put_value {
+            ($cf:expr, $key:expr, $value:expr) => {{
+            wb.put_cf(
+                $cf,
+                serialize(&$key).unwrap(),
+                serialize(&$value).unwrap(),
+            )?;
+            }}
+        }
+        macro_rules! delete_value {
+            ($cf:expr, $key:expr) => {{
+            wb.delete_cf(
+                $cf,
+                serialize(&$key).unwrap(),
+            )?;
+            }}
+        }
+        let mut change_begin: Option<u64> = None;
+        for level in &affected {
+            let proposer_blocks: Vec<H256> = get_value!(proposer_tree_level_cf, *level as u64).unwrap();
+            let existing_leader: Option<H256> = get_value!(proposer_leader_sequence_cf, *level as u64);
+            // compute the new leader of this level
+            // TODO: bad confirmation rule: we just choose the block with the most votes
+            let new_leader: Option<H256> = {
+                let mut new_leader = None;
+                let mut max_votes = 0;
+                for p in &proposer_blocks {
+                    let votes: Vec<(u16, u64)> = match get_value!(proposer_node_vote_cf, p) {
+                        None => vec![],
+                        Some(d) => d,
+                    };
+                    let num_votes = votes.len();
+                    if num_votes > max_votes {
+                        max_votes = num_votes;
+                        new_leader = Some(*p);
+                    }
+                }
+                new_leader
+            };
+
+            if new_leader != existing_leader {
+                // mark it's the beginning of the change
+                if change_begin.is_none() {
+                    change_begin = Some(*level);
+                }
+                match new_leader {
+                    None => delete_value!(proposer_leader_sequence_cf, *level as u64),
+                    Some(new) => put_value!(proposer_leader_sequence_cf, *level as u64, new),
+                };
+            }
+        }
+        // commit the new leaders into the database
+        self.db.write(wb)?;
+
+        // recompute the ledger from the first level whose leader changed
+        if change_begin.is_some() {
+            let change_begin = change_begin.unwrap();
+            let mut proposer_ledger_tip = self.proposer_ledger_tip.lock().unwrap();
+            let mut unconfirmed_proposers = self.unconfirmed_proposers.lock().unwrap();
+            let mut removed: Vec<H256> = vec![];
+            let mut added: Vec<H256> = vec![];
+            let mut wb = WriteBatch::default();
+            macro_rules! merge_value {
+                ($cf:expr, $key:expr, $value:expr) => {{
+                    wb.merge_cf(
+                        $cf,
+                        serialize(&$key).unwrap(),
+                        serialize(&$value).unwrap(),
+                        )?;
+                }}
+            }
+            macro_rules! put_value {
+                ($cf:expr, $key:expr, $value:expr) => {{
+                    wb.put_cf(
+                        $cf,
+                        serialize(&$key).unwrap(),
+                        serialize(&$value).unwrap(),
+                        )?;
+                }}
+            }
+            macro_rules! delete_value {
+                ($cf:expr, $key:expr) => {{
+                    wb.delete_cf(
+                        $cf,
+                        serialize(&$key).unwrap(),
+                        )?;
+                }}
+            }
+
+            // deconfirm the blocks from change_begin all the way to previous ledger tip
+            for level in change_begin..=*proposer_ledger_tip {
+                let original_ledger: Vec<H256> = get_value!(proposer_ledger_order_cf, level as u64).unwrap();
+                delete_value!(proposer_ledger_order_cf, level as u64);
+                for block in &original_ledger {
+                    unconfirmed_proposers.insert(*block);
+                    removed.push(*block);
+                }
+            }
+
+            // recompute the ledger from change_begin until the first level where there's no leader
+            // make sure that the ledger is continuous
+            if change_begin <= *proposer_ledger_tip + 1 {
+                for level in change_begin.. {
+                    let leader: H256 = match get_value!(proposer_leader_sequence_cf, level as u64) {
+                        None => {
+                            *proposer_ledger_tip = level - 1;
+                            break;
+                        }
+                        Some(leader) => {
+                            leader
+                        }
+                    };
+                    // Get the sequence of blocks by doing a depth-first traverse
+                    let mut order: Vec<H256> = vec![];
+                    let mut stack: Vec<H256> = vec![leader];
+                    while let Some(top) = stack.pop() {
+                        // try to remove it from the unconfirmed list, if we failed, it's already
+                        // confirmed
+                        if !unconfirmed_proposers.remove(&top) {
+                            continue;
+                        }
+                        let refs: Vec<H256> = get_value!(proposer_ref_neighbor_cf, top).unwrap();
+
+                        // add the current block to the ordered ledger
+                        order.push(top);
+
+                        // search all referred blocks
+                        for ref_hash in &refs {
+                            stack.push(*ref_hash);
+                        }
+                    }
+
+                    // reverse the order we just got
+                    order.reverse();
+                    put_value!(proposer_ledger_order_cf, level as u64, order);
+                    added.extend(&order);
+                }
+            }
+            // commit the new ledger into the database
+            self.db.write(wb)?;
+
+            let mut removed_transaction_blocks: Vec<H256> = vec![];
+            let mut added_transaction_blocks: Vec<H256> = vec![];
+            for block in &removed {
+                let t: Vec<H256> = get_value!(transaction_ref_neighbor_cf, block).unwrap();
+                removed_transaction_blocks.extend(&t);
+            }
+            for block in &added {
+                let t: Vec<H256> = get_value!(transaction_ref_neighbor_cf, block).unwrap();
+                added_transaction_blocks.extend(&t);
+            }
+            return Ok((added, removed));
+        } else {
+            return Ok((vec![], vec![]));
+        }
     }
 
     /// Given two voter blocks on the same chain, calculate the added and removed votes when
@@ -562,7 +793,7 @@ impl BlockChain {
 
 impl BlockChain {
     pub fn proposer_transaction_in_ledger(&self, limit: u64) -> Result<Vec<(H256, Vec<H256>)>> {
-        let ledger_tip_ = self.ledger_tip.lock().unwrap();
+        let ledger_tip_ = self.proposer_ledger_tip.lock().unwrap();
         let ledger_tip = *ledger_tip_;
         // TODO: get snapshot here doesn't ensure consistency of snapshot, since we use multiple write batch in `insert_block`
         // and the ledger_tip lock doesn't ensure it either.
@@ -721,7 +952,7 @@ impl BlockChain {
         let mut voter_number: Vec<u64> = vec![];
 
         // get the ledger tip and bottom, for processing ledger
-        let ledger_tip_ = self.ledger_tip.lock().unwrap();
+        let ledger_tip_ = self.proposer_ledger_tip.lock().unwrap();
         let ledger_tip = *ledger_tip_;
         for voter_chain in self.voter_best.iter() {
             let longest = voter_chain.lock().unwrap();
