@@ -313,17 +313,6 @@ impl BlockChain {
 
         match &block.content {
             Content::Proposer(content) => {
-                // remove ref'ed blocks from unreferred list, mark itself as unreferred
-                let mut unreferred_proposers = self.unreferred_proposers.lock().unwrap();
-                for ref_hash in &content.proposer_refs {
-                    unreferred_proposers.remove(&ref_hash);
-                }
-                unreferred_proposers.remove(&parent_hash);
-                unreferred_proposers.insert(block_hash);
-                let mut unreferred_transactions = self.unreferred_transactions.lock().unwrap();
-                for ref_hash in &content.transaction_refs {
-                    unreferred_transactions.remove(&ref_hash);
-                }
                 // add ref'ed blocks
                 // note that the parent is the first proposer block that we refer
                 let mut refed_proposer: Vec<H256> = vec![parent_hash];
@@ -336,6 +325,19 @@ impl BlockChain {
                 // set current block level
                 put_value!(proposer_node_level_cf, block_hash, self_level as u64);
                 merge_value!(proposer_tree_level_cf, self_level, block_hash);
+                self.db.write(wb)?;
+
+                // remove ref'ed blocks from unreferred list, mark itself as unreferred
+                let mut unreferred_proposers = self.unreferred_proposers.lock().unwrap();
+                for ref_hash in &content.proposer_refs {
+                    unreferred_proposers.remove(&ref_hash);
+                }
+                unreferred_proposers.remove(&parent_hash);
+                unreferred_proposers.insert(block_hash);
+                let mut unreferred_transactions = self.unreferred_transactions.lock().unwrap();
+                for ref_hash in &content.transaction_refs {
+                    unreferred_transactions.remove(&ref_hash);
+                }
                 // set best block info
                 let mut proposer_best = self.proposer_best.lock().unwrap();
                 if self_level > proposer_best.1 {
@@ -369,10 +371,9 @@ impl BlockChain {
                 // set the voted level to be until proposer parent
                 let proposer_parent_level: u64 = get_value!(proposer_node_level_cf, parent_hash);
                 put_value!(voter_node_voted_level_cf, block_hash, proposer_parent_level as u64);
-                let mut voter_best = self.voter_best[self_chain as usize].lock().unwrap();
-                let previous_best = voter_best.0;
-                let previous_best_level = voter_best.1;
+                self.db.write(wb)?;
 
+                let mut voter_best = self.voter_best[self_chain as usize].lock().unwrap();
                 // update best block
                 if self_level > voter_best.1 {
                     voter_best.0 = block_hash;
@@ -381,13 +382,14 @@ impl BlockChain {
                 drop(voter_best);
             }
             Content::Transaction(content) => {
+                // TODO: this is actually useless
+                self.db.write(wb)?;
                 // mark itself as unreferred
                 let mut unreferred_transactions = self.unreferred_transactions.lock().unwrap();
                 unreferred_transactions.insert(block_hash);
                 drop(unreferred_transactions);
             }
         }
-        self.db.write(wb)?;
         return Ok(());
     }
 
