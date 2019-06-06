@@ -203,9 +203,10 @@ function get_performance_single
 
 function start_transactions_single
 {
-	curl -s "http://$3:$4/transaction-generator/set-arrival-distribution?interval=100&distribution=uniform"
+	curl -s "http://$3:$4/transaction-generator/set-arrival-distribution?interval=0&distribution=uniform"
+	curl -s "http://$3:$4/transaction-generator/set-value-distribution?min=100&max=100&distribution=uniform"
 	curl -s "http://$3:$4/transaction-generator/start"
-	curl -s "http://$3:$4/miner/start?lambda=200000&lazy=false"
+	curl -s "http://$3:$4/miner/start?lambda=1000000&lazy=false"
 }
 
 function query_api 
@@ -365,7 +366,7 @@ function run_experiment
 	echo "Starting Prism nodes"
 	start_prism
 	echo "All nodes started, starting transaction generation"
-	query_api start_transactions 1
+	query_api start_transactions 0
 	echo "Running experiment for $1 seconds"
 	sleep $1
 	show_performance
