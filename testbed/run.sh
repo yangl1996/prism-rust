@@ -100,7 +100,18 @@ function build_prism
 	rsync -ar ../Cargo.toml prism:~/prism/
 	rsync -ar ../src prism:~/prism/
 	echo "Building Prism binary"
-	ssh prism -- 'cd ~/prism && /home/prism/.cargo/bin/cargo build && strip /home/prism/prism/target/debug/prism' &> log/prism_build.log
+	ssh prism -- 'cd ~/prism && /home/prism/.cargo/bin/cargo build' &> log/prism_build.log
+	if [ $# -ne 1 ]; then
+		echo "Stripping symbol"
+		ssh prism -- 'cp /home/prism/prism/target/debug/prism /home/prism/prism/target/debug/prism-copy && strip /home/prism/prism/target/debug/prism-copy'
+	else
+		if [ "$1" = "nostrip" ]; then
+			ssh prism -- 'cp /home/prism/prism/target/debug/prism /home/prism/prism/target/debug/prism-copy'
+		else
+			echo "Stripping symbol"
+			ssh prism -- 'cp /home/prism/prism/target/debug/prism /home/prism/prism/target/debug/prism-copy && strip /home/prism/prism/target/debug/prism-copy'
+		fi
+	fi
 	tput setaf 2
 	echo "Finished"
 	tput sgr0
@@ -121,7 +132,7 @@ function prepare_payload
 	mkdir -p payload
 	mkdir -p binary
 	echo "Download binaries"
-	scp prism:/home/prism/prism/target/debug/prism binary/prism
+	scp prism:/home/prism/prism/target/debug/prism-copy binary/prism
 	local instances=`cat instances.txt`
 	local instance_ids=""
 	for instance in $instances ;
@@ -392,7 +403,7 @@ case "$1" in
 		Run Experiment
 
 		  gen-payload topo      Generate scripts and configuration files
-		  build			Build the Prism client binary
+		  build [nostrip]	Build the Prism client binary
 		  sync-payload          Synchronize payload to remote servers
 		  start-prism           Start Prism nodes on each remote server
 		  stop-prism            Stop Prism nodes on each remote server
@@ -422,7 +433,7 @@ case "$1" in
 	gen-payload)
 		prepare_payload $2 ;;
 	build)
-		build_prism ;;
+		build_prism $2 ;;
 	sync-payload)
 		execute_on_all remove_payload
 		execute_on_all sync_payload ;;
