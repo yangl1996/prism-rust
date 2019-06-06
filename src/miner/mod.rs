@@ -284,7 +284,7 @@ impl Context {
         // Create a block
         // assemble the merkle tree and get the proof
         let merkle_tree = MerkleTree::new(&self.content);
-        let sortition_proof: Vec<H256> = merkle_tree.get_proof_from_index(sortition_id);
+        let sortition_proof: Vec<H256> = merkle_tree.proof(sortition_id as usize);
         let mined_block = Block::from_header(
             header,
             self.content[sortition_id as usize].clone(),

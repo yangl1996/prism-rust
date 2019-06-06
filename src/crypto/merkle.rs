@@ -2,14 +2,14 @@ use super::hash::{Hashable, H256};
 
 /// A Merkle tree.
 #[derive(Debug, Default)]
-pub struct MerkleTree<'a, T: Hashable> {
-    data: &'a [T],
+pub struct MerkleTree {
+    data_size: Vec<usize>,
     nodes: Vec<H256>,
 }
 
 //todo : Add proof check function
-impl<'a, T: Hashable> MerkleTree<'a, T> {
-    pub fn new(data: &'a [T]) -> Self {
+impl MerkleTree {
+    pub fn new<T>(data: &[T]) -> Self where T: Hashable {
         // calculate the size of the tree
         let mut this_layer_size = data.len();
 
@@ -17,7 +17,7 @@ impl<'a, T: Hashable> MerkleTree<'a, T> {
         // What default behaviour do we want?
         if this_layer_size == 0 {
             return Self {
-                data: data,
+                data_size: vec![this_layer_size],
                 nodes: vec![],
             };
         }
@@ -72,7 +72,7 @@ impl<'a, T: Hashable> MerkleTree<'a, T> {
         }
 
         return MerkleTree {
-            data: data,
+            data_size: data_size,
             nodes: nodes,
         };
     }
@@ -85,7 +85,7 @@ impl<'a, T: Hashable> MerkleTree<'a, T> {
         }
     }
 
-    fn proof(&self, data: &T) -> Vec<H256> {
+/*    fn proof(&self, data: &T) -> Vec<H256> {
         let mut results = vec![];
         let data_index = self
             .data
@@ -110,13 +110,106 @@ impl<'a, T: Hashable> MerkleTree<'a, T> {
         }
         return results;
     }
-
+*/
     /// Returns the Merkle Proof of data at index i
     /// todo: Lei check this
-    pub fn get_proof_from_index(&self, index: u32) -> Vec<H256> {
-        // TODO: inefficient
-        return self.proof(&self.data[index as usize]);
+    pub fn proof(&self, index: usize) -> Vec<H256> {
+        if self.data_size.len() == 1 || index >= self.data_size[0] { return vec![]; }
+        let mut results = vec![];
+        let mut known_index = if self.data_size[0] & 0x01 == 1 {
+            self.nodes.len() - self.data_size[0] - 1 + index
+        } else {
+            self.nodes.len() - self.data_size[0] + index
+        };
+        loop {
+            if known_index == 0 {
+                break;
+            }
+            let sibling_index = match known_index & 0x01 {
+                1 => known_index + 1,
+                _ => known_index - 1,
+            };
+            results.push(self.nodes[sibling_index]);
+            known_index = (known_index - 1) >> 1;
+        }
+        results
     }
+
+    pub fn update<T>(&mut self, index: usize, data: &T) where T: Hashable {
+        if index >= self.data_size[0] { return; }
+        if self.data_size[0] == 1 {
+            self.nodes[0] = data.hash();
+            return;
+        }
+        let (mut known_index, last_layer_start) = if self.data_size[0] & 0x01 == 1 {
+            (self.nodes.len() - self.data_size[0] - 1 + index, self.nodes.len() - self.data_size[0] - 1)
+        } else {
+            (self.nodes.len() - self.data_size[0] + index, self.nodes.len() - self.data_size[0])
+        };
+        let mut layer_start = last_layer_start;
+        let mut idx = 0usize;
+        loop {
+            if known_index >= last_layer_start {
+                self.nodes[known_index] = data.hash();
+            } else {
+                self.nodes[known_index] = {
+                    let mut ctx = ring::digest::Context::new(&ring::digest::SHA256);
+                    let left_hash: [u8; 32] = (&self.nodes[(known_index << 1) + 1]).into();
+                    let right_hash: [u8; 32] = (&self.nodes[(known_index << 1) + 2]).into();
+                    ctx.update(&left_hash[..]);
+                    ctx.update(&right_hash[..]);
+                    let digest = ctx.finish();
+                    digest.into()
+                };
+            }
+            if known_index == 0 {
+                break;
+            }
+            if known_index == layer_start + self.data_size[idx] - 1 && self.data_size[idx] & 0x01 == 1 {
+                self.nodes[known_index + 1] = self.nodes[known_index];
+            }
+            layer_start = (layer_start - 1) >> 1;
+            idx += 1;
+            known_index = (known_index - 1) >> 1;
+        }
+    }
+}
+
+pub fn verify(root: H256, data: H256, proof: &[H256], index: usize, data_size: usize) -> bool {
+    let mut this_layer_size = data_size;
+    let mut layer_size = vec![];
+    loop {
+        if this_layer_size == 1 {
+            layer_size.push(this_layer_size);
+            break;
+        }
+        if this_layer_size & 0x01 == 1 {
+            this_layer_size += 1;
+        }
+        layer_size.push(this_layer_size);
+        this_layer_size = this_layer_size >> 1;
+    }
+    let mut iter = layer_size.into_iter();
+    iter.next();
+    let mut index: usize = iter.sum::<usize>() + index;
+    let mut acc = data;
+    for h in proof.iter() {
+        if index == 0 { return false; }
+        let mut ctx = ring::digest::Context::new(&ring::digest::SHA256);
+        let acc_: [u8; 32] = (&acc).into();
+        let h: [u8; 32] = h.into();
+        if index & 0x01 == 1 {
+            ctx.update(&acc_[..]);
+            ctx.update(&h[..]);
+        } else {
+            ctx.update(&h[..]);
+            ctx.update(&acc_[..]);
+        }
+        let digest = ctx.finish();
+        acc = digest.into();
+        index = (index - 1) >> 1;
+    }
+    acc == root
 }
 
 #[cfg(test)]
@@ -168,10 +261,54 @@ mod tests {
     fn proof() {
         let input_data: Vec<hash::H256> = gen_merkle_tree_data!();
         let merkle_tree = MerkleTree::new(&input_data);
-        let proof = merkle_tree.proof(&input_data[2]);
+        let proof = merkle_tree.proof(2);
         assert_eq!(proof[0], merkle_tree.nodes[10]);
         assert_eq!(proof[1], merkle_tree.nodes[3]);
         assert_eq!(proof[2], merkle_tree.nodes[2]);
         assert_eq!(proof.len(), 3);
+        assert!(verify(merkle_tree.root(), input_data[2].hash(), &proof, 2, input_data.len()));
+
+        let proof = merkle_tree.proof(6);
+        assert_eq!(proof[0], merkle_tree.nodes[14]);
+        assert_eq!(proof[1], merkle_tree.nodes[5]);
+        assert_eq!(proof[2], merkle_tree.nodes[1]);
+        assert_eq!(proof.len(), 3);
+        assert!(verify(merkle_tree.root(), input_data[6].hash(), &proof, 6, input_data.len()));
+
+        let wrong_proof: Vec<H256> = proof.iter().take(2).cloned().collect();
+        assert!(!verify(merkle_tree.root(), input_data[6].hash(), &wrong_proof, 6, input_data.len()));
+        let mut wrong_proof: Vec<H256> = proof.clone();
+        wrong_proof[0] = [09u8; 32].into();
+        assert!(!verify(merkle_tree.root(), input_data[6].hash(), &wrong_proof, 6, input_data.len()));
+
+    }
+
+    #[test]
+    fn update() {
+        for top in 0..=7usize {
+            let input_data: Vec<hash::H256> = gen_merkle_tree_data!().into_iter().take(top).collect();
+            let merkle_tree = MerkleTree::new(&input_data);
+            for idx in 0..input_data.len() {
+                //proof
+                let proof = merkle_tree.proof(idx);
+                assert!(verify(merkle_tree.root(), input_data[idx].hash(), &proof, idx, input_data.len()));
+                //update
+                let mut input_data_mut = input_data.clone();
+                input_data_mut[idx] = [09u8; 32].into();
+                let mut merkle_tree_mut = MerkleTree::new(&input_data_mut);
+                assert_ne!(merkle_tree.root(), merkle_tree_mut.root());
+                merkle_tree_mut.update(idx, &input_data[idx]);
+                assert_eq!(merkle_tree.root(), merkle_tree_mut.root(), "iter: {}", idx);
+            }
+            if top>1 {
+                let input_data_: Vec<hash::H256> = input_data.iter().rev().cloned().collect();
+                let mut merkle_tree_ = MerkleTree::new(&input_data_);
+                assert_ne!(merkle_tree.root(), merkle_tree_.root());
+                for idx in 0..input_data.len() {
+                    merkle_tree_.update(idx, &input_data[idx]);
+                }
+                assert_eq!(merkle_tree.root(), merkle_tree_.root());
+            }
+        }
     }
 }
