@@ -124,7 +124,7 @@ fn main() {
     thread::spawn(move || {
         loop {
             update_ledger(&blockdb_copy, &blockchain_copy, &utxodb_copy, &wallet_copy);
-            thread::sleep(time::Duration::from_millis(1000));
+            thread::sleep(time::Duration::from_millis(5000));
         }
     });
 
