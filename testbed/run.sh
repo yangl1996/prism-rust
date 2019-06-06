@@ -44,6 +44,30 @@ function start_instances
 	tput sgr0
 }
 
+function fix_ssh_config
+{
+	local instances=`jq -r '.Instances[].InstanceId ' log/aws_start.log`
+	rm -f instances.txt
+	rm -f ~/.ssh/config.d/prism
+	echo "Querying public IPs and writing to SSH config"
+	for instance in $instances ;
+	do
+		local ip=`aws ec2 describe-instances --instance-ids $instance | jq -r '.Reservations[0].Instances[0].PublicIpAddress'`
+		local lan=`aws ec2 describe-instances --instance-ids $instance | jq -r '.Reservations[0].Instances[0].PrivateIpAddress'`
+		echo "$instance,$ip,$lan" >> instances.txt
+		echo "Host $instance" >> ~/.ssh/config.d/prism
+		echo "    Hostname $ip" >> ~/.ssh/config.d/prism
+		echo "    User ubuntu" >> ~/.ssh/config.d/prism
+		echo "    IdentityFile ~/.ssh/prism.pem" >> ~/.ssh/config.d/prism
+		echo "    StrictHostKeyChecking no" >> ~/.ssh/config.d/prism
+		echo "    UserKnownHostsFile=/dev/null" >> ~/.ssh/config.d/prism
+		echo "" >> ~/.ssh/config.d/prism
+	done
+	tput setaf 2
+	echo "SSH config written"
+	tput sgr0
+}
+
 function stop_instances
 {
 	echo "Really?"
@@ -181,7 +205,7 @@ function start_transactions_single
 {
 	curl -s "http://$3:$4/transaction-generator/set-arrival-distribution?interval=100000&distribution=uniform"
 	curl -s "http://$3:$4/transaction-generator/start"
-	curl -s "http://$3:$4/miner/start?lambda=400000&lazy=false"
+	curl -s "http://$3:$4/miner/start?lambda=1000000&lazy=false"
 }
 
 function query_api 
@@ -362,6 +386,7 @@ case "$1" in
 		  start-instances n     Start n EC2 instances
 		  stop-instances        Terminate EC2 instances
 		  install-tools         Install tools
+	          fix-config            Fix SSH config
 
 		Run Experiment
 
@@ -389,6 +414,8 @@ case "$1" in
 		start_instances $2 ;;
 	stop-instances)
 		stop_instances ;;
+	fix-config)
+		fix_ssh_config ;;
 	install-tools)
 		execute_on_all install_perf ;;
 	gen-payload)
