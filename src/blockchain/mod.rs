@@ -611,7 +611,7 @@ impl BlockChain {
                 let t: Vec<H256> = get_value!(transaction_ref_neighbor_cf, block).unwrap();
                 added_transaction_blocks.extend(&t);
             }
-            return Ok((added, removed));
+            return Ok((added_transaction_blocks, removed_transaction_blocks));
         } else {
             return Ok((vec![], vec![]));
         }
