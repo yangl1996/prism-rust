@@ -152,7 +152,7 @@ function remove_payload_single
 
 function install_perf_single
 {
-	ssh $1 -- 'sudo apt-get update -y && sudo apt-get install linux-tools-aws -y && sudo apt-get install linux-tools-4.15.0-1021-aws -y'
+	ssh $1 -- 'sudo apt-get update -y && sudo apt-get install linux-tools-aws -y && sudo apt-get install linux-tools-4.15.0-1032-aws -y'
 }
 
 function sync_payload_single
@@ -203,7 +203,7 @@ function get_performance_single
 
 function start_transactions_single
 {
-	curl -s "http://$3:$4/transaction-generator/set-arrival-distribution?interval=250&distribution=uniform"
+	curl -s "http://$3:$4/transaction-generator/set-arrival-distribution?interval=100&distribution=uniform"
 	curl -s "http://$3:$4/transaction-generator/start"
 	curl -s "http://$3:$4/miner/start?lambda=200000&lazy=false"
 }
