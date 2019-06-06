@@ -393,7 +393,7 @@ impl BlockChain {
         return Ok(());
     }
 
-    pub fn update_ledger(&self) -> Result<(Vec<H256>, Vec<H256>)> { 
+    pub fn update_ledger(&self) -> Result<(Vec<H256>, Vec<H256>)> {
         let proposer_node_vote_cf = self.db.cf_handle(PROPOSER_NODE_VOTE_CF).unwrap();
         let proposer_node_level_cf = self.db.cf_handle(PROPOSER_NODE_LEVEL_CF).unwrap();
         let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
@@ -626,7 +626,7 @@ impl BlockChain {
         let voter_node_level_cf = self.db.cf_handle(VOTER_NODE_LEVEL_CF).unwrap();
         let vote_neighbor_cf = self.db.cf_handle(VOTE_NEIGHBOR_CF).unwrap();
         let voter_parent_neighbor_cf = self.db.cf_handle(VOTER_PARENT_NEIGHBOR_CF).unwrap();
-        
+
         macro_rules! get_value {
             ($cf:expr, $key:expr) => {{
                 deserialize(

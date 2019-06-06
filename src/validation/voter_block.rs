@@ -45,57 +45,40 @@ pub fn check_chain_number(content: &Content) -> bool {
 pub fn check_levels_voted(
     content: &Content,
     blockchain: &BlockChain,
-    blockdb: &BlockDatabase,
-    parent: H256
+    parent: &H256
 ) -> bool {
-    // get the deepest block voted by our parent
-    let parent_block = blockdb.get(&content.voter_parent).unwrap().unwrap();
-    let last_voted_level = latest_level_voted_on_chain(&parent_block, blockchain, blockdb);
+    let should_vote = blockchain.unvoted_proposer(&content.voter_parent, &parent).unwrap();//latest_level_voted_on_chain(&parent_block, blockchain, blockdb);
 
-    // check whether the votes are continuous, and starts at the next unvoted level
-    for (index, proposer_vote) in content.votes.iter().enumerate() {
-        let voted = blockdb.get(proposer_vote).unwrap().unwrap();
-        let level = blockchain.proposer_level(&voted.hash()).unwrap() as usize;
-        if level != index + 1 + last_voted_level {
-            return false;
-        }
-    }
+    if content.votes.len() != should_vote.len() { return false; }
 
-    // check if the last voted block is same as parent block
-    if !content.votes.last().is_none() {
-        if parent != *content.votes.last().unwrap() {
-            return false;
-        }
-    }
-
-    return true;
+    content.votes.iter().zip(should_vote.iter()).all(|(x,y)|*x == *y)
 }
 
-/// Get the deepest proposer level voted by this chain, until the given voter block.
-fn latest_level_voted_on_chain(
-    voter_block: &Block,
-    blockchain: &BlockChain,
-    blockdb: &BlockDatabase,
-) -> usize {
-    let content = match &voter_block.content {
-        BlockContent::Voter(content) => content,
-        _ => panic!("Wrong type"),
-    };
-
-    let voter_genesis_hash = VOTER_GENESIS_HASHES[content.chain_number as usize];
-
-    if voter_block.hash() == voter_genesis_hash {
-        // if the voter block is the genesis block
-        return 0;
-    } else if content.votes.len() > 0 {
-        // if this block voted for some blocks, then just return the deepest level among them
-        let latest_prop_voted = content.votes.last().unwrap();
-        return blockchain.proposer_level(latest_prop_voted).unwrap() as usize;
-    } else {
-        // if this block voted for zero block, then look for its parent
-        let parent = blockdb.get(&content.voter_parent).unwrap().unwrap();
-        return latest_level_voted_on_chain(&parent, blockchain, blockdb);
-    }
-}
+///// Get the deepest proposer level voted by this chain, until the given voter block.
+//fn latest_level_voted_on_chain(
+//    voter_block: &Block,
+//    blockchain: &BlockChain,
+//    blockdb: &BlockDatabase,
+//) -> usize {
+//    let content = match &voter_block.content {
+//        BlockContent::Voter(content) => content,
+//        _ => panic!("Wrong type"),
+//    };
+//
+//    let voter_genesis_hash = VOTER_GENESIS_HASHES[content.chain_number as usize];
+//
+//    if voter_block.hash() == voter_genesis_hash {
+//        // if the voter block is the genesis block
+//        return 0;
+//    } else if content.votes.len() > 0 {
+//        // if this block voted for some blocks, then just return the deepest level among them
+//        let latest_prop_voted = content.votes.last().unwrap();
+//        return blockchain.proposer_level(latest_prop_voted).unwrap() as usize;
+//    } else {
+//        // if this block voted for zero block, then look for its parent
+//        let parent = blockdb.get(&content.voter_parent).unwrap().unwrap();
+//        return latest_level_voted_on_chain(&parent, blockchain, blockdb);
+//    }
+//}
 
 // TODO: Add tests

@@ -125,11 +125,13 @@ pub mod tests {
     }
 
     pub fn proposer_block(parent: H256, timestamp: u128, proposer_refs: Vec<H256>, transaction_refs: Vec<H256>) -> Block {
-        Block::new(parent, timestamp, random_nonce!(), [0u8;32].into(), vec![],
-        Content::Proposer(proposer::Content {
+        let content = Content::Proposer(proposer::Content {
             transaction_refs,
             proposer_refs,
-        }), [0u8;32], *config::DEFAULT_DIFFICULTY)
+        });
+        let content_hash = content.hash();
+        Block::new(parent, timestamp, random_nonce!(), content_hash, vec![content_hash],
+        content, [0u8;32], *config::DEFAULT_DIFFICULTY)
     }
 
     pub fn voter_block(parent: H256, timestamp: u128, chain_number: u16, voter_parent: H256, votes: Vec<H256>) -> Block {

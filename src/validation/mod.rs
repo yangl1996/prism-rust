@@ -5,7 +5,6 @@ use crate::block::{Block, Content};
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
 use crate::crypto::hash::{Hashable, H256};
-use crate::utxodb::UtxoDatabase;
 
 /// The result of block validation.
 pub enum BlockResult {
@@ -51,7 +50,6 @@ pub fn check_block(
     block: &Block,
     blockchain: &BlockChain,
     blockdb: &BlockDatabase,
-    utxodb: &UtxoDatabase,
 ) -> BlockResult {
     // TODO: check PoW. Where should we get the current difficulty ranges?
 
@@ -135,13 +133,13 @@ pub fn check_block(
             // check chain number
             if !voter_block::check_chain_number(&content) {
                 return BlockResult::WrongChainNumber;
-            }
+            }*/
 
             // check whether all proposer levels deeper than the one our parent voted are voted
-            if !voter_block::check_levels_voted(&content, blockchain, blockdb, parent) {
+            if !voter_block::check_levels_voted(&content, blockchain, &parent) {
                 return BlockResult::WrongVoteLevel;
             }
-            */
+
             return BlockResult::Pass;
         }
     }
