@@ -137,10 +137,8 @@ impl MerkleTree {
 
     pub fn update<T>(&mut self, index: usize, data: &T) where T: Hashable {
         if index >= self.data_size[0] { return; }
-        if self.data_size.len() == 1 {
-            if self.data_size[0] == 1 {
-                self.nodes[0] = data.hash();
-            }
+        if self.data_size[0] == 1 {
+            self.nodes[0] = data.hash();
             return;
         }
         let (mut known_index, last_layer_start) = if self.data_size[0] & 0x01 == 1 {
