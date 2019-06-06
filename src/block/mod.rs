@@ -24,7 +24,7 @@ impl Block {
         parent: H256,
         timestamp: u128,
         nonce: u32,
-        content_root: H256,
+        content_merkle_root: H256,
         sortition_proof: Vec<H256>,
         content: Content,
         extra_content: [u8; 32],
@@ -34,7 +34,7 @@ impl Block {
             parent,
             timestamp,
             nonce,
-            content_root,
+            content_merkle_root,
             extra_content,
             difficulty,
         );

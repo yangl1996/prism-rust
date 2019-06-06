@@ -65,7 +65,7 @@ pub fn check_block(
 
     /*
     // check the content hash
-    if block.content.hash() != block.header.content_root {
+    if block.content.hash() != block.header.content_merkle_root {
         return BlockResult::WrongContentHash;
     }
     */
@@ -85,7 +85,7 @@ pub fn check_block(
                 if !transaction::check_non_empty(&transaction) {
                     return BlockResult::EmptyTransaction;
                 }
-
+// Gerui: I think we won't go to utxo in validation.
                 if !transaction::check_input_unspent(&transaction, utxodb) {
                     return BlockResult::InputAlreadySpent;
                 }

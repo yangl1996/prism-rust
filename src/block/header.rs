@@ -11,7 +11,7 @@ pub struct Header {
     /// Proof of work nonce.
     pub nonce: u32,
     /// Merkle root of the block content.
-    pub content_root: H256,
+    pub content_merkle_root: H256,
     /// Extra content for debugging purposes.
     pub extra_content: [u8; 32],
     /// Mining difficulty of this block.
@@ -24,7 +24,7 @@ impl Header {
         parent: H256,
         timestamp: u128,
         nonce: u32,
-        content_root: H256,
+        content_merkle_root: H256,
         extra_content: [u8; 32],
         difficulty: H256,
     ) -> Self {
@@ -32,7 +32,7 @@ impl Header {
             parent,
             timestamp,
             nonce,
-            content_root,
+            content_merkle_root,
             extra_content,
             difficulty,
         }

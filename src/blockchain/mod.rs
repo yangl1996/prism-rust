@@ -348,6 +348,7 @@ impl BlockChain {
                 // mark this new proposer block as unconfirmed
                 let mut unconfirmed_proposers = self.unconfirmed_proposers.lock().unwrap();
                 unconfirmed_proposers.insert(block_hash);
+                //TODO: see #76 on github
                 drop(unreferred_proposers);
                 drop(unreferred_transactions);
                 drop(proposer_best);

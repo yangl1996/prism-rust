@@ -298,13 +298,13 @@ impl Context {
     fn create_header(&self) -> Header {
         let nonce: u32 = 0; // we will update this value in-place when mining
         let timestamp: u128= get_time();
-        let content_root = self.content_merkle_tree_root;
+        let content_merkle_root = self.content_merkle_tree_root;
         let extra_content: [u8; 32] = [0; 32]; // TODO: Add miner id?
         return Header::new(
             self.proposer_parent_hash.clone(),
             timestamp,
             nonce,
-            content_root,
+            content_merkle_root,
             extra_content,
             self.difficulty,
         );
