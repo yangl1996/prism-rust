@@ -125,7 +125,11 @@ impl TransactionGenerator {
                 }
                 let value: u64 = match &self.value_distribution {
                     ValueDistribution::Uniform(d) => {
-                        rng.gen_range(d.min, d.max)
+                        if d.min == d.max {
+                            d.min
+                        } else {
+                            rng.gen_range(d.min, d.max)
+                        }
                     }
                 };
                 let transaction = self.wallet.create_transaction(addr, value);
