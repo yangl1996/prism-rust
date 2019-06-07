@@ -163,7 +163,7 @@ function remove_payload_single
 
 function install_perf_single
 {
-	ssh $1 -- 'rm -f rust-unmangle && rm -rf FlameGraph && sudo apt-get update -y && sudo apt-get install linux-tools-aws linux-tools-4.15.0-1032-aws binutils -y && wget https://github.com/yangl1996/rust-unmangle/raw/master/rust-unmangle && git clone https://github.com/brendangregg/FlameGraph.git && chmod +x rust-unmangle && chmod +x flamegraph.pl && echo export PATH=$PATH:/home/ubuntu:/home/ubuntu/FlameGraph >> /home/ubuntu/.profile'
+	ssh $1 -- 'rm -f rust-unmangle && rm -rf FlameGraph && sudo apt-get update -y && sudo apt-get install linux-tools-aws linux-tools-4.15.0-1032-aws binutils -y && wget https://github.com/yangl1996/rust-unmangle/raw/master/rust-unmangle && git clone https://github.com/brendangregg/FlameGraph.git && chmod +x rust-unmangle && echo export PATH=$PATH:/home/ubuntu:/home/ubuntu/FlameGraph >> /home/ubuntu/.profile'
 }
 
 function sync_payload_single
@@ -217,7 +217,7 @@ function start_transactions_single
 	curl -s "http://$3:$4/transaction-generator/set-arrival-distribution?interval=0&distribution=uniform"
 	curl -s "http://$3:$4/transaction-generator/set-value-distribution?min=100&max=100&distribution=uniform"
 	curl -s "http://$3:$4/transaction-generator/start"
-	curl -s "http://$3:$4/miner/start?lambda=60000&lazy=false"
+	curl -s "http://$3:$4/miner/start?lambda=300000&lazy=false"
 }
 
 function query_api 
