@@ -7,6 +7,7 @@ use std::{error, fmt};
 use std::convert::TryInto;
 use std::sync::Mutex;
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 pub const COIN_CF: &str = "COIN";
 pub const KEYPAIR_CF: &str = "KEYPAIR";     // &Address to &KeyPairPKCS8
@@ -19,6 +20,7 @@ pub struct Wallet {
     db: rocksdb::DB,
     /// Keep key pair (in pkcs8 bytes) in memory for performance, it's duplicated in database as well.
     key_pair: Mutex<HashMap<Address, Vec<u8>>>,
+    counter: AtomicUsize,
 }
 
 #[derive(Debug)]
@@ -63,12 +65,16 @@ impl Wallet {
         db_opts.create_missing_column_families(true);
         db_opts.create_if_missing(true);
         let handle = rocksdb::DB::open_cf_descriptors(&db_opts, path, vec![coin_cf, keypair_cf])?;
-        return Ok(Self { db: handle, key_pair: Mutex::new(HashMap::new()) });
+        return Ok(Self { db: handle, key_pair: Mutex::new(HashMap::new()), counter: AtomicUsize::new(0), });
     }
 
     pub fn new<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
         rocksdb::DB::destroy(&rocksdb::Options::default(), &path)?;
         return Self::open(path);
+    }
+
+    pub fn number_of_coins(&self) -> usize {
+        self.counter.load(Ordering::Relaxed)
     }
 
     /// Generate a new key pair
@@ -128,6 +134,7 @@ impl Wallet {
                 let key = serialize(&coin.coin).unwrap();
                 let val = serialize(&output).unwrap();
                 batch.put_cf(cf, &key, &val)?;
+                self.counter.fetch_add(1, Ordering::Relaxed);
             }
         }
         for coin in remove {
@@ -152,11 +159,17 @@ impl Wallet {
     }
 
     /// Create a transaction using the wallet coins
-    pub fn create_transaction(&self, recipient: Address, value: u64) -> Result<Transaction> {
+    pub fn create_transaction(&self, recipient: Address, value: u64, previous_used_coin: Option<Input> ) -> Result<Transaction> {
         let mut coins_to_use: Vec<Input> = vec![];
         let mut value_sum = 0u64;
         let cf = self.db.cf_handle(COIN_CF).unwrap();
-        let iter = self.db.iterator_cf(cf, rocksdb::IteratorMode::Start)?;
+        let iter = match previous_used_coin {
+            Some(c) => {
+                let prev_key = serialize(&c.coin).unwrap();
+                self.db.iterator_cf(cf, rocksdb::IteratorMode::From(&prev_key, rocksdb::Direction::Forward))?
+            },
+            None => self.db.iterator_cf(cf, rocksdb::IteratorMode::Start)?
+        };
         // iterate through our wallet
         for (k, v) in iter {
             let coin_id: CoinId = bincode::deserialize(k.as_ref()).unwrap();
@@ -208,87 +221,13 @@ impl Wallet {
                 signature: unsigned.sign(&keypair),
             });
         }
-
+        self.counter.fetch_sub(unsigned.input.len(), Ordering::Relaxed);
         Ok(Transaction {
             authorization,
             ..unsigned
         })
     }
-
-    /// Create multiple transactions at once
-    pub fn create_transactions(&self, recipient_value: &[(Address, u64)]) -> Result<Vec<Transaction>> {
-        let mut result: Vec<Transaction> = vec![];
-        let mut coins_to_remove: Vec<Input> = vec![];
-        let cf = self.db.cf_handle(COIN_CF).unwrap();
-        let mut iter = self.db.raw_iterator_cf(cf)?;
-        iter.seek_to_first();
-        for (recipient,value) in recipient_value {
-            let mut coins_to_use: Vec<Input> = vec![];
-            let mut value_sum = 0u64;
-            // iterate through our wallet
-            while iter.valid() {
-                let coin_id: CoinId = bincode::deserialize(&iter.key().unwrap()).unwrap();
-                let coin_data: Output = bincode::deserialize(&iter.value().unwrap()).unwrap();
-                iter.next();
-                value_sum += coin_data.value;
-                coins_to_use.push(Input {
-                    coin: coin_id,
-                    value: coin_data.value,
-                    owner: coin_data.recipient,
-                }); // coins that will be used for this transaction
-                if value_sum >= *value {
-                    // if we already have enough money, break
-                    break;
-                }
-            }
-            if value_sum < *value {
-                // we don't have enough money in wallet
-                return Err(WalletError::InsufficientBalance);
-            }
-            // if we have enough money in our wallet, create tx
-            // add coins_to_use to a vector and remove them at the end
-            coins_to_remove.extend(&coins_to_use);
-            // create the output
-            let mut output = vec![Output { recipient: *recipient, value: *value }];
-            if value_sum > *value {
-                // transfer the remaining value back to self
-                let recipient = self.addresses()?[0];
-                output.push(Output {
-                    recipient,
-                    value: value_sum - *value,
-                });
-            }
-
-            let mut owners: Vec<Address> = coins_to_use.iter().map(|input| input.owner).collect();
-            let unsigned = Transaction {
-                input: coins_to_use,
-                output: output,
-                authorization: vec![],
-                hash: RefCell::new(None)
-            };
-            let mut authorization = vec![];
-            owners.sort_unstable();
-            owners.dedup();
-            for owner in owners.iter() {
-                let keypair = self.keypair(&owner)?;
-                authorization.push(Authorization {
-                    pubkey: keypair.public_key(),
-                    signature: unsigned.sign(&keypair),
-                });
-            }
-
-            result.push(Transaction {
-                authorization,
-                ..unsigned
-            });
-        }
-        // remove used coin from wallet
-        self.apply_diff(&[], &coins_to_remove)?;
-
-        Ok(result)
-    }
 }
-
 
 #[cfg(test)]
 pub mod tests {
