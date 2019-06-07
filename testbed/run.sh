@@ -163,7 +163,7 @@ function remove_payload_single
 
 function install_perf_single
 {
-	ssh $1 -- 'sudo apt-get update -y && sudo apt-get install linux-tools-aws -y && sudo apt-get install linux-tools-4.15.0-1032-aws -y && wget https://github.com/Yamakaky/rust-unmangle/raw/master/rust-unmangle && wget https://github.com/brendangregg/FlameGraph/raw/master/flamegraph.pl && chmod +x rust-unmangle && chmod +x flamegraph.pl'
+	ssh $1 -- 'rm -f rust-unmangle && rm -rf FlameGraph && sudo apt-get update -y && sudo apt-get install linux-tools-aws linux-tools-4.15.0-1032-aws binutils -y && wget https://github.com/yangl1996/rust-unmangle/raw/master/rust-unmangle && git clone https://github.com/brendangregg/FlameGraph.git && chmod +x rust-unmangle && chmod +x flamegraph.pl && echo export PATH=$PATH:/home/ubuntu:/home/ubuntu/FlameGraph >> /home/ubuntu/.profile'
 }
 
 function sync_payload_single
