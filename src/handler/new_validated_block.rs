@@ -17,6 +17,7 @@ pub fn new_validated_block(
     blockdb: &BlockDatabase,
     chain: &BlockChain,
     server: &ServerHandle,
+    pass: bool,
 ) {
     PERFORMANCE_COUNTER.record_process_block(&block);
 
@@ -46,5 +47,7 @@ pub fn new_validated_block(
     blockdb.insert(&block).unwrap();
 
     // tell the neighbors that we have a new block
-    server.broadcast(message::Message::NewBlockHashes(vec![block.hash()]));
+    if pass {
+        server.broadcast(message::Message::NewBlockHashes(vec![block.hash()]));
+    }
 }

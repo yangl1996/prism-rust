@@ -175,6 +175,7 @@ impl Context {
                                     &self.blockdb,
                                     &self.chain,
                                     &self.server,
+                                    false,
                                 );
                                 let mut resolved_by_current = self.buffer.satisfy(block.hash());
                                 if !resolved_by_current.is_empty() {

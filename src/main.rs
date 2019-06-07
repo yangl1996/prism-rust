@@ -149,7 +149,7 @@ fn main() {
     server_ctx.start().unwrap();
 
     // start the worker
-    let worker_ctx = worker::new(4, msg_rx, &blockchain, &blockdb, &utxodb, &wallet, &mempool, ctx_tx, &server);
+    let worker_ctx = worker::new(16, msg_rx, &blockchain, &blockdb, &utxodb, &wallet, &mempool, ctx_tx, &server);
     worker_ctx.start();
 
     // start the miner

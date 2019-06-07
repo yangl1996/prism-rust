@@ -12,7 +12,7 @@ pub fn new_transaction(transaction: Transaction, mempool: &Mutex<MemoryPool>, se
     // memory pool check
     if !mempool.contains(&transaction.hash()) && !mempool.is_double_spend(&transaction.input) {
         // if check passes, insert the new transaction into the mempool
-        server.broadcast(Message::NewTransactionHashes(vec![transaction.hash()]));
+        //server.broadcast(Message::NewTransactionHashes(vec![transaction.hash()]));
         mempool.insert(transaction);
     }
     drop(mempool);
