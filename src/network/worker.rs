@@ -121,11 +121,8 @@ impl Context {
                     let mut hashes_to_request = vec![];
                     for hash in hashes {
                         // we need to check blockchain as well
-                        match self.blockdb.get(&hash).unwrap() {
-                            None => {
-                                hashes_to_request.push(hash);
-                            }
-                            _ => {}
+                        if !self.blockdb.contains(&hash).unwrap() {
+                            hashes_to_request.push(hash);
                         }
                     }
                     if hashes_to_request.len() != 0 {
