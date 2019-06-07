@@ -168,7 +168,7 @@ function install_perf_single
 
 function sync_payload_single
 {
-	rsync -r payload/$1/ $1:/home/ubuntu/payload
+	rsync -rz payload/$1/ $1:/home/ubuntu/payload
 }
 
 function start_prism_single
