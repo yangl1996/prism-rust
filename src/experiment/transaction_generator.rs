@@ -103,6 +103,7 @@ impl TransactionGenerator {
             let mut rng = rand::thread_rng();
             // TODO: make it flexible
             let addr = self.wallet.addresses().unwrap()[0];
+            let mut prev_coin = None;
             loop {
                 // check the current state and try to receive control message
                 match self.state {
@@ -132,10 +133,11 @@ impl TransactionGenerator {
                         }
                     }
                 };
-                let transaction = self.wallet.create_transaction(addr, value);
+                let transaction = self.wallet.create_transaction(addr, value, prev_coin);
                 PERFORMANCE_COUNTER.record_generate_transaction(&transaction);
                 match transaction {
                     Ok(t) => {
+                        prev_coin = Some(t.input.last().unwrap().clone());
                         new_transaction(t, &self.mempool, &self.server);
                         // if we are in stepping mode, decrease the step count
                         if let State::Step(step_count) = self.state {
@@ -148,6 +150,7 @@ impl TransactionGenerator {
                     }
                     Err(e) => {
                         trace!("Failed to generate transaction: {}", e);
+                        prev_coin = None;
                     }
                 };
                 let interval: u64 = match &self.arrival_distribution {
