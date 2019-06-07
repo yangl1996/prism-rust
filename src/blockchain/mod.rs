@@ -484,21 +484,69 @@ impl BlockChain {
             let proposer_blocks: Vec<H256> = get_value!(proposer_tree_level_cf, *level as u64).unwrap();
             let existing_leader: Option<H256> = get_value!(proposer_leader_sequence_cf, *level as u64);
             // compute the new leader of this level
-            // TODO: bad confirmation rule: we just choose the block with the most votes
             let new_leader: Option<H256> = {
-                let mut new_leader = None;
-                let mut max_votes = 0;
-                for p in &proposer_blocks {
-                    let votes: Vec<(u16, u64)> = match get_value!(proposer_node_vote_cf, p) {
+                let mut new_leader: Option<H256> = None;
+
+                let mut all_votes: Vec<u16> = vec![];
+                let mut total_votes: u16 = 0;
+                let mut max_votes: u16 = 0;
+
+                for p_block in &proposer_blocks {
+                    let p_votes: Vec<(u16, u64)> = match get_value!(proposer_node_vote_cf, p_block) {
                         None => vec![],
                         Some(d) => d,
                     };
-                    let num_votes = votes.len();
-                    if num_votes > max_votes {
-                        max_votes = num_votes;
-                        new_leader = Some(*p);
+                    all_votes.push(p_votes.len() as u16);
+                    total_votes += p_votes.len() as u16;
+
+                    if max_votes < p_votes.len() as u16 {
+                        max_votes = p_votes.len() as u16;
+                        new_leader = Some(*p_block);
+                    }
+
+                    if max_votes == p_votes.len() as u16 && !new_leader.is_none(){ //TODO: is_none is not required?
+                        if *p_block < new_leader.unwrap() {
+                            new_leader = Some(*p_block);
+                        }
                     }
                 }
+                // debugging only
+                if NUM_VOTER_CHAINS < total_votes {
+                    for p_block in &proposer_blocks {
+                        let votes: Vec<(u16, u64)> = match self
+                            .db
+                            .get_cf(proposer_node_vote_cf, serialize(&p_block).unwrap())?
+                            {
+                                None => vec![],
+                                Some(d) => deserialize(&d).unwrap(),
+                            };
+                        print!("block: {}, votes: {}; ", p_block, votes.len());
+                        for vote in votes.iter(){
+                            print!(" ({}, {}) ", vote.0, vote.1);
+                        }
+                        println!("");
+
+                    }
+                    panic!("NUM_VOTER_CHAINS: {} total_votes:{}", NUM_VOTER_CHAINS, total_votes)
+                } else {
+                    let remaining_votes = NUM_VOTER_CHAINS - total_votes;
+
+                    if max_votes >= remaining_votes && !new_leader.is_none() { //TODO: is_none is not required?
+                        for (i, p_block) in proposer_blocks.iter().enumerate() {
+                            if max_votes < all_votes[i] + remaining_votes && *p_block != new_leader.unwrap() {
+                                new_leader = None;
+                                break;
+                            }
+                            if max_votes == all_votes[i] + remaining_votes && *p_block < new_leader.unwrap() {
+                                new_leader = None;
+                                break;
+                            }
+                        }
+                    } else {
+                        new_leader = None;
+                    }
+                }
+
                 new_leader
             };
 
