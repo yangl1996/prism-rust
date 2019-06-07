@@ -31,6 +31,7 @@ pub enum BlockResult {
     /// A voter block votes for incorrect proposer levels.
     WrongVoteLevel,
     EmptyTransaction,
+    ZeroValue,
     InsufficientInput,
     WrongSignature,
     Duplicate,
@@ -50,6 +51,7 @@ impl std::fmt::Display for BlockResult {
             BlockResult::WrongChainNumber => write!(f, "chain number out of range"),
             BlockResult::WrongVoteLevel => write!(f, "incorrent vote levels"),
             BlockResult::EmptyTransaction => write!(f, "empty transaction input or output"),
+            BlockResult::ZeroValue => write!(f, "transaction input or output value contains a zero"),
             BlockResult::InsufficientInput => write!(f, "insufficient input"),
             BlockResult::WrongSignature => write!(f, "signature mismatch"),
         }
@@ -65,22 +67,10 @@ pub fn check_block(
     // TODO: Check difficulty. Where should we get the current difficulty ranges?
 
     // check PoW and sortition id
-    let sortition_id = get_sortition_id(&block.hash(), &block.header.difficulty);
-    if let Some(sortition_id) = sortition_id {
-        let correct_sortition_id = match &block.content {
-            Content::Proposer(_) => PROPOSER_INDEX,
-            Content::Transaction(_) => TRANSACTION_INDEX,
-            Content::Voter(content) => content.chain_number + FIRST_VOTER_INDEX,
-        };
-        if sortition_id != correct_sortition_id {
-            return BlockResult::WrongSortitionId;
-        }
-        if !verify(&block.header.content_merkle_root, &block.content.hash(), &block.sortition_proof, sortition_id as usize, (NUM_VOTER_CHAINS + FIRST_VOTER_INDEX) as usize) {
-            return BlockResult::WrongSortitionProof;
-        }
-    } else {
-        return BlockResult::WrongPoW;
-    }
+//    match check_pow_sortition(block, blockchain, blockdb) {
+//        BlockResult::Pass => {}
+//        x => return x,
+//    };
 
     // check whether the parent exists
     let parent = block.header.parent;
@@ -106,7 +96,7 @@ pub fn check_block(
                 return BlockResult::MissingReferences(missing_refs);
             }
             // check refed proposer level should be less than its level
-            if !check_ref_proposer_level(&parent, &content, blockchain) {
+            if !proposer_block::check_ref_proposer_level(&parent, &content, blockchain) {
                 return BlockResult::WrongProposerRef;
             }
             return BlockResult::Pass;
@@ -141,17 +131,19 @@ pub fn check_block(
                 return BlockResult::Duplicate;
             }
             // check each transaction
-            /*
             for transaction in content.transactions.iter() {
-                /*
                 if !transaction::check_non_empty(&transaction) {
                     return BlockResult::EmptyTransaction;
                 }
+                if !transaction::check_non_zero(&transaction) {
+                    return BlockResult::ZeroValue;
+                }
 // Gerui: I think we won't go to utxo in validation.
+                /*
                 if !transaction::check_input_unspent(&transaction, utxodb) {
                     return BlockResult::InputAlreadySpent;
                 }
-
+*/
                 if !transaction::check_sufficient_input(&transaction) {
                     return BlockResult::InsufficientInput;
                 }
@@ -159,9 +151,7 @@ pub fn check_block(
                 if !transaction::check_signature(&transaction) {
                     return BlockResult::WrongSignature;
                 }
-                */
             }
-            */
             return BlockResult::Pass;
         }
 
@@ -248,4 +238,30 @@ pub fn get_sortition_id(hash: &H256, difficulty: &H256) -> Option<u16> {
     } else {
         None
     }
+}
+
+// check PoW and sortition id
+pub fn check_pow_sortition(
+    block: &Block,
+    blockchain: &BlockChain,
+    blockdb: &BlockDatabase,
+) -> BlockResult {
+
+    let sortition_id = get_sortition_id(&block.hash(), &block.header.difficulty);
+    if let Some(sortition_id) = sortition_id {
+        let correct_sortition_id = match &block.content {
+            Content::Proposer(_) => PROPOSER_INDEX,
+            Content::Transaction(_) => TRANSACTION_INDEX,
+            Content::Voter(content) => content.chain_number + FIRST_VOTER_INDEX,
+        };
+        if sortition_id != correct_sortition_id {
+            return BlockResult::WrongSortitionId;
+        }
+        if !verify(&block.header.content_merkle_root, &block.content.hash(), &block.sortition_proof, sortition_id as usize, (NUM_VOTER_CHAINS + FIRST_VOTER_INDEX) as usize) {
+            return BlockResult::WrongSortitionProof;
+        }
+    } else {
+        return BlockResult::WrongPoW;
+    }
+    BlockResult::Pass
 }

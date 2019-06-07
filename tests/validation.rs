@@ -1,10 +1,12 @@
-use prism::validation::*;
+use prism::validation::{check_block, BlockResult};
 use prism::block::tests::{proposer_block, voter_block, transaction_block};
 use prism::crypto::hash::tests::generate_random_hash;
+use prism::transaction::tests::{generate_random_transaction, generate_random_output, generate_random_coinid};
 use prism::blockdb::BlockDatabase;
 use prism::blockchain::BlockChain;
 use prism::config;
 use prism::crypto::hash::Hashable;
+use prism::transaction::{Transaction, Input, Output};
 
 macro_rules! assert_result {
         ( $left:expr, $right:pat ) => {{
@@ -43,6 +45,9 @@ fn validate_block() {
     blockdb.insert(&proposer_2).unwrap();
     blockchain.insert_block(&proposer_2).unwrap();
 
+    let proposer_2_fork = proposer_block(parent, timestamp, vec![proposer_2.hash()], vec![]);
+    assert_result!(check_block(&proposer_2_fork, &blockchain, &blockdb), BlockResult::WrongProposerRef);
+
     parent = blockchain.best_proposer();
     timestamp += 1;
 
@@ -58,5 +63,40 @@ fn validate_block() {
         // vote's order matters
         let voter = voter_block(parent, timestamp, chain, blockchain.best_voter(chain as usize), vec![proposer_2.hash(), proposer_1.hash()]);
         assert_result!(check_block(&voter, &blockchain, &blockdb), BlockResult::WrongVoteLevel);
+        if chain > 0 {
+            let voter = voter_block(parent, timestamp, chain-1, blockchain.best_voter(chain as usize), vec![proposer_2.hash(), proposer_1.hash()]);
+            assert_result!(check_block(&voter, &blockchain, &blockdb), BlockResult::WrongChainNumber);
+        }
     }
+
+    timestamp += 1;
+
+    let invalid_tx = Transaction { input: vec![], ..generate_random_transaction() };
+    let transaction_1 = transaction_block(parent, timestamp, vec![invalid_tx]);
+    assert_result!(check_block(&transaction_1, &blockchain, &blockdb), BlockResult::EmptyTransaction);
+    let invalid_tx = Transaction { output: vec![], ..generate_random_transaction() };
+    let transaction_2 = transaction_block(parent, timestamp, vec![invalid_tx]);
+    assert_result!(check_block(&transaction_2, &blockchain, &blockdb), BlockResult::EmptyTransaction);
+    let invalid_tx = Transaction { input: vec![Input { coin: generate_random_coinid(), value: 0, owner: [9u8;32].into() }], ..generate_random_transaction() };
+    let transaction_3 = transaction_block(parent, timestamp, vec![invalid_tx]);
+    assert_result!(check_block(&transaction_3, &blockchain, &blockdb), BlockResult::ZeroValue);
+    let invalid_tx = Transaction { output: vec![Output { value: 0, recipient: [9u8;32].into() }], ..generate_random_transaction() };
+    let transaction_4 = transaction_block(parent, timestamp, vec![invalid_tx]);
+    assert_result!(check_block(&transaction_4, &blockchain, &blockdb), BlockResult::ZeroValue);
+    let invalid_tx = Transaction {
+        input: vec![Input { coin: generate_random_coinid(), value: 1, owner: [9u8;32].into() }],
+        output: vec![Output {value: 2, recipient: [9u8;32].into() }],
+        authorization: vec![]
+    };
+    let transaction_5 = transaction_block(parent, timestamp, vec![invalid_tx]);
+    assert_result!(check_block(&transaction_5, &blockchain, &blockdb), BlockResult::InsufficientInput);
+    let invalid_tx = Transaction {
+        input: vec![Input { coin: generate_random_coinid(), value: 2, owner: [9u8;32].into() }],
+        output: vec![Output {value: 2, recipient: [9u8;32].into() }],
+        authorization: vec![]
+    };
+    let transaction_6 = transaction_block(parent, timestamp, vec![invalid_tx]);
+    assert_result!(check_block(&transaction_6, &blockchain, &blockdb), BlockResult::WrongSignature);
+
+    //TODO: check PoW and sortition, check signature
 }
