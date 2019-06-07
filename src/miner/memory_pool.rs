@@ -7,6 +7,8 @@ use std::collections::VecDeque;
 /// transactions storage
 #[derive(Debug)]
 pub struct MemoryPool {
+    num_transactions: u64,
+    max_transactions: u64,
     /// Number of transactions
     counter: u64,
     /// By-hash storage
@@ -26,8 +28,10 @@ pub struct Entry {
 }
 
 impl MemoryPool {
-    pub fn new() -> Self {
+    pub fn new(size_limit: u64) -> Self {
         Self {
+            num_transactions: 0,
+            max_transactions: size_limit,
             counter: 0,
             by_hash: HashMap::new(),
             by_input: HashMap::new(),
@@ -37,6 +41,9 @@ impl MemoryPool {
 
     /// Insert a tx into memory pool. The input of it will also be recorded.
     pub fn insert(&mut self, tx: Transaction) {
+        if self.num_transactions > self.max_transactions {
+            return;
+        }
         // assumes no duplicates nor double spends
         let hash = tx.hash();
         let entry = Entry {
@@ -55,6 +62,7 @@ impl MemoryPool {
 
         // add to hashmap
         self.by_hash.insert(hash, entry);
+        self.num_transactions += 1;
     }
 
     pub fn get(&self, h: &H256) -> Option<&Entry> {
@@ -80,6 +88,7 @@ impl MemoryPool {
             self.by_input.remove(&input);
         }
         self.by_storage_index.remove(&entry.storage_index);
+        self.num_transactions -= 1;
         return Some(entry);
     }
 

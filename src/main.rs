@@ -41,6 +41,7 @@ fn main() {
      (@arg wallet_db: --walletdb [PATH] default_value("/tmp/prism-wallet.rocksdb") "Sets the path of the wallet")
      (@arg init_fund_addr: --("fund-addr") ... [HASH] "Endows the given address an initial fund")
      (@arg load_key_path: --("load-key") ... [PATH] "Loads a key pair into the wallet from the given address")
+     (@arg mempool_size: --("mempool-size") ... [SIZE] default_value("8000") "Sets the size limit of the memory pool")
      (@subcommand keygen =>
       (about: "Generates Prism wallet key pair")
       (@arg display_address: --addr "Prints the address of the key pair to STDERR")
@@ -69,7 +70,11 @@ fn main() {
     stderrlog::new().verbosity(verbosity).init().unwrap();
 
     // init mempool
-    let mempool = MemoryPool::new();
+    let mempool_size = matches.value_of("mempool_size").unwrap().parse::<u64>().unwrap_or_else(|e| {
+        error!("Error parsing memory pool size limit: {}", e);
+        process::exit(1);
+    });
+    let mempool = MemoryPool::new(mempool_size);
     let mempool = Arc::new(std::sync::Mutex::new(mempool));
 
     // init block database
