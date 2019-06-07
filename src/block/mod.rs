@@ -13,7 +13,7 @@ pub struct Block {
     /// The content of the block. It could contain transactions, references, or votes, depending on
     /// the block type.
     pub content: Content,
-    /// The sortition proof of the content. In addition to the content root in block header, we are
+    /// The sortition proof of the content. In addition to the content Merkle root in block header, we are
     /// able to verify that the block is mined on a set of content candidates.
     pub sortition_proof: Vec<H256>,
 }

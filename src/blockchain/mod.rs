@@ -769,6 +769,19 @@ impl BlockChain {
         return Ok(level);
     }
 
+    /// Get the chain number of the voter block
+    pub fn voter_chain_number(&self, hash: &H256) -> Result<u16> {
+        let voter_node_chain_cf = self.db.cf_handle(VOTER_NODE_CHAIN_CF).unwrap();
+        let chain: u16 = deserialize(
+            &self
+                .db
+                .get_cf(voter_node_chain_cf, serialize(&hash).unwrap())?
+                .unwrap(),
+        )
+            .unwrap();
+        return Ok(chain);
+    }
+
     /// Check whether the given proposer block exists in the database.
     pub fn contains_proposer(&self, hash: &H256) -> Result<bool> {
         let proposer_node_level_cf = self.db.cf_handle(PROPOSER_NODE_LEVEL_CF).unwrap();

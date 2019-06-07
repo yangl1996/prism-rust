@@ -32,14 +32,9 @@ pub fn get_missing_references(
     return missing_blocks;
 }
 
-pub fn check_chain_number(content: &Content) -> bool {
-    let chain_num = content.chain_number;
-
-    if chain_num > config::NUM_VOTER_CHAINS {
-        return false;
-    } else {
-        return true;
-    }
+pub fn check_chain_number(content: &Content, blockchain: &BlockChain) -> bool {
+    let chain_num = blockchain.voter_chain_number(&content.voter_parent).unwrap();
+    chain_num == content.chain_number
 }
 
 pub fn check_levels_voted(
@@ -51,7 +46,7 @@ pub fn check_levels_voted(
 
     if content.votes.len() != should_vote.len() { return false; }
 
-    content.votes.iter().zip(should_vote.iter()).all(|(x,y)|*x == *y)
+    content.votes.iter().zip(should_vote.into_iter()).all(|(x,y)|*x == y)
 }
 
 ///// Get the deepest proposer level voted by this chain, until the given voter block.

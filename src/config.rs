@@ -34,9 +34,9 @@ pub const PROPOSER_BLOCK_TX_BLOCK_REF_LIMIT: u32 = 3*TRANSACTION_MINING_RANGE/PR
 pub const PROPOSER_BLOCK_PROP_BLOCK_REF_LIMIT: u32 = 10; // Max number of prop blocks referred by a prop block.
 
 // Chain id
-pub const TRANSACTION_INDEX: u32 = 1;
-pub const PROPOSER_INDEX: u32 = 0;
-pub const FIRST_VOTER_INDEX: u32 = 2;
+pub const TRANSACTION_INDEX: u16 = 1;
+pub const PROPOSER_INDEX: u16 = 0;
+pub const FIRST_VOTER_INDEX: u16 = 2;
 
 lazy_static! {
     pub static ref DEFAULT_DIFFICULTY: H256 = {

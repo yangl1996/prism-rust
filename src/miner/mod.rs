@@ -13,6 +13,7 @@ use crate::network::server::Handle as ServerHandle;
 use crate::utxodb::UtxoDatabase;
 use crate::wallet::Wallet;
 use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
+use crate::validation::get_sortition_id;
 use log::{debug, info};
 
 use memory_pool::MemoryPool;
@@ -24,11 +25,8 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use rand::distributions::Distribution;
 
-extern crate rand; // 0.6.0
 use rand::Rng;
 
-extern crate bigint;
-use bigint::uint::U256;
 
 #[derive(PartialEq)]
 enum ControlSignal {
@@ -279,8 +277,8 @@ impl Context {
     /// Given a valid header, sortition its hash and create the block
     fn assemble_block(&self, header: Header) -> Block {
         // Get sortition ID
-        let hash: [u8; 32] = (&header.hash()).into();
-        let sortition_id = self.get_sortition_id(&hash);
+//        let hash: [u8; 32] = (&header.hash()).into();
+        let sortition_id = get_sortition_id(&header.hash(), &header.difficulty).expect("Block Hash should <= Difficulty");
         // Create a block
         // assemble the merkle tree and get the proof
         let merkle_tree = MerkleTree::new(&self.content);
@@ -371,36 +369,6 @@ impl Context {
         self.content = content;
         let merkle_tree = MerkleTree::new(&self.content);
         self.content_merkle_tree_root = merkle_tree.root();
-    }
-
-    /// Calculate which chain should we attach the new block to
-    fn get_sortition_id(&self, hash: &[u8; 32]) -> u32 {
-        let big_hash = U256::from_big_endian(hash);
-        let difficulty_raw: [u8; 32] = (&self.difficulty).into();
-        let big_difficulty = U256::from_big_endian(&difficulty_raw);
-        let total_mining_range: U256 = TOTAL_MINING_RANGE.into();
-        let big_proposer_range: U256 = PROPOSER_MINING_RANGE.into();
-        let big_transaction_range: U256 = TRANSACTION_MINING_RANGE.into();
-
-        if big_hash < big_difficulty / total_mining_range * big_proposer_range {
-            // proposer block
-            return PROPOSER_INDEX;
-        } else if big_hash
-            < big_difficulty / total_mining_range * (big_transaction_range + big_proposer_range)
-        {
-            // transaction block
-            return TRANSACTION_INDEX;
-        } else if big_hash < big_difficulty {
-            // voter index, figure out which voter tree we are in
-            let voter_id =
-                (big_hash - big_transaction_range - big_proposer_range) % NUM_VOTER_CHAINS.into();
-            return voter_id.as_u32() + FIRST_VOTER_INDEX;
-        } else {
-            panic!(
-                "Difficulty {}, The function should not be called for such high value of hash {}",
-                big_difficulty, big_hash
-            );
-        }
     }
 
     /// Calculate the difficulty for the block to be mined

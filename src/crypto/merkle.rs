@@ -175,7 +175,7 @@ impl MerkleTree {
     }
 }
 
-pub fn verify(root: H256, data: H256, proof: &[H256], index: usize, data_size: usize) -> bool {
+pub fn verify(root: &H256, data: &H256, proof: &[H256], index: usize, data_size: usize) -> bool {
     let mut this_layer_size = data_size;
     let mut layer_size = vec![];
     loop {
@@ -189,10 +189,11 @@ pub fn verify(root: H256, data: H256, proof: &[H256], index: usize, data_size: u
         layer_size.push(this_layer_size);
         this_layer_size = this_layer_size >> 1;
     }
+    if layer_size.len() != proof.len() + 1 { return false; }
     let mut iter = layer_size.into_iter();
     iter.next();
     let mut index: usize = iter.sum::<usize>() + index;
-    let mut acc = data;
+    let mut acc = *data;
     for h in proof.iter() {
         if index == 0 { return false; }
         let mut ctx = ring::digest::Context::new(&ring::digest::SHA256);
@@ -209,7 +210,7 @@ pub fn verify(root: H256, data: H256, proof: &[H256], index: usize, data_size: u
         acc = digest.into();
         index = (index - 1) >> 1;
     }
-    acc == root
+    acc == *root
 }
 
 #[cfg(test)]
@@ -266,20 +267,20 @@ mod tests {
         assert_eq!(proof[1], merkle_tree.nodes[3]);
         assert_eq!(proof[2], merkle_tree.nodes[2]);
         assert_eq!(proof.len(), 3);
-        assert!(verify(merkle_tree.root(), input_data[2].hash(), &proof, 2, input_data.len()));
+        assert!(verify(&merkle_tree.root(), &input_data[2].hash(), &proof, 2, input_data.len()));
 
         let proof = merkle_tree.proof(6);
         assert_eq!(proof[0], merkle_tree.nodes[14]);
         assert_eq!(proof[1], merkle_tree.nodes[5]);
         assert_eq!(proof[2], merkle_tree.nodes[1]);
         assert_eq!(proof.len(), 3);
-        assert!(verify(merkle_tree.root(), input_data[6].hash(), &proof, 6, input_data.len()));
+        assert!(verify(&merkle_tree.root(), &input_data[6].hash(), &proof, 6, input_data.len()));
 
         let wrong_proof: Vec<H256> = proof.iter().take(2).cloned().collect();
-        assert!(!verify(merkle_tree.root(), input_data[6].hash(), &wrong_proof, 6, input_data.len()));
+        assert!(!verify(&merkle_tree.root(), &input_data[6].hash(), &wrong_proof, 6, input_data.len()));
         let mut wrong_proof: Vec<H256> = proof.clone();
         wrong_proof[0] = [09u8; 32].into();
-        assert!(!verify(merkle_tree.root(), input_data[6].hash(), &wrong_proof, 6, input_data.len()));
+        assert!(!verify(&merkle_tree.root(), &input_data[6].hash(), &wrong_proof, 6, input_data.len()));
 
     }
 
@@ -291,7 +292,7 @@ mod tests {
             for idx in 0..input_data.len() {
                 //proof
                 let proof = merkle_tree.proof(idx);
-                assert!(verify(merkle_tree.root(), input_data[idx].hash(), &proof, idx, input_data.len()));
+                assert!(verify(&merkle_tree.root(), &input_data[idx].hash(), &proof, idx, input_data.len()));
                 //update
                 let mut input_data_mut = input_data.clone();
                 input_data_mut[idx] = [09u8; 32].into();
