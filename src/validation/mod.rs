@@ -67,10 +67,10 @@ pub fn check_block(
     // TODO: Check difficulty. Where should we get the current difficulty ranges?
 
     // check PoW and sortition id
-//    match check_pow_sortition(block, blockchain, blockdb) {
-//        BlockResult::Pass => {}
-//        x => return x,
-//    };
+    match check_pow_sortition(block, blockchain, blockdb) {
+        BlockResult::Pass => {}
+        x => return x,
+    };
 
     // check whether the parent exists
     let parent = block.header.parent;
