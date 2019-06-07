@@ -484,24 +484,6 @@ impl BlockChain {
             let proposer_blocks: Vec<H256> = get_value!(proposer_tree_level_cf, *level as u64).unwrap();
             let existing_leader: Option<H256> = get_value!(proposer_leader_sequence_cf, *level as u64);
             // compute the new leader of this level
-            // TODO: bad confirmation rule: we just choose the block with the most votes
-//            let new_leader: Option<H256> = {
-//                let mut new_leader = None;
-//                let mut max_votes = 0;
-//                for p in &proposer_blocks {
-//                    let votes: Vec<(u16, u64)> = match get_value!(proposer_node_vote_cf, p) {
-//                        None => vec![],
-//                        Some(d) => d,
-//                    };
-//                    let num_votes = votes.len();
-//                    if num_votes > max_votes {
-//                        max_votes = num_votes;
-//                        new_leader = Some(*p);
-//                    }
-//                }
-//                new_leader
-//            };
-
             let new_leader: Option<H256> = {
                 let mut new_leader: Option<H256> = None;
 
