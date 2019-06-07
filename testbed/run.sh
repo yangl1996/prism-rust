@@ -163,7 +163,7 @@ function remove_payload_single
 
 function install_perf_single
 {
-	ssh $1 -- 'sudo apt-get update -y && sudo apt-get install linux-tools-aws -y && sudo apt-get install linux-tools-4.15.0-1032-aws -y'
+	ssh $1 -- 'sudo apt-get update -y && sudo apt-get install linux-tools-aws -y && sudo apt-get install linux-tools-4.15.0-1032-aws -y && wget https://github.com/Yamakaky/rust-unmangle/raw/master/rust-unmangle && wget https://github.com/brendangregg/FlameGraph/raw/master/flamegraph.pl && chmod +x rust-unmangle && chmod +x flamegraph.pl'
 }
 
 function sync_payload_single
@@ -217,7 +217,7 @@ function start_transactions_single
 	curl -s "http://$3:$4/transaction-generator/set-arrival-distribution?interval=0&distribution=uniform"
 	curl -s "http://$3:$4/transaction-generator/set-value-distribution?min=100&max=100&distribution=uniform"
 	curl -s "http://$3:$4/transaction-generator/start"
-	curl -s "http://$3:$4/miner/start?lambda=1000000&lazy=false"
+	curl -s "http://$3:$4/miner/start?lambda=60000&lazy=false"
 }
 
 function query_api 
