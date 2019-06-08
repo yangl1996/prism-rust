@@ -11,7 +11,7 @@ use crate::handler::new_transaction;
 use log::{debug, error, info, trace};
 
 pub enum ControlSignal {
-    Start,
+    Start(u64),
     Step(u64),
     Stop,
     SetArrivalDistribution(ArrivalDistribution),
@@ -36,7 +36,7 @@ pub struct UniformValue {
 }
 
 enum State {
-    Continuous,
+    Continuous(u64),
     Paused,
     Step(u64),
 }
@@ -77,8 +77,8 @@ impl TransactionGenerator {
 
     fn handle_control_signal(&mut self, signal: ControlSignal) {
         match signal {
-            ControlSignal::Start => {
-                self.state = State::Continuous;
+            ControlSignal::Start(t) => {
+                self.state = State::Continuous(t);
                 info!("Transaction generator started");
             }
             ControlSignal::Stop => {
@@ -107,7 +107,7 @@ impl TransactionGenerator {
             loop {
                 // check the current state and try to receive control message
                 match self.state {
-                    State::Continuous | State::Step(_) => {
+                    State::Continuous(_) | State::Step(_) => {
                         match self.control_chan.try_recv() {
                             Ok(signal) => {
                                 self.handle_control_signal(signal);
@@ -121,6 +121,20 @@ impl TransactionGenerator {
                         // block until we get a signal
                         let signal = self.control_chan.recv().unwrap();
                         self.handle_control_signal(signal);
+                        continue;
+                    }
+                }
+                // check whether the mempool is already full
+                if let State::Continuous(throttle) = self.state {
+                    if self.mempool.lock().unwrap().len() as u64 >= throttle {
+                        // if the mempool is full, just skip this transaction
+                        let interval: u64 = match &self.arrival_distribution {
+                            ArrivalDistribution::Uniform(d) => {
+                                d.interval
+                            }
+                        };
+                        let interval = time::Duration::from_micros(interval);
+                        thread::sleep(interval);
                         continue;
                     }
                 }

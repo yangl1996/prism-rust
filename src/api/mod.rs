@@ -112,7 +112,23 @@ impl Server {
                             respond_json!(req, PERFORMANCE_COUNTER.snapshot());
                         }
                         "/transaction-generator/start" => {
-                            let control_signal = transaction_generator::ControlSignal::Start;
+                            let params = url.query_pairs();
+                            let params: HashMap<_, _> = params.into_owned().collect();
+                            let throttle = match params.get("throttle") {
+                                Some(v) => v,
+                                None => {
+                                    respond_result!(req, false, "missing throttle");
+                                    return;
+                                }
+                            };
+                            let throttle = match throttle.parse::<u64>() {
+                                Ok(v) => v,
+                                Err(e) => {
+                                    respond_result!(req, false, format!("error parsing throttle: {}", e));
+                                    return;
+                                }
+                            };
+                            let control_signal = transaction_generator::ControlSignal::Start(throttle);
                             match transaction_generator_handle.send(control_signal) {
                                 Ok(()) => respond_result!(req, true, "ok"),
                                 Err(e) => respond_result!(req, false, format!("error sending control signal to transaction generator: {}", e)),
