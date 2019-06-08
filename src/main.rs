@@ -158,7 +158,7 @@ fn main() {
     worker_ctx.start();
 
     // start the miner
-    let (miner_ctx, miner) = miner::new(&mempool, &blockchain, &utxodb, &wallet, &blockdb, ctx_rx, &server);
+    let (miner_ctx, miner) = miner::new(&mempool, &blockchain, &blockdb, ctx_rx, &server);
     miner_ctx.start();
 
     // connect to known peers

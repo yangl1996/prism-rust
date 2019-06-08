@@ -10,8 +10,6 @@ use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::merkle::MerkleTree;
 use crate::handler::new_validated_block;
 use crate::network::server::Handle as ServerHandle;
-use crate::utxodb::UtxoDatabase;
-use crate::wallet::Wallet;
 use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 use crate::validation::get_sortition_id;
 use log::{debug, info};
@@ -37,10 +35,13 @@ enum ControlSignal {
 
 #[derive(PartialEq)]
 pub enum ContextUpdateSignal {
-    NewContent,
-    NewTx,//should be called: mem pool change
-    NewTransactionBlock,
+    // TODO: New transaction comes, we update transaction block's content
+    //NewTx,//should be called: mem pool change
+    // New proposer block comes, we need to update all contents' parent
     NewProposerBlock,
+    // New transaction block comes, we need to update proposer content's tx ref
+    NewTransactionBlock,
+    // New voter block comes, we need to update that voter chain
     NewVoterBlock(u16),
 }
 
@@ -55,9 +56,7 @@ enum OperatingState {
 pub struct Context {
     tx_mempool: Arc<Mutex<MemoryPool>>,
     blockchain: Arc<BlockChain>,
-    utxodb: Arc<UtxoDatabase>,
-    wallet: Arc<Wallet>,
-    db: Arc<BlockDatabase>,
+    blockdb: Arc<BlockDatabase>,
     // Channel for receiving control signal
     control_chan: Receiver<ControlSignal>,
     // Channel for notifying miner of new content
@@ -81,9 +80,7 @@ pub struct Handle {
 pub fn new(
     tx_mempool: &Arc<Mutex<MemoryPool>>,
     blockchain: &Arc<BlockChain>,
-    utxodb: &Arc<UtxoDatabase>,
-    wallet: &Arc<Wallet>,
-    db: &Arc<BlockDatabase>,
+    blockdb: &Arc<BlockDatabase>,
     ctx_update_source: Receiver<ContextUpdateSignal>,
     server: &ServerHandle,
 ) -> (Context, Handle) {
@@ -91,9 +88,7 @@ pub fn new(
     let ctx = Context {
         tx_mempool: Arc::clone(tx_mempool),
         blockchain: Arc::clone(blockchain),
-        utxodb: Arc::clone(utxodb),
-        wallet: Arc::clone(wallet),
-        db: Arc::clone(db),
+        blockdb: Arc::clone(blockdb),
         control_chan: signal_chan_receiver,
         context_update_chan: ctx_update_source,
         proposer_parent_hash: H256::default(),
@@ -209,9 +204,11 @@ impl Context {
                 for sig in &context_update_msg {
                     match *sig {
                         ContextUpdateSignal::NewProposerBlock => unreachable!(),
-                        ContextUpdateSignal::NewTransactionBlock => self.update_all_contents(),//add a function
-                        ContextUpdateSignal::NewVoterBlock(chain) => self.update_all_contents(),
-                        _ => {}
+                        ContextUpdateSignal::NewVoterBlock(chain) => self.update_voter_content(chain),
+                        ContextUpdateSignal::NewTransactionBlock => {
+                            self.update_refed_transaction();
+                            self.update_transaction_content();
+                        }
                     }
                 }
             }
@@ -271,13 +268,12 @@ impl Context {
                     new_validated_block(
                         &mined_block,
                         &self.tx_mempool,
-                        &self.db,
+                        &self.blockdb,
                         &self.blockchain,
                         &self.server,
                         true
                     );
                     //                debug!("Mined block {:.8}", mined_block.hash());
-                    // TODO: Only update block contents if relevant parent
                     // if we are stepping, pause the miner loop
                     if self.operating_state == OperatingState::Step {
                         self.operating_state = OperatingState::Paused;
@@ -285,9 +281,12 @@ impl Context {
                 }
                 // after we mined this block, we update the context based on this block
                 match &mined_block.content {
-                    Content::Proposer(c) => self.update_all_contents(),//add a function
-                    Content::Voter(c) => self.update_all_contents(),
-                    Content::Transaction(c) => self.update_all_contents(),
+                    Content::Proposer(_) => self.update_all_contents(),
+                    Content::Voter(content) => self.update_voter_content(content.chain_number),
+                    Content::Transaction(_) => {
+                        self.update_refed_transaction();
+                        self.update_transaction_content();
+                    }
                 }
                 header = self.create_header();
             }
@@ -306,12 +305,10 @@ impl Context {
     /// Given a valid header, sortition its hash and create the block
     fn assemble_block(&self, header: Header) -> Block {
         // Get sortition ID
-//        let hash: [u8; 32] = (&header.hash()).into();
         let sortition_id = get_sortition_id(&header.hash(), &header.difficulty).expect("Block Hash should <= Difficulty");
         // Create a block
-        // assemble the merkle tree and get the proof
-        let merkle_tree = MerkleTree::new(&self.content);
-        let sortition_proof: Vec<H256> = merkle_tree.proof(sortition_id as usize);
+        // get the merkle proof
+        let sortition_proof: Vec<H256> = self.content_merkle_tree.proof(sortition_id as usize);
         let mined_block = Block::from_header(
             header,
             self.content[sortition_id as usize].clone(),
@@ -350,7 +347,7 @@ impl Context {
             .map(|i| proposer_block_refs.remove(i));
 
         let voter_parent_hash: Vec<H256> = (0..NUM_VOTER_CHAINS)
-            .map(|i| self.blockchain.best_voter(i as usize).clone())
+            .map(|i| self.blockchain.best_voter(i as usize))
             .collect();
         let proposer_block_votes: Vec<Vec<H256>> = (0..NUM_VOTER_CHAINS)
             .map(|i| {
@@ -396,11 +393,51 @@ impl Context {
         self.content = content;
     }
 
+    /// Update the transaction ref of proposer content
+    fn update_refed_transaction(&mut self) {
+        let transaction_block_refs = self.blockchain.unreferred_transactions();
+        let idx: usize = PROPOSER_INDEX as usize;
+        if let Content::Proposer(content) = &self.content[idx] {
+            let proposer_block_refs = content.proposer_refs.clone();
+            self.content[idx] = Content::Proposer(proposer::Content::new(
+                transaction_block_refs,
+                proposer_block_refs,
+            ));
+            self.content_merkle_tree.update(idx, &self.content[idx]);
+        } else { unreachable!(); }
+    }
+
+    /// Update one voter chain's content with chain number
+    fn update_voter_content(&mut self, chain: u16) {
+        let idx: usize = (FIRST_VOTER_INDEX + chain) as usize;
+        let voter_parent = self.blockchain.best_voter(chain as usize);
+        let votes = self.blockchain
+            .unvoted_proposer(&voter_parent, &self.proposer_parent_hash).unwrap();
+        self.content[idx] = Content::Voter(voter::Content::new(
+            chain,
+            voter_parent,
+            votes,
+        ));
+        self.content_merkle_tree.update(idx, &self.content[idx]);
+    }
+
+    /// Update transaction block's content
+    fn update_transaction_content(&mut self) {
+        let mempool = self.tx_mempool.lock().unwrap();
+        let transactions = mempool.get_transactions(TRANSACTION_BLOCK_TX_LIMIT);
+        drop(mempool);
+        let idx: usize = TRANSACTION_INDEX as usize;
+        self.content[idx] = Content::Transaction(transaction::Content::new(
+            transactions,
+        ));
+        self.content_merkle_tree.update(idx, &self.content[idx]);
+    }
+
     /// Calculate the difficulty for the block to be mined
     // TODO: shall we make a dedicated type for difficulty?
     fn get_difficulty(&self, block_hash: &H256) -> H256 {
         // Get the header of the block corresponding to block_hash
-        match self.db.get(block_hash).unwrap() {
+        match self.blockdb.get(block_hash).unwrap() {
             // extract difficulty
             Some(b) => {
                 return b.header.difficulty;
