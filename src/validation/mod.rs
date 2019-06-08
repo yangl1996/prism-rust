@@ -165,12 +165,9 @@ fn check_proposer_block_exists(
     blockdb: &BlockDatabase,
     blockchain: &BlockChain,
 ) -> bool {
-    let in_db = match blockdb.get(&hash) {
+    let in_db = match blockdb.contains(&hash) {
         Err(e) => panic!("Database error {}", e),
-        Ok(b) => match b {
-            None => false,
-            Some(_) => true,
-        },
+        Ok(b) => b,
     };
 
     let in_chain = match blockchain.contains_proposer(&hash) {
@@ -183,12 +180,9 @@ fn check_proposer_block_exists(
 
 /// Check whether a voter block exists in the block database and the blockchain.
 fn check_voter_block_exists(hash: H256, blockdb: &BlockDatabase, blockchain: &BlockChain) -> bool {
-    let in_db = match blockdb.get(&hash) {
+    let in_db = match blockdb.contains(&hash) {
         Err(e) => panic!("Database error {}", e),
-        Ok(b) => match b {
-            None => false,
-            Some(_) => true,
-        },
+        Ok(b) => b
     };
 
     let in_chain = match blockchain.contains_voter(&hash) {
@@ -201,12 +195,9 @@ fn check_voter_block_exists(hash: H256, blockdb: &BlockDatabase, blockchain: &Bl
 
 /// Check whether a transaction block exists in the block database.
 fn check_transaction_block_exists(hash: H256, blockdb: &BlockDatabase) -> bool {
-    let in_db = match blockdb.get(&hash) {
+    let in_db = match blockdb.contains(&hash) {
         Err(e) => panic!("Database error {}", e),
-        Ok(b) => match b {
-            None => false,
-            Some(_) => true,
-        },
+        Ok(b) => b
     };
 
     return in_db;

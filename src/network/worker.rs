@@ -121,11 +121,8 @@ impl Context {
                     let mut hashes_to_request = vec![];
                     for hash in hashes {
                         // we need to check blockchain as well
-                        match self.blockdb.get(&hash).unwrap() {
-                            None => {
-                                hashes_to_request.push(hash);
-                            }
-                            _ => {}
+                        if !self.blockdb.contains(&hash).unwrap() {
+                            hashes_to_request.push(hash);
                         }
                     }
                     if hashes_to_request.len() != 0 {
@@ -179,6 +176,7 @@ impl Context {
                                     &self.blockdb,
                                     &self.chain,
                                     &self.server,
+                                    false,
                                 );
                                 context_update_sig.push(match &block.content {
                                     Content::Proposer(_) => ContextUpdateSignal::NewProposerBlock,
@@ -207,7 +205,7 @@ impl Context {
                     if !to_request.is_empty() {
                         to_request.sort();
                         to_request.dedup();
-                        self.server.broadcast(Message::GetBlocks(to_request));
+                        peer.write(Message::GetBlocks(to_request));
                     }
 
                     // tell the miner to update the context

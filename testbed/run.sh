@@ -100,7 +100,18 @@ function build_prism
 	rsync -ar ../Cargo.toml prism:~/prism/
 	rsync -ar ../src prism:~/prism/
 	echo "Building Prism binary"
-	ssh prism -- 'cd ~/prism && /home/prism/.cargo/bin/cargo build && strip /home/prism/prism/target/debug/prism' &> log/prism_build.log
+	ssh prism -- 'cd ~/prism && /home/prism/.cargo/bin/cargo build' &> log/prism_build.log
+	if [ $# -ne 1 ]; then
+		echo "Stripping symbol"
+		ssh prism -- 'cp /home/prism/prism/target/debug/prism /home/prism/prism/target/debug/prism-copy && strip /home/prism/prism/target/debug/prism-copy'
+	else
+		if [ "$1" = "nostrip" ]; then
+			ssh prism -- 'cp /home/prism/prism/target/debug/prism /home/prism/prism/target/debug/prism-copy'
+		else
+			echo "Stripping symbol"
+			ssh prism -- 'cp /home/prism/prism/target/debug/prism /home/prism/prism/target/debug/prism-copy && strip /home/prism/prism/target/debug/prism-copy'
+		fi
+	fi
 	tput setaf 2
 	echo "Finished"
 	tput sgr0
@@ -121,7 +132,7 @@ function prepare_payload
 	mkdir -p payload
 	mkdir -p binary
 	echo "Download binaries"
-	scp prism:/home/prism/prism/target/debug/prism binary/prism
+	scp prism:/home/prism/prism/target/debug/prism-copy binary/prism
 	local instances=`cat instances.txt`
 	local instance_ids=""
 	for instance in $instances ;
@@ -152,12 +163,12 @@ function remove_payload_single
 
 function install_perf_single
 {
-	ssh $1 -- 'sudo apt-get update -y && sudo apt-get install linux-tools-aws -y && sudo apt-get install linux-tools-4.15.0-1032-aws -y'
+	ssh $1 -- 'rm -f rust-unmangle && rm -rf FlameGraph && sudo apt-get update -y && sudo apt-get install linux-tools-aws linux-tools-4.15.0-1032-aws binutils -y && wget https://github.com/yangl1996/rust-unmangle/raw/master/rust-unmangle && git clone https://github.com/brendangregg/FlameGraph.git && chmod +x rust-unmangle && echo export PATH=$PATH:/home/ubuntu:/home/ubuntu/FlameGraph >> /home/ubuntu/.profile'
 }
 
 function sync_payload_single
 {
-	rsync -r payload/$1/ $1:/home/ubuntu/payload
+	rsync -rz payload/$1/ $1:/home/ubuntu/payload
 }
 
 function start_prism_single
@@ -203,9 +214,10 @@ function get_performance_single
 
 function start_transactions_single
 {
-	curl -s "http://$3:$4/transaction-generator/set-arrival-distribution?interval=100&distribution=uniform"
-	curl -s "http://$3:$4/transaction-generator/start"
-	curl -s "http://$3:$4/miner/start?lambda=200000&lazy=false"
+	curl -s "http://$3:$4/transaction-generator/set-arrival-distribution?interval=500&distribution=uniform"
+	curl -s "http://$3:$4/transaction-generator/set-value-distribution?min=100&max=100&distribution=uniform"
+	curl -s "http://$3:$4/transaction-generator/start?throttle=8000"
+	curl -s "http://$3:$4/miner/start?lambda=2000000&lazy=false"
 }
 
 function query_api 
@@ -365,7 +377,7 @@ function run_experiment
 	echo "Starting Prism nodes"
 	start_prism
 	echo "All nodes started, starting transaction generation"
-	query_api start_transactions 1
+	query_api start_transactions 0
 	echo "Running experiment for $1 seconds"
 	sleep $1
 	show_performance
@@ -391,7 +403,7 @@ case "$1" in
 		Run Experiment
 
 		  gen-payload topo      Generate scripts and configuration files
-		  build			Build the Prism client binary
+		  build [nostrip]	Build the Prism client binary
 		  sync-payload          Synchronize payload to remote servers
 		  start-prism           Start Prism nodes on each remote server
 		  stop-prism            Stop Prism nodes on each remote server
@@ -421,7 +433,7 @@ case "$1" in
 	gen-payload)
 		prepare_payload $2 ;;
 	build)
-		build_prism ;;
+		build_prism $2 ;;
 	sync-payload)
 		execute_on_all remove_payload
 		execute_on_all sync_payload ;;

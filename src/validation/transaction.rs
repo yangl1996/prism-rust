@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use crate::crypto::hash::Hashable;
 use crate::transaction::{CoinId, Transaction, Address};
 use crate::utxodb::UtxoDatabase;

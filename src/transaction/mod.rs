@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+use std::hash::{Hash, Hasher};
 use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::sign::{KeyPair, PubKey, Signable, Signature};
 use bincode::serialize;
@@ -44,7 +46,7 @@ pub struct Output {
 
 /// A Prism transaction. It takes a set of existing coins (inputs) and transforms them into a set
 /// of coins (outputs).
-#[derive(Serialize, Deserialize, Debug, Hash, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct Transaction {
     /// The list of inputs put into this transaction.
     pub input: Vec<Input>,
@@ -52,6 +54,8 @@ pub struct Transaction {
     pub output: Vec<Output>,
     /// Authorization of this transaction by the owners of the inputs.
     pub authorization: Vec<Authorization>,
+    #[serde(skip)]
+    pub hash: RefCell<Option<H256>>,
 }
 
 impl PayloadSize for Transaction {
@@ -66,7 +70,23 @@ impl PayloadSize for Transaction {
 
 impl Hashable for Transaction {
     fn hash(&self) -> H256 {
-        return ring::digest::digest(&ring::digest::SHA256, &serialize(self).unwrap()).into();
+        let hash = self.hash.borrow();
+        if let Some(h) = *hash {
+            return h;
+        }
+        drop(hash);
+        let mut hash_mut = self.hash.borrow_mut();
+        let hash: H256 = ring::digest::digest(&ring::digest::SHA256, &serialize(self).unwrap()).into();
+        *hash_mut = Some(hash);
+        return hash;
+    }
+}
+
+impl Hash for Transaction {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.input.hash(state);
+        self.output.hash(state);
+        self.authorization.hash(state);
     }
 }
 
@@ -134,6 +154,7 @@ pub mod tests {
             input: (0..rng.gen_range(1,5)).map(|_|generate_random_input()).collect(),
             output: (0..rng.gen_range(1,5)).map(|_|generate_random_output()).collect(),
             authorization: vec![],
+            hash: RefCell::new(None),
         }
     }
 }

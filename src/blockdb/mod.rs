@@ -121,6 +121,15 @@ impl BlockDatabase {
         }
     }
 
+    pub fn contains(&self, hash: &H256) -> Result<bool, rocksdb::Error> {
+        let block_cf = self.db.cf_handle(BLOCK_CF).unwrap();
+        let serialized = self.db.get_cf(block_cf, hash)?;
+        match serialized {
+            None => return Ok(false),
+            Some(_) => return Ok(true),
+        }
+    }
+
     pub fn blocks_after(&self, after: &H256, batch_size: u64) -> BlocksInArrivalOrder {
         let block_sequence_number_cf = self.db.cf_handle(BLOCK_SEQUENCE_NUMBER_CF).unwrap();
         let start_seq = u64::from_ne_bytes(self.db.get_cf(block_sequence_number_cf, &after).unwrap().unwrap()[0..8].try_into().unwrap()) + 1;
