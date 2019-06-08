@@ -38,11 +38,10 @@ enum ControlSignal {
 #[derive(PartialEq)]
 pub enum ContextUpdateSignal {
     NewContent,
-    // TODO: To be added later for efficiency:
-    // NewTx,
-    // NewTxBlockContent,
-    // NewPropBlockContent,
-    // NewVoterBlockContent(u16)
+    NewTx,//should be called: mem pool change
+    NewTransactionBlock,
+    NewProposerBlock,
+    NewVoterBlock(u16),
 }
 
 #[derive(PartialEq)]
@@ -67,7 +66,7 @@ pub struct Context {
     proposer_parent_hash: H256,
     // Block contents
     content: Vec<Content>,
-    content_merkle_tree_root: H256,
+    content_merkle_tree: MerkleTree,
     difficulty: H256,
     operating_state: OperatingState,
     server: ServerHandle,
@@ -99,7 +98,7 @@ pub fn new(
         context_update_chan: ctx_update_source,
         proposer_parent_hash: H256::default(),
         content: vec![],
-        content_merkle_tree_root: H256::default(),
+        content_merkle_tree: MerkleTree::new(&Vec::<Content>::new()),
         difficulty: *DEFAULT_DIFFICULTY,
         operating_state: OperatingState::Paused,
         server: server.clone(),
@@ -156,7 +155,7 @@ impl Context {
 
     fn miner_loop(&mut self) {
         // Initialize the context and the header to mine
-        self.update_context();
+        self.update_all_contents();
         let mut header: Header = self.create_header();
 
         let mut rng = rand::thread_rng();
@@ -185,15 +184,39 @@ impl Context {
                 return;
             }
 
-            // check whether there is new content
-            match self.context_update_chan.try_recv() {
-                Ok(_) => {
-                    // TODO: Only update block contents of the relevant structures
-                    self.update_context();
-                    header = self.create_header();
+            // check whether there is new content through context update channel
+            // use a loop to get multiple messages
+            let mut context_update_msg = vec![];
+            let mut contains_proposer = false;
+            loop {
+                match self.context_update_chan.try_recv() {
+                    Ok(sig) => {
+                        // TODO: Only update block contents of the relevant structures
+                        // TODO: make a partial update function of Merkle.
+                        if let ContextUpdateSignal::NewProposerBlock = sig {
+                            contains_proposer = true;
+                        }
+                        context_update_msg.push(sig);
+                    }
+                    Err(TryRecvError::Empty) => break,
+                    Err(TryRecvError::Disconnected) => panic!("Miner context update channel detached"),
                 }
-                Err(TryRecvError::Empty) => {}
-                Err(TryRecvError::Disconnected) => panic!("Miner context update channel detached"),
+            }
+            if contains_proposer {
+                self.update_all_contents();
+            } else {
+                // we didn't hear a proposer block, so don't need to update all contents
+                for sig in &context_update_msg {
+                    match *sig {
+                        ContextUpdateSignal::NewProposerBlock => unreachable!(),
+                        ContextUpdateSignal::NewTransactionBlock => self.update_all_contents(),//add a function
+                        ContextUpdateSignal::NewVoterBlock(chain) => self.update_all_contents(),
+                        _ => {}
+                    }
+                }
+            }
+            if !context_update_msg.is_empty() {
+                header = self.create_header();
             }
 
             // try a new nonce, and update the timestamp
@@ -259,7 +282,12 @@ impl Context {
                         self.operating_state = OperatingState::Paused;
                     }
                 }
-                self.update_context();
+                // after we mined this block, we update the context based on this block
+                match &mined_block.content {
+                    Content::Proposer(c) => self.update_all_contents(),//add a function
+                    Content::Voter(c) => self.update_all_contents(),
+                    Content::Transaction(c) => self.update_all_contents(),
+                }
                 header = self.create_header();
             }
 
@@ -296,10 +324,10 @@ impl Context {
     fn create_header(&self) -> Header {
         let nonce: u32 = 0; // we will update this value in-place when mining
         let timestamp: u128= get_time();
-        let content_merkle_root = self.content_merkle_tree_root;
+        let content_merkle_root = self.content_merkle_tree.root();
         let extra_content: [u8; 32] = [0; 32]; // TODO: Add miner id?
         return Header::new(
-            self.proposer_parent_hash.clone(),
+            self.proposer_parent_hash,
             timestamp,
             nonce,
             content_merkle_root,
@@ -309,7 +337,7 @@ impl Context {
     }
 
     /// Update the block to be mined
-    fn update_context(&mut self) {
+    fn update_all_contents(&mut self) {
         // get mutex of blockchain and get all required data
         self.proposer_parent_hash = self.blockchain.best_proposer();
         self.difficulty = self.get_difficulty(&self.proposer_parent_hash);
@@ -339,9 +367,6 @@ impl Context {
         // update the contents and the parents based on current view
         let mut content = vec![];
 
-        // TODO: since the content field will always contain three elements, could we switch it to
-        // a tuple?
-
         // Update proposer content
         content.push(Content::Proposer(proposer::Content::new(
             transaction_block_refs,
@@ -366,9 +391,8 @@ impl Context {
             )));
         }
 
+        self.content_merkle_tree = MerkleTree::new(&content);
         self.content = content;
-        let merkle_tree = MerkleTree::new(&self.content);
-        self.content_merkle_tree_root = merkle_tree.root();
     }
 
     /// Calculate the difficulty for the block to be mined

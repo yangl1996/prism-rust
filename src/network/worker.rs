@@ -1,7 +1,7 @@
 use super::buffer::BlockBuffer;
 use super::message::{self, Message};
 use super::peer;
-use crate::block::Block;
+use crate::block::{Block, Content};
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
 use crate::crypto::hash::{Hashable, H256};
@@ -152,6 +152,7 @@ impl Context {
                     }
                     let mut to_process: Vec<Block> = blocks;
                     let mut to_request: Vec<H256> = vec![];
+                    let mut context_update_sig = vec![];
                     while let Some(block) = to_process.pop() {
                         let validation_result =
                             check_block(&block, &self.chain, &self.blockdb);
@@ -179,6 +180,11 @@ impl Context {
                                     &self.chain,
                                     &self.server,
                                 );
+                                context_update_sig.push(match &block.content {
+                                    Content::Proposer(_) => ContextUpdateSignal::NewProposerBlock,
+                                    Content::Voter(c) => ContextUpdateSignal::NewVoterBlock(c.chain_number),
+                                    Content::Transaction(_) => ContextUpdateSignal::NewTransactionBlock,
+                                });
                                 let mut resolved_by_current = self.buffer.satisfy(block.hash());
                                 if !resolved_by_current.is_empty() {
                                     debug!(
@@ -205,9 +211,11 @@ impl Context {
                     }
 
                     // tell the miner to update the context
-                    self.context_update_chan
-                        .send(ContextUpdateSignal::NewContent)
-                        .unwrap();
+                    for sig in context_update_sig {
+                        self.context_update_chan
+                            .send(sig)
+                            .unwrap();
+                    }
                 }
                 Message::Bootstrap(after) => {
                     debug!("Asked for all blocks after {}", &after);
