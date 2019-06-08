@@ -199,7 +199,7 @@ impl Context {
                     if !to_request.is_empty() {
                         to_request.sort();
                         to_request.dedup();
-                        self.server.broadcast(Message::GetBlocks(to_request));
+                        peer.write(Message::GetBlocks(to_request));
                     }
 
                     // tell the miner to update the context
