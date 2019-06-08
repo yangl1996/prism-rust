@@ -153,6 +153,7 @@ mod test {
     use crate::crypto::hash::H256;
     use crate::transaction::Input;
     use bincode::deserialize;
+    use std::cell::RefCell;
 
     #[test]
     fn initialize_new() {
@@ -175,6 +176,7 @@ mod test {
                 },
             ],
             authorization: vec![],
+            hash: RefCell::new(None),
         };
         let transaction_2 = Transaction {
             input: vec![],
@@ -183,6 +185,7 @@ mod test {
                 recipient: H256::default(),
             }],
             authorization: vec![],
+            hash: RefCell::new(None),
         };
         db.apply_diff(&vec![transaction_1.clone(), transaction_2.clone()], &vec![])
             .unwrap();
@@ -220,6 +223,7 @@ mod test {
                 recipient: H256::default(),
             }],
             authorization: vec![],
+            hash: RefCell::new(None),
         };
         db.apply_diff(&vec![transaction_3.clone()], &vec![])
             .unwrap();

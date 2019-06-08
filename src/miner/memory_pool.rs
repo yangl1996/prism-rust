@@ -147,7 +147,7 @@ pub mod tests {
 
     #[test]
     fn insert_remove_transactions() {
-        let mut pool = MemoryPool::new();
+        let mut pool = MemoryPool::new(1000);
         let tx = tx_generator::generate_random_transaction();
         let _h = tx.hash();
         pool.insert(tx.clone());
@@ -168,7 +168,7 @@ pub mod tests {
 
     #[test]
     fn check_duplicate_doublespend() {
-        let mut pool = MemoryPool::new();
+        let mut pool = MemoryPool::new(1000);
         let tx = tx_generator::generate_random_transaction();
         let h = tx.hash();
         pool.insert(tx.clone());
@@ -178,7 +178,7 @@ pub mod tests {
 
     #[test]
     fn remove_by_input() {
-        let mut pool = MemoryPool::new();
+        let mut pool = MemoryPool::new(1000);
         let first_tx = tx_generator::generate_random_transaction();
         let mut input = vec![Input {
             coin: CoinId {
@@ -222,7 +222,7 @@ pub mod tests {
 
     #[test]
     fn fifo() {
-        let mut pool = MemoryPool::new();
+        let mut pool = MemoryPool::new(1000);
         let mut v = vec![];
         for _i in 0..20 {
             let tx: Transaction = tx_generator::generate_random_transaction();

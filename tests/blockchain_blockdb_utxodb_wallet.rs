@@ -13,6 +13,7 @@ use std::net::{SocketAddr, IpAddr, Ipv4Addr};
 use prism::block::tests::{proposer_block, voter_block, transaction_block};
 use prism::block::Content;
 use prism::experiment::ico;
+use std::cell::RefCell;
 
 #[test]
 fn integration() {
@@ -26,7 +27,7 @@ fn integration() {
     let wallet = Wallet::new("/tmp/prism_test_integration_walletdb.rocksdb").unwrap();
     wallet.generate_keypair().unwrap();
     let wallet_address = wallet.addresses().unwrap()[0];
-    let mempool = Mutex::new(MemoryPool::new());
+    let mempool = Mutex::new(MemoryPool::new(10000000));
 
     let (msg_tx, _msg_rx) = mpsc::channel();
     let (_ctx, server) = server::new(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 10999),msg_tx).expect("fail at creating server");
@@ -59,7 +60,7 @@ fn integration() {
     // call new_validated_block 3 times to ensure robustness
     macro_rules! handle_block {
         ( $block:expr ) => {{
-            new_validated_block(&$block, &mempool, &blockdb, &blockchain, &server);
+            new_validated_block(&$block, &mempool, &blockdb, &blockchain, &server, false);
             update_ledger(&blockdb, &blockchain, &utxodb, &wallet);
         }};
     }
@@ -86,7 +87,12 @@ fn integration() {
     macro_rules! random_transaction_block_0_input {
         () => {{
             transaction_block!(
-                vec![Transaction{input:vec![], output:(0..3).map(|_|tx_generator::generate_random_output()).collect(), authorization:vec![]}]
+                vec![Transaction{
+                    input:vec![],
+                    output:(0..3).map(|_|tx_generator::generate_random_output()).collect(),
+                    authorization:vec![],
+                    hash: RefCell::new(None),
+                }]
             )
         }};
     }
@@ -183,6 +189,7 @@ fn integration() {
                     recipient: wallet_address,
                 }],
                 authorization: vec![],
+                hash: RefCell::new(None),
             });
             value_4 += value;
         }
@@ -257,7 +264,7 @@ fn integration() {
 
     //test wallet create_transaction
     let receiver: H256 = [9u8;32].into();
-    let payment = wallet.create_transaction(receiver, value_4-1).unwrap();
+    let payment = wallet.create_transaction(receiver, value_4-1, None).unwrap();
     let transaction_8 = transaction_block!(vec![payment.clone()]);
     handle_block!(transaction_8);
     let proposer_8 = proposer_block!(vec![], vec![transaction_8.hash()]);
