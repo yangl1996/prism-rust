@@ -325,34 +325,44 @@ impl BlockChain {
                 // set current block level
                 put_value!(proposer_node_level_cf, block_hash, self_level as u64);
                 merge_value!(proposer_tree_level_cf, self_level, block_hash);
-                self.db.write(wb)?;
 
-                // remove ref'ed blocks from unreferred list, mark itself as unreferred
-                let mut unreferred_proposers = self.unreferred_proposers.lock().unwrap();
-                for ref_hash in &content.proposer_refs {
-                    unreferred_proposers.remove(&ref_hash);
+                let mut unconfirmed_proposers = self.unconfirmed_proposers.lock().unwrap();//Gerui: has to use a lock here
+                let exists = self.contains_proposer(&block_hash)?;
+                if !exists {
+                    self.db.write(wb)?;
                 }
-                unreferred_proposers.remove(&parent_hash);
-                unreferred_proposers.insert(block_hash);
-                let mut unreferred_transactions = self.unreferred_transactions.lock().unwrap();
-                for ref_hash in &content.transaction_refs {
-                    unreferred_transactions.remove(&ref_hash);
-                }
-                // set best block info
-                let mut proposer_best = self.proposer_best.lock().unwrap();
-                if self_level > proposer_best.1 {
-                    proposer_best.0 = block_hash;
-                    proposer_best.1 = self_level;
-                }
-
-                // mark this new proposer block as unconfirmed
-                let mut unconfirmed_proposers = self.unconfirmed_proposers.lock().unwrap();
-                unconfirmed_proposers.insert(block_hash);
-                //TODO: see #76 on github
-                drop(unreferred_proposers);
-                drop(unreferred_transactions);
-                drop(proposer_best);
                 drop(unconfirmed_proposers);
+
+                if !exists {
+                    // mark this new proposer block as unconfirmed
+                    let mut unconfirmed_proposers = self.unconfirmed_proposers.lock().unwrap();
+                    unconfirmed_proposers.insert(block_hash);
+                    drop(unconfirmed_proposers);
+
+                    // remove ref'ed blocks from unreferred list, mark itself as unreferred
+                    let mut unreferred_proposers = self.unreferred_proposers.lock().unwrap();
+                    for ref_hash in &content.proposer_refs {
+                        unreferred_proposers.remove(&ref_hash);
+                    }
+                    unreferred_proposers.remove(&parent_hash);
+                    unreferred_proposers.insert(block_hash);
+                    drop(unreferred_proposers);
+
+                    let mut unreferred_transactions = self.unreferred_transactions.lock().unwrap();
+                    for ref_hash in &content.transaction_refs {
+                        unreferred_transactions.remove(&ref_hash);
+                    }
+                    drop(unreferred_transactions);
+
+                    // set best block info
+                    let mut proposer_best = self.proposer_best.lock().unwrap();
+                    if self_level > proposer_best.1 {
+                        proposer_best.0 = block_hash;
+                        proposer_best.1 = self_level;
+                    }
+                    drop(proposer_best);
+                }
+
                 info!("Adding proposer block {} at timestamp {} at level {}", block_hash, block.header.timestamp, self_level);
             }
             Content::Voter(content) => {
