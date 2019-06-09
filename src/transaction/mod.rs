@@ -96,7 +96,9 @@ impl Signable for Transaction {
         let raw_inputs = serialize(&self.input).unwrap();
         let raw_outputs = serialize(&self.output).unwrap();
         let raw = [&raw_inputs[..], &raw_outputs[..]].concat(); // we can also use Vec extend, don't know which is better
-        keypair.sign(&raw)
+        let hash: H256 = ring::digest::digest(&ring::digest::SHA256, &raw).into();
+        let hash: [u8; 32] = hash.into();
+        keypair.sign(&hash)
     }
 
     fn verify(&self, public_key: &PubKey, signature: &Signature) -> bool {
@@ -104,7 +106,9 @@ impl Signable for Transaction {
         let raw_inputs = serialize(&self.input).unwrap();
         let raw_outputs = serialize(&self.output).unwrap();
         let raw = [&raw_inputs[..], &raw_outputs[..]].concat(); // we can also use Vec extend, don't know which is better
-        public_key.verify(&raw, signature)
+        let hash: H256 = ring::digest::digest(&ring::digest::SHA256, &raw).into();
+        let hash: [u8; 32] = hash.into();
+        public_key.verify(&hash, signature)
     }
 }
 
