@@ -280,7 +280,6 @@ fn integration() {
     // check proposers in ledger
     let ledger = blockchain.proposer_transaction_in_ledger(100).unwrap();
     let ledger_proposer: Vec<H256> = ledger.into_iter().map(|x|x.0).collect();
-    // TODO: change this part of test code
     assert_eq!(ledger_proposer, vec![
         *config::PROPOSER_GENESIS_HASH,
         proposer_1.hash(),
@@ -415,29 +414,28 @@ fn integration() {
 
     let ledger = blockchain.proposer_transaction_in_ledger(100).unwrap();
     let ledger_proposer: Vec<H256> = ledger.into_iter().map(|x|x.0).collect();
-    // TODO: change this part of test code
-//    assert_eq!(ledger_proposer, vec![
-//        *config::PROPOSER_GENESIS_HASH,
-//        proposer_1.hash(),
-//        proposer_1_fork.hash(), proposer_1_fork_2.hash(),
-//        proposer_2.hash(),
-//        proposer_9.hash(),//since this is leader in the first place
-//        proposer_10.hash(),//since this is leader in the first place
-//        proposer_11.hash(),//since this is leader in the first place
-//        proposer_12.hash(),//since this is leader in the first place
-//        proposer_2_fork.hash(),//since 13 refer 4 first
-//        proposer_3.hash(),
-//        proposer_3_fork.hash(),
-//        proposer_4.hash(),//since 13 refer 6 second
-//        proposer_4_fork.hash(), proposer_4_fork_2.hash(),
-//        proposer_5.hash(),
-//        proposer_6.hash(),
-//        proposer_13.hash(),
-//        proposer_14.hash(),
-//        proposer_7.hash(),
-//        proposer_8.hash(),
-//        proposer_15.hash(),
-//    ]);
+    assert_eq!(ledger_proposer, vec![
+        *config::PROPOSER_GENESIS_HASH,
+        proposer_1.hash(),
+        proposer_1_fork.hash(), proposer_1_fork_2.hash(),
+        proposer_2.hash(),
+        proposer_9.hash(),//since this is leader in the first place
+        proposer_10.hash(),//since this is leader in the first place
+        proposer_11.hash(),//since this is leader in the first place
+        proposer_12.hash(),//since this is leader in the first place
+        proposer_2_fork.hash(),//since 13 refer 4 first
+        proposer_3.hash(),
+        proposer_4.hash(),
+        proposer_5.hash(),//since 13 refer 6 second
+        proposer_3_fork.hash(),
+        proposer_4_fork.hash(), proposer_4_fork_2.hash(),
+        proposer_6.hash(),
+        proposer_13.hash(),
+        proposer_14.hash(),
+        proposer_7.hash(),
+        proposer_8.hash(),
+        proposer_15.hash(),
+    ]);
 
     //insert previous proposer blocks multiple times to check robustness
     handle_block!(proposer_4);
@@ -462,20 +460,19 @@ fn integration() {
     }
     let ledger = blockchain.proposer_transaction_in_ledger(100).unwrap();
     let ledger_proposer: Vec<H256> = ledger.into_iter().map(|x|x.0).collect();
-    // TODO: change this part of test code
-//    assert_eq!(ledger_proposer, vec![
-//        *config::PROPOSER_GENESIS_HASH,
-//        proposer_1.hash(),
-//        proposer_1_fork.hash(), proposer_1_fork_2.hash(),
-//        proposer_2.hash(),
-//        proposer_2_fork.hash(),
-//        proposer_3.hash(),
-//        proposer_4.hash(),
-//        proposer_5.hash(),
-//        proposer_3_fork.hash(),
-//        proposer_4_fork.hash(), proposer_4_fork_2.hash(),
-//        proposer_6.hash(),
-//        proposer_7.hash(),
-//        proposer_8.hash(),
-//    ]);
+    assert_eq!(ledger_proposer, vec![
+        *config::PROPOSER_GENESIS_HASH,
+        proposer_1.hash(),
+        proposer_1_fork.hash(), proposer_1_fork_2.hash(),
+        proposer_2.hash(),
+        proposer_2_fork.hash(),
+        proposer_3.hash(),
+        proposer_4.hash(),
+        proposer_5.hash(),
+        proposer_3_fork.hash(),
+        proposer_4_fork.hash(), proposer_4_fork_2.hash(),
+        proposer_6.hash(),
+        proposer_7.hash(),
+        proposer_8.hash(),
+    ]);
 }

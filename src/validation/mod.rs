@@ -227,6 +227,7 @@ pub fn get_sortition_id(hash: &H256, difficulty: &H256) -> Option<u16> {
             (big_hash - big_transaction_range - big_proposer_range) % NUM_VOTER_CHAINS.into();
         Some(voter_id.as_u32() as u16 + FIRST_VOTER_INDEX)
     } else {
+        // Didn't pass PoW
         None
     }
 }

@@ -576,8 +576,7 @@ impl BlockChain {
         self.db.write(wb)?;
 
         // recompute the ledger from the first level whose leader changed
-        if change_begin.is_some() {
-            let change_begin = change_begin.unwrap();
+        if let Some(change_begin) = change_begin {
             let mut proposer_ledger_tip = self.proposer_ledger_tip.lock().unwrap();
             let mut unconfirmed_proposers = self.unconfirmed_proposers.lock().unwrap();
             let mut removed: Vec<H256> = vec![];
@@ -637,14 +636,14 @@ impl BlockChain {
                     let mut order: Vec<H256> = vec![];
                     let mut stack: Vec<H256> = vec![leader];
                     while let Some(top) = stack.pop() {
-                        // try to remove it from the unconfirmed list, if we failed, it's already
-                        // confirmed
-                        if !unconfirmed_proposers.remove(&top) {
+                        // if it's already
+                        // confirmed before, ignore it
+                        if !unconfirmed_proposers.contains(&top) {
                             continue;
                         }
                         let refs: Vec<H256> = get_value!(proposer_ref_neighbor_cf, top).unwrap();
 
-                        // add the current block to the ordered ledger
+                        // add the current block to the ordered ledger, could be duplicated
                         order.push(top);
 
                         // search all referred blocks
@@ -655,6 +654,8 @@ impl BlockChain {
 
                     // reverse the order we just got
                     order.reverse();
+                    // deduplicate, keep the one copy that is former in this order
+                    order = order.into_iter().filter(|h|unconfirmed_proposers.remove(h)).collect();
                     put_value!(proposer_ledger_order_cf, level as u64, order);
                     added.extend(&order);
                 }
@@ -1562,7 +1563,7 @@ mod tests {
         }
     }
 
-    /*
+    /* This test is also covered by integration test.
     #[test]
     fn insert_block() {
         let db = BlockChain::new("/tmp/prism_test_blockchain_insert_block.rocksdb").unwrap();
@@ -2191,35 +2192,36 @@ mod tests {
         );
     }
 
-    /*
     #[test]
     fn merge_operator_h256_vec() {
         let db = BlockChain::new("/tmp/prism_test_blockchain_merge_op_h256_vec.rocksdb").unwrap();
         let cf = db.db.cf_handle(PARENT_NEIGHBOR_CF).unwrap();
 
+        let hash_1: H256 = [0u8;32].into();
+        let hash_2: H256 = [1u8;32].into();
+        let hash_3: H256 = [2u8;32].into();
         // merge with an nonexistent entry
         db.db
-            .merge_cf(cf, b"testkey", serialize(&H256::default()).unwrap())
+            .merge_cf(cf, b"testkey", serialize(&hash_1).unwrap())
             .unwrap();
         let result: Vec<H256> =
             deserialize(&db.db.get_cf(cf, b"testkey").unwrap().unwrap()).unwrap();
-        assert_eq!(result, vec![H256::default()]);
+        assert_eq!(result, vec![hash_1]);
 
         // merge with an existing entry
         db.db
-            .merge_cf(cf, b"testkey", serialize(&H256::default()).unwrap())
+            .merge_cf(cf, b"testkey", serialize(&hash_2).unwrap())
             .unwrap();
         db.db
-            .merge_cf(cf, b"testkey", serialize(&H256::default()).unwrap())
+            .merge_cf(cf, b"testkey", serialize(&hash_3).unwrap())
             .unwrap();
         let result: Vec<H256> =
             deserialize(&db.db.get_cf(cf, b"testkey").unwrap().unwrap()).unwrap();
         assert_eq!(
             result,
-            vec![H256::default(), H256::default(), H256::default()]
+            vec![hash_1, hash_2, hash_3]
         );
     }
-    */
 
     #[test]
     fn merge_operator_btreemap() {
