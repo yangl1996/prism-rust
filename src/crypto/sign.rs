@@ -239,8 +239,9 @@ mod tests {
         let message: [u8; 5] = [0, 1, 2, 3, 4];
         let public_key = keypair.public_key();
         let signature = keypair.sign(&message);
-        let result = public_key.verify(&message, &signature);
-        assert!(result);
+        assert!(public_key.verify(&message, &signature));
+        let message_2: [u8; 5] = [9, 1, 2, 3, 4];
+        assert!(!public_key.verify(&message_2, &signature));
     }
 
     #[test]

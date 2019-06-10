@@ -1,4 +1,4 @@
-use prism::validation::{check_block, BlockResult};
+use prism::validation::{check_block_after_pow_sortition, BlockResult};
 use prism::block::tests::{proposer_block, voter_block, transaction_block};
 use prism::crypto::hash::tests::generate_random_hash;
 use prism::transaction::tests::{generate_random_transaction, generate_random_output, generate_random_coinid};
@@ -17,7 +17,7 @@ macro_rules! assert_result {
     }};
 }
 
-//#[test]
+#[test]
 fn validate_block() {
     let blockdb = BlockDatabase::new("/tmp/prism_test_validation_blockdb.rocksdb").unwrap();
 
@@ -27,46 +27,46 @@ fn validate_block() {
     let mut timestamp = 1u128;
 
     let proposer_1 = proposer_block(parent, timestamp, vec![], vec![]);
-    assert_result!(check_block(&proposer_1, &blockchain, &blockdb), BlockResult::Pass);
+    assert_result!(check_block_after_pow_sortition(&proposer_1, &blockchain, &blockdb), BlockResult::Pass);
     blockdb.insert(&proposer_1).unwrap();
     blockchain.insert_block(&proposer_1).unwrap();
-    assert_result!(check_block(&proposer_1, &blockchain, &blockdb), BlockResult::Duplicate);
+    assert_result!(check_block_after_pow_sortition(&proposer_1, &blockchain, &blockdb), BlockResult::Duplicate);
     let proposer_ = proposer_block(generate_random_hash(), timestamp, vec![], vec![]);
-    assert_result!(check_block(&proposer_, &blockchain, &blockdb),  BlockResult::MissingParent(_));
+    assert_result!(check_block_after_pow_sortition(&proposer_, &blockchain, &blockdb),  BlockResult::MissingParent(_));
     let proposer_ = proposer_block(parent, timestamp, vec![generate_random_hash()], vec![]);
-    assert_result!(check_block(&proposer_, &blockchain, &blockdb),  BlockResult::MissingReferences(_));
+    assert_result!(check_block_after_pow_sortition(&proposer_, &blockchain, &blockdb),  BlockResult::MissingReferences(_));
     let proposer_ = proposer_block(parent, timestamp, vec![], vec![generate_random_hash()]);
-    assert_result!(check_block(&proposer_, &blockchain, &blockdb),  BlockResult::MissingReferences(_));
+    assert_result!(check_block_after_pow_sortition(&proposer_, &blockchain, &blockdb),  BlockResult::MissingReferences(_));
 
     parent = blockchain.best_proposer();
     timestamp += 1;
 
     let proposer_2 = proposer_block(parent, timestamp, vec![], vec![]);
-    assert_result!(check_block(&proposer_2, &blockchain, &blockdb), BlockResult::Pass);
+    assert_result!(check_block_after_pow_sortition(&proposer_2, &blockchain, &blockdb), BlockResult::Pass);
     blockdb.insert(&proposer_2).unwrap();
     blockchain.insert_block(&proposer_2).unwrap();
 
     let proposer_2_fork = proposer_block(parent, timestamp, vec![proposer_2.hash()], vec![]);
-    assert_result!(check_block(&proposer_2_fork, &blockchain, &blockdb), BlockResult::WrongProposerRef);
+    assert_result!(check_block_after_pow_sortition(&proposer_2_fork, &blockchain, &blockdb), BlockResult::WrongProposerRef);
 
     parent = blockchain.best_proposer();
     timestamp += 1;
 
     for chain in 0..config::NUM_VOTER_CHAINS {
         let voter = voter_block(parent, timestamp, chain, blockchain.best_voter(chain as usize), vec![]);
-        assert_result!(check_block(&voter, &blockchain, &blockdb), BlockResult::WrongVoteLevel);
+        assert_result!(check_block_after_pow_sortition(&voter, &blockchain, &blockdb), BlockResult::WrongVoteLevel);
         let voter = voter_block(parent, timestamp, chain, blockchain.best_voter(chain as usize), vec![proposer_1.hash()]);
-        assert_result!(check_block(&voter, &blockchain, &blockdb), BlockResult::WrongVoteLevel);
+        assert_result!(check_block_after_pow_sortition(&voter, &blockchain, &blockdb), BlockResult::WrongVoteLevel);
         let voter = voter_block(parent, timestamp, chain, blockchain.best_voter(chain as usize), vec![proposer_1.hash(), proposer_2.hash()]);
-        assert_result!(check_block(&voter, &blockchain, &blockdb), BlockResult::Pass);
+        assert_result!(check_block_after_pow_sortition(&voter, &blockchain, &blockdb), BlockResult::Pass);
         let voter = voter_block(parent, timestamp, chain, blockchain.best_voter(chain as usize), vec![proposer_2.hash()]);
-        assert_result!(check_block(&voter, &blockchain, &blockdb), BlockResult::WrongVoteLevel);
+        assert_result!(check_block_after_pow_sortition(&voter, &blockchain, &blockdb), BlockResult::WrongVoteLevel);
         // vote's order matters
         let voter = voter_block(parent, timestamp, chain, blockchain.best_voter(chain as usize), vec![proposer_2.hash(), proposer_1.hash()]);
-        assert_result!(check_block(&voter, &blockchain, &blockdb), BlockResult::WrongVoteLevel);
+        assert_result!(check_block_after_pow_sortition(&voter, &blockchain, &blockdb), BlockResult::WrongVoteLevel);
         if chain > 0 {
             let voter = voter_block(parent, timestamp, chain-1, blockchain.best_voter(chain as usize), vec![proposer_2.hash(), proposer_1.hash()]);
-            assert_result!(check_block(&voter, &blockchain, &blockdb), BlockResult::WrongChainNumber);
+            assert_result!(check_block_after_pow_sortition(&voter, &blockchain, &blockdb), BlockResult::WrongChainNumber);
         }
     }
 
@@ -74,16 +74,16 @@ fn validate_block() {
 
     let invalid_tx = Transaction { input: vec![], ..generate_random_transaction() };
     let transaction_1 = transaction_block(parent, timestamp, vec![invalid_tx]);
-    assert_result!(check_block(&transaction_1, &blockchain, &blockdb), BlockResult::EmptyTransaction);
+    assert_result!(check_block_after_pow_sortition(&transaction_1, &blockchain, &blockdb), BlockResult::EmptyTransaction);
     let invalid_tx = Transaction { output: vec![], ..generate_random_transaction() };
     let transaction_2 = transaction_block(parent, timestamp, vec![invalid_tx]);
-    assert_result!(check_block(&transaction_2, &blockchain, &blockdb), BlockResult::EmptyTransaction);
+    assert_result!(check_block_after_pow_sortition(&transaction_2, &blockchain, &blockdb), BlockResult::EmptyTransaction);
     let invalid_tx = Transaction { input: vec![Input { coin: generate_random_coinid(), value: 0, owner: [9u8;32].into() }], ..generate_random_transaction() };
     let transaction_3 = transaction_block(parent, timestamp, vec![invalid_tx]);
-    assert_result!(check_block(&transaction_3, &blockchain, &blockdb), BlockResult::ZeroValue);
+    assert_result!(check_block_after_pow_sortition(&transaction_3, &blockchain, &blockdb), BlockResult::ZeroValue);
     let invalid_tx = Transaction { output: vec![Output { value: 0, recipient: [9u8;32].into() }], ..generate_random_transaction() };
     let transaction_4 = transaction_block(parent, timestamp, vec![invalid_tx]);
-    assert_result!(check_block(&transaction_4, &blockchain, &blockdb), BlockResult::ZeroValue);
+    assert_result!(check_block_after_pow_sortition(&transaction_4, &blockchain, &blockdb), BlockResult::ZeroValue);
     let invalid_tx = Transaction {
         input: vec![Input { coin: generate_random_coinid(), value: 1, owner: [9u8;32].into() }],
         output: vec![Output {value: 2, recipient: [9u8;32].into() }],
@@ -91,7 +91,7 @@ fn validate_block() {
         hash: RefCell::new(None),
     };
     let transaction_5 = transaction_block(parent, timestamp, vec![invalid_tx]);
-    assert_result!(check_block(&transaction_5, &blockchain, &blockdb), BlockResult::InsufficientInput);
+    assert_result!(check_block_after_pow_sortition(&transaction_5, &blockchain, &blockdb), BlockResult::InsufficientInput);
     let invalid_tx = Transaction {
         input: vec![Input { coin: generate_random_coinid(), value: 2, owner: [9u8;32].into() }],
         output: vec![Output {value: 2, recipient: [9u8;32].into() }],
@@ -99,7 +99,21 @@ fn validate_block() {
         hash: RefCell::new(None),
     };
     let transaction_6 = transaction_block(parent, timestamp, vec![invalid_tx]);
-    assert_result!(check_block(&transaction_6, &blockchain, &blockdb), BlockResult::WrongSignature);
+    assert_result!(check_block_after_pow_sortition(&transaction_6, &blockchain, &blockdb), BlockResult::WrongSignature);
 
     //TODO: check PoW and sortition, check signature
+    //TODO: test miner with validation
+//    Context {
+//        tx_mempool: Arc::clone(tx_mempool),
+//        blockchain: Arc::clone(blockchain),
+//        blockdb: Arc::clone(blockdb),
+//        control_chan: signal_chan_receiver,
+//        context_update_chan: ctx_update_source,
+//        proposer_parent_hash: H256::default(),
+//        content: vec![],
+//        content_merkle_tree: MerkleTree::new(&Vec::<Content>::new()),
+//        difficulty: *DEFAULT_DIFFICULTY,
+//        operating_state: OperatingState::Paused,
+//        server: server.clone(),
+//    };
 }

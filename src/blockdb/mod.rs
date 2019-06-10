@@ -204,13 +204,14 @@ mod tests {
     use crate::crypto::hash::Hashable;
 
     #[test]
-    fn insert_and_get() {
+    fn insert_contains_and_get() {
         let db = BlockDatabase::new(&std::path::Path::new(
             "/tmp/blockdb_tests_insert_get_and_delete.rocksdb",
         ))
         .unwrap();
         let block = proposer_genesis();
         let seq = db.insert(&block).unwrap();
+        assert!(db.contains(&block.hash()).unwrap());
         let got = db.get(&block.hash()).unwrap().unwrap();
         let num_block = db.num_blocks();
         assert_eq!(got.hash(), block.hash());

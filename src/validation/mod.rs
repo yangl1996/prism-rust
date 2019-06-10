@@ -67,10 +67,18 @@ pub fn check_block(
     // TODO: Check difficulty. Where should we get the current difficulty ranges?
 
     // check PoW and sortition id
-    match check_pow_sortition(block, blockchain, blockdb) {
-        BlockResult::Pass => {}
-        x => return x,
-    };
+    match check_pow_sortition(block) {
+        BlockResult::Pass => check_block_after_pow_sortition(block, blockchain, blockdb),
+        x => x,
+    }
+
+}
+/// Validate a block that already passes pow and sortition test.
+pub fn check_block_after_pow_sortition(
+    block: &Block,
+    blockchain: &BlockChain,
+    blockdb: &BlockDatabase,
+) -> BlockResult {
 
     // check whether the parent exists
     let parent = block.header.parent;
@@ -155,7 +163,6 @@ pub fn check_block(
             return BlockResult::Pass;
         }
 
-
     }
 }
 
@@ -235,8 +242,6 @@ pub fn get_sortition_id(hash: &H256, difficulty: &H256) -> Option<u16> {
 // check PoW and sortition id
 pub fn check_pow_sortition(
     block: &Block,
-    blockchain: &BlockChain,
-    blockdb: &BlockDatabase,
 ) -> BlockResult {
 
     let sortition_id = get_sortition_id(&block.hash(), &block.header.difficulty);
@@ -256,4 +261,20 @@ pub fn check_pow_sortition(
         return BlockResult::WrongPoW;
     }
     BlockResult::Pass
+}
+
+#[cfg(test)]
+mod tests {
+    use super::get_sortition_id;
+    use super::super::config::*;
+    use crate::crypto::hash::H256;
+
+    #[test]
+    fn sortition_id() {
+        let difficulty = *DEFAULT_DIFFICULTY;
+        let hash: H256 = [0;32].into();
+        assert_eq!(get_sortition_id(&hash, &difficulty), Some(PROPOSER_INDEX));
+        // This hash should fail PoW test (so result is None)
+        assert_eq!(get_sortition_id(&difficulty, &difficulty), None);
+    }
 }
