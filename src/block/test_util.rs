@@ -1,12 +1,13 @@
 use super::header::Header;
-use super::proposer::Content as proposer_Content;
+use super::proposer::Content as ProposerContent;
 use super::transaction::Content as tx_Content;
 use super::voter::Content as voter_Content;
 use super::{Block, Content};
+use std::cell::RefCell;
 
 use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::merkle::MerkleTree;
-use crate::transaction::{Input, Output, PubkeyAndSignature, Transaction};
+use crate::transaction::{CoinId, Input, Output, Authorization, Transaction};
 
 macro_rules! gen_hashed_data {
     () => {{
@@ -26,7 +27,7 @@ macro_rules! gen_hashed_data {
 pub fn sample_header() -> Header {
     let parent_hash: H256 =
         (&hex!("0102010201020102010201020102010201020102010201020102010201020102")).into();
-    let timestamp: u64 = 7094730;
+    let timestamp: u128 = 7094730;
     let nonce: u32 = 839782;
     let content_root: H256 =
         (&hex!("deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")).into();
@@ -61,17 +62,24 @@ pub fn sample_header_hash_should_be() -> H256 {
 pub fn sample_transaction_content() -> tx_Content {
     let hashed_data: Vec<H256> = gen_hashed_data!();
 
-    let input1 = Input {
+    let coinid_1 = CoinId{
         hash: hashed_data[0],
         index: 1,
+    };
+    let input1 = Input {
+        coin: coinid_1,
         value: 9,
-        recipient: hashed_data[2], //or other hash?
+        owner: hashed_data[2], //or other hash?
+    };
+
+    let coinid_2 = CoinId{
+        hash: hashed_data[1],
+        index: 1,
     };
     let input2 = Input {
-        hash: hashed_data[1],
-        index: 2,
+        coin: coinid_2,
         value: 13,
-        recipient: hashed_data[3], //or other hash?
+        owner: hashed_data[3], //or other hash?
     };
     let input_vec: Vec<Input> = vec![input1, input2];
 
@@ -85,12 +93,13 @@ pub fn sample_transaction_content() -> tx_Content {
     };
     let output_vec: Vec<Output> = vec![output1, output2];
 
-    let signature_vec: Vec<PubkeyAndSignature> = vec![];
+    let signature_vec: Vec<Authorization> = vec![];
 
     let sample_transaction = Transaction {
         input: input_vec,
         output: output_vec,
-        signatures: signature_vec,
+        authorization: signature_vec,
+        hash: RefCell::new(None)
     };
 
     let mut transaction_vec: Vec<Transaction> = vec![];
@@ -123,37 +132,37 @@ pub fn sample_transaction_block() -> Block {
 
 // Proposer block stuffs
 /// Returns sample content of a proposer block containing only tx block hashes
-pub fn sample_proposer_content1() -> proposer_Content {
+pub fn sample_ProposerContent1() -> ProposerContent {
     let tx_block = sample_transaction_block();
-    let transaction_block_hashes = vec![tx_block.hash()];
+    let transaction_refs = vec![tx_block.hash()];
 
-    let proposer_block_content = proposer_Content {
-        transaction_block_hashes,
-        proposer_block_hashes: vec![],
+    let proposer_block_content = ProposerContent {
+        transaction_refs,
+        proposer_refs: vec![],
     };
     let _header = sample_header();
     let _sortition_proof: Vec<H256> = vec![]; // The sortition proof is bogus
     return proposer_block_content;
 }
-pub fn sample_proposer_content1_hash_shouldbe() -> H256 {
+pub fn sample_ProposerContent1_hash_shouldbe() -> H256 {
     let transaction_content_hash: H256 =
         (&hex!("92b44c4a1f245d603d9bf8befdd09cd0921f0cbfdfc00772c2e0073bd6145669")).into();
     return transaction_content_hash;
 }
 
 /// Returns sample content of a proposer block containing only tx block hashes and prop block hashes
-pub fn sample_proposer_content2() -> proposer_Content {
+pub fn sample_ProposerContent2() -> ProposerContent {
     let tx_block = sample_transaction_block();
-    let transaction_block_hashes = vec![tx_block.hash()];
+    let transaction_refs = vec![tx_block.hash()];
     let propose_block = sample_proposer_block1();
-    let proposer_block_hashes = vec![propose_block.hash()];
-    let proposer_block_content = proposer_Content {
-        transaction_block_hashes,
-        proposer_block_hashes,
+    let proposer_refs = vec![propose_block.hash()];
+    let proposer_block_content = ProposerContent {
+        transaction_refs,
+        proposer_refs,
     };
     return proposer_block_content;
 }
-pub fn sample_proposer_content2_hash_shouldbe() -> H256 {
+pub fn sample_ProposerContent2_hash_shouldbe() -> H256 {
     let transaction_content_hash: H256 =
         (&hex!("92b44c4a1f245d603d9bf8befdd09cd0921f0cbfdfc00772c2e0073bd6145669")).into();
     return transaction_content_hash;
@@ -161,7 +170,7 @@ pub fn sample_proposer_content2_hash_shouldbe() -> H256 {
 
 /// Returns sample a proposer block 1 and 2
 pub fn sample_proposer_block1() -> Block {
-    let proposer_block_content = sample_proposer_content1();
+    let proposer_block_content = sample_ProposerContent1();
     let header = sample_header(); // The content root is incorrect
     let sortition_proof: Vec<H256> = vec![]; // The sortition proof is bogus
     return Block {
@@ -171,9 +180,9 @@ pub fn sample_proposer_block1() -> Block {
     };
 }
 pub fn sample_proposer_block2() -> Block {
-    let proposer_block_content = sample_proposer_content2();
+    let proposer_block_content = sample_ProposerContent2();
     let mut header = sample_header();
-    header.content_root = sample_proposer_content1_hash_shouldbe();
+    header.content_merkle_root = sample_ProposerContent1_hash_shouldbe();
     let sortition_proof: Vec<H256> = vec![]; // The sortition proof is bogus
     return Block {
         header,
@@ -215,12 +224,12 @@ pub fn sample_mined_block(index: u32) -> Block {
     content_hash_vec.push(transaction_content.hash());
 
     // Adding proposer content
-    let proposer_content = sample_proposer_content2();
-    content_hash_vec.push(proposer_content.hash());
+    let ProposerContent = sample_ProposerContent2();
+    content_hash_vec.push(ProposerContent.hash());
 
     let merkle_tree = MerkleTree::new(&content_hash_vec);
     let mut header = sample_header();
-    header.content_root = merkle_tree.root();
+    header.content_merkle_root = merkle_tree.root();
 
     // Fake mining: The content corresponding to 'index' is chosen
     let content: Content;
@@ -231,10 +240,10 @@ pub fn sample_mined_block(index: u32) -> Block {
     } else if index == m {
         content = Content::Transaction(transaction_content);
     } else {
-        content = Content::Proposer(proposer_content);
+        content = Content::Proposer(ProposerContent);
     }
 
-    let sortition_proof = merkle_tree.get_proof_from_index(index);
+    let sortition_proof = merkle_tree.proof(index as usize);
 
     return Block::from_header(header, content, sortition_proof);
 }
