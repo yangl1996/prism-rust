@@ -25,15 +25,12 @@ use rand::distributions::Distribution;
 
 use rand::Rng;
 
-
-#[derive(PartialEq)]
 enum ControlSignal {
     Start(u64, bool), // the number controls the lambda of interval between block generation
     Step,
     Exit,
 }
 
-#[derive(PartialEq)]
 pub enum ContextUpdateSignal {
     // TODO: New transaction comes, we update transaction block's content
     //NewTx,//should be called: mem pool change
@@ -45,7 +42,6 @@ pub enum ContextUpdateSignal {
     NewVoterBlock(u16),
 }
 
-#[derive(PartialEq)]
 enum OperatingState {
     Paused,
     Run(u64, bool),
@@ -175,7 +171,7 @@ impl Context {
                     Err(TryRecvError::Disconnected) => panic!("Miner control channel detached"),
                 },
             }
-            if self.operating_state == OperatingState::ShutDown {
+            if let OperatingState::ShutDown = self.operating_state {
                 return;
             }
 
@@ -275,7 +271,7 @@ impl Context {
                     );
                     //                debug!("Mined block {:.8}", mined_block.hash());
                     // if we are stepping, pause the miner loop
-                    if self.operating_state == OperatingState::Step {
+                    if let OperatingState::Step = self.operating_state {
                         self.operating_state = OperatingState::Paused;
                     }
                 }
@@ -464,6 +460,18 @@ fn get_time() -> u128 {
 
 #[cfg(test)]
 mod tests {
+    use crate::blockdb::BlockDatabase;
+    use crate::blockchain::BlockChain;
+    use crate::block::{Content, proposer, transaction, voter};
+    use std::sync::{Arc, Mutex};
+    use std::sync::mpsc::channel;
+    use super::memory_pool::MemoryPool;
+    use super::{Context, OperatingState};
+    use crate::config;
+    use crate::crypto::hash::{H256, Hashable};
+    use crate::crypto::merkle::MerkleTree;
+    use crate::network::server;
+    use crate::validation::{check_block, BlockResult};
 
     /*
     #[test]
@@ -487,128 +495,73 @@ mod tests {
     // this test is commented out for now, since it requires that we add the newly mined blocks to
     // the db and the blockchain. if we add those, the test becomes an integration test, and no
     // longer fits here.
-    /*
+    // Gerui: but only here can we call a private function
+
+    // test assemble block and check the block passes validation
     #[test]
-    fn mine() {
-        // Initialize a blockchain with 10 voter chains.
-        let tx_mempool = Arc::new(Mutex::new(MemoryPool::new()));
-        let blockchain = Arc::new(Mutex::new(BlockChain::new()));
-        let db = Arc::new(BlockDatabase::new(
-            &std::path::Path::new("/tmp/prism_miner_mine.rocksdb")).unwrap());
-        let (sender, receiver) = channel();
-        let (ctx, handle) = new(&tx_mempool, &blockchain, &db, sender);
-        ctx.start();
+    fn assemble_block() {
+        let blockdb = BlockDatabase::new("/tmp/prism_test_miner_blockdb.rocksdb").unwrap();
+        let blockdb = Arc::new(blockdb);
 
-        // check whether blockchain is correctly initialized
-        assert_eq!(11, blockchain.lock().unwrap().graph.node_count(), "Expecting 11 nodes corresponding to 11 genesis blocks");
+        let blockchain = BlockChain::new("/tmp/prism_test_miner_blockchain.rocksdb").unwrap();
+        let blockchain = Arc::new(blockchain);
 
-        // mine two blocks
-        handle.step();
-        let block1 = receiver.recv().unwrap();
-        handle.step();
-        let block2 = receiver.recv().unwrap();
-        handle.exit();
+        let mempool = Arc::new(Mutex::new(MemoryPool::new(100)));
+        let (signal_chan_sender, signal_chan_receiver) = channel();
+        let (ctx_update_sink, ctx_update_source) = channel();
+        let (msg_tx, msg_rx) = channel();
 
-        // check those two blocks are different
-        assert!(block1.hash() != block2.hash());
-
-        // If the last block was a proposer or voter block, check that it's the best proposer block
-        let t = block2.get_block_type().unwrap();
-        let block2_hash = block2.hash();
-        if t == PROPOSER_INDEX {
-            assert_eq!(block2_hash, blockchain.lock().unwrap().get_proposer_best_block(),
-                       "Expected the last-mined proposer block to be the best proposer block");
-        } else if t == TRANSACTION_INDEX {
-            assert!(blockchain.lock().unwrap().tx_pool.is_unconfirmed(&block2_hash),
-                       "Expected the last-mined tx block to be unconfirmed");
-        } else  if t >= FIRST_VOTER_INDEX {
-            assert_eq!(blockchain.lock().unwrap().voter_chains[(t-FIRST_VOTER_INDEX) as usize].best_block, block2_hash,
-                       "Expected the last-mined voter block to be the best voter block");
+        let mut content = vec![];
+        content.push(Content::Proposer(proposer::Content::new( vec![], vec![] )));
+        content.push(Content::Transaction(transaction::Content::new(vec![])));
+        let voter_parent_hash: Vec<H256> = (0..config::NUM_VOTER_CHAINS)
+            .map(|i| blockchain.best_voter(i as usize))
+            .collect();
+        let proposer_block_votes: Vec<Vec<H256>> = (0..config::NUM_VOTER_CHAINS)
+            .map(|i| {
+                blockchain
+                    .unvoted_proposer(&voter_parent_hash[i as usize], &blockchain.best_proposer())
+                    .unwrap()
+                    .clone()
+            })
+            .collect();
+        for (i, (voter_parent, proposer_block_votes)) in voter_parent_hash
+            .into_iter()
+            .zip(proposer_block_votes.into_iter())
+            .enumerate()
+            {
+                content.push(Content::Voter(voter::Content::new(
+                    i as u16,
+                    voter_parent,
+                    proposer_block_votes,
+                )));
+            }
+        let (server_ctx, server) = server::new(
+            std::net::SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)), 8080),
+            msg_tx,
+        ).unwrap();
+        let miner = Context {
+            tx_mempool: Arc::clone(&mempool),
+            blockchain: Arc::clone(&blockchain),
+            blockdb: Arc::clone(&blockdb),
+            control_chan: signal_chan_receiver,
+            context_update_chan: ctx_update_source,
+            proposer_parent_hash: blockchain.best_proposer(),
+            content_merkle_tree: MerkleTree::new(&content),
+            content,
+            difficulty: *config::DEFAULT_DIFFICULTY,
+            operating_state: OperatingState::Paused,
+            server,
+        };
+        for nonce in 0..100 {
+            let mut header = miner.create_header();
+            header.nonce = nonce;
+            // Here, we assume difficulty is large enough s.t. we can get a block every time
+            let block = miner.assemble_block(header);
+            if let BlockResult::Pass = check_block(&block, &blockchain, &blockdb) {}
+            else {
+                panic!("Miner mine a block that doesn't pass validation!");
+            }
         }
-
-        // Assert that the new blocks appear in the db
-        assert_eq!(db.num_blocks(),2,
-            "Expecting 2 nodes since 2 blocks were added");
-
-        // Check that 2 new blocks appear in the blockchain
-        assert_eq!(blockchain.lock().unwrap().graph.node_count(), 13,
-            "Expecting 13 nodes since 2 blocks were added");
-
     }
-    */
-
-    /*
-    #[test]
-    fn sortition_id() {
-        let tx_mempool = Arc::new(Mutex::new(MemoryPool::new()));
-        let (state_update_sink, state_update_source) = mpsc::channel();
-        let blockchain = Arc::new(Mutex::new(BlockChain::new(
-            NUM_VOTER_CHAINS,
-            state_update_sink,
-        )));
-        let db = Arc::new(
-            BlockDatabase::new(&std::path::Path::new(
-                "/tmp/prism_miner_test_sortition.rocksdb",
-            ))
-            .unwrap(),
-        );
-        let (_ctx_update_s, ctx_update_r) = channel();
-        let (ctx, _handle) = new(&tx_mempool, &blockchain, &db, ctx_update_r);
-
-        let big_difficulty = U256::from_big_endian(&DEFAULT_DIFFICULTY);
-
-        let mut big_hash: U256;
-        let big_proposer_range: U256 = PROPOSER_MINING_RANGE.into();
-        let big_transaction_range: U256 = TRANSACTION_MINING_RANGE.into();
-
-        let mut hash: [u8; 32];
-        let mut sortition_id: u32;
-
-        // Transaction blocks
-        hash = [0; 32]; // hash = 0
-        sortition_id = ctx.get_sortition_id(&hash);
-        assert_eq!(sortition_id, PROPOSER_INDEX);
-
-        // Set the hash to just below the boundary between tx and proposer blocks
-        big_hash = big_difficulty / 100.into() * big_proposer_range - 1.into();
-        hash = big_hash.into();
-        sortition_id = ctx.get_sortition_id(&hash);
-        assert_eq!(sortition_id, PROPOSER_INDEX);
-
-        // Proposer blocks
-        // Set the hash to just above the boundary between tx and proposer blocks
-        big_hash = big_difficulty / 100.into() * big_proposer_range;
-        hash = big_hash.into();
-        sortition_id = ctx.get_sortition_id(&hash);
-        assert_eq!(sortition_id, TRANSACTION_INDEX);
-
-        // Set the hash to just below the boundary between tx and voter blocks
-        big_hash =
-            big_difficulty / 100.into() * (big_transaction_range + big_proposer_range) - 1.into();
-        hash = big_hash.into();
-        sortition_id = ctx.get_sortition_id(&hash);
-        assert_eq!(sortition_id, TRANSACTION_INDEX);
-
-        // Voter blocks
-        // Set the hash to just above the boundary between tx and voter blocks
-        big_hash = big_difficulty / 100.into() * (big_transaction_range + big_proposer_range);
-        hash = big_hash.into();
-        sortition_id = ctx.get_sortition_id(&hash);
-        assert_eq!(sortition_id, FIRST_VOTER_INDEX);
-
-        // Adding NUM_VOTER_CHAINS to the previous hash should
-        // give the same result
-        big_hash = big_hash + NUM_VOTER_CHAINS.into();
-        hash = big_hash.into();
-        sortition_id = ctx.get_sortition_id(&hash);
-        assert_eq!(sortition_id, FIRST_VOTER_INDEX);
-
-        // Adding one to the previous hash should
-        // increment the voter chain  ID by one
-        big_hash = big_hash + 1.into();
-        hash = big_hash.into();
-        sortition_id = ctx.get_sortition_id(&hash);
-        assert_eq!(sortition_id, FIRST_VOTER_INDEX + 1);
-    }
-    */
 }

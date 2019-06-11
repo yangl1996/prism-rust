@@ -7,7 +7,6 @@ pub struct MerkleTree {
     nodes: Vec<H256>,
 }
 
-//todo : Add proof check function
 impl MerkleTree {
     pub fn new<T>(data: &[T]) -> Self where T: Hashable {
         // calculate the size of the tree
@@ -85,32 +84,6 @@ impl MerkleTree {
         }
     }
 
-/*    fn proof(&self, data: &T) -> Vec<H256> {
-        let mut results = vec![];
-        let data_index = self
-            .data
-            .iter()
-            .position(|r| std::ptr::eq(r, data))
-            .unwrap();
-        let mut known_index = if self.data.len() & 0x01 == 1 {
-            self.nodes.len() - self.data.len() - 1 + data_index
-        } else {
-            self.nodes.len() - self.data.len() + data_index
-        };
-        loop {
-            if known_index == 0 {
-                break;
-            }
-            let sibling_index = match known_index & 0x01 {
-                1 => known_index + 1,
-                _ => known_index - 1,
-            };
-            results.push(self.nodes[sibling_index]);
-            known_index = (known_index - 1) >> 1;
-        }
-        return results;
-    }
-*/
     /// Returns the Merkle Proof of data at index i
     /// todo: Lei check this
     pub fn proof(&self, index: usize) -> Vec<H256> {
@@ -141,11 +114,12 @@ impl MerkleTree {
             self.nodes[0] = data.hash();
             return;
         }
-        let (mut known_index, last_layer_start) = if self.data_size[0] & 0x01 == 1 {
-            (self.nodes.len() - self.data_size[0] - 1 + index, self.nodes.len() - self.data_size[0] - 1)
+        let last_layer_start = if self.data_size[0] & 0x01 == 1 {
+            self.nodes.len() - self.data_size[0] - 1
         } else {
-            (self.nodes.len() - self.data_size[0] + index, self.nodes.len() - self.data_size[0])
+            self.nodes.len() - self.data_size[0]
         };
+        let mut known_index = last_layer_start + index;
         let mut layer_start = last_layer_start;
         let mut idx = 0usize;
         loop {
@@ -285,7 +259,7 @@ mod tests {
     }
 
     #[test]
-    fn update() {
+    fn proof_and_update() {
         for top in 0..=7usize {
             let input_data: Vec<hash::H256> = gen_merkle_tree_data!().into_iter().take(top).collect();
             let merkle_tree = MerkleTree::new(&input_data);
@@ -299,7 +273,7 @@ mod tests {
                 let mut merkle_tree_mut = MerkleTree::new(&input_data_mut);
                 assert_ne!(merkle_tree.root(), merkle_tree_mut.root());
                 merkle_tree_mut.update(idx, &input_data[idx]);
-                assert_eq!(merkle_tree.root(), merkle_tree_mut.root(), "iter: {}", idx);
+                assert_eq!(merkle_tree.root(), merkle_tree_mut.root());
             }
             if top>1 {
                 let input_data_: Vec<hash::H256> = input_data.iter().rev().cloned().collect();
