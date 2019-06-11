@@ -1,13 +1,18 @@
 use prism::validation::{check_block_after_pow_sortition, BlockResult};
 use prism::block::tests::{proposer_block, voter_block, transaction_block};
 use prism::crypto::hash::tests::generate_random_hash;
+use prism::crypto::hash::H256;
 use prism::transaction::tests::{generate_random_transaction, generate_random_output, generate_random_coinid};
 use prism::blockdb::BlockDatabase;
 use prism::blockchain::BlockChain;
 use prism::config;
 use prism::crypto::hash::Hashable;
 use prism::transaction::{Transaction, Input, Output};
+use prism::miner::Context;
 use std::cell::RefCell;
+use std::sync::{Arc, Mutex};
+use std::sync::mpsc::channel;
+use prism::miner::memory_pool::MemoryPool;
 
 macro_rules! assert_result {
     ( $left:expr, $right:pat ) => {{
@@ -101,19 +106,4 @@ fn validate_block() {
     let transaction_6 = transaction_block(parent, timestamp, vec![invalid_tx]);
     assert_result!(check_block_after_pow_sortition(&transaction_6, &blockchain, &blockdb), BlockResult::WrongSignature);
 
-    //TODO: check PoW and sortition, check signature
-    //TODO: test miner with validation
-//    Context {
-//        tx_mempool: Arc::clone(tx_mempool),
-//        blockchain: Arc::clone(blockchain),
-//        blockdb: Arc::clone(blockdb),
-//        control_chan: signal_chan_receiver,
-//        context_update_chan: ctx_update_source,
-//        proposer_parent_hash: H256::default(),
-//        content: vec![],
-//        content_merkle_tree: MerkleTree::new(&Vec::<Content>::new()),
-//        difficulty: *DEFAULT_DIFFICULTY,
-//        operating_state: OperatingState::Paused,
-//        server: server.clone(),
-//    };
 }
