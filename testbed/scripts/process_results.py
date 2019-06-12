@@ -36,7 +36,7 @@ def print_node_results(display_name, metrics, reduction, mapping='average'):
                 result = "{:.2f} {}".format(data[name][field], unit)
             results.append(result)
         result_string += '\t'.join(results)
-        print(result_string)
+        #print(result_string)
 
     results = []
     for m in metrics:
