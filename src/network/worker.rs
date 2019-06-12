@@ -150,12 +150,17 @@ impl Context {
                     let mut hashes: Vec<H256> = vec![];
                     for encoded_block in &encoded_blocks {
                         let block: Block = bincode::deserialize(&encoded_block).unwrap();
+                        let hash = block.hash();
+                        
+                        // detect duplicates
+                        if self.blockdb.contains(&hash).unwrap() {
+                            continue;
+                        }
 
                         // TODO: check POW here. If POW does not pass, discard the block at this
                         // stage
 
                         // store the block into database
-                        let hash = block.hash();
                         self.blockdb.insert_encoded(&hash, &encoded_block).unwrap();
 
                         blocks.push(block);
