@@ -100,7 +100,7 @@ function build_prism
 	rsync -ar ../Cargo.toml prism:~/prism/
 	rsync -ar ../src prism:~/prism/
 	echo "Building Prism binary"
-	ssh prism -- 'cd ~/prism && /home/prism/.cargo/bin/cargo build' &> log/prism_build.log
+	ssh prism -- 'cd ~/prism && /home/prism/.cargo/bin/cargo build --release' &> log/prism_build.log
 	if [ $# -ne 1 ]; then
 		echo "Stripping symbol"
 		ssh prism -- 'cp /home/prism/prism/target/debug/prism /home/prism/prism/target/debug/prism-copy && strip /home/prism/prism/target/debug/prism-copy'
