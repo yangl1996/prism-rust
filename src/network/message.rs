@@ -8,7 +8,7 @@ pub enum Message {
     Pong(String),
     NewBlockHashes(Vec<H256>),
     GetBlocks(Vec<H256>),
-    Blocks(Vec<Block>),
+    Blocks(Vec<Vec<u8>>),
     NewTransactionHashes(Vec<H256>),
     GetTransactions(Vec<H256>),
     Transactions(Vec<Transaction>),

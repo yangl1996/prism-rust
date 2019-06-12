@@ -133,20 +133,43 @@ impl Context {
                     debug!("Asked for {} blocks", hashes.len());
                     let mut blocks = vec![];
                     for hash in hashes {
-                        match self.blockdb.get(&hash).unwrap() {
+                        match self.blockdb.get_encoded(&hash).unwrap() {
                             None => {}
-                            Some(block) => {
-                                blocks.push(block);
+                            Some(encoded_block) => {
+                                blocks.push(encoded_block.to_vec());
                             }
                         }
                     }
                     peer.write(Message::Blocks(blocks));
                 }
-                Message::Blocks(blocks) => {
-                    debug!("Got {} blocks", blocks.len());
+                Message::Blocks(encoded_blocks) => {
+                    debug!("Got {} blocks", encoded_blocks.len());
+
+                    // decode the blocks
+                    let mut blocks: Vec<Block> = vec![];
+                    let mut hashes: Vec<H256> = vec![];
+                    for encoded_block in &encoded_blocks {
+                        let block: Block = bincode::deserialize(&encoded_block).unwrap();
+
+                        // TODO: check POW here. If POW does not pass, discard the block at this
+                        // stage
+
+                        // store the block into database
+                        let hash = block.hash();
+                        self.blockdb.insert_encoded(&hash, &encoded_block).unwrap();
+
+                        blocks.push(block);
+                        hashes.push(hash);
+                    }
+
                     for block in &blocks {
                         PERFORMANCE_COUNTER.record_receive_block(&block);
                     }
+                    
+                    // tell peers about the new blocks
+                    self.server.broadcast(Message::NewBlockHashes(hashes.clone()));
+
+                    // process each block
                     let mut to_process: Vec<Block> = blocks;
                     let mut to_request: Vec<H256> = vec![];
                     while let Some(block) = to_process.pop() {
@@ -175,7 +198,6 @@ impl Context {
                                     &self.blockdb,
                                     &self.chain,
                                     &self.server,
-                                    false,
                                 );
                                 let mut resolved_by_current = self.buffer.satisfy(block.hash());
                                 if !resolved_by_current.is_empty() {
@@ -209,9 +231,12 @@ impl Context {
                 }
                 Message::Bootstrap(after) => {
                     debug!("Asked for all blocks after {}", &after);
+                    /*
+                     * TODO: recover this message
                     for batch in self.blockdb.blocks_after(&after, 500) {
                         peer.write(Message::Blocks(batch));
                     }
+                    */
                 }
             }
         }

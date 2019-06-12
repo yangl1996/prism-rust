@@ -110,15 +110,31 @@ impl BlockDatabase {
         return Ok(counter);
     }
 
+    pub fn insert_encoded(&self, hash: &H256, raw_block: &[u8]) -> Result<u64, rocksdb::Error> {
+        let block_cf = self.db.cf_handle(BLOCK_CF).unwrap();
+        let block_arrival_order_cf = self.db.cf_handle(BLOCK_ARRIVAL_ORDER_CF).unwrap();
+        let block_sequence_number_cf = self.db.cf_handle(BLOCK_SEQUENCE_NUMBER_CF).unwrap();
+        let counter = self.count.fetch_add(1, Ordering::Relaxed);
+        self.db.put_cf(block_cf, &hash, &raw_block)?;
+        self.db.put_cf(block_arrival_order_cf, &counter.to_ne_bytes(), &hash)?;
+        self.db.put_cf(block_sequence_number_cf, &hash, &counter.to_ne_bytes())?;
+        return Ok(counter);
+    }
+
     /// Get a block from the database.
     pub fn get(&self, hash: &H256) -> Result<Option<Block>, rocksdb::Error> {
         let block_cf = self.db.cf_handle(BLOCK_CF).unwrap();
-        let block_arrival_order_cf = self.db.cf_handle(BLOCK_ARRIVAL_ORDER_CF).unwrap();
         let serialized = self.db.get_cf(block_cf, hash)?;
         match serialized {
             None => return Ok(None),
             Some(s) => return Ok(Some(deserialize(&s).unwrap())),
         }
+    }
+
+    pub fn get_encoded(&self, hash: &H256) -> Result<Option<rocksdb::DBVector>, rocksdb::Error> {
+        let block_cf = self.db.cf_handle(BLOCK_CF).unwrap();
+        let serialized = self.db.get_cf(block_cf, hash)?;
+        return Ok(serialized);
     }
 
     pub fn contains(&self, hash: &H256) -> Result<bool, rocksdb::Error> {
