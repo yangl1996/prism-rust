@@ -1,12 +1,9 @@
-use crate::block::Content;
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
-use crate::crypto::hash::{Hashable, H256};
-use crate::handler;
-use crate::transaction::CoinId;
-use crate::transaction::Transaction as RawTransaction;
+use crate::crypto::hash::H256;
 use crate::utxodb::UtxoDatabase;
 
+/*
 #[derive(Serialize)]
 pub struct Input {
     hash: String,
@@ -43,6 +40,7 @@ pub struct ProposerBlock {
     /// List of transaction blocks
     pub transaction_refs: Vec<TransactionBlock>,
 }
+*/
 
 #[derive(Serialize)]
 pub struct Dump {
@@ -63,7 +61,7 @@ pub fn dump_ledger(
 
     let mut proposer_blocks: Vec<String> = vec![];
     // loop over all tx blocks in the ledger
-    for (proposer_hash, tx_block_hashes) in &ledger {
+    for (proposer_hash, _tx_block_hashes) in &ledger {
         /*
         let mut transactions_blocks: Vec<TransactionBlock> = vec![];
         for tx_block_hash in tx_block_hashes {

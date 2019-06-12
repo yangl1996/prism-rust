@@ -492,10 +492,11 @@ mod tests {
     }
     */
 
-    // this test is commented out for now, since it requires that we add the newly mined blocks to
-    // the db and the blockchain. if we add those, the test becomes an integration test, and no
-    // longer fits here.
-    // Gerui: but only here can we call a private function
+    /* this test is commented out for now, since it requires that we add the newly mined blocks to
+       the db and the blockchain. if we add those, the test becomes an integration test, and no
+       longer fits here.
+       TODO: Gerui: but only here can we call a private function
+    */ 
 
     // test assemble block and check the block passes validation
     #[test]

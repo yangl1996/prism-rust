@@ -7,9 +7,11 @@ use std::collections::VecDeque;
 /// transactions storage
 #[derive(Debug)]
 pub struct MemoryPool {
-    num_transactions: u64,
-    max_transactions: u64,
     /// Number of transactions
+    num_transactions: u64,
+    /// Maximum number that the memory pool can hold
+    max_transactions: u64,
+    /// Counter for storage index
     counter: u64,
     /// By-hash storage
     by_hash: HashMap<H256, Entry>,
@@ -62,6 +64,7 @@ impl MemoryPool {
 
         // add to hashmap
         self.by_hash.insert(hash, entry);
+
         self.num_transactions += 1;
     }
 

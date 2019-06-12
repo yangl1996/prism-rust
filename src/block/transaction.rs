@@ -130,7 +130,7 @@ pub mod tests {
                 signature: unsigned_transaction.sign(&keypair),
             }];
 
-        let mut transaction_vec: Vec<Transaction> = vec![Transaction {
+        let transaction_vec: Vec<Transaction> = vec![Transaction {
             authorization,
             ..unsigned_transaction
         }];

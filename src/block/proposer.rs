@@ -34,8 +34,6 @@ impl PayloadSize for Content {
 
 impl Hashable for Content {
     fn hash(&self) -> H256 {
-        // TODO: why do we need a merkle tree here? simply hashing all the bytes is much faster and
-        // more straightforward.
         let tx_merkle_tree = MerkleTree::new(&self.transaction_refs);
         let prop_merkle_tree = MerkleTree::new(&self.proposer_refs);
         let mut bytes = [0u8;64];
@@ -92,23 +90,23 @@ pub mod tests {
         assert_eq!(block.hash(), block_hash_should_be);
     }
     macro_rules! gen_hashed_data {
-    () => {{
-        vec![
-            (&hex!("0a0b0c0d0e0f0e0d0a0b0c0d0e0f0e0d0a0b0c0d0e0f0e0d0a0b0c0d0e0f0e0d")).into(),
-            (&hex!("0102010201020102010201020102010201020102010201020102010201020102")).into(),
-            (&hex!("0a0a0a0a0b0b0b0b0a0a0a0a0b0b0b0b0a0a0a0a0b0b0b0b0a0a0a0a0b0b0b0b")).into(),
-            (&hex!("0403020108070605040302010807060504030201080706050403020108070605")).into(),
-            (&hex!("1a2a3a4a1a2a3a4a1a2a3a4a1a2a3a4a1a2a3a4a1a2a3a4a1a2a3a4a1a2a3a4a")).into(),
-            (&hex!("deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")).into(),
-            (&hex!("0000000100000001000000010000000100000001000000010000000100000001")).into(),
-        ]
-    }};
-}
+        () => {{
+            vec![
+                (&hex!("0a0b0c0d0e0f0e0d0a0b0c0d0e0f0e0d0a0b0c0d0e0f0e0d0a0b0c0d0e0f0e0d")).into(),
+                (&hex!("0102010201020102010201020102010201020102010201020102010201020102")).into(),
+                (&hex!("0a0a0a0a0b0b0b0b0a0a0a0a0b0b0b0b0a0a0a0a0b0b0b0b0a0a0a0a0b0b0b0b")).into(),
+                (&hex!("0403020108070605040302010807060504030201080706050403020108070605")).into(),
+                (&hex!("1a2a3a4a1a2a3a4a1a2a3a4a1a2a3a4a1a2a3a4a1a2a3a4a1a2a3a4a1a2a3a4a")).into(),
+                (&hex!("deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")).into(),
+                (&hex!("0000000100000001000000010000000100000001000000010000000100000001")).into(),
+            ]
+        }};
+    }
 
 
     // Proposer block stuffs
     /// Returns sample content of a proposer block containing only tx block hashes
-    pub fn sample_ProposerContent1() -> ProposerContent {
+    pub fn sample_proposer_content1() -> ProposerContent {
         let tx_block = sample_transaction_block();
         let transaction_refs = vec![tx_block.hash()];
 
@@ -121,7 +119,7 @@ pub mod tests {
 
     /// Returns sample a proposer block 1 and 2
     pub fn sample_proposer_block1() -> Block {
-        let proposer_block_content = sample_ProposerContent1();
+        let proposer_block_content = sample_proposer_content1();
         let mut header = sample_header(); // The content root is incorrect
         header.content_merkle_root = proposer_block_content.hash();
         let sortition_proof: Vec<H256> = vec![]; // The sortition proof is bogus
@@ -139,7 +137,7 @@ pub mod tests {
     }
 
     /// Returns sample content of a proposer block containing only tx block hashes and prop block hashes
-    pub fn sample_ProposerContent2() -> ProposerContent {
+    pub fn sample_proposer_content2() -> ProposerContent {
         let tx_block = sample_transaction_block();
         let transaction_refs = vec![tx_block.hash()];
         let propose_block = sample_proposer_block1();
@@ -151,7 +149,7 @@ pub mod tests {
         return proposer_block_content;
     }
     pub fn sample_proposer_block2() -> Block {
-        let proposer_block_content = sample_ProposerContent2();
+        let proposer_block_content = sample_proposer_content2();
         let mut header = sample_header(); // The content root is incorrect
         header.content_merkle_root = proposer_block_content.hash();
         let sortition_proof: Vec<H256> = vec![]; // The sortition proof is bogus

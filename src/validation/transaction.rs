@@ -13,19 +13,6 @@ pub fn check_non_empty(transaction: &Transaction) -> bool {
 pub fn check_non_zero(transaction: &Transaction) -> bool {
     !(transaction.input.iter().any(|x|x.value==0) || transaction.output.iter().any(|x|x.value==0) )
 }
-/*
-/// Checks if all the inputs are unspent
-pub fn check_input_unspent(transaction: &Transaction, utxodb: &UtxoDatabase) -> bool {
-    transaction.input.iter().all(|input| {
-        utxodb
-            .contains(&CoinId {
-                hash: input.coin.hash,
-                index: input.coin.index,
-            })
-            .unwrap()
-    })
-}
-*/
 
 /// Checks if input_sum >= output_sum
 pub fn check_sufficient_input(transaction: &Transaction) -> bool {

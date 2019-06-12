@@ -244,7 +244,6 @@ pub mod tests {
         let addr = w.generate_keypair().unwrap();
         assert_eq!(w.addresses().unwrap(), vec![addr]);
         assert!(w.create_transaction(H256::default(), 1, None).is_err());
-//        assert!(w.create_transactions(&[(H256::default(), 1)]).is_err());
         // give the test address 10 x 10 coins
         let mut ico: Vec<Input> = vec![];
         for _ in 0..10 {
@@ -269,21 +268,6 @@ pub mod tests {
         assert_eq!(tx.output[1].recipient,addr);
         assert_eq!(tx.output[1].value,1);
 
-//        let txs = w.create_transactions(&[(H256::default(), 8);4]).unwrap();
-//        assert_eq!(txs.len(),4);
-//        for i in 0..4usize {
-//            assert_eq!(txs[i].input.len(), 1);
-//            assert_eq!(txs[i].input[0].value, 10);
-//            assert_eq!(txs[i].output.len(), 2);
-//            assert_eq!(txs[i].output[0].recipient,H256::default());
-//            assert_eq!(txs[i].output[0].value, 8);
-//            assert_eq!(txs[i].output[1].recipient,addr);
-//            assert_eq!(txs[i].output[1].value, 2);
-//        }
-//        for i in 1..4usize {
-//            // these transactions would use different coins
-//            assert_ne!(txs[0].input[0].coin, txs[i].input[0].coin);
-//        }
         // remove coins
         w.apply_diff(&[],&ico).unwrap();
         assert_eq!(w.balance().unwrap(), 0);

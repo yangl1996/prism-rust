@@ -40,7 +40,7 @@ pub const FIRST_VOTER_INDEX: u16 = 2;
 
 lazy_static! {
     pub static ref DEFAULT_DIFFICULTY: H256 = {
-        let mut raw: [u8; 32] = [255; 32];
+        let raw: [u8; 32] = [255; 32];
         raw.into()
     };
 

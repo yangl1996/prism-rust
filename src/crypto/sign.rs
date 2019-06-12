@@ -245,7 +245,7 @@ mod tests {
     }
 
     #[test]
-    fn serde() {
+    fn from_pkcs8() {
         let keypair = KeyPair::random();
         let pkcs8 = keypair.pkcs8_bytes.clone();
         let de_keypair = KeyPair::from_pkcs8(pkcs8);

@@ -1,18 +1,13 @@
 use prism::validation::{check_block_after_pow_sortition, BlockResult};
 use prism::block::tests::{proposer_block, voter_block, transaction_block};
 use prism::crypto::hash::tests::generate_random_hash;
-use prism::crypto::hash::H256;
-use prism::transaction::tests::{generate_random_transaction, generate_random_output, generate_random_coinid};
+use prism::transaction::tests::{generate_random_transaction, generate_random_coinid};
 use prism::blockdb::BlockDatabase;
 use prism::blockchain::BlockChain;
 use prism::config;
 use prism::crypto::hash::Hashable;
 use prism::transaction::{Transaction, Input, Output};
-use prism::miner::Context;
 use std::cell::RefCell;
-use std::sync::{Arc, Mutex};
-use std::sync::mpsc::channel;
-use prism::miner::memory_pool::MemoryPool;
 
 macro_rules! assert_result {
     ( $left:expr, $right:pat ) => {{

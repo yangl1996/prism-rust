@@ -75,7 +75,7 @@ impl Server {
                     let base_url = Url::parse(&format!("http://{}/", &addr)).unwrap();
                     let url = match base_url.join(req.url()) {
                         Ok(u) => u,
-                        Err(e) => {
+                        Err(_) => {
                             let content_type = "Content-Type: text/html".parse::<Header>().unwrap();
                             let resp = Response::from_string(include_str!("404.html"))
                                 .with_header(content_type)

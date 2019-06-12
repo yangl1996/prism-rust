@@ -68,6 +68,7 @@ pub fn check_block(
 
     // check PoW and sortition id
     match check_pow_sortition(block) {
+        // if PoW and sortition id passes, we check other rules
         BlockResult::Pass => check_block_after_pow_sortition(block, blockchain, blockdb),
         x => x,
     }
@@ -146,7 +147,7 @@ pub fn check_block_after_pow_sortition(
                 if !transaction::check_non_zero(&transaction) {
                     return BlockResult::ZeroValue;
                 }
-// Gerui: I think we won't go to utxo in validation.
+// Gerui: I think we won't go to utxo in validation. TODO: remove it
                 /*
                 if !transaction::check_input_unspent(&transaction, utxodb) {
                     return BlockResult::InputAlreadySpent;

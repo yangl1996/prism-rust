@@ -71,7 +71,7 @@ pub fn genesis(chain_num: u16) -> Block {
 
 #[cfg(test)]
 pub mod test{
-    use super::super::voter::Content as voter_Content;
+    use super::super::voter::Content as voter_Content;// TODO: name change to VoterContent
     use super::super::proposer::tests::*;
     use super::super::transaction::tests::*;
     use super::super::{Block, Content};

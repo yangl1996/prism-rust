@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate clap;
 
-use log::{debug, error, info};
+use log::{error, info};
 use prism::blockchain::BlockChain;
 use prism::blockdb::BlockDatabase;
 use prism::miner::memory_pool::MemoryPool;
@@ -12,7 +12,6 @@ use prism::api::Server as ApiServer;
 use prism::network::server;
 use prism::network::worker;
 use prism::experiment::transaction_generator::TransactionGenerator;
-use prism::experiment::performance_counter::Counter as PerformanceCounter;
 use prism::miner;
 use prism::crypto::hash::{H256, Hashable};
 use prism::handler::update_ledger;
@@ -20,7 +19,6 @@ use std::net;
 use std::process;
 use std::sync::Arc;
 use std::sync::mpsc;
-use std::io::{self, Write};
 use std::convert::TryInto;
 use std::thread;
 use std::time;

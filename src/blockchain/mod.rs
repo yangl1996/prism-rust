@@ -326,7 +326,7 @@ impl BlockChain {
                 put_value!(proposer_node_level_cf, block_hash, self_level as u64);
                 merge_value!(proposer_tree_level_cf, self_level, block_hash);
 
-                let mut unconfirmed_proposers = self.unconfirmed_proposers.lock().unwrap();//Gerui: has to use a lock here
+                let unconfirmed_proposers = self.unconfirmed_proposers.lock().unwrap();//Gerui: has to use a lock here. TODO: what lock should we use?
                 let exists = self.contains_proposer(&block_hash)?;
                 if !exists {
                     self.db.write(wb)?;
@@ -1563,7 +1563,8 @@ mod tests {
         }
     }
 
-    /* This test is also covered by integration test.
+    /* Some part of this test is covered by integration test. TODO: delete those parts and fix the
+     * test.
     #[test]
     fn insert_block() {
         let db = BlockChain::new("/tmp/prism_test_blockchain_insert_block.rocksdb").unwrap();
