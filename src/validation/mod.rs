@@ -75,11 +75,6 @@ pub fn check_block(
     // match the block type and check content
     match &block.content {
         Content::Transaction(content) => {
-            // check whether it is a duplicate
-            let self_exists = check_transaction_block_exists(block.hash(), blockdb);
-            if self_exists {
-                return BlockResult::Duplicate;
-            }
             // check each transaction
             /*
             for transaction in content.transactions.iter() {
@@ -105,11 +100,6 @@ pub fn check_block(
             return BlockResult::Pass;
         }
         Content::Proposer(content) => {
-            // check whether it is a duplicate
-            let self_exists = check_proposer_block_exists(block.hash(), blockdb, blockchain);
-            if self_exists {
-                return BlockResult::Duplicate;
-            }
             // check for missing references
             let missing_refs =
                 proposer_block::get_missing_references(&content, blockchain, blockdb);
@@ -120,11 +110,6 @@ pub fn check_block(
             }
         }
         Content::Voter(content) => {
-            // check whether it is a duplicate
-            let self_exists = check_voter_block_exists(block.hash(), blockdb, blockchain);
-            if self_exists {
-                return BlockResult::Duplicate;
-            }
             // check for missing references
             let missing_refs = voter_block::get_missing_references(&content, blockchain, blockdb);
             if missing_refs.len() != 0 {
