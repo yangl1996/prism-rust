@@ -21,7 +21,7 @@ use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 
 #[derive(Clone)]
 pub struct Context {
-    msg_chan: Arc<Mutex<mpsc::Receiver<(message::Message, peer::Handle)>>>,
+    msg_chan: Arc<Mutex<mpsc::Receiver<(Vec<u8>, peer::Handle)>>>,
     num_worker: usize,
     chain: Arc<BlockChain>,
     blockdb: Arc<BlockDatabase>,
@@ -35,7 +35,7 @@ pub struct Context {
 
 pub fn new(
     num_worker: usize,
-    msg_src: mpsc::Receiver<(message::Message, peer::Handle)>,
+    msg_src: mpsc::Receiver<(Vec<u8>, peer::Handle)>,
     blockchain: &Arc<BlockChain>,
     blockdb: &Arc<BlockDatabase>,
     utxodb: &Arc<UtxoDatabase>,
@@ -77,6 +77,7 @@ impl Context {
             drop(chan);
             PERFORMANCE_COUNTER.record_process_message();
             let (msg, peer) = msg;
+            let msg: Message = bincode::deserialize(&msg).unwrap();
             match msg {
                 Message::Ping(nonce) => {
                     debug!("Ping: {}", nonce);

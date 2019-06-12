@@ -12,7 +12,7 @@ enum DecodeState {
 
 pub enum ReadResult {
     Continue,
-    Message(message::Message),
+    Message(Vec<u8>),
     EOF,
 }
 
@@ -51,8 +51,7 @@ impl ReadContext {
                             return Ok(ReadResult::Continue);
                         }
                         DecodeState::Payload => {
-                            let new_payload: message::Message =
-                                bincode::deserialize(&self.buffer[0..self.msg_length]).unwrap();
+                            let new_payload: Vec<u8> = self.buffer[0..self.msg_length].to_vec();
                             self.state = DecodeState::Length;
                             self.read_length = 0;
                             self.msg_length = std::mem::size_of::<u32>();
@@ -83,7 +82,7 @@ enum WriteState {
 
 pub struct WriteContext {
     writer: std::io::BufWriter<mio::net::TcpStream>,
-    pub queue: channel::Receiver<message::Message>,
+    pub queue: channel::Receiver<Vec<u8>>,
     len_buffer: [u8; std::mem::size_of::<u32>()],
     msg_buffer: Vec<u8>,
     msg_length: usize,
@@ -129,7 +128,7 @@ impl WriteContext {
                         };
 
                         // encode the message and the length
-                        self.msg_buffer = bincode::serialize(&msg).unwrap();
+                        self.msg_buffer = msg;
                         self.msg_length = self.msg_buffer.len();
                         BigEndian::write_u32(&mut self.len_buffer, self.msg_length as u32);
                         self.written_length = 0;
@@ -206,13 +205,14 @@ pub struct Context {
 
 #[derive(Clone)]
 pub struct Handle {
-    write_queue: channel::Sender<message::Message>,
+    write_queue: channel::Sender<Vec<u8>>,
 }
 
 impl Handle {
     pub fn write(&self, msg: message::Message) {
         // TODO: return result
-        self.write_queue.send(msg);
+        let buffer = bincode::serialize(&msg).unwrap();
+        self.write_queue.send(buffer);
         return;
     }
 }
