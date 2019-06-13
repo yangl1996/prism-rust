@@ -113,7 +113,7 @@ for (( i = 0; i < $num_nodes; i++ )); do
 		echo "Failed to set transaction rate for node $i"
 		exit 1
 	fi
-	url="localhost:${port}/transaction-generator/start?throttle=8000"
+	url="localhost:${port}/transaction-generator/start?throttle=500000"
 	curl "$url" &> /dev/null
 	if [ "$?" -ne 0 ]; then
 		echo "Failed to start transaction generation for node $i"

@@ -12,6 +12,10 @@ use crate::handler::new_validated_block;
 use crate::network::server::Handle as ServerHandle;
 use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 use crate::validation::get_sortition_id;
+use crate::utxodb::UtxoDatabase;
+use crate::wallet::Wallet;
+use crate::network::message::Message;
+
 use log::{debug, info};
 
 use memory_pool::MemoryPool;
@@ -260,14 +264,15 @@ impl Context {
 
                 if !skip {
                     PERFORMANCE_COUNTER.record_mine_block(&mined_block);
-                    // Release block to the network
+                    let hash = mined_block.hash();
+                    self.db.insert(&mined_block).unwrap();
+                    self.server.broadcast(Message::NewBlockHashes(vec![hash]));
                     new_validated_block(
                         &mined_block,
                         &self.tx_mempool,
                         &self.blockdb,
                         &self.blockchain,
                         &self.server,
-                        true
                     );
                     //                debug!("Mined block {:.8}", mined_block.hash());
                     // if we are stepping, pause the miner loop

@@ -93,11 +93,6 @@ pub fn check_block_after_pow_sortition(
     // match the block type and check content
     match &block.content {
         Content::Proposer(content) => {
-            // check whether it is a duplicate
-            let self_exists = check_proposer_block_exists(block.hash(), blockdb, blockchain);
-            if self_exists {
-                return BlockResult::Duplicate;
-            }
             // check for missing references
             let missing_refs =
                 proposer_block::get_missing_references(&content, blockchain, blockdb);
@@ -111,11 +106,6 @@ pub fn check_block_after_pow_sortition(
             return BlockResult::Pass;
         }
         Content::Voter(content) => {
-            // check whether it is a duplicate
-            let self_exists = check_voter_block_exists(block.hash(), blockdb, blockchain);
-            if self_exists {
-                return BlockResult::Duplicate;
-            }
             // check for missing references
             let missing_refs = voter_block::get_missing_references(&content, blockchain, blockdb);
             if !missing_refs.is_empty() {
@@ -134,11 +124,6 @@ pub fn check_block_after_pow_sortition(
             return BlockResult::Pass;
         }
         Content::Transaction(content) => {
-            // check whether it is a duplicate
-            let self_exists = check_transaction_block_exists(block.hash(), blockdb);
-            if self_exists {
-                return BlockResult::Duplicate;
-            }
             // check each transaction
             for transaction in content.transactions.iter() {
                 if !transaction::check_non_empty(&transaction) {
@@ -147,12 +132,6 @@ pub fn check_block_after_pow_sortition(
                 if !transaction::check_non_zero(&transaction) {
                     return BlockResult::ZeroValue;
                 }
-// Gerui: I think we won't go to utxo in validation. TODO: remove it
-                /*
-                if !transaction::check_input_unspent(&transaction, utxodb) {
-                    return BlockResult::InputAlreadySpent;
-                }
-*/
                 if !transaction::check_sufficient_input(&transaction) {
                     return BlockResult::InsufficientInput;
                 }
@@ -163,7 +142,6 @@ pub fn check_block_after_pow_sortition(
             }
             return BlockResult::Pass;
         }
-
     }
 }
 

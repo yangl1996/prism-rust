@@ -100,16 +100,16 @@ function build_prism
 	rsync -ar ../Cargo.toml prism:~/prism/
 	rsync -ar ../src prism:~/prism/
 	echo "Building Prism binary"
-	ssh prism -- 'cd ~/prism && /home/prism/.cargo/bin/cargo build' &> log/prism_build.log
+	ssh prism -- 'cd ~/prism && /home/prism/.cargo/bin/cargo build --release' &> log/prism_build.log
 	if [ $# -ne 1 ]; then
 		echo "Stripping symbol"
-		ssh prism -- 'cp /home/prism/prism/target/debug/prism /home/prism/prism/target/debug/prism-copy && strip /home/prism/prism/target/debug/prism-copy'
+		ssh prism -- 'cp /home/prism/prism/target/release/prism /home/prism/prism/target/release/prism-copy && strip /home/prism/prism/target/release/prism-copy'
 	else
 		if [ "$1" = "nostrip" ]; then
-			ssh prism -- 'cp /home/prism/prism/target/debug/prism /home/prism/prism/target/debug/prism-copy'
+			ssh prism -- 'cp /home/prism/prism/target/release/prism /home/prism/prism/target/release/prism-copy'
 		else
 			echo "Stripping symbol"
-			ssh prism -- 'cp /home/prism/prism/target/debug/prism /home/prism/prism/target/debug/prism-copy && strip /home/prism/prism/target/debug/prism-copy'
+			ssh prism -- 'cp /home/prism/prism/target/release/prism /home/prism/prism/target/release/prism-copy && strip /home/prism/prism/target/release/prism-copy'
 		fi
 	fi
 	tput setaf 2
@@ -132,7 +132,7 @@ function prepare_payload
 	mkdir -p payload
 	mkdir -p binary
 	echo "Download binaries"
-	scp prism:/home/prism/prism/target/debug/prism-copy binary/prism
+	scp prism:/home/prism/prism/target/release/prism-copy binary/prism
 	local instances=`cat instances.txt`
 	local instance_ids=""
 	for instance in $instances ;
@@ -214,10 +214,10 @@ function get_performance_single
 
 function start_transactions_single
 {
-	curl -s "http://$3:$4/transaction-generator/set-arrival-distribution?interval=500&distribution=uniform"
+	curl -s "http://$3:$4/transaction-generator/set-arrival-distribution?interval=8000&distribution=uniform"
 	curl -s "http://$3:$4/transaction-generator/set-value-distribution?min=100&max=100&distribution=uniform"
-	curl -s "http://$3:$4/transaction-generator/start?throttle=8000"
-	curl -s "http://$3:$4/miner/start?lambda=2000000&lazy=false"
+	curl -s "http://$3:$4/transaction-generator/start?throttle=500000"
+	curl -s "http://$3:$4/miner/start?lambda=700000&lazy=false"
 }
 
 function query_api 

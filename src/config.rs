@@ -1,7 +1,7 @@
 use crate::crypto::hash::H256;
 
 // Network parameters
-pub const NETWORK_CAPACITY: u32 = 3000_000; // the expected network usage in KByte/s
+pub const NETWORK_CAPACITY: u32 = 20000_000; // the expected network usage in KByte/s
 pub const NETWORK_DELAY: f32 = 2.0; // the expected block propagation delay in seconds
 
 // Design parameters

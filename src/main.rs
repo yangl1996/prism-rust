@@ -39,7 +39,7 @@ fn main() {
      (@arg wallet_db: --walletdb [PATH] default_value("/tmp/prism-wallet.rocksdb") "Sets the path of the wallet")
      (@arg init_fund_addr: --("fund-addr") ... [HASH] "Endows the given address an initial fund")
      (@arg load_key_path: --("load-key") ... [PATH] "Loads a key pair into the wallet from the given address")
-     (@arg mempool_size: --("mempool-size") ... [SIZE] default_value("8000") "Sets the size limit of the memory pool")
+     (@arg mempool_size: --("mempool-size") ... [SIZE] default_value("500000") "Sets the size limit of the memory pool")
      (@subcommand keygen =>
       (about: "Generates Prism wallet key pair")
       (@arg display_address: --addr "Prints the address of the key pair to STDERR")
@@ -127,7 +127,7 @@ fn main() {
     thread::spawn(move || {
         loop {
             update_ledger(&blockdb_copy, &blockchain_copy, &utxodb_copy, &wallet_copy);
-            thread::sleep(time::Duration::from_millis(5000));
+            thread::sleep(time::Duration::from_millis(1000));
         }
     });
 

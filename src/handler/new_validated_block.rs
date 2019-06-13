@@ -17,7 +17,6 @@ pub fn new_validated_block(
     blockdb: &BlockDatabase,
     chain: &BlockChain,
     server: &ServerHandle,
-    pass: bool,
 ) {
     PERFORMANCE_COUNTER.record_process_block(&block);
 
@@ -40,14 +39,4 @@ pub fn new_validated_block(
 
     // insert the new block into the blockchain
     chain.insert_block(&block).unwrap();
-
-    // TODO: we should use blockchain as the ultimate authority to tell whether a block has been
-    // received
-    // insert the new block into the blockdb
-    blockdb.insert(&block).unwrap();
-
-    // tell the neighbors that we have a new block
-    if pass {
-        server.broadcast(message::Message::NewBlockHashes(vec![block.hash()]));
-    }
 }

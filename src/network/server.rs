@@ -13,7 +13,7 @@ const MAX_EVENT: usize = 1024;
 
 pub fn new(
     addr: std::net::SocketAddr,
-    msg_sink: mpsc::Sender<(message::Message, peer::Handle)>,
+    msg_sink: mpsc::Sender<(Vec<u8>, peer::Handle)>,
 ) -> std::io::Result<(Context, Handle)> {
     let (control_signal_sender, control_signal_receiver) = channel::channel();
     let handle = Handle {
@@ -35,7 +35,7 @@ pub struct Context {
     addr: std::net::SocketAddr,
     poll: mio::Poll,
     control_chan: channel::Receiver<ControlSignal>,
-    new_msg_chan: mpsc::Sender<(message::Message, peer::Handle)>,
+    new_msg_chan: mpsc::Sender<(Vec<u8>, peer::Handle)>,
     handle: Handle,
 }
 
