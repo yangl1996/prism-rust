@@ -57,10 +57,10 @@ fn integration() {
             transaction_block(parent_hash, timestamp, $transactions)
         }};
     }
-    // call new_validated_block 3 times to ensure robustness
     macro_rules! handle_block {
         ( $block:expr ) => {{
-            new_validated_block(&$block, &mempool, &blockdb, &blockchain, &server, false);
+            blockdb.insert(&$block).unwrap();
+            new_validated_block(&$block, &mempool, &blockdb, &blockchain, &server);
             update_ledger(&blockdb, &blockchain, &utxodb, &wallet);
         }};
     }

@@ -12,11 +12,9 @@ use crate::handler::new_validated_block;
 use crate::network::server::Handle as ServerHandle;
 use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 use crate::validation::get_sortition_id;
-use crate::utxodb::UtxoDatabase;
-use crate::wallet::Wallet;
 use crate::network::message::Message;
 
-use log::{debug, info};
+use log::info;
 
 use memory_pool::MemoryPool;
 use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
@@ -564,9 +562,10 @@ mod tests {
             header.nonce = nonce;
             // Here, we assume difficulty is large enough s.t. we can get a block every time
             let block = miner.assemble_block(header);
-            if let BlockResult::Pass = check_block(&block, &blockchain, &blockdb) {}
+            let result = check_block(&block, &blockchain, &blockdb);
+            if let BlockResult::Pass = result {}
             else {
-                panic!("Miner mine a block that doesn't pass validation!");
+                panic!("Miner mine a block that doesn't pass validation!\n\tResult: {:?},\n\tBlock: {:?}\n\tContent Hash: {}", result, block, block.content.hash() );
             }
         }
     }

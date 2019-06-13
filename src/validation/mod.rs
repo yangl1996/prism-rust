@@ -11,6 +11,7 @@ extern crate bigint;
 use bigint::uint::U256;
 
 /// The result of block validation.
+#[derive(Debug)]
 pub enum BlockResult {
     /// The validation passes.
     Pass,
