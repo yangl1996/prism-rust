@@ -38,6 +38,8 @@ fn main() {
      (@arg blockchain_db: --blockchaindb [PATH] default_value("/tmp/prism-blockchain.rocksdb") "Sets the path of the blockchain database")
      (@arg wallet_db: --walletdb [PATH] default_value("/tmp/prism-wallet.rocksdb") "Sets the path of the wallet")
      (@arg init_fund_addr: --("fund-addr") ... [HASH] "Endows the given address an initial fund")
+     (@arg init_fund_coins: --("fund-coins") [INT] default_value("50000") "Sets the number of coins of the initial fund for each peer")
+     (@arg init_fund_value: --("fund-value") [INT] default_value("100") "Sets the value of each initial fund coin")
      (@arg load_key_path: --("load-key") ... [PATH] "Loads a key pair into the wallet from the given address")
      (@arg mempool_size: --("mempool-size") ... [SIZE] default_value("500000") "Sets the size limit of the memory pool")
      (@subcommand keygen =>
@@ -191,6 +193,14 @@ fn main() {
 
     // fund the given addresses
     if let Some(fund_addrs) = matches.values_of("init_fund_addr") {
+        let num_coins = matches.value_of("init_fund_coins").unwrap().parse::<usize>().unwrap_or_else(|e| {
+            error!("Error parsing number of initial fund coins: {}", e);
+            process::exit(1);
+        });
+        let coin_value = matches.value_of("init_fund_value").unwrap().parse::<u64>().unwrap_or_else(|e| {
+            error!("Error parsing value of initial fund coins: {}", e);
+            process::exit(1);
+        });
         let mut addrs = vec![];
         for addr in fund_addrs {
             let decoded = match base64::decode(&addr.trim()) {
@@ -204,8 +214,8 @@ fn main() {
             let hash: H256 = addr_bytes.into();
             addrs.push(hash);
         }
-        info!("Funding {} addresses with initial coins", addrs.len());
-        prism::experiment::ico(&addrs, &utxodb, &wallet).unwrap();
+        info!("Funding {} addresses with {} initial coins of {}", addrs.len(), num_coins, coin_value);
+        prism::experiment::ico(&addrs, &utxodb, &wallet, num_coins, coin_value).unwrap();
     }
 
     // create wallet key pair if there is none
