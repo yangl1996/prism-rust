@@ -124,22 +124,22 @@ impl BlockDatabase {
     /// Get a block from the database.
     pub fn get(&self, hash: &H256) -> Result<Option<Block>, rocksdb::Error> {
         let block_cf = self.db.cf_handle(BLOCK_CF).unwrap();
-        let serialized = self.db.get_cf(block_cf, hash)?;
+        let serialized = self.db.get_pinned_cf(block_cf, hash)?;
         match serialized {
             None => return Ok(None),
             Some(s) => return Ok(Some(deserialize(&s).unwrap())),
         }
     }
 
-    pub fn get_encoded(&self, hash: &H256) -> Result<Option<rocksdb::DBVector>, rocksdb::Error> {
+    pub fn get_encoded(&self, hash: &H256) -> Result<Option<rocksdb::DBPinnableSlice>, rocksdb::Error> {
         let block_cf = self.db.cf_handle(BLOCK_CF).unwrap();
-        let serialized = self.db.get_cf(block_cf, hash)?;
+        let serialized = self.db.get_pinned_cf(block_cf, hash)?;
         return Ok(serialized);
     }
 
     pub fn contains(&self, hash: &H256) -> Result<bool, rocksdb::Error> {
         let block_cf = self.db.cf_handle(BLOCK_CF).unwrap();
-        let serialized = self.db.get_cf(block_cf, hash)?;
+        let serialized = self.db.get_pinned_cf(block_cf, hash)?;
         match serialized {
             None => return Ok(false),
             Some(_) => return Ok(true),
