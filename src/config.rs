@@ -5,7 +5,7 @@ pub const NETWORK_CAPACITY: u32 = 20000_000; // the expected network usage in KB
 pub const NETWORK_DELAY: f32 = 2.0; // the expected block propagation delay in seconds
 
 // Design parameters
-pub const NUM_VOTER_CHAINS: u16 = 11 as u16; // more chains means better latency
+pub const NUM_VOTER_CHAINS: u16 = 100 as u16; // more chains means better latency
 pub const TX_BLOCK_SIZE_BYTES: u32 = 64_000; // the maximum size of a transaction block
 
 // All the parameters below are function of the above parameters
