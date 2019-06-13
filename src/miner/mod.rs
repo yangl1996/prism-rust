@@ -265,7 +265,7 @@ impl Context {
                 if !skip {
                     PERFORMANCE_COUNTER.record_mine_block(&mined_block);
                     let hash = mined_block.hash();
-                    self.db.insert(&mined_block).unwrap();
+                    self.blockdb.insert(&mined_block).unwrap();
                     self.server.broadcast(Message::NewBlockHashes(vec![hash]));
                     new_validated_block(
                         &mined_block,
