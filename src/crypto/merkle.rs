@@ -150,9 +150,9 @@ impl MerkleTree {
 }
 
 /// Verify that the data hash with a vector of proofs will produce the Merkle root. Also need the
-/// index of data and `data_size`, the total number of leaves.
-pub fn verify(root: &H256, data: &H256, proof: &[H256], index: usize, data_size: usize) -> bool {
-    let mut this_layer_size = data_size;
+/// index of data and `leaf_size`, the total number of leaves.
+pub fn verify(root: &H256, data: &H256, proof: &[H256], index: usize, leaf_size: usize) -> bool {
+    let mut this_layer_size = leaf_size;
     let mut layer_size = vec![];
     loop {
         if this_layer_size == 1 {
