@@ -174,7 +174,7 @@ impl Context {
                     
                     // tell peers about the new blocks
                     // TODO: we will do this only in a reasonable network topology
-                    //self.server.broadcast(Message::NewBlockHashes(hashes.clone()));
+                    self.server.broadcast(Message::NewBlockHashes(hashes.clone()));
 
                     // process each block
                     let mut to_process: Vec<Block> = blocks;
