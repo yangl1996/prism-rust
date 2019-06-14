@@ -19,6 +19,9 @@ type Snapshot struct {
 	Confirmed_transactions   int
 	Deconfirmed_transactions int
 	Incoming_message_queue   int
+	Mined_proposer_blocks    int
+	Mined_voter_blocks       int
+	Mined_transaction_blocks int
 }
 
 type Report struct {
@@ -84,6 +87,9 @@ func log(interval, duration uint, nodesFile, dataDir string) {
 		c.DS("deconfirmed_tx", "COUNTER", interval * 2, 0, "U")
 		c.DS("generated_tx", "COUNTER", interval * 2, 0, "U")
 		c.DS("queue_length", "GAUGE", interval * 2, 0, "U")
+		c.DS("mined_proposer", "COUNTER", interval * 2, 0, "U")
+		c.DS("mined_voter", "COUNTER", interval * 2, 0, "U")
+		c.DS("mined_transaction", "COUNTER", interval * 2, 0, "U")
 		c.RRA("LAST", 0, 1, duration / interval)
 		err = c.Create(true)
 		if err != nil {
@@ -123,12 +129,18 @@ func log(interval, duration uint, nodesFile, dataDir string) {
 					ctot.Confirmed_transactions += v.Confirmed_transactions
 					ctot.Deconfirmed_transactions += v.Deconfirmed_transactions
 					ctot.Incoming_message_queue += v.Incoming_message_queue
+					ctot.Mined_proposer_blocks += v.Mined_proposer_blocks
+					ctot.Mined_voter_blocks += v.Mined_voter_blocks
+					ctot.Mined_transaction_blocks += v.Mined_transaction_blocks
 				}
 				cavg := Snapshot {
-					Generated_transactions: ctot.Generated_transactions / len(curr),
+					Generated_transactions: ctot.Generated_transactions,
 					Confirmed_transactions: ctot.Confirmed_transactions / len(curr),
 					Deconfirmed_transactions: ctot.Deconfirmed_transactions / len(curr),
 					Incoming_message_queue: ctot.Incoming_message_queue / len(curr),
+					Mined_proposer_blocks: ctot.Mined_proposer_blocks,
+					Mined_voter_blocks: ctot.Mined_voter_blocks,
+					Mined_transaction_blocks: ctot.Mined_transaction_blocks,
 				}
 				ptot := Snapshot{}
 				for _, v := range prev {
@@ -136,12 +148,18 @@ func log(interval, duration uint, nodesFile, dataDir string) {
 					ptot.Confirmed_transactions += v.Confirmed_transactions
 					ptot.Deconfirmed_transactions += v.Deconfirmed_transactions
 					ptot.Incoming_message_queue += v.Incoming_message_queue
+					ptot.Mined_proposer_blocks += v.Mined_proposer_blocks
+					ptot.Mined_voter_blocks += v.Mined_voter_blocks
+					ptot.Mined_transaction_blocks += v.Mined_transaction_blocks
 				}
 				pavg := Snapshot {
-					Generated_transactions: ptot.Generated_transactions / len(prev),
+					Generated_transactions: ptot.Generated_transactions,
 					Confirmed_transactions: ptot.Confirmed_transactions / len(prev),
 					Deconfirmed_transactions: ptot.Deconfirmed_transactions / len(prev),
 					Incoming_message_queue: ptot.Incoming_message_queue / len(prev),
+					Mined_proposer_blocks: ptot.Mined_proposer_blocks,
+					Mined_voter_blocks: ptot.Mined_voter_blocks,
+					Mined_transaction_blocks: ptot.Mined_transaction_blocks,
 				}
 				// display the values
 				tm.Clear()
@@ -153,6 +171,9 @@ func log(interval, duration uint, nodesFile, dataDir string) {
 				tm.Printf("  Confirmed Transactions    %8v  %8v\n", cavg.Confirmed_transactions / dur, (cavg.Confirmed_transactions - pavg.Confirmed_transactions) / int(interval))
 				tm.Printf("Deconfirmed Transactions    %8v  %8v\n", cavg.Deconfirmed_transactions / dur, (cavg.Deconfirmed_transactions - pavg.Deconfirmed_transactions) / int(interval))
 				tm.Printf("            Queue Length    %8v  %8v\n", cavg.Incoming_message_queue / dur, (cavg.Incoming_message_queue - pavg.Incoming_message_queue) / int(interval))
+				tm.Printf("    Mining -    Proposer    %8.3g  %8.3g\n", float64(cavg.Mined_proposer_blocks) / float64(dur), float64(cavg.Incoming_message_queue - pavg.Incoming_message_queue) / float64(interval))
+				tm.Printf("    Mining -       Voter    %8.3g  %8.3g\n", float64(cavg.Mined_voter_blocks) / float64(dur), float64(cavg.Incoming_message_queue - pavg.Incoming_message_queue) / float64(interval))
+				tm.Printf("    Mining - Transaction    %8.3g  %8.3g\n", float64(cavg.Mined_transaction_blocks) / float64(dur), float64(cavg.Incoming_message_queue - pavg.Incoming_message_queue) / float64(interval))
 				tm.Flush()
 			}
 		}
@@ -177,7 +198,7 @@ func monitor(node string, url string, interval uint, datachan chan Report) {
 			if err != nil {
 				continue
 			}
-			err = updater.Update(time.Now(), snapshot.Confirmed_transactions, snapshot.Deconfirmed_transactions, snapshot.Generated_transactions, snapshot.Incoming_message_queue)
+			err = updater.Update(time.Now(), snapshot.Confirmed_transactions, snapshot.Deconfirmed_transactions, snapshot.Generated_transactions, snapshot.Incoming_message_queue, snapshot.Mined_proposer_blocks, snapshot.Mined_voter_blocks, snapshot.Mined_transaction_blocks)
 			if err != nil {
 				// sometimes we get error if interval is set to 1 and the timer goes a bit faster
 				continue
