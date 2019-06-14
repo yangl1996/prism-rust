@@ -466,6 +466,7 @@ mod tests {
     use crate::blockdb::BlockDatabase;
     use crate::blockchain::BlockChain;
     use crate::block::{Content, proposer, transaction, voter};
+    use crate::block::tests::{proposer_block, voter_block, transaction_block};
     use std::sync::{Arc, Mutex};
     use std::sync::mpsc::channel;
     use super::memory_pool::MemoryPool;
@@ -475,6 +476,7 @@ mod tests {
     use crate::crypto::merkle::MerkleTree;
     use crate::network::server;
     use crate::validation::{check_block, BlockResult};
+    use crate::transaction::tests as tx_generator;
 
     /*
     #[test]
@@ -544,7 +546,7 @@ mod tests {
             std::net::SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)), 8080),
             msg_tx,
         ).unwrap();
-        let miner = Context {
+        let mut miner = Context {
             tx_mempool: Arc::clone(&mempool),
             blockchain: Arc::clone(&blockchain),
             blockdb: Arc::clone(&blockdb),
@@ -557,6 +559,47 @@ mod tests {
             operating_state: OperatingState::Paused,
             server,
         };
+        for nonce in 0..100 {
+            let mut header = miner.create_header();
+            header.nonce = nonce;
+            // Here, we assume difficulty is large enough s.t. we can get a block every time
+            let block = miner.assemble_block(header);
+            let result = check_block(&block, &blockchain, &blockdb);
+            if let BlockResult::Pass = result {}
+            else {
+                panic!("Miner mine a block that doesn't pass validation!\n\tResult: {:?},\n\tBlock: {:?}\n\tContent Hash: {}", result, block, block.content.hash() );
+            }
+        }
+        for chain in 0..config::NUM_VOTER_CHAINS {
+            let voter = voter_block(blockchain.best_proposer(), 3,chain, blockchain.best_voter(chain as usize), vec![]);
+            blockdb.insert(&voter);
+            blockchain.insert_block(&voter);
+            miner.update_voter_content(chain);
+            let header = miner.create_header();
+            // Here, we assume difficulty is large enough s.t. we can get a block every time
+            let block = miner.assemble_block(header);
+            let result = check_block(&block, &blockchain, &blockdb);
+            if let BlockResult::Pass = result {}
+            else {
+                panic!("Miner mine a block that doesn't pass validation!\n\tResult: {:?},\n\tBlock: {:?}\n\tContent Hash: {}", result, block, block.content.hash() );
+            }
+        }
+        miner.update_refed_transaction();
+        for nonce in 0..100 {
+            let mut header = miner.create_header();
+            header.nonce = nonce;
+            // Here, we assume difficulty is large enough s.t. we can get a block every time
+            let block = miner.assemble_block(header);
+            let result = check_block(&block, &blockchain, &blockdb);
+            if let BlockResult::Pass = result {}
+            else {
+                panic!("Miner mine a block that doesn't pass validation!\n\tResult: {:?},\n\tBlock: {:?}\n\tContent Hash: {}", result, block, block.content.hash() );
+            }
+        }
+        let proposer_1 = proposer_block(blockchain.best_proposer(), 3, vec![], vec![]);
+        blockdb.insert(&proposer_1);
+        blockchain.insert_block(&proposer_1);
+        miner.update_all_contents();
         for nonce in 0..100 {
             let mut header = miner.create_header();
             header.nonce = nonce;

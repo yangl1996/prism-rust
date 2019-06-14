@@ -52,7 +52,7 @@ fn main() {
   }
 
   //ico
-  ico(&wallet.addresses().unwrap(), &utxodb, &wallet);
+  ico(&wallet.addresses().unwrap(), &utxodb, &wallet, 100, 100);
   println!("The wallet starts with {} coins.", wallet.number_of_coins());
   let mut rng = rand::thread_rng();
 

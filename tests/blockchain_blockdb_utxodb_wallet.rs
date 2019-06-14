@@ -103,7 +103,7 @@ fn integration() {
     assert_eq!(wallet.balance().unwrap(), 0);
 
     //test ico
-    ico(&[wallet_address], &utxodb, &wallet).unwrap();
+    ico(&[wallet_address], &utxodb, &wallet, 100, 100).unwrap();
     let ico_number = wallet.balance().unwrap();
 
     let transaction_1 = random_transaction_block_0_input!();
