@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicUsize, AtomicIsize, Ordering};
 use crate::transaction::Transaction;
 use crate::block::Block;
 use crate::block::Content as BlockContent;
@@ -46,7 +46,7 @@ pub struct Counter {
     received_proposer_blocks: AtomicUsize,
     received_voter_blocks: AtomicUsize,
     received_transaction_blocks: AtomicUsize,
-    incoming_message_queue: AtomicUsize,
+    incoming_message_queue: AtomicIsize,
 }
 
 #[derive(Serialize)]
@@ -78,7 +78,7 @@ pub struct Snapshot {
     pub proposer_block_delay_variance: usize,
     pub voter_block_delay_variance: usize,
     pub transaction_block_delay_variance: usize,
-    pub incoming_message_queue: usize,
+    pub incoming_message_queue: isize,
 }
 
 impl Counter {
@@ -114,7 +114,7 @@ impl Counter {
             received_proposer_blocks: AtomicUsize::new(0),
             received_voter_blocks: AtomicUsize::new(0),
             received_transaction_blocks: AtomicUsize::new(0),
-            incoming_message_queue: AtomicUsize::new(0),
+            incoming_message_queue: AtomicIsize::new(0),
         }
     }
 
@@ -257,6 +257,12 @@ impl Counter {
         } else {
             transaction_delay_squared_total / transaction_num - (transaction_delay_total / transaction_num) * (transaction_delay_total / transaction_num)
         };
+        let incoming_message_queue = self.incoming_message_queue.load(Ordering::Relaxed);
+        let incoming_message_queue = if incoming_message_queue < 0 {
+            0
+        } else {
+            incoming_message_queue
+        };
         return Snapshot {
             generated_transactions: self.generated_transactions.load(Ordering::Relaxed),
             generated_transaction_bytes: self.generated_transaction_bytes.load(Ordering::Relaxed),
@@ -285,7 +291,7 @@ impl Counter {
             voter_block_delay_variance: voter_delay_variance,
             transaction_block_delay_mean: transaction_delay_mean,
             transaction_block_delay_variance: transaction_delay_variance,
-            incoming_message_queue: self.incoming_message_queue.load(Ordering::Relaxed),
+            incoming_message_queue: incoming_message_queue,
         };
     }
 }
