@@ -147,6 +147,12 @@ func log(interval, duration uint, nodesFile, dataDir string) {
 					ctot.Mined_proposer_blocks += v.Mined_proposer_blocks
 					ctot.Mined_voter_blocks += v.Mined_voter_blocks
 					ctot.Mined_transaction_blocks += v.Mined_transaction_blocks
+					ctot.Total_proposer_block_delay += v.Total_proposer_block_delay
+					ctot.Total_voter_block_delay += v.Total_voter_block_delay
+					ctot.Total_transaction_block_delay += v.Total_transaction_block_delay
+					ctot.Received_proposer_blocks += v.Received_proposer_blocks
+					ctot.Received_voter_blocks += v.Received_voter_blocks
+					ctot.Received_transaction_blocks += v.Received_transaction_blocks
 				}
 				cavg := Snapshot {
 					Generated_transactions: ctot.Generated_transactions,
@@ -156,6 +162,12 @@ func log(interval, duration uint, nodesFile, dataDir string) {
 					Mined_proposer_blocks: ctot.Mined_proposer_blocks,
 					Mined_voter_blocks: ctot.Mined_voter_blocks,
 					Mined_transaction_blocks: ctot.Mined_transaction_blocks,
+					Total_proposer_block_delay: ctot.Total_proposer_block_delay,
+					Total_voter_block_delay: ctot.Total_voter_block_delay,
+					Total_transaction_block_delay: ctot.Total_transaction_block_delay,
+					Received_proposer_blocks: ctot.Received_proposer_blocks,
+					Received_voter_blocks: ctot.Received_voter_blocks,
+					Received_transaction_blocks: ctot.Received_transaction_blocks,
 				}
 				ptot := Snapshot{}
 				for _, v := range prev {
@@ -166,6 +178,12 @@ func log(interval, duration uint, nodesFile, dataDir string) {
 					ptot.Mined_proposer_blocks += v.Mined_proposer_blocks
 					ptot.Mined_voter_blocks += v.Mined_voter_blocks
 					ptot.Mined_transaction_blocks += v.Mined_transaction_blocks
+					ptot.Total_proposer_block_delay += v.Total_proposer_block_delay
+					ptot.Total_voter_block_delay += v.Total_voter_block_delay
+					ptot.Total_transaction_block_delay += v.Total_transaction_block_delay
+					ptot.Received_proposer_blocks += v.Received_proposer_blocks
+					ptot.Received_voter_blocks += v.Received_voter_blocks
+					ptot.Received_transaction_blocks += v.Received_transaction_blocks
 				}
 				pavg := Snapshot {
 					Generated_transactions: ptot.Generated_transactions,
@@ -175,6 +193,12 @@ func log(interval, duration uint, nodesFile, dataDir string) {
 					Mined_proposer_blocks: ptot.Mined_proposer_blocks,
 					Mined_voter_blocks: ptot.Mined_voter_blocks,
 					Mined_transaction_blocks: ptot.Mined_transaction_blocks,
+					Total_proposer_block_delay: ptot.Total_proposer_block_delay,
+					Total_voter_block_delay: ptot.Total_voter_block_delay,
+					Total_transaction_block_delay: ptot.Total_transaction_block_delay,
+					Received_proposer_blocks: ptot.Received_proposer_blocks,
+					Received_voter_blocks: ptot.Received_voter_blocks,
+					Received_transaction_blocks: ptot.Received_transaction_blocks,
 				}
 				// display the values
 				tm.Clear()
@@ -189,6 +213,9 @@ func log(interval, duration uint, nodesFile, dataDir string) {
 				tm.Printf("    Mining -    Proposer    %8.3g  %8.3g\n", float64(cavg.Mined_proposer_blocks) / float64(dur), float64(cavg.Mined_proposer_blocks - pavg.Mined_proposer_blocks) / float64(interval))
 				tm.Printf("    Mining -       Voter    %8.3g  %8.3g\n", float64(cavg.Mined_voter_blocks) / float64(dur), float64(cavg.Mined_voter_blocks - pavg.Mined_voter_blocks) / float64(interval))
 				tm.Printf("    Mining - Transaction    %8.3g  %8.3g\n", float64(cavg.Mined_transaction_blocks) / float64(dur), float64(cavg.Mined_transaction_blocks - pavg.Mined_transaction_blocks) / float64(interval))
+				tm.Printf("     Delay -    Proposer    %8.3g  %8.3g\n", float64(cavg.Total_proposer_block_delay) / float64(cavg.Received_proposer_blocks), float64(cavg.Total_proposer_block_delay - pavg.Total_proposer_block_delay) / float64(cavg.Received_proposer_blocks - pavg.Received_proposer_blocks))
+				tm.Printf("     Delay -       Voter    %8.3g  %8.3g\n", float64(cavg.Total_voter_block_delay) / float64(cavg.Received_voter_blocks), float64(cavg.Total_voter_block_delay - pavg.Total_voter_block_delay) / float64(cavg.Received_voter_blocks - pavg.Received_voter_blocks))
+				tm.Printf("     Delay - Transaction    %8.3g  %8.3g\n", float64(cavg.Total_transaction_block_delay) / float64(cavg.Received_transaction_blocks), float64(cavg.Total_transaction_block_delay - pavg.Total_transaction_block_delay) / float64(cavg.Received_transaction_blocks - pavg.Received_transaction_blocks))
 				tm.Flush()
 			}
 		}
