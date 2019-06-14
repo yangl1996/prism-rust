@@ -96,9 +96,7 @@ impl Signable for Transaction {
         let raw_inputs = serialize(&self.input).unwrap();
         let raw_outputs = serialize(&self.output).unwrap();
         let raw = [&raw_inputs[..], &raw_outputs[..]].concat(); // we can also use Vec extend, don't know which is better
-        let hash: H256 = ring::digest::digest(&ring::digest::SHA256, &raw).into();
-        let hash: [u8; 32] = hash.into();
-        keypair.sign(&hash)
+        keypair.sign(&raw)
     }
 
     fn verify(&self, public_key: &PubKey, signature: &Signature) -> bool {
@@ -106,9 +104,7 @@ impl Signable for Transaction {
         let raw_inputs = serialize(&self.input).unwrap();
         let raw_outputs = serialize(&self.output).unwrap();
         let raw = [&raw_inputs[..], &raw_outputs[..]].concat(); // we can also use Vec extend, don't know which is better
-        let hash: H256 = ring::digest::digest(&ring::digest::SHA256, &raw).into();
-        let hash: [u8; 32] = hash.into();
-        public_key.verify(&hash, signature)
+        public_key.verify(&raw, signature)
     }
 }
 
@@ -154,11 +150,21 @@ pub mod tests {
 
     pub fn generate_random_transaction() -> Transaction {
         let mut rng = rand::thread_rng();
-        Transaction {
+        let unsigned = Transaction {
             input: (0..rng.gen_range(1,5)).map(|_|generate_random_input()).collect(),
             output: (0..rng.gen_range(1,5)).map(|_|generate_random_output()).collect(),
             authorization: vec![],
             hash: RefCell::new(None),
+        };
+        let mut authorization = vec![];
+        let keypair = KeyPair::random();
+        authorization.push(Authorization {
+            pubkey: keypair.public_key(),
+            signature: unsigned.sign(&keypair),
+        });
+        Transaction {
+            authorization,
+            ..unsigned
         }
     }
 }
