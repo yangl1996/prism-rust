@@ -11,6 +11,7 @@ import (
 	"time"
 	"flag"
 	"path"
+	tm "github.com/buger/goterm"
 )
 
 type Snapshot struct {
@@ -18,6 +19,11 @@ type Snapshot struct {
 	Confirmed_transactions   int
 	Deconfirmed_transactions int
 	Incoming_message_queue   int
+}
+
+type Report struct {
+	Node string
+	Data Snapshot
 }
 
 func main() {
@@ -87,14 +93,75 @@ func log(interval, duration uint, nodesFile, dataDir string) {
 	}
 
 	fmt.Println("Start logging data")
+	c := make(chan Report)
 	for k, v := range nodes {
-		monitor(k, v, interval)
+		monitor(k, v, interval, c)
 	}
+
+	// start displaying data
+	t := time.NewTicker(time.Duration(interval) * time.Second)
+	prev := make(map[string]Snapshot)
+	curr := make(map[string]Snapshot)
+	start := time.Now()
+	go func() {
+		for {
+			select {
+			case r := <-c:
+				cv, cvp := curr[r.Node]
+				if cvp {
+					prev[r.Node] = cv
+				}
+				curr[r.Node] = r.Data
+			case now := <-t.C:
+				if len(curr) == 0 || len(prev) == 0 {
+					continue
+				}
+				// calculate average among nodes
+				ctot := Snapshot{}
+				for _, v := range curr {
+					ctot.Generated_transactions += v.Generated_transactions
+					ctot.Confirmed_transactions += v.Confirmed_transactions
+					ctot.Deconfirmed_transactions += v.Deconfirmed_transactions
+					ctot.Incoming_message_queue += v.Incoming_message_queue
+				}
+				cavg := Snapshot {
+					Generated_transactions: ctot.Generated_transactions / len(curr),
+					Confirmed_transactions: ctot.Confirmed_transactions / len(curr),
+					Deconfirmed_transactions: ctot.Deconfirmed_transactions / len(curr),
+					Incoming_message_queue: ctot.Incoming_message_queue / len(curr),
+				}
+				ptot := Snapshot{}
+				for _, v := range prev {
+					ptot.Generated_transactions += v.Generated_transactions
+					ptot.Confirmed_transactions += v.Confirmed_transactions
+					ptot.Deconfirmed_transactions += v.Deconfirmed_transactions
+					ptot.Incoming_message_queue += v.Incoming_message_queue
+				}
+				pavg := Snapshot {
+					Generated_transactions: ptot.Generated_transactions / len(prev),
+					Confirmed_transactions: ptot.Confirmed_transactions / len(prev),
+					Deconfirmed_transactions: ptot.Deconfirmed_transactions / len(prev),
+					Incoming_message_queue: ptot.Incoming_message_queue / len(prev),
+				}
+				// display the values
+				tm.Clear()
+				tm.MoveCursor(1, 1)
+				dur := int(now.Sub(start).Seconds())
+				tm.Printf("Experiment duration - %v sec\n", dur)
+				tm.Printf("                            %8v  %8v\n", "Overall", "Window")
+				tm.Printf("  Generated Transactions    %8v  %8v\n", cavg.Generated_transactions / dur, (cavg.Generated_transactions - pavg.Generated_transactions) / int(interval))
+				tm.Printf("  Confirmed Transactions    %8v  %8v\n", cavg.Confirmed_transactions / dur, (cavg.Confirmed_transactions - pavg.Confirmed_transactions) / int(interval))
+				tm.Printf("Deconfirmed Transactions    %8v  %8v\n", cavg.Deconfirmed_transactions / dur, (cavg.Deconfirmed_transactions - pavg.Deconfirmed_transactions) / int(interval))
+				tm.Printf("            Queue Length    %8v  %8v\n", cavg.Incoming_message_queue / dur, (cavg.Incoming_message_queue - pavg.Incoming_message_queue) / int(interval))
+				tm.Flush()
+			}
+		}
+	}()
 
 	select {}
 }
 
-func monitor(node string, url string, interval uint) {
+func monitor(node string, url string, interval uint, datachan chan Report) {
 	ticker := time.NewTicker(time.Duration(interval) * time.Second)
 	updater := rrd.NewUpdater("data/" + node + ".rrd")
 	go func() {
@@ -114,6 +181,7 @@ func monitor(node string, url string, interval uint) {
 			if err != nil {
 				fmt.Println("Error updating round-robin database:", err)
 			}
+			datachan <- Report{Node: node, Data: snapshot}
 		}
 	}()
 }
