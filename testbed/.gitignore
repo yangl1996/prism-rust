@@ -1,4 +1,6 @@
 flame.svg
+*.png
+
 data
 *.addr
 binary
