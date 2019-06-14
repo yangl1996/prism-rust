@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 	"flag"
+	"path"
 )
 
 type Snapshot struct {
@@ -71,13 +72,13 @@ func log(interval, duration uint, nodesFile, dataDir string) {
 		os.Exit(1)
 	}
 	for k, _ := range nodes {
-		n := "data/" + k + ".rrd"
+		n := path.Clean(dataDir + "/" + k + ".rrd")
 		c := rrd.NewCreator(n, time.Now(), interval)
 		c.DS("confirmed_tx", "COUNTER", interval * 2, 0, "U")
 		c.DS("deconfirmed_tx", "COUNTER", interval * 2, 0, "U")
 		c.DS("generated_tx", "COUNTER", interval * 2, 0, "U")
 		c.DS("queue_length", "GAUGE", interval * 2, 0, "U")
-		c.RRA("LAST", 0, interval, duration / interval) // collect 3600 data points
+		c.RRA("LAST", 0, 1, duration / interval)
 		err = c.Create(true)
 		if err != nil {
 			fmt.Println("Error creating round-robin database:", err)
