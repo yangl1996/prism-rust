@@ -179,7 +179,8 @@ func monitor(node string, url string, interval uint, datachan chan Report) {
 			}
 			err = updater.Update(time.Now(), snapshot.Confirmed_transactions, snapshot.Deconfirmed_transactions, snapshot.Generated_transactions, snapshot.Incoming_message_queue)
 			if err != nil {
-				fmt.Println("Error updating round-robin database:", err)
+				// sometimes we get error if interval is set to 1 and the timer goes a bit faster
+				continue
 			}
 			datachan <- Report{Node: node, Data: snapshot}
 		}
