@@ -343,18 +343,18 @@ function show_visualization
 
 function show_performance
 {
-	start_time_line=`cat experiment.txt | grep START`
-	read -r _ start_timestamp <<< "$start_time_line"
-	if cat experiment.txt | grep STOP; then
-		stop_time_line=`cat experiment.txt | grep STOP`
-		read -r _ stop_timestamp <<< "$stop_time_line"
-	else
-		stop_timestamp=`date +%s`
-	fi
-	duration=`expr $stop_timestamp - $start_timestamp`
-	query_api get_performance 0
-	echo "Experiment started for $duration seconds"
-	python3 scripts/process_results.py nodes.txt $duration
+	local nodes=`cat nodes.txt`
+	local pids=''
+	for node in $nodes; do
+		local name
+		local host
+		local pubip
+		local visport 
+		IFS=',' read -r name host pubip _ _ apiport _ <<< "$node"
+		if [ $name == $1 ]; then
+			curl "http://$pubip:$apiport/telematics/snapshot"
+		fi
+	done
 }
 
 function start_prism
@@ -438,7 +438,7 @@ case "$1" in
 	run-exp)
 		run_experiment ;;
 	get-perf)
-		show_performance ;;
+		show_performance $2 ;;
 	show-vis)
 		show_visualization $2 ;;
 	run-all)
