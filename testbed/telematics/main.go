@@ -22,6 +22,12 @@ type Snapshot struct {
 	Mined_proposer_blocks    int
 	Mined_voter_blocks       int
 	Mined_transaction_blocks int
+	Total_proposer_block_delay int
+	Total_voter_block_delay int
+	Total_transaction_block_delay int
+	Received_proposer_blocks int
+	Received_voter_blocks int
+	Received_transaction_blocks int
 }
 
 type Report struct {
@@ -90,6 +96,15 @@ func log(interval, duration uint, nodesFile, dataDir string) {
 		c.DS("mined_proposer", "COUNTER", interval * 2, 0, "U")
 		c.DS("mined_voter", "COUNTER", interval * 2, 0, "U")
 		c.DS("mined_transaction", "COUNTER", interval * 2, 0, "U")
+		c.DS("proposer_delay_sum", "COUNTER", interval * 2, 0, "U")
+		c.DS("voter_delay_sum", "COUNTER", interval * 2, 0, "U")
+		c.DS("tx_delay_sum", "COUNTER", interval * 2, 0, "U")
+		c.DS("received_proposer", "COUNTER", interval * 2, 0, "U")
+		c.DS("received_voter", "COUNTER", interval * 2, 0, "U")
+		c.DS("received_tx", "COUNTER", interval * 2, 0, "U")
+		c.DS("proposer_delay_mean", "COMPUTE", "proposer_delay_sum,received_proposer,/")
+		c.DS("voter_delay_mean", "COMPUTE", "voter_delay_sum,received_voter,/")
+		c.DS("tx_delay_mean", "COMPUTE", "tx_delay_sum,received_tx,/")
 		c.RRA("LAST", 0, 1, duration / interval)
 		err = c.Create(true)
 		if err != nil {
@@ -198,7 +213,7 @@ func monitor(node string, url string, interval uint, datachan chan Report) {
 			if err != nil {
 				continue
 			}
-			err = updater.Update(time.Now(), snapshot.Confirmed_transactions, snapshot.Deconfirmed_transactions, snapshot.Generated_transactions, snapshot.Incoming_message_queue, snapshot.Mined_proposer_blocks, snapshot.Mined_voter_blocks, snapshot.Mined_transaction_blocks)
+			err = updater.Update(time.Now(), snapshot.Confirmed_transactions, snapshot.Deconfirmed_transactions, snapshot.Generated_transactions, snapshot.Incoming_message_queue, snapshot.Mined_proposer_blocks, snapshot.Mined_voter_blocks, snapshot.Mined_transaction_blocks, snapshot.Total_proposer_block_delay, snapshot.Total_voter_block_delay, snapshot.Total_transaction_block_delay, snapshot.Received_proposer_blocks, snapshot.Received_voter_blocks, snapshot.Received_transaction_blocks)
 			if err != nil {
 				// sometimes we get error if interval is set to 1 and the timer goes a bit faster
 				continue
