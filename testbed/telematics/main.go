@@ -171,9 +171,9 @@ func log(interval, duration uint, nodesFile, dataDir string) {
 				tm.Printf("  Confirmed Transactions    %8v  %8v\n", cavg.Confirmed_transactions / dur, (cavg.Confirmed_transactions - pavg.Confirmed_transactions) / int(interval))
 				tm.Printf("Deconfirmed Transactions    %8v  %8v\n", cavg.Deconfirmed_transactions / dur, (cavg.Deconfirmed_transactions - pavg.Deconfirmed_transactions) / int(interval))
 				tm.Printf("            Queue Length    %8v  %8v\n", cavg.Incoming_message_queue / dur, (cavg.Incoming_message_queue - pavg.Incoming_message_queue) / int(interval))
-				tm.Printf("    Mining -    Proposer    %8.3g  %8.3g\n", float64(cavg.Mined_proposer_blocks) / float64(dur), float64(cavg.Incoming_message_queue - pavg.Incoming_message_queue) / float64(interval))
-				tm.Printf("    Mining -       Voter    %8.3g  %8.3g\n", float64(cavg.Mined_voter_blocks) / float64(dur), float64(cavg.Incoming_message_queue - pavg.Incoming_message_queue) / float64(interval))
-				tm.Printf("    Mining - Transaction    %8.3g  %8.3g\n", float64(cavg.Mined_transaction_blocks) / float64(dur), float64(cavg.Incoming_message_queue - pavg.Incoming_message_queue) / float64(interval))
+				tm.Printf("    Mining -    Proposer    %8.3g  %8.3g\n", float64(cavg.Mined_proposer_blocks) / float64(dur), float64(cavg.Mined_proposer_blocks - pavg.Mined_proposer_blocks) / float64(interval))
+				tm.Printf("    Mining -       Voter    %8.3g  %8.3g\n", float64(cavg.Mined_voter_blocks) / float64(dur), float64(cavg.Mined_voter_blocks - pavg.Mined_voter_blocks) / float64(interval))
+				tm.Printf("    Mining - Transaction    %8.3g  %8.3g\n", float64(cavg.Mined_transaction_blocks) / float64(dur), float64(cavg.Mined_transaction_blocks - pavg.Incoming_message_queue) / float64(interval))
 				tm.Flush()
 			}
 		}
