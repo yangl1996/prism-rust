@@ -361,8 +361,6 @@ function start_prism
 {
 	execute_on_all start_prism
 	start_time=`date +%s`
-	rm -f experiment.txt
-	echo "START $start_time" >> experiment.txt
 }
 
 function stop_prism
@@ -378,6 +376,8 @@ function run_experiment
 	start_prism
 	echo "All nodes started, starting transaction generation"
 	query_api start_transactions 0
+	rm -f experiment.txt
+	echo "START $start_time" >> experiment.txt
 	echo "Running experiment"
 }
 
