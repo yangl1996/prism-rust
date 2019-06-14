@@ -217,7 +217,7 @@ function start_transactions_single
 	curl -s "http://$3:$4/transaction-generator/set-arrival-distribution?interval=1000&distribution=uniform"
 	curl -s "http://$3:$4/transaction-generator/set-value-distribution?min=100&max=100&distribution=uniform"
 	curl -s "http://$3:$4/transaction-generator/start?throttle=500000"
-	curl -s "http://$3:$4/miner/start?lambda=20000&lazy=false"
+	curl -s "http://$3:$4/miner/start?lambda=200000&lazy=false"
 }
 
 function query_api 
