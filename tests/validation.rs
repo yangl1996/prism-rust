@@ -23,7 +23,7 @@ fn validate_block() {
 
     let blockchain = BlockChain::new("/tmp/prism_test_validation_blockchain.rocksdb").unwrap();
 
-    let mut parent = blockchain.best_proposer();
+    let mut parent = blockchain.best_proposer().unwrap();
     let mut timestamp = 1u128;
 
     let proposer_1 = proposer_block(parent, timestamp, vec![], vec![]);
@@ -39,7 +39,7 @@ fn validate_block() {
     let proposer_ = proposer_block(parent, timestamp, vec![], vec![generate_random_hash()]);
     assert_result!(check_block_after_pow_sortition(&proposer_, &blockchain, &blockdb),  BlockResult::MissingReferences(_));
 
-    parent = blockchain.best_proposer();
+    parent = blockchain.best_proposer().unwrap();
     timestamp += 1;
 
     let proposer_2 = proposer_block(parent, timestamp, vec![], vec![]);
@@ -50,7 +50,7 @@ fn validate_block() {
     let proposer_2_fork = proposer_block(parent, timestamp, vec![proposer_2.hash()], vec![]);
     assert_result!(check_block_after_pow_sortition(&proposer_2_fork, &blockchain, &blockdb), BlockResult::WrongProposerRef);
 
-    parent = blockchain.best_proposer();
+    parent = blockchain.best_proposer().unwrap();
     timestamp += 1;
 
     for chain in 0..config::NUM_VOTER_CHAINS {

@@ -336,7 +336,7 @@ impl Context {
     /// Update the block to be mined
     fn update_all_contents(&mut self) {
         // get mutex of blockchain and get all required data
-        self.proposer_parent_hash = self.blockchain.best_proposer();
+        self.proposer_parent_hash = self.blockchain.best_proposer().unwrap();
         self.difficulty = self.get_difficulty(&self.proposer_parent_hash);
         let transaction_block_refs = self.blockchain.unreferred_transactions();
         let mut proposer_block_refs = self.blockchain.unreferred_proposers();
@@ -517,6 +517,7 @@ mod tests {
         let (ctx_update_sink, ctx_update_source) = channel();
         let (msg_tx, msg_rx) = channel();
 
+        let parent = blockchain.best_proposer().unwrap();
         let mut content = vec![];
         content.push(Content::Proposer(proposer::Content::new( vec![], vec![] )));
         content.push(Content::Transaction(transaction::Content::new(vec![])));
@@ -526,7 +527,7 @@ mod tests {
         let proposer_block_votes: Vec<Vec<H256>> = (0..config::NUM_VOTER_CHAINS)
             .map(|i| {
                 blockchain
-                    .unvoted_proposer(&voter_parent_hash[i as usize], &blockchain.best_proposer())
+                    .unvoted_proposer(&voter_parent_hash[i as usize], &parent)
                     .unwrap()
                     .clone()
             })
@@ -552,7 +553,7 @@ mod tests {
             blockdb: Arc::clone(&blockdb),
             control_chan: signal_chan_receiver,
             context_update_chan: ctx_update_source,
-            proposer_parent_hash: blockchain.best_proposer(),
+            proposer_parent_hash: parent,
             content_merkle_tree: MerkleTree::new(&content),
             content,
             difficulty: *config::DEFAULT_DIFFICULTY,
@@ -571,7 +572,7 @@ mod tests {
             }
         }
         for chain in 0..config::NUM_VOTER_CHAINS {
-            let voter = voter_block(blockchain.best_proposer(), 3,chain, blockchain.best_voter(chain as usize), vec![]);
+            let voter = voter_block(parent, 3,chain, blockchain.best_voter(chain as usize), vec![]);
             blockdb.insert(&voter);
             blockchain.insert_block(&voter);
             miner.update_voter_content(chain);
@@ -596,7 +597,7 @@ mod tests {
                 panic!("Miner mine a block that doesn't pass validation!\n\tResult: {:?},\n\tBlock: {:?}\n\tContent Hash: {}", result, block, block.content.hash() );
             }
         }
-        let proposer_1 = proposer_block(blockchain.best_proposer(), 3, vec![], vec![]);
+        let proposer_1 = proposer_block(parent, 3, vec![], vec![]);
         blockdb.insert(&proposer_1);
         blockchain.insert_block(&proposer_1);
         miner.update_all_contents();

@@ -35,7 +35,7 @@ pub type Result<T> = std::result::Result<T, rocksdb::Error>;
 
 pub struct BlockChain {
     db: DB,
-    proposer_best: Mutex<(H256, u64)>,
+    proposer_best_level: Mutex<u64>,
     voter_best: Vec<Mutex<(H256, u64)>>,
     unreferred_transactions: Mutex<HashSet<H256>>,
     unreferred_proposers: Mutex<HashSet<H256>>,
@@ -141,7 +141,7 @@ impl BlockChain {
 
         let blockchain_db = Self {
             db: db,
-            proposer_best: Mutex::new((H256::default(), 0)),
+            proposer_best_level: Mutex::new( 0),
             voter_best: voter_best,
             unreferred_transactions: Mutex::new(HashSet::new()),
             unreferred_proposers: Mutex::new(HashSet::new()),
@@ -185,9 +185,6 @@ impl BlockChain {
             serialize(&(0 as u64)).unwrap(),
             serialize(&(*PROPOSER_GENESIS_HASH)).unwrap(),
         )?;
-        let mut proposer_best = db.proposer_best.lock().unwrap();
-        proposer_best.0 = *PROPOSER_GENESIS_HASH;
-        drop(proposer_best);
         let mut unreferred_proposers = db.unreferred_proposers.lock().unwrap();
         unreferred_proposers.insert(*PROPOSER_GENESIS_HASH);
         drop(unreferred_proposers);
@@ -355,10 +352,9 @@ impl BlockChain {
                     drop(unreferred_transactions);
 
                     // set best block info
-                    let mut proposer_best = self.proposer_best.lock().unwrap();
-                    if self_level > proposer_best.1 {
-                        proposer_best.0 = block_hash;
-                        proposer_best.1 = self_level;
+                    let mut proposer_best = self.proposer_best_level.lock().unwrap();
+                    if self_level > *proposer_best {
+                        *proposer_best = self_level;
                     }
                     drop(proposer_best);
                 }
@@ -681,7 +677,7 @@ impl BlockChain {
 
     /// Given two voter blocks on the same chain, calculate the added and removed votes when
     /// switching the main chain.
-    pub fn vote_diff(&self, from: H256, to: H256) -> Result<(Vec<(H256, u64)>, Vec<(H256, u64)>)> {
+    fn vote_diff(&self, from: H256, to: H256) -> Result<(Vec<(H256, u64)>, Vec<(H256, u64)>)> {
         // get cf handles
         let voter_node_level_cf = self.db.cf_handle(VOTER_NODE_LEVEL_CF).unwrap();
         let vote_neighbor_cf = self.db.cf_handle(VOTE_NEIGHBOR_CF).unwrap();
@@ -746,11 +742,19 @@ impl BlockChain {
         return Ok((added_votes, removed_votes));
     }
 
-    pub fn best_proposer(&self) -> H256 {
-        let proposer_best = self.proposer_best.lock().unwrap();
-        let hash = proposer_best.0;
+    pub fn best_proposer(&self) -> Result<H256> {
+        let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
+
+        let proposer_best = self.proposer_best_level.lock().unwrap();
+        let level: u64 = *proposer_best;
         drop(proposer_best);
-        return hash;
+        let blocks: Vec<H256> = deserialize(
+            &self
+                .db
+                .get_cf(proposer_tree_level_cf, serialize(&level).unwrap())?
+                .unwrap())
+            .unwrap();
+        return Ok(blocks[0]);
     }
 
     pub fn best_voter(&self, chain_num: usize) -> H256 {
@@ -810,7 +814,7 @@ impl BlockChain {
                     .unwrap(),
             )
             .unwrap();
-            list.push(blocks[0]);
+            list.push(blocks[0]);//Note: the last vote in list could be other proposer that at the same level of proposer_parent
         }
         return Ok(list);
     }
@@ -826,6 +830,20 @@ impl BlockChain {
         )
         .unwrap();
         return Ok(level);
+    }
+
+    /// Get the deepest voted level of a voter
+    pub fn deepest_voted_level(&self, voter: &H256) -> Result<u64> {
+        let voter_node_voted_level_cf = self.db.cf_handle(VOTER_NODE_VOTED_LEVEL_CF).unwrap();
+        // get the deepest voted level
+        let voted_level: u64 = deserialize(
+            &self
+                .db
+                .get_cf(voter_node_voted_level_cf, serialize(voter).unwrap())?
+                .unwrap(),
+        )
+            .unwrap();
+        return Ok(voted_level);
     }
 
     /// Get the chain number of the voter block
@@ -917,8 +935,17 @@ impl BlockChain {
             None => None,
         };
         if let Some(proposer_bottom) = proposer_bottom {
-            let proposer_best = self.proposer_best.lock().unwrap();
-            return Ok((proposer_bottom,proposer_best.0,proposer_best.1));
+            let proposer_best = self.proposer_best_level.lock().unwrap();
+            let proposer_best_level = *proposer_best;
+            drop(proposer_best);
+            let proposer_tip = match self.db.get_cf(proposer_tree_level_cf, serialize(&proposer_best_level).unwrap())? {
+                Some(d) => {
+                    let blocks: Vec<H256> = deserialize(&d).unwrap();
+                    blocks[0]
+                }
+                None => unreachable!(),
+            };
+            return Ok((proposer_bottom,proposer_tip,proposer_best_level));
         } else {
             return Ok((H256::default(),H256::default(),0));
         }
@@ -1470,8 +1497,8 @@ mod tests {
         }
         assert_eq!(genesis_votes, true_genesis_votes);
         assert_eq!(
-            *db.proposer_best.lock().unwrap(),
-            (*PROPOSER_GENESIS_HASH, 0)
+            *db.proposer_best_level.lock().unwrap(),
+            0
         );
         assert_eq!(*db.unconfirmed_proposers.lock().unwrap(), HashSet::new());
         assert_eq!(db.unreferred_proposers.lock().unwrap().len(), 1);
@@ -2032,7 +2059,7 @@ mod tests {
     fn best_proposer_and_voter() {
         let db =
             BlockChain::new("/tmp/prism_test_blockchain_best_proposer_and_voter.rocksdb").unwrap();
-        assert_eq!(db.best_proposer(), *PROPOSER_GENESIS_HASH);
+        assert_eq!(db.best_proposer().unwrap(), *PROPOSER_GENESIS_HASH);
         assert_eq!(db.best_voter(0), VOTER_GENESIS_HASHES[0]);
 
         let new_proposer_content = Content::Proposer(proposer::Content::new(vec![], vec![]));
@@ -2063,7 +2090,7 @@ mod tests {
             H256::default(),
         );
         db.insert_block(&new_voter_block).unwrap();
-        assert_eq!(db.best_proposer(), new_proposer_block.hash());
+        assert_eq!(db.best_proposer().unwrap(), new_proposer_block.hash());
         assert_eq!(db.best_voter(0), new_voter_block.hash());
     }
 
@@ -2132,7 +2159,7 @@ mod tests {
     fn unvoted_proposer() {
         let db = BlockChain::new("/tmp/prism_test_blockchain_unvoted_proposer.rocksdb").unwrap();
         assert_eq!(
-            db.unvoted_proposer(&VOTER_GENESIS_HASHES[0], &db.best_proposer()).unwrap(),
+            db.unvoted_proposer(&VOTER_GENESIS_HASHES[0], &db.best_proposer().unwrap()).unwrap(),
             vec![]
         );
 
@@ -2162,7 +2189,7 @@ mod tests {
         );
         db.insert_block(&new_proposer_block_2).unwrap();
         assert_eq!(
-            db.unvoted_proposer(&VOTER_GENESIS_HASHES[0], &db.best_proposer()).unwrap(),
+            db.unvoted_proposer(&VOTER_GENESIS_HASHES[0], &db.best_proposer().unwrap()).unwrap(),
             vec![new_proposer_block_1.hash()]
         );
 
@@ -2184,11 +2211,11 @@ mod tests {
         db.insert_block(&new_voter_block).unwrap();
 
         assert_eq!(
-            db.unvoted_proposer(&VOTER_GENESIS_HASHES[0], &db.best_proposer()).unwrap(),
+            db.unvoted_proposer(&VOTER_GENESIS_HASHES[0], &db.best_proposer().unwrap()).unwrap(),
             vec![new_proposer_block_1.hash()]
         );
         assert_eq!(
-            db.unvoted_proposer(&new_voter_block.hash(), &db.best_proposer()).unwrap(),
+            db.unvoted_proposer(&new_voter_block.hash(), &db.best_proposer().unwrap()).unwrap(),
             vec![]
         );
     }

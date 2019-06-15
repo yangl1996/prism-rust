@@ -13,7 +13,7 @@ use crate::network::server::Handle as ServerHandle;
 use crate::utxodb::UtxoDatabase;
 use crate::validation::{check_block, BlockResult};
 use crate::wallet::Wallet;
-use log::{debug, info};
+use log::{debug, info, warn};
 use std::collections::HashSet;
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
@@ -222,7 +222,7 @@ impl Context {
                                 to_process.append(&mut resolved_by_current);
                             }
                             _ => {
-                                debug!(
+                                warn!(
                                     "Ignoring invalid block {:.8}: {}",
                                     block.hash(),
                                     validation_result

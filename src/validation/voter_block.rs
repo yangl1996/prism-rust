@@ -42,10 +42,15 @@ pub fn check_levels_voted(
     blockchain: &BlockChain,
     parent: &H256
 ) -> bool {
-    let should_vote = blockchain.unvoted_proposer(&content.voter_parent, &parent).unwrap();
+    let mut start = blockchain.deepest_voted_level(&content.voter_parent).unwrap();//need to be +1
+    let end = blockchain.proposer_level(parent).unwrap();
 
-    if content.votes.len() != should_vote.len() { return false; }
-
-    content.votes.iter().zip(should_vote.into_iter()).all(|(x,y)|*x == y)
+    if start > end { return false; }//end < start means incorrect parent level
+    if content.votes.len() != (end - start) as usize { return false; }//
+    for vote in content.votes.iter() {
+        start += 1;
+        if start != blockchain.proposer_level(vote).unwrap() { return false; }
+    }
+    true
 }
 

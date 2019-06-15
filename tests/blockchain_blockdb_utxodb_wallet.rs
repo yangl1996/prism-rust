@@ -34,7 +34,7 @@ fn integration() {
 
     // this section we define the timestamp and macros that increment timestamp automatically
     let mut timestamp: u128 = 0;
-    let mut parent_hash = blockchain.best_proposer();
+    let mut parent_hash = blockchain.best_proposer().unwrap();
     macro_rules! proposer_block {
         ( $proposer_refs:expr, $transaction_refs:expr ) => {{
             timestamp += 1;
@@ -120,11 +120,11 @@ fn integration() {
     assert_eq!(blockchain.unreferred_transactions().len(),1);
     assert_eq!(blockchain.unreferred_proposers().len(),1);
     assert!(blockchain.unreferred_proposers().contains(&proposer_1.hash()));
-    assert_eq!(proposer_1.hash(), blockchain.best_proposer());
+    assert_eq!(proposer_1.hash(), blockchain.best_proposer().unwrap());
     //create empty proposer (for proposer tree forking)
     let proposer_1_fork = proposer_block!();
     handle_block!(proposer_1_fork);
-    assert_ne!(proposer_1_fork.hash(), blockchain.best_proposer());
+    assert_ne!(proposer_1_fork.hash(), blockchain.best_proposer().unwrap());
     let proposer_1_fork_2 = proposer_block!();
     handle_block!(proposer_1_fork_2);
 
@@ -135,7 +135,7 @@ fn integration() {
     assert_eq!(blockchain.unreferred_transactions().len(),0);
     assert_eq!(blockchain.unreferred_proposers().len(),1);
     assert!(blockchain.unreferred_proposers().contains(&proposer_2.hash()));
-    assert_eq!(proposer_2.hash(), blockchain.best_proposer());
+    assert_eq!(proposer_2.hash(), blockchain.best_proposer().unwrap());
     //create empty proposer (for proposer tree forking)
     let proposer_2_fork = proposer_block!();
     handle_block!(proposer_2_fork);
@@ -158,7 +158,7 @@ fn integration() {
     handle_block!(transaction_3);
     let proposer_3 = proposer_block!(vec![proposer_2_fork.hash()], vec![transaction_3.hash()]);
     handle_block!(proposer_3);
-    assert_eq!(proposer_3.hash(), blockchain.best_proposer());
+    assert_eq!(proposer_3.hash(), blockchain.best_proposer().unwrap());
     //create empty proposer (for proposer tree forking)
     //it's parent is proposer_1_fork_2
     parent_hash = proposer_2_fork.hash();
@@ -351,7 +351,7 @@ fn integration() {
     assert!(blockchain.unreferred_proposers().contains(&proposer_8.hash()));
     assert_eq!(blockchain.unreferred_transactions().len(),0);
     //although proposer_9 is leader now, it is not best proposer
-    assert_ne!(proposer_9.hash(), blockchain.best_proposer());
+    assert_ne!(proposer_9.hash(), blockchain.best_proposer().unwrap());
     //only the proposer fork with proposer_9 is in ledger
     check_transaction_output!(transaction_1, true);
     check_transaction_output!(transaction_2, true);
