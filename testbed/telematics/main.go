@@ -95,22 +95,30 @@ func plot(nodesFile, dataDir, content, node, output string, step uint) {
 	g.SetSize(800, 300)
 	switch content {
 	case "txrate":
-		// create def of generated tx for each node, and create a cdef to sum them up
+		// create def for each node, and create a cdef to sum them up (for generate) and get max/min (for confirm)
 		genSum := ""
+		nodeConfirmSet := ""
 		for n, p := range nodes {
 			g.Def(n + "_gen", p, "generated_tx", "AVERAGE", fmt.Sprintf("step=%v", step))
+			g.Def(n + "_confirm", p, "confirmed_tx", "AVERAGE", fmt.Sprintf("step=%v", step))
 			if genSum == "" {
 				genSum = n + "_gen"
 			} else {
 				genSum += "," + n + "_gen,+"
 			}
+			nodeConfirmSet += n + "_confirm,"
 		}
 		g.CDef("gen_sum", genSum)
-		// create def of confirmed tx for the node we care about
-		g.Def(node + "_confirm", nodes[node], "confirmed_tx", "AVERAGE", fmt.Sprintf("step=%v", step))
+		g.CDef("confirm_max", fmt.Sprintf("%s%v,SMAX", nodeConfirmSet, len(nodes)))
+		g.CDef("confirm_min", fmt.Sprintf("%s%v,SMIN", nodeConfirmSet, len(nodes)))
+		g.CDef("confirm_avg", fmt.Sprintf("%s%v,AVG", nodeConfirmSet, len(nodes)))
+		g.CDef("min_max_diff", "confirm_max,confirm_min,-")
 		// plot the lines
-		g.Line(1.0, "gen_sum", "00FF00")
-		g.Line(1.0, node + "_confirm", "FF0000")
+		g.Line(1.0, "gen_sum", "00FF00", "Generated")
+		g.Line(1.0, node + "_confirm", "FF0000", node + " confirmed")
+		g.Line(1.0, "confirm_min", "")
+		g.Area("min_max_diff", "0000FF15", "STACK")	// this area is stacked on confirm_min, so we should sub min
+		g.Line(1.0, "confirm_avg", "0000FF", "Avg confirmed")
 	case "blockdelay":
 		g.Def(node + "_proposer_delay", nodes[node], "proposer_delay_mean", "AVERAGE", fmt.Sprintf("step=%v", step))
 		g.Def(node + "_voter_delay", nodes[node], "voter_delay_mean", "AVERAGE", fmt.Sprintf("step=%v", step))
