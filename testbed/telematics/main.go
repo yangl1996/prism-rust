@@ -45,7 +45,7 @@ func main() {
 	plotCommand := flag.NewFlagSet("plot", flag.ExitOnError)
 	plotNodeListFlag := plotCommand.String("nodelist", "nodes.txt", "Sets the path to the node list file")
 	plotDataDirFlag := plotCommand.String("datadir", "data", "Sets the path to the directory holding RRD files")
-	plotContentFlag := plotCommand.String("content", "txrate", "Sets the content to plot, possible values are txrate, blockdelay, messagequeue, mining")
+	plotContentFlag := plotCommand.String("content", "txrate", "Sets the content to plot, possible values are txrate, blockdelay, queue, mining")
 	plotNodeFlag := plotCommand.String("node", "node_0", "Sets the node to plot")
 	plotStepFlag := plotCommand.Uint("step", 1, "Sets the step of the plot")
 	plotOutputFlag := plotCommand.String("output", "output.png", "Sets the output path")
@@ -118,10 +118,18 @@ func plot(nodesFile, dataDir, content, node, output string, step uint) {
 		g.Line(1.0, node + "_proposer_delay", "FF0000")
 		g.Line(1.0, node + "_voter_delay", "00FF00")
 		g.Line(1.0, node + "_tx_delay", "0000FF")
-	case "messagequeue":
+	case "queue":
+		g.Def(node + "_queue", nodes[node], "queue_length", "AVERAGE", fmt.Sprintf("step=%v", step))
+		g.Line(1.0, node + "_queue", "0000FF")
 	case "mining":
+		g.Def(node + "_mined_proposer", nodes[node], "mined_proposer", "AVERAGE", fmt.Sprintf("step=%v", step))
+		g.Def(node + "_mined_voter", nodes[node], "mined_voter", "AVERAGE", fmt.Sprintf("step=%v", step))
+		g.Def(node + "_mined_transaction", nodes[node], "mined_transaction", "AVERAGE", fmt.Sprintf("step=%v", step))
+		g.Line(1.0, node + "_mined_proposer", "FF0000")
+		g.Line(1.0, node + "_mined_voter", "00FF00")
+		g.Line(1.0, node + "_mined_transaction", "0000FF")
 	default:
-		fmt.Println("Plot content options: txrate, blockdelay, messagequeue, mining")
+		fmt.Println("Plot content options: txrate, blockdelay, queue, mining")
 		os.Exit(1)
 	}
 	_, e := g.SaveGraph(output, time.Now().Add(-time.Duration(600) * time.Second), time.Now())
