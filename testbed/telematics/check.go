@@ -71,7 +71,7 @@ func check(nodesFile string) {
 	}
 	wg.Wait()
 	if !failed {
-		min := uint(0)
+		min := ^uint(0)
 		max := uint(0)
 		for _, v := range balance {
 			if v < min {
