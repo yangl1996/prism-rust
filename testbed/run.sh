@@ -214,10 +214,24 @@ function get_performance_single
 
 function start_transactions_single
 {
-	curl -s "http://$3:$4/transaction-generator/set-arrival-distribution?interval=1000&distribution=uniform"
+	curl -s "http://$3:$4/transaction-generator/set-arrival-distribution?interval=300&distribution=uniform"
 	curl -s "http://$3:$4/transaction-generator/set-value-distribution?min=100&max=100&distribution=uniform"
 	curl -s "http://$3:$4/transaction-generator/start?throttle=500000"
-	curl -s "http://$3:$4/miner/start?lambda=200000&lazy=false"
+}
+
+function start_mining_single
+{
+	curl -s "http://$3:$4/miner/start?lambda=100000&lazy=false"
+}
+
+function stop_transactions_single
+{
+	curl -s "http://$3:$4/transaction-generator/stop"
+}
+
+function stop_mining_single
+{
+	curl -s "http://$3:$4/miner/step"
 }
 
 function query_api 
@@ -376,9 +390,16 @@ function run_experiment
 	start_prism
 	echo "All nodes started, starting transaction generation"
 	query_api start_transactions 0
+	query_api start_mining 0
 	rm -f experiment.txt
 	echo "START $start_time" >> experiment.txt
 	echo "Running experiment"
+}
+
+function stop_generating_transactions
+{
+	query_api stop_transactions 0
+	echo "Transaction stopped"
 }
 
 mkdir -p log
@@ -402,6 +423,7 @@ case "$1" in
 		  start-prism           Start Prism nodes on each remote server
 		  stop-prism            Stop Prism nodes on each remote server
 		  run-exp               Run the experiment
+		  stop-tx               Stop generating transactions
 
 		Collect Data
 		  
@@ -437,6 +459,8 @@ case "$1" in
 		stop_prism ;;
 	run-exp)
 		run_experiment ;;
+	stop-tx)
+		stop_generating_transactions ;;
 	get-perf)
 		show_performance $2 ;;
 	show-vis)
