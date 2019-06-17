@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicUsize, AtomicIsize, Ordering};
 use crate::transaction::Transaction;
 use crate::block::Block;
 use crate::block::Content as BlockContent;
@@ -46,7 +46,7 @@ pub struct Counter {
     received_proposer_blocks: AtomicUsize,
     received_voter_blocks: AtomicUsize,
     received_transaction_blocks: AtomicUsize,
-    incoming_message_queue: AtomicUsize,
+    incoming_message_queue: AtomicIsize,
 }
 
 #[derive(Serialize)]
@@ -72,13 +72,16 @@ pub struct Snapshot {
     pub mined_voter_block_bytes: usize,
     pub mined_transaction_blocks: usize,
     pub mined_transaction_block_bytes: usize,
-    pub proposer_block_delay_mean: usize,
-    pub voter_block_delay_mean: usize,
-    pub transaction_block_delay_mean: usize,
-    pub proposer_block_delay_variance: usize,
-    pub voter_block_delay_variance: usize,
-    pub transaction_block_delay_variance: usize,
-    pub incoming_message_queue: usize,
+    pub total_proposer_block_delay: usize,
+    pub total_voter_block_delay: usize,
+    pub total_transaction_block_delay: usize,
+    pub total_proposer_block_squared_delay: usize,
+    pub total_voter_block_squared_delay: usize,
+    pub total_transaction_block_squared_delay: usize,
+    pub received_proposer_blocks: usize,
+    pub received_voter_blocks: usize,
+    pub received_transaction_blocks: usize,
+    pub incoming_message_queue: isize,
 }
 
 impl Counter {
@@ -114,7 +117,7 @@ impl Counter {
             received_proposer_blocks: AtomicUsize::new(0),
             received_voter_blocks: AtomicUsize::new(0),
             received_transaction_blocks: AtomicUsize::new(0),
-            incoming_message_queue: AtomicUsize::new(0),
+            incoming_message_queue: AtomicIsize::new(0),
         }
     }
 
@@ -218,44 +221,11 @@ impl Counter {
     }
 
     pub fn snapshot(&self) -> Snapshot {
-        let proposer_delay_total = self.total_proposer_block_delay.load(Ordering::Relaxed);
-        let proposer_delay_squared_total = self.total_proposer_block_squared_delay.load(Ordering::Relaxed);
-        let proposer_num = self.received_proposer_blocks.load(Ordering::Relaxed);
-        let proposer_delay_mean = if proposer_num == 0 {
+        let incoming_message_queue = self.incoming_message_queue.load(Ordering::Relaxed);
+        let incoming_message_queue = if incoming_message_queue < 0 {
             0
         } else {
-            proposer_delay_total / proposer_num
-        };
-        let proposer_delay_variance = if proposer_num == 0 {
-            0
-        } else {
-            proposer_delay_squared_total / proposer_num - (proposer_delay_total / proposer_num) * (proposer_delay_total / proposer_num)
-        };
-        let voter_delay_total = self.total_voter_block_delay.load(Ordering::Relaxed);
-        let voter_delay_squared_total = self.total_voter_block_squared_delay.load(Ordering::Relaxed);
-        let voter_num = self.received_voter_blocks.load(Ordering::Relaxed);
-        let voter_delay_mean = if voter_num == 0 {
-            0
-        } else {
-            voter_delay_total / voter_num
-        };
-        let voter_delay_variance = if voter_num == 0 {
-            0
-        } else {
-            voter_delay_squared_total / voter_num - (voter_delay_total / voter_num) * (voter_delay_total / voter_num)
-        };
-        let transaction_delay_total = self.total_transaction_block_delay.load(Ordering::Relaxed);
-        let transaction_delay_squared_total = self.total_transaction_block_squared_delay.load(Ordering::Relaxed);
-        let transaction_num = self.received_transaction_blocks.load(Ordering::Relaxed);
-        let transaction_delay_mean = if transaction_num == 0 {
-            0
-        } else {
-            transaction_delay_total / transaction_num
-        };
-        let transaction_delay_variance = if transaction_num == 0 {
-            0
-        } else {
-            transaction_delay_squared_total / transaction_num - (transaction_delay_total / transaction_num) * (transaction_delay_total / transaction_num)
+            incoming_message_queue
         };
         return Snapshot {
             generated_transactions: self.generated_transactions.load(Ordering::Relaxed),
@@ -279,13 +249,16 @@ impl Counter {
             mined_voter_block_bytes: self.mined_voter_block_bytes.load(Ordering::Relaxed),
             mined_transaction_blocks: self.mined_transaction_blocks.load(Ordering::Relaxed),
             mined_transaction_block_bytes: self.mined_transaction_block_bytes.load(Ordering::Relaxed),
-            proposer_block_delay_mean: proposer_delay_mean,
-            proposer_block_delay_variance: proposer_delay_variance,
-            voter_block_delay_mean: voter_delay_mean,
-            voter_block_delay_variance: voter_delay_variance,
-            transaction_block_delay_mean: transaction_delay_mean,
-            transaction_block_delay_variance: transaction_delay_variance,
-            incoming_message_queue: self.incoming_message_queue.load(Ordering::Relaxed),
+            total_proposer_block_delay: self.total_proposer_block_delay.load(Ordering::Relaxed),
+            total_voter_block_delay: self.total_voter_block_delay.load(Ordering::Relaxed),
+            total_transaction_block_delay: self.total_transaction_block_delay.load(Ordering::Relaxed),
+            total_proposer_block_squared_delay: self.total_proposer_block_squared_delay.load(Ordering::Relaxed),
+            total_voter_block_squared_delay: self.total_voter_block_squared_delay.load(Ordering::Relaxed),
+            total_transaction_block_squared_delay: self.total_transaction_block_squared_delay.load(Ordering::Relaxed),
+            received_proposer_blocks: self.received_proposer_blocks.load(Ordering::Relaxed),
+            received_voter_blocks: self.received_voter_blocks.load(Ordering::Relaxed),
+            received_transaction_blocks: self.received_transaction_blocks.load(Ordering::Relaxed),
+            incoming_message_queue: incoming_message_queue,
         };
     }
 }

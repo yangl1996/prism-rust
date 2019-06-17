@@ -343,26 +343,24 @@ function show_visualization
 
 function show_performance
 {
-	start_time_line=`cat experiment.txt | grep START`
-	read -r _ start_timestamp <<< "$start_time_line"
-	if cat experiment.txt | grep STOP; then
-		stop_time_line=`cat experiment.txt | grep STOP`
-		read -r _ stop_timestamp <<< "$stop_time_line"
-	else
-		stop_timestamp=`date +%s`
-	fi
-	duration=`expr $stop_timestamp - $start_timestamp`
-	query_api get_performance 0
-	echo "Experiment started for $duration seconds"
-	python3 scripts/process_results.py nodes.txt $duration
+	local nodes=`cat nodes.txt`
+	local pids=''
+	for node in $nodes; do
+		local name
+		local host
+		local pubip
+		local visport 
+		IFS=',' read -r name host pubip _ _ apiport _ <<< "$node"
+		if [ $name == $1 ]; then
+			curl "http://$pubip:$apiport/telematics/snapshot"
+		fi
+	done
 }
 
 function start_prism
 {
 	execute_on_all start_prism
 	start_time=`date +%s`
-	rm -f experiment.txt
-	echo "START $start_time" >> experiment.txt
 }
 
 function stop_prism
@@ -378,13 +376,9 @@ function run_experiment
 	start_prism
 	echo "All nodes started, starting transaction generation"
 	query_api start_transactions 0
-	echo "Running experiment for $1 seconds"
-	sleep $1
-	show_performance
-	echo "Stopping all nodes"
-	execute_on_all stop_prism
-	python3 scripts/process_results.py nodes.txt $1
-	tput bel
+	rm -f experiment.txt
+	echo "START $start_time" >> experiment.txt
+	echo "Running experiment"
 }
 
 mkdir -p log
@@ -407,7 +401,7 @@ case "$1" in
 		  sync-payload          Synchronize payload to remote servers
 		  start-prism           Start Prism nodes on each remote server
 		  stop-prism            Stop Prism nodes on each remote server
-		  run-exp time          Run the experiment for the given time 
+		  run-exp               Run the experiment
 
 		Collect Data
 		  
@@ -442,9 +436,9 @@ case "$1" in
 	stop-prism)
 		stop_prism ;;
 	run-exp)
-		run_experiment $2 ;;
+		run_experiment ;;
 	get-perf)
-		show_performance ;;
+		show_performance $2 ;;
 	show-vis)
 		show_visualization $2 ;;
 	run-all)
