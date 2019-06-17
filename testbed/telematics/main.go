@@ -112,6 +112,12 @@ func plot(nodesFile, dataDir, content, node, output string, step uint) {
 		g.Line(1.0, "gen_sum", "00FF00")
 		g.Line(1.0, node + "_confirm", "FF0000")
 	case "blockdelay":
+		g.Def(node + "_proposer_delay", nodes[node], "proposer_delay_mean", "AVERAGE", fmt.Sprintf("step=%v", step))
+		g.Def(node + "_voter_delay", nodes[node], "voter_delay_mean", "AVERAGE", fmt.Sprintf("step=%v", step))
+		g.Def(node + "_tx_delay", nodes[node], "tx_delay_mean", "AVERAGE", fmt.Sprintf("step=%v", step))
+		g.Line(1.0, node + "_proposer_delay", "FF0000")
+		g.Line(1.0, node + "_voter_delay", "00FF00")
+		g.Line(1.0, node + "_tx_delay", "0000FF")
 	case "messagequeue":
 	case "mining":
 	default:
