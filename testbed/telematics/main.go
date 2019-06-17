@@ -39,11 +39,19 @@ func main() {
 	logCommand := flag.NewFlagSet("log", flag.ExitOnError)
 	intervalFlag := logCommand.Uint("interval", 1, "Sets the interval between data points")
 	durationFlag := logCommand.Uint("duration", 3600, "Sets the duration of the log")
-	nodeListFlag := logCommand.String("nodes", "nodes.txt", "Sets the path to the node list")
+	nodeListFlag := logCommand.String("nodelist", "nodes.txt", "Sets the path to the node list file")
 	dataDirFlag := logCommand.String("datadir", "data", "Sets the path to the directory to hold data")
 
+	plotCommand := flag.NewFlagSet("plot", flag.ExitOnError)
+	plotNodeListFlag := plotCommand.String("nodelist", "nodes.txt", "Sets the path to the node list file")
+	plotDataDirFlag := plotCommand.String("datadir", "data", "Sets the path to the directory holding RRD files")
+	plotContentFlag := plotCommand.String("content", "txrate", "Sets the content to plot, possible values are txrate, blockdelay, messagequeue, mining")
+	plotNodeFlag := plotCommand.String("node", "node_0", "Sets the node to plot")
+	plotStepFlag := plotCommand.Uint("step", 1, "Sets the step of the plot")
+	plotOutputFlag := plotCommand.String("output", "output.png", "Sets the output path")
+
 	if len(os.Args) < 2 {
-		fmt.Println("Subcommands: log")
+		fmt.Println("Subcommands: log, plot")
 		os.Exit(1)
 	}
 
@@ -51,9 +59,68 @@ func main() {
 	case "log":
 		logCommand.Parse(os.Args[2:])
 		log(*intervalFlag, *durationFlag, *nodeListFlag, *dataDirFlag)
+	case "plot":
+		plotCommand.Parse(os.Args[2:])
+		plot(*plotNodeListFlag, *plotDataDirFlag, *plotContentFlag, *plotNodeFlag, *plotOutputFlag, *plotStepFlag)
 	default:
 		fmt.Println("Subcommands: log")
 		os.Exit(1)
+	}
+}
+
+func plot(nodesFile, dataDir, content, node, output string, step uint) {
+	nodes := make(map[string]string)
+	file, err := os.Open(nodesFile)
+	if err != nil {
+		fmt.Println("Error opening node list:", err)
+		os.Exit(1)
+	}
+	defer file.Close()
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		s := strings.Split(scanner.Text(), ",")
+		name := s[0]
+		p := path.Clean(dataDir + "/" + name + ".rrd")
+		nodes[name] = p
+	}
+	if err := scanner.Err(); err != nil {
+		fmt.Println("Error reading node list:", err)
+		os.Exit(1)
+	}
+	if _, ok := nodes[node]; !ok {
+		fmt.Println("Node", node, "does not exist")
+		os.Exit(1)
+	}
+	g := rrd.NewGrapher()
+	g.SetSize(800, 300)
+	switch content {
+	case "txrate":
+		// create def of generated tx for each node, and create a cdef to sum them up
+		genSum := ""
+		for n, p := range nodes {
+			g.Def(n + "_gen", p, "generated_tx", "AVERAGE", fmt.Sprintf("step=%v", step))
+			if genSum == "" {
+				genSum = n + "_gen"
+			} else {
+				genSum += "," + n + "_gen,+"
+			}
+		}
+		g.CDef("gen_sum", genSum)
+		// create def of confirmed tx for the node we care about
+		g.Def(node + "_confirm", nodes[node], "confirmed_tx", "AVERAGE", fmt.Sprintf("step=%v", step))
+		// plot the lines
+		g.Line(1.0, "gen_sum", "00FF00")
+		g.Line(1.0, node + "_confirm", "FF0000")
+	case "blockdelay":
+	case "messagequeue":
+	case "mining":
+	default:
+		fmt.Println("Plot content options: txrate, blockdelay, messagequeue, mining")
+		os.Exit(1)
+	}
+	_, e := g.SaveGraph(output, time.Now().Add(-time.Duration(600) * time.Second), time.Now())
+	if e != nil {
+		fmt.Println("Error plotting data:", e)
 	}
 }
 
