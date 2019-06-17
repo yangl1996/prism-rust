@@ -214,14 +214,14 @@ function get_performance_single
 
 function start_transactions_single
 {
-	curl -s "http://$3:$4/transaction-generator/set-arrival-distribution?interval=300&distribution=uniform"
+	curl -s "http://$3:$4/transaction-generator/set-arrival-distribution?interval=100&distribution=uniform"
 	curl -s "http://$3:$4/transaction-generator/set-value-distribution?min=100&max=100&distribution=uniform"
 	curl -s "http://$3:$4/transaction-generator/start?throttle=500000"
 }
 
 function start_mining_single
 {
-	curl -s "http://$3:$4/miner/start?lambda=100000&lazy=false"
+	curl -s "http://$3:$4/miner/start?lambda=50000&lazy=false"
 }
 
 function stop_transactions_single

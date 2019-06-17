@@ -17,12 +17,18 @@ pub struct Server {
     transaction_generator_handle: mpsc::Sender<transaction_generator::ControlSignal>,
     handle: HTTPServer,
     miner: MinerHandle,
+    wallet: Arc<Wallet>
 }
 
 #[derive(Serialize)]
 struct ApiResponse {
     success: bool,
     message: String,
+}
+
+#[derive(Serialize)]
+struct WalletBalanceResponse {
+    balance: u64,
 }
 
 macro_rules! respond_result {
@@ -54,11 +60,13 @@ impl Server {
             handle: handle,
             transaction_generator_handle: txgen_control_chan,
             miner: miner.clone(),
+            wallet: Arc::clone(wallet),
         };
         thread::spawn(move || {
             for req in server.handle.incoming_requests() {
                 let transaction_generator_handle = server.transaction_generator_handle.clone();
                 let miner = server.miner.clone();
+                let wallet = Arc::clone(&server.wallet);
                 thread::spawn(move || {
                     // a valid url requires a base
                     let base_url = Url::parse(&format!("http://{}/", &addr)).unwrap();
@@ -70,6 +78,12 @@ impl Server {
                         }
                     };
                     match url.path() {
+                        "/wallet/balance" => {
+                            let resp = WalletBalanceResponse {
+                                balance: wallet.balance().unwrap(),
+                            };
+                            respond_json!(req, resp);
+                        }
                         "/miner/start" => {
                             let params = url.query_pairs();
                             let params: HashMap<_, _> = params.into_owned().collect();
