@@ -41,6 +41,11 @@ function kill_prism() {
 		generate_failures=`expr $generate_failures + $(echo $result | jq .[$'"generate_transaction_failures"'])`
 		confirmed=`echo $result | jq .[$'"confirmed_transactions"']`
 		confirmed_bytes=`echo $result | jq .[$'"confirmed_transaction_bytes"']`
+		mined_proposer=`echo $result | jq .[$'"mined_proposer_blocks"']`
+		mined_voter=`echo $result | jq .[$'"mined_voter_blocks"']`
+		mined_transaction=`echo $result | jq .[$'"mined_transaction_blocks"']`
+        mined=`expr $mined_proposer + $mined_voter + $mined_transaction`
+		echo "Node $i Mined blocks: $(expr $mined / $elapsed) blk/s"
 		echo "Node $i Transaction Confirmation: $(expr $confirmed / $elapsed) Tx/s"
 		echo "Node $i Transaction Confirmation: $(expr $confirmed_bytes / $elapsed) B/s"
 	done
@@ -119,7 +124,7 @@ for (( i = 0; i < $num_nodes; i++ )); do
 		echo "Failed to start transaction generation for node $i"
 		exit 1
 	fi
-	url="localhost:${port}/miner/start?lambda=1000&lazy=false"
+	url="localhost:${port}/miner/start?lambda=0&lazy=false"
 	curl "$url" &> /dev/null
 	if [ "$?" -ne 0 ]; then
 		echo "Failed to start mining for node $i"
