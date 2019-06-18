@@ -67,16 +67,64 @@ pub fn check_block(
 ) -> BlockResult {
     // TODO: Check difficulty. Where should we get the current difficulty ranges?
 
-    // check PoW and sortition id
-    match check_pow_sortition(block) {
+    match check_pow_sortition_id(block) {
         // if PoW and sortition id passes, we check other rules
-        BlockResult::Pass => check_block_after_pow_sortition(block, blockchain, blockdb),
-        x => x,
-    }
-
+        BlockResult::Pass => {}
+        x => return x,
+    };
+    match check_sortition_proof(block) {
+        BlockResult::Pass => {}
+        x => return x,
+    };
+    match check_data_availability(block, blockchain, blockdb) {
+        BlockResult::Pass => {}
+        x => return x,
+    };
+    match check_content_semantic(block, blockchain, blockdb) {
+        BlockResult::Pass => {}
+        x => return x,
+    };
+    BlockResult::Pass
 }
-/// Validate a block that already passes pow and sortition test.
-pub fn check_block_after_pow_sortition(
+
+// check PoW and sortition id
+pub fn check_pow_sortition_id(
+    block: &Block,
+) -> BlockResult {
+
+    let sortition_id = get_sortition_id(&block.hash(), &block.header.difficulty);
+    if let Some(sortition_id) = sortition_id {
+        let correct_sortition_id = match &block.content {
+            Content::Proposer(_) => PROPOSER_INDEX,
+            Content::Transaction(_) => TRANSACTION_INDEX,
+            Content::Voter(content) => content.chain_number + FIRST_VOTER_INDEX,
+        };
+        if sortition_id != correct_sortition_id {
+            return BlockResult::WrongSortitionId;
+        }
+    } else {
+        return BlockResult::WrongPoW;
+    }
+    BlockResult::Pass
+}
+
+/// check sortition proof
+pub fn check_sortition_proof(
+    block: &Block,
+) -> BlockResult {
+
+    let sortition_id = get_sortition_id(&block.hash(), &block.header.difficulty);
+    if let Some(sortition_id) = sortition_id {
+        if !verify(&block.header.content_merkle_root, &block.content.hash(), &block.sortition_proof, sortition_id as usize, (NUM_VOTER_CHAINS + FIRST_VOTER_INDEX) as usize) {
+            return BlockResult::WrongSortitionProof;
+        }
+    } else {
+        unreachable!();
+    }
+    BlockResult::Pass
+}
+/// Validate a block that already passes pow and sortition test. See if parents/refs are missing.
+pub fn check_data_availability(
     block: &Block,
     blockchain: &BlockChain,
     blockdb: &BlockDatabase,
@@ -100,10 +148,6 @@ pub fn check_block_after_pow_sortition(
             if !missing_refs.is_empty() {
                 return BlockResult::MissingReferences(missing_refs);
             }
-            // check refed proposer level should be less than its level
-            if !proposer_block::check_ref_proposer_level(&parent, &content, blockchain) {
-                return BlockResult::WrongProposerRef;
-            }
             return BlockResult::Pass;
         }
         Content::Voter(content) => {
@@ -112,16 +156,38 @@ pub fn check_block_after_pow_sortition(
             if !missing_refs.is_empty() {
                 return BlockResult::MissingReferences(missing_refs);
             }
+            return BlockResult::Pass;
+        }
+        Content::Transaction(_) => {
+            return BlockResult::Pass;
+        }
+    }
+}
+
+/// Check block content semantic
+pub fn check_content_semantic(
+    block: &Block,
+    blockchain: &BlockChain,
+    blockdb: &BlockDatabase,
+) -> BlockResult {
+    let parent = block.header.parent;
+    match &block.content {
+        Content::Proposer(content) => {
+            // check refed proposer level should be less than its level
+            if !proposer_block::check_ref_proposer_level(&parent, &content, blockchain) {
+                return BlockResult::WrongProposerRef;
+            }
+            return BlockResult::Pass;
+        }
+        Content::Voter(content) => {
             // check chain number
             if !voter_block::check_chain_number(&content, blockchain) {
                 return BlockResult::WrongChainNumber;
             }
-
             // check whether all proposer levels deeper than the one our parent voted are voted
             if !voter_block::check_levels_voted(&content, blockchain, &parent) {
                 return BlockResult::WrongVoteLevel;
             }
-
             return BlockResult::Pass;
         }
         Content::Transaction(content) => {
@@ -219,29 +285,6 @@ pub fn get_sortition_id(hash: &H256, difficulty: &H256) -> Option<u16> {
     }
 }
 
-// check PoW and sortition id
-pub fn check_pow_sortition(
-    block: &Block,
-) -> BlockResult {
-
-    let sortition_id = get_sortition_id(&block.hash(), &block.header.difficulty);
-    if let Some(sortition_id) = sortition_id {
-        let correct_sortition_id = match &block.content {
-            Content::Proposer(_) => PROPOSER_INDEX,
-            Content::Transaction(_) => TRANSACTION_INDEX,
-            Content::Voter(content) => content.chain_number + FIRST_VOTER_INDEX,
-        };
-        if sortition_id != correct_sortition_id {
-            return BlockResult::WrongSortitionId;
-        }
-        if !verify(&block.header.content_merkle_root, &block.content.hash(), &block.sortition_proof, sortition_id as usize, (NUM_VOTER_CHAINS + FIRST_VOTER_INDEX) as usize) {
-            return BlockResult::WrongSortitionProof;
-        }
-    } else {
-        return BlockResult::WrongPoW;
-    }
-    BlockResult::Pass
-}
 
 #[cfg(test)]
 mod tests {
