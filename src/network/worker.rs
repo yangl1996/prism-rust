@@ -225,13 +225,11 @@ impl Context {
                             }
                         }
                     }
-                    /*
                     if !to_request.is_empty() {
                         to_request.sort();
                         to_request.dedup();
                         peer.write(Message::GetBlocks(to_request));
                     }
-                    */
 
                     // tell the miner to update the context
                     self.context_update_chan
