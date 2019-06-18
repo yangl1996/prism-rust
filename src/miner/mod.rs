@@ -33,15 +33,16 @@ enum ControlSignal {
     Exit,
 }
 
+#[derive(Ord, Eq, PartialOrd, PartialEq)]
 pub enum ContextUpdateSignal {
     // TODO: New transaction comes, we update transaction block's content
     //NewTx,//should be called: mem pool change
     // New proposer block comes, we need to update all contents' parent
     NewProposerBlock,
-    // New transaction block comes, we need to update proposer content's tx ref
-    NewTransactionBlock,
     // New voter block comes, we need to update that voter chain
     NewVoterBlock(u16),
+    // New transaction block comes, we need to update proposer content's tx ref
+    NewTransactionBlock,
 }
 
 enum OperatingState {
@@ -179,37 +180,24 @@ impl Context {
 
             // check whether there is new content through context update channel
             // use a loop to get multiple messages
-            let mut context_update_msg = vec![];
-            let mut contains_proposer = false;
-            loop {
-                match self.context_update_chan.try_recv() {
-                    Ok(sig) => {
-                        // TODO: Only update block contents of the relevant structures
-                        // TODO: make a partial update function of Merkle.
-                        if let ContextUpdateSignal::NewProposerBlock = sig {
-                            contains_proposer = true;
-                        }
-                        context_update_msg.push(sig);
-                    }
-                    Err(TryRecvError::Empty) => break,
-                    Err(TryRecvError::Disconnected) => panic!("Miner context update channel detached"),
-                }
-            }
-            if contains_proposer {
-                self.update_all_contents();
-            } else {
-                // we didn't hear a proposer block, so don't need to update all contents
-                for sig in &context_update_msg {
-                    match *sig {
-                        ContextUpdateSignal::NewProposerBlock => unreachable!(),
-                        ContextUpdateSignal::NewVoterBlock(chain) => self.update_voter_content(chain),
-                        ContextUpdateSignal::NewTransactionBlock => {
-                            self.update_refed_transaction();
-                            self.update_transaction_content();
-                        }
+            let mut context_update_msg: Vec<ContextUpdateSignal> = self.context_update_chan.try_iter().collect();
+            context_update_msg.sort_unstable();
+            context_update_msg.dedup();
+
+            for sig in &context_update_msg {
+                match *sig {
+                    ContextUpdateSignal::NewProposerBlock => {
+                        self.update_all_contents();
+                        break;  // we don't need to take care of other messages, since the whole block is refreshed
+                    },
+                    ContextUpdateSignal::NewVoterBlock(chain) => self.update_voter_content(chain),
+                    ContextUpdateSignal::NewTransactionBlock => {
+                        self.update_refed_transaction();
+                        self.update_transaction_content();
                     }
                 }
             }
+
             if !context_update_msg.is_empty() {
                 header = self.create_header();
             }
