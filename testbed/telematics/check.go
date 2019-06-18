@@ -14,6 +14,10 @@ type WalletBalance struct {
 	Balance uint
 }
 
+type UTXOSnapshot struct {
+	Hash string
+}
+
 func check(nodesFile string) {
 	nodes := make(map[string]string)
 	file, err := os.Open(nodesFile)
@@ -85,7 +89,62 @@ func check(nodesFile string) {
 			fmt.Println("All wallets have the same balance", min)
 		} else {
 			fmt.Println("Wallets have different balances ranging between", min, "and", max)
+			return
 		}
+	} else {
+		fmt.Println("Failed to query some of the nodes")
+		return
+	}
+
+	// check utxodb 
+	utxohash := make(map[string]string)
+	failed = false
+	var m2 sync.Mutex
+	var wg2 sync.WaitGroup
+	for k, v := range nodes {
+		url := v + "/utxo/snapshot"
+		node := k
+		wg2.Add(1)
+		go func(node, url string) {
+			defer wg2.Done()
+			resp, err := http.Get(url)
+			if err != nil {
+				m2.Lock()
+				failed = true
+				m2.Unlock()
+				return // the node is not running yet
+			}
+			defer resp.Body.Close()
+
+			data := UTXOSnapshot{}
+			err = json.NewDecoder(resp.Body).Decode(&data)
+			if err != nil {
+				m2.Lock()
+				failed = true
+				m2.Unlock()
+				return
+			}
+			m2.Lock()
+			utxohash[node] = data.Hash
+			m2.Unlock()
+		}(node, url)
+	}
+	wg2.Wait()
+	if !failed {
+		inited := false
+		base := ""
+		for _, v := range utxohash {
+			if !inited {
+				base = v
+				inited = true
+			} else {
+				if v != base {
+					fmt.Println("UTXO hash differs among nodes")
+					return
+				}
+			}
+		}
+		fmt.Println("UTXO hash is consistent across nodes")
 	} else {
 		fmt.Println("Failed to query some of the nodes")
 	}
