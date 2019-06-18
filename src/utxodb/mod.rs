@@ -1,4 +1,5 @@
 use crate::crypto::hash::Hashable;
+use crate::crypto::hash::H256;
 use crate::transaction::{CoinId, Input, Output, Transaction};
 use bincode::serialize;
 use rocksdb::{Options, DB};
@@ -35,6 +36,17 @@ impl UtxoDatabase {
             Some(_) => return Ok(true),
             None => return Ok(false),
         };
+    }
+
+    pub fn snapshot(&self) -> Result<H256, rocksdb::Error> {
+        let iter = self.db.iterator(rocksdb::IteratorMode::Start);
+        let mut ctx = ring::digest::Context::new(&ring::digest::SHA256);
+        for (k, v) in iter {
+            ctx.update(k.as_ref());
+            ctx.update(v.as_ref());
+        }
+        let hash = ctx.finish();
+        return Ok(hash.into());
     }
 
     /// Remove the given transactions, then add another set of transactions.

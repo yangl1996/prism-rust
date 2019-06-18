@@ -230,7 +230,7 @@ fn main() {
     txgen_ctx.start();
 
     // start the API server
-    ApiServer::start(api_addr, &wallet, &server, &miner, &mempool, txgen_control_chan);
+    ApiServer::start(api_addr, &wallet, &utxodb, &server, &miner, &mempool, txgen_control_chan);
 
     // start the visualization server
     match matches.value_of("visualization") {

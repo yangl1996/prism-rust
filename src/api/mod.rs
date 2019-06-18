@@ -1,6 +1,7 @@
 use crate::experiment::transaction_generator;
 use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 use crate::wallet::Wallet;
+use crate::utxodb::UtxoDatabase;
 use crate::network::server::Handle as ServerHandle;
 use crate::miner::memory_pool::MemoryPool;
 use crate::miner::Handle as MinerHandle;
@@ -17,7 +18,8 @@ pub struct Server {
     transaction_generator_handle: mpsc::Sender<transaction_generator::ControlSignal>,
     handle: HTTPServer,
     miner: MinerHandle,
-    wallet: Arc<Wallet>
+    wallet: Arc<Wallet>,
+    utxodb: Arc<UtxoDatabase>,
 }
 
 #[derive(Serialize)]
@@ -29,6 +31,11 @@ struct ApiResponse {
 #[derive(Serialize)]
 struct WalletBalanceResponse {
     balance: u64,
+}
+
+#[derive(Serialize)]
+struct UtxoSnapshotResponse {
+    hash: String,
 }
 
 macro_rules! respond_result {
@@ -54,19 +61,21 @@ macro_rules! respond_json {
 }
 
 impl Server {
-    pub fn start(addr: std::net::SocketAddr, wallet: &Arc<Wallet>, server: &ServerHandle, miner: &MinerHandle, mempool: &Arc<Mutex<MemoryPool>>, txgen_control_chan: mpsc::Sender<transaction_generator::ControlSignal>) {
+    pub fn start(addr: std::net::SocketAddr, wallet: &Arc<Wallet>, utxodb: &Arc<UtxoDatabase>, server: &ServerHandle, miner: &MinerHandle, mempool: &Arc<Mutex<MemoryPool>>, txgen_control_chan: mpsc::Sender<transaction_generator::ControlSignal>) {
         let handle = HTTPServer::http(&addr).unwrap();
         let server = Self {
             handle: handle,
             transaction_generator_handle: txgen_control_chan,
             miner: miner.clone(),
             wallet: Arc::clone(wallet),
+            utxodb: Arc::clone(utxodb),
         };
         thread::spawn(move || {
             for req in server.handle.incoming_requests() {
                 let transaction_generator_handle = server.transaction_generator_handle.clone();
                 let miner = server.miner.clone();
                 let wallet = Arc::clone(&server.wallet);
+                let utxodb = Arc::clone(&server.utxodb);
                 thread::spawn(move || {
                     // a valid url requires a base
                     let base_url = Url::parse(&format!("http://{}/", &addr)).unwrap();
@@ -78,6 +87,13 @@ impl Server {
                         }
                     };
                     match url.path() {
+                        "/utxo/snapshot" => {
+                            let hash = utxodb.snapshot();
+                            let resp = UtxoSnapshotResponse {
+                                hash: format!("{}", hash.unwrap()),
+                            };
+                            respond_json!(req, resp);
+                        }
                         "/wallet/balance" => {
                             let resp = WalletBalanceResponse {
                                 balance: wallet.balance().unwrap(),
