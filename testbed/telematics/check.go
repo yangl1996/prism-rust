@@ -155,7 +155,7 @@ func check(nodesFile string, verbose bool) {
 				}
 			}
 		}
-		fmt.Println("UTXO hash" + base + "is consistent across nodes")
+		fmt.Println("UTXO hash " + base + " is consistent across nodes")
 	} else {
 		fmt.Println("Failed to query some of the nodes")
 	}
