@@ -137,8 +137,6 @@ pub fn check_data_availability(
         return BlockResult::MissingParent(parent);
     }
 
-    // TODO: check timestamp
-
     // match the block type and check content
     match &block.content {
         Content::Proposer(content) => {
@@ -159,6 +157,8 @@ pub fn check_data_availability(
             return BlockResult::Pass;
         }
         Content::Transaction(_) => {
+            // TODO: note that we don't care about blockdb here, since all blocks at this stage
+            // should have been inserted into the blockdb
             return BlockResult::Pass;
         }
     }

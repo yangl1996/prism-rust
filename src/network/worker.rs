@@ -11,7 +11,7 @@ use crate::miner::memory_pool::MemoryPool;
 use crate::miner::ContextUpdateSignal;
 use crate::network::server::Handle as ServerHandle;
 use crate::utxodb::UtxoDatabase;
-use crate::validation::{check_block, BlockResult};
+use crate::validation::{self, BlockResult};
 use crate::wallet::Wallet;
 use log::{debug, info, warn};
 use std::collections::HashSet;
@@ -30,7 +30,7 @@ pub struct Context {
     mempool: Arc<Mutex<MemoryPool>>,
     context_update_chan: mpsc::Sender<ContextUpdateSignal>,
     server: ServerHandle,
-    buffer: Arc<BlockBuffer>,
+    buffer: Arc<Mutex<BlockBuffer>>,
 }
 
 pub fn new(
@@ -54,7 +54,7 @@ pub fn new(
         mempool: Arc::clone(mempool),
         context_update_chan: ctx_update_sink,
         server: server.clone(),
-        buffer: Arc::new(BlockBuffer::new()),
+        buffer: Arc::new(Mutex::new(BlockBuffer::new())),
     };
     return ctx;
 }
@@ -158,8 +158,13 @@ impl Context {
                             continue;
                         }
 
-                        // TODO: check POW here. If POW does not pass, discard the block at this
+                        // check POW here. If POW does not pass, discard the block at this
                         // stage
+                        let pow_check = validation::check_pow_sortition_id(&block);
+                        match pow_check {
+                            BlockResult::Pass => {}
+                            _ => continue
+                        }
 
                         // store the block into database
                         self.blockdb.insert_encoded(&hash, &encoded_block).unwrap();
@@ -181,13 +186,19 @@ impl Context {
                     let mut to_request: Vec<H256> = vec![];
                     let mut context_update_sig = vec![];
                     while let Some(block) = to_process.pop() {
-                        let validation_result =
-                            check_block(&block, &self.chain, &self.blockdb);
-                        match validation_result {
+                        // check data availability
+                        // make sure checking data availability and buffering are one atomic
+                        // operation. see the comments in buffer.rs
+                        let mut buffer = self.buffer.lock().unwrap();
+                        let data_availability = validation::check_data_availability(&block, &self.chain, &self.blockdb);
+                        match data_availability {
+                            BlockResult::Pass => drop(buffer),
                             BlockResult::MissingParent(p) => {
                                 debug!("Missing parent block for block {:.8}", block.hash());
-                                self.buffer.insert(block, &vec![p]);
+                                buffer.insert(block, &vec![p]);
                                 to_request.push(p);
+                                drop(buffer);
+                                continue;
                             }
                             BlockResult::MissingReferences(r) => {
                                 debug!(
@@ -195,41 +206,63 @@ impl Context {
                                     r.len(),
                                     block.hash()
                                 );
-                                self.buffer.insert(block, &r);
+                                buffer.insert(block, &r);
                                 to_request.extend_from_slice(&r);
+                                drop(buffer);
+                                continue;
                             }
-                            BlockResult::Pass => {
-                                debug!("Processing block {:.8}", block.hash());
-                                new_validated_block(
-                                    &block,
-                                    &self.mempool,
-                                    &self.blockdb,
-                                    &self.chain,
-                                    &self.server,
-                                );
-                                context_update_sig.push(match &block.content {
-                                    Content::Proposer(_) => ContextUpdateSignal::NewProposerBlock,
-                                    Content::Voter(c) => ContextUpdateSignal::NewVoterBlock(c.chain_number),
-                                    Content::Transaction(_) => ContextUpdateSignal::NewTransactionBlock,
-                                });
-                                let mut resolved_by_current = self.buffer.satisfy(block.hash());
-                                if !resolved_by_current.is_empty() {
-                                    debug!(
-                                        "Resolved dependency for {} buffered blocks",
-                                        resolved_by_current.len()
-                                    );
-                                }
-                                to_process.append(&mut resolved_by_current);
-                            }
+                            _ => unreachable!()
+                        }
+
+                        // check sortition proof and content semantics
+                        let sortition_proof = validation::check_sortition_proof(&block);
+                        match sortition_proof {
+                            BlockResult::Pass => {}
                             _ => {
                                 warn!(
                                     "Ignoring invalid block {:.8}: {}",
                                     block.hash(),
-                                    validation_result
+                                    sortition_proof
                                 );
-                                // pass invalid block
+                                continue;
                             }
                         }
+                        let content_semantic = validation::check_content_semantic(&block, &self.chain, &self.blockdb);
+                        match content_semantic {
+                            BlockResult::Pass => {}
+                            _ => {
+                                warn!(
+                                    "Ignoring invalid block {:.8}: {}",
+                                    block.hash(),
+                                    content_semantic 
+                                );
+                                continue;
+                            }
+                        }
+
+                        debug!("Processing block {:.8}", block.hash());
+                        new_validated_block(
+                            &block,
+                            &self.mempool,
+                            &self.blockdb,
+                            &self.chain,
+                            &self.server,
+                            );
+                        context_update_sig.push(match &block.content {
+                            Content::Proposer(_) => ContextUpdateSignal::NewProposerBlock,
+                            Content::Voter(c) => ContextUpdateSignal::NewVoterBlock(c.chain_number),
+                            Content::Transaction(_) => ContextUpdateSignal::NewTransactionBlock,
+                        });
+                        let mut buffer = self.buffer.lock().unwrap();
+                        let mut resolved_by_current = buffer.satisfy(block.hash());
+                        drop(buffer);
+                        if !resolved_by_current.is_empty() {
+                            debug!(
+                                "Resolved dependency for {} buffered blocks",
+                                resolved_by_current.len()
+                                );
+                        }
+                        to_process.append(&mut resolved_by_current);
                     }
                     if !to_request.is_empty() {
                         to_request.sort();
