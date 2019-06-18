@@ -101,7 +101,7 @@ func check(nodesFile string, verbose bool) {
 		return
 	}
 
-	// check utxodb 
+	// check utxodb
 	utxohash := make(map[string]string)
 	failed = false
 	var m2 sync.Mutex
@@ -160,4 +160,3 @@ func check(nodesFile string, verbose bool) {
 		fmt.Println("Failed to query some of the nodes")
 	}
 }
-
