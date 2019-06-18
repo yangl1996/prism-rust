@@ -129,7 +129,6 @@ fn main() {
     thread::spawn(move || {
         loop {
             update_ledger(&blockdb_copy, &blockchain_copy, &utxodb_copy, &wallet_copy);
-            thread::sleep(time::Duration::from_millis(1000));
         }
     });
 
@@ -228,7 +227,7 @@ fn main() {
     txgen_ctx.start();
 
     // start the API server
-    ApiServer::start(api_addr, &wallet, &server, &miner, &mempool, txgen_control_chan);
+    ApiServer::start(api_addr, &wallet, &utxodb, &server, &miner, &mempool, txgen_control_chan);
 
     // start the visualization server
     match matches.value_of("visualization") {

@@ -23,6 +23,7 @@ func main() {
 
 	checkCommand := flag.NewFlagSet("check", flag.ExitOnError)
 	checkNodeListFlag := checkCommand.String("nodelist", "nodes.txt", "Sets the path to the node list file")
+	checkVerboseFlag := checkCommand.Bool("verbose", false, "Enables verbose mode")
 
 	if len(os.Args) < 2 {
 		fmt.Println("Subcommands: log, plot, check")
@@ -38,7 +39,7 @@ func main() {
 		plot(*plotNodeListFlag, *plotDataDirFlag, *plotContentFlag, *plotNodeFlag, *plotOutputFlag, *plotStepFlag)
 	case "check":
 		checkCommand.Parse(os.Args[2:])
-		check(*checkNodeListFlag)
+		check(*checkNodeListFlag, *checkVerboseFlag)
 	default:
 		fmt.Println("Subcommands: log, plot, check")
 		os.Exit(1)
