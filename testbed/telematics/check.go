@@ -18,7 +18,7 @@ type UTXOSnapshot struct {
 	Hash string
 }
 
-func check(nodesFile string) {
+func check(nodesFile string, verbose bool) {
 	nodes := make(map[string]string)
 	file, err := os.Open(nodesFile)
 	if err != nil {
@@ -89,6 +89,11 @@ func check(nodesFile string) {
 			fmt.Println("All wallets have the same balance", min)
 		} else {
 			fmt.Println("Wallets have different balances ranging between", min, "and", max)
+			if verbose {
+				for k, v := range balance {
+					fmt.Printf("%v: %v\n", k, v)
+				}
+			}
 			return
 		}
 	} else {
@@ -140,11 +145,17 @@ func check(nodesFile string) {
 			} else {
 				if v != base {
 					fmt.Println("UTXO hash differs among nodes")
+
+					if verbose {
+						for k, v := range utxohash {
+							fmt.Printf("%v: %v\n", k, v)
+						}
+					}
 					return
 				}
 			}
 		}
-		fmt.Println("UTXO hash is consistent across nodes")
+		fmt.Println("UTXO hash" + base + "is consistent across nodes")
 	} else {
 		fmt.Println("Failed to query some of the nodes")
 	}
