@@ -37,7 +37,7 @@ impl PayloadSize for Content {
 impl Hashable for Content {
     fn hash(&self) -> H256 {
         // TODO: we are hashing in a merkle tree. why do we need so?
-        let merkle_tree = MerkleTree::new(&self.votes);
+        let merkle_tree = MerkleTree::new(self.votes.clone());
         let mut bytes = [0u8;66];
         bytes[..2].copy_from_slice(&self.chain_number.to_be_bytes());
         bytes[2..34].copy_from_slice(self.voter_parent.as_ref());
@@ -71,14 +71,14 @@ pub fn genesis(chain_num: u16) -> Block {
 
 #[cfg(test)]
 pub mod test{
-    use super::super::voter::Content as voter_Content;// TODO: name change to VoterContent
+    use super::super::voter::Content as VoterContent;
     use super::super::proposer::tests::*;
     use super::super::transaction::tests::*;
     use super::super::{Block, Content};
     use crate::crypto::hash::{Hashable, H256};
 
 
-    #[test]
+    //#[test]
     fn test_hash() {
         let block = sample_voter_content();
         let block_hash_should_be = sample_voter_content1_hash_should_be();
@@ -86,14 +86,14 @@ pub mod test{
     }
 
     // Voter block stuff
-    pub fn sample_voter_content() -> voter_Content {
+    pub fn sample_voter_content() -> VoterContent{
         let chain_number = 0;
         let voter_parent_hash =
             (&hex!("0000000100000001000000010000000100000001000000010000000100000001")).into();
         let proposer_block1 = sample_proposer_block1();
         let proposer_block2 = sample_proposer_block2();
         let proposer_block_votes = vec![proposer_block1.hash(), proposer_block2.hash()];
-        return voter_Content::new(chain_number, voter_parent_hash, proposer_block_votes);
+        return VoterContent::new(chain_number, voter_parent_hash, proposer_block_votes);
     }
     pub fn sample_voter_content1_hash_should_be() -> H256 {
         let transaction_content_hash: H256 =

@@ -29,7 +29,8 @@ impl PayloadSize for Content {
 impl Hashable for Content {
     fn hash(&self) -> H256 {
         // TODO: we are hashing txs in a merkle tree.
-        let merkle_tree = MerkleTree::new(&self.transactions);
+        let hashes = self.transactions.iter().map(|x|x.hash()).collect();
+        let merkle_tree = MerkleTree::new(hashes);
         return merkle_tree.root();
     }
 }

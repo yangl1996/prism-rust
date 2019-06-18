@@ -91,7 +91,7 @@ pub fn new(
         context_update_chan: ctx_update_source,
         proposer_parent_hash: H256::default(),
         content: vec![],
-        content_merkle_tree: MerkleTree::new(&Vec::<Content>::new()),
+        content_merkle_tree: MerkleTree::new(vec![]),
         difficulty: *DEFAULT_DIFFICULTY,
         operating_state: OperatingState::Paused,
         server: server.clone(),
@@ -388,7 +388,8 @@ impl Context {
             )));
         }
 
-        self.content_merkle_tree = MerkleTree::new(&content);
+        let hashes = content.iter().map(|x|x.hash()).collect();
+        self.content_merkle_tree = MerkleTree::new(hashes);
         self.content = content;
     }
 
@@ -402,7 +403,7 @@ impl Context {
                 transaction_block_refs,
                 proposer_block_refs,
             ));
-            self.content_merkle_tree.update(idx, &self.content[idx]);
+            self.content_merkle_tree.update(idx, self.content[idx].hash());
         } else { unreachable!(); }
     }
 
@@ -417,7 +418,7 @@ impl Context {
             voter_parent,
             votes,
         ));
-        self.content_merkle_tree.update(idx, &self.content[idx]);
+        self.content_merkle_tree.update(idx, self.content[idx].hash());
     }
 
     /// Update transaction block's content
@@ -429,7 +430,7 @@ impl Context {
         self.content[idx] = Content::Transaction(transaction::Content::new(
             transactions,
         ));
-        self.content_merkle_tree.update(idx, &self.content[idx]);
+        self.content_merkle_tree.update(idx, self.content[idx].hash());
     }
 
     /// Calculate the difficulty for the block to be mined
@@ -554,7 +555,7 @@ mod tests {
             control_chan: signal_chan_receiver,
             context_update_chan: ctx_update_source,
             proposer_parent_hash: parent,
-            content_merkle_tree: MerkleTree::new(&content),
+            content_merkle_tree: MerkleTree::new(content.iter().map(|x|x.hash()).collect()),
             content,
             difficulty: *config::DEFAULT_DIFFICULTY,
             operating_state: OperatingState::Paused,
