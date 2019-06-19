@@ -40,15 +40,23 @@ func plot(nodesFile, dataDir, content, node, output string, window uint) {
 		// create def for each node, and create a cdef to sum them up (for generate) and get max/min (for confirm)
 		genSum := ""
 		nodeConfirmSet := ""
+		trend_cmd := fmt.Sprintf(",%v,TRENDNAN", window)
 		for n, p := range nodes {
 			g.Def(n+"_gen", p, "generated_tx", "AVERAGE")
-			g.Def(n+"_confirm", p, "confirmed_tx", "AVERAGE")
 			if genSum == "" {
 				genSum = n + "_gen"
 			} else {
 				genSum += "," + n + "_gen,+"
 			}
-			nodeConfirmSet += n + "_confirm,"
+			g.Def(n+"_confirm", p, "confirmed_tx", "AVERAGE")
+			if window != 1 {
+				// if we are doing windowed average, we will be computing the min, max, avg of the
+				// windowed average value
+				g.CDef(n+"_confirm_wa", n+"_confirm" + trend_cmd)
+				nodeConfirmSet += n + "_confirm_wa,"
+			} else {
+				nodeConfirmSet += n + "_confirm,"
+			}
 		}
 		g.Def(node+"_tx_blk_confirm", nodes[node], "confirmed_tx_blk", "AVERAGE")
 		g.CDef("gen_sum", genSum)
@@ -58,25 +66,16 @@ func plot(nodesFile, dataDir, content, node, output string, window uint) {
 		g.CDef("min_max_diff", "confirm_max,confirm_min,-")
 		// enable sliding window if necessary
 		if window != 1 {
-			trend_cmd := fmt.Sprintf(",%v,TRENDNAN", window)
-			g.CDef(node+"_confirm_wa", node+"_confirm"+trend_cmd)
 			g.CDef("gen_sum_wa", "gen_sum"+trend_cmd)
-			g.CDef("confirm_max_wa", "confirm_max"+trend_cmd)
-			g.CDef("confirm_min_wa", "confirm_min"+trend_cmd)
-			g.CDef("confirm_avg_wa", "confirm_avg"+trend_cmd)
-			g.CDef("min_max_diff_wa", "confirm_max_wa,confirm_min_wa,-")
 			g.Line(1.0, "gen_sum_wa", "00FF00", "Total Generated")
 			g.Line(1.0, node+"_confirm_wa", "FF0000", node+" Confirmed")
-			g.Line(1.0, "confirm_min_wa", "")
-			g.Area("min_max_diff_wa", "0000FF15", "STACK") // this area is stacked on confirm_min, so we should sub min
-			g.Line(1.0, "confirm_avg_wa", "0000FF", "Avg Confirmed")
 		} else {
 			g.Line(1.0, "gen_sum", "00FF00", "Total Generated")
 			g.Line(1.0, node+"_confirm", "FF0000", node+" Confirmed")
-			g.Line(1.0, "confirm_min", "")
-			g.Area("min_max_diff", "0000FF15", "STACK") // this area is stacked on confirm_min, so we should sub min
-			g.Line(1.0, "confirm_avg", "0000FF", "Avg Confirmed")
 		}
+		g.Line(1.0, "confirm_min", "")
+		g.Area("min_max_diff", "0000FF15", "STACK") // this area is stacked on confirm_min, so we should sub min
+		g.Line(1.0, "confirm_avg", "0000FF", "Avg Confirmed")
 		g.Tick(node+"_tx_blk_confirm", "808080", "1.0", "Tx Block Confirmation")
 		g.SetVLabel("Tx/s")
 		g.SetTitle("Transaction Rate (" + node + ")")
