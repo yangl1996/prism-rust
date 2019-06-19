@@ -1,6 +1,8 @@
 use super::buffer::BlockBuffer;
 use super::message::{self, Message};
 use super::peer;
+use std::iter::FromIterator;
+use std::collections::VecDeque;
 use crate::block::{Block, Content};
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
@@ -64,10 +66,11 @@ pub fn new(
 impl Context {
     pub fn start(self) {
         let num_worker = self.num_worker;
-        for _ in 0..num_worker {
+        for i in 0..num_worker {
             let cloned = self.clone();
             thread::spawn(move || {
                 cloned.worker_loop();
+                warn!("Worker thread {} exited", i);
             });
         }
     }
@@ -203,13 +206,16 @@ impl Context {
                     
                     // tell peers about the new blocks
                     // TODO: we will do this only in a reasonable network topology
+                    if hashes.is_empty() {
+                        continue;   // end processing this message
+                    }
                     self.server.broadcast(Message::NewBlockHashes(hashes.clone()));
 
                     // process each block
-                    let mut to_process: Vec<Block> = blocks;
+                    let mut to_process: VecDeque<Block> = VecDeque::from_iter(blocks);
                     let mut to_request: Vec<H256> = vec![];
                     let mut context_update_sig = vec![];
-                    while let Some(block) = to_process.pop() {
+                    while let Some(block) = to_process.pop_front() {
                         // check data availability
                         // make sure checking data availability and buffering are one atomic
                         // operation. see the comments in buffer.rs
@@ -279,7 +285,9 @@ impl Context {
                                 resolved_by_current.len()
                                 );
                         }
-                        to_process.append(&mut resolved_by_current);
+                        for b in resolved_by_current.drain(..) {
+                            to_process.push_back(b);
+                        }
                     }
                     if !to_request.is_empty() {
                         to_request.sort();
