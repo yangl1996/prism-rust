@@ -1,7 +1,7 @@
 use crate::crypto::hash::Hashable;
 use crate::crypto::hash::H256;
 use crate::transaction::{CoinId, Input, Output, Transaction};
-use bincode::serialize;
+use bincode::{serialize, deserialize};
 use rocksdb::{self, Options, DB, ColumnFamilyDescriptor};
 use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 
@@ -176,6 +176,15 @@ impl UtxoDatabase {
             None => {}
         }
         return Ok((added_coins, removed_coins));
+    }
+
+    pub fn get_snapshot_at_level(&self, level: u64) -> Result<Option<H256>, rocksdb::Error>{
+        let snapshot_cf = self.db.cf_handle(SNAPSHOT_CF).unwrap();
+        let serialized = self.db.get_pinned_cf(snapshot_cf, serialize(&level).unwrap())?;
+        match serialized {
+            None => return Ok(None),
+            Some(s) => return Ok(Some(deserialize(&s).unwrap())),
+        }
     }
 }
 
