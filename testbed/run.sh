@@ -396,12 +396,6 @@ function run_experiment
 	echo "Running experiment"
 }
 
-function stop_generating_transactions
-{
-	query_api stop_transactions 0
-	echo "Transaction stopped"
-}
-
 mkdir -p log
 case "$1" in
 	help)
@@ -424,6 +418,7 @@ case "$1" in
 		  stop-prism            Stop Prism nodes on each remote server
 		  run-exp               Run the experiment
 		  stop-tx               Stop generating transactions
+		  stop-mine             Stop mining
 
 		Collect Data
 		  
@@ -460,7 +455,9 @@ case "$1" in
 	run-exp)
 		run_experiment ;;
 	stop-tx)
-		stop_generating_transactions ;;
+		query_api stop_transactions 0 ;;
+	stop-mine)
+		query_api stop_mining 0 ;;
 	get-perf)
 		show_performance $2 ;;
 	show-vis)
