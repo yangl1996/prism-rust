@@ -20,6 +20,7 @@ use memory_pool::MemoryPool;
 use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
 use std::time::SystemTime;
 use std::time;
+use std::collections::HashSet;
 
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -67,6 +68,8 @@ pub struct Context {
     difficulty: H256,
     operating_state: OperatingState,
     server: ServerHandle,
+    proposer_content_transaction_refs: MerkleTree,
+    proposer_content_proposer_refs: MerkleTree,
 }
 
 #[derive(Clone)]
@@ -95,6 +98,8 @@ pub fn new(
         difficulty: *DEFAULT_DIFFICULTY,
         operating_state: OperatingState::Paused,
         server: server.clone(),
+        proposer_content_transaction_refs: MerkleTree::new(vec![]),
+        proposer_content_proposer_refs: MerkleTree::new(vec![]),
     };
 
     let handle = Handle {
@@ -364,11 +369,15 @@ impl Context {
         // update the contents and the parents based on current view
         let mut content = vec![];
 
-        // Update proposer content
-        content.push(Content::Proposer(proposer::Content::new(
+        // Update proposer content, and create the Merkle trees of two kinds of refs.
+        self.proposer_content_transaction_refs = MerkleTree::new(transaction_block_refs.clone());
+        self.proposer_content_proposer_refs = MerkleTree::new(proposer_block_refs.clone());
+        let proposer_content = proposer::Content::new(
             transaction_block_refs,
             proposer_block_refs,
-        )));
+        );
+        let proposer_content_hash = proposer_content.ref_roots_to_hash(self.proposer_content_transaction_refs.root(), self.proposer_content_proposer_refs.root());
+        content.push(Content::Proposer(proposer_content));
 
         // Update transaction content with TX_BLOCK_SIZE mempool txs
         content.push(Content::Transaction(transaction::Content::new(
@@ -388,22 +397,27 @@ impl Context {
             )));
         }
 
-        let hashes = content.iter().map(|x|x.hash()).collect();
+        // we avoid compute twice proposer content hash, there is skip(1)
+        let mut hashes = vec![proposer_content_hash];
+        hashes.append(&mut content.iter().skip(1).map(|x|x.hash()).collect());
         self.content_merkle_tree = MerkleTree::new(hashes);
         self.content = content;
     }
 
     /// Update the transaction ref of proposer content
     fn update_refed_transaction(&mut self) {
-        let transaction_block_refs = self.blockchain.unreferred_transactions();
+        let mut transaction_block_refs = self.blockchain.unreferred_transactions();
         let idx: usize = PROPOSER_INDEX as usize;
-        if let Content::Proposer(content) = &self.content[idx] {
-            let proposer_block_refs = content.proposer_refs.clone();
-            self.content[idx] = Content::Proposer(proposer::Content::new(
-                transaction_block_refs,
-                proposer_block_refs,
-            ));
-            self.content_merkle_tree.update(idx, self.content[idx].hash());
+        if let Content::Proposer(ref mut content) = self.content.get_mut(idx).unwrap() {
+            let previous_transaction_refs: HashSet<H256> = content.transaction_refs.iter().cloned().collect();
+            // get the newly refs
+            transaction_block_refs.retain(|h|!previous_transaction_refs.contains(h));
+            // add to the merkle tree, to avoid re-creating merkle tree every time.
+            self.proposer_content_transaction_refs.append(&mut transaction_block_refs.clone());
+            // add to content
+            content.transaction_refs.append(&mut transaction_block_refs);
+            let content_hash = content.ref_roots_to_hash(self.proposer_content_transaction_refs.root(), self.proposer_content_proposer_refs.root());
+            self.content_merkle_tree.update(idx, content_hash);
         } else { unreachable!(); }
     }
 
@@ -560,6 +574,8 @@ mod tests {
             difficulty: *config::DEFAULT_DIFFICULTY,
             operating_state: OperatingState::Paused,
             server,
+            proposer_content_transaction_refs: MerkleTree::new(vec![]),
+            proposer_content_proposer_refs: MerkleTree::new(vec![]),
         };
         for nonce in 0..100 {
             let mut header = miner.create_header();

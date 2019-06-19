@@ -8,8 +8,6 @@ pub struct MerkleTree {
 
 impl MerkleTree {
     pub fn new(data: Vec<H256>) -> Self {
-        // todo: Added by Vivek. Lei check this
-        // What default behaviour do we want?
         let mut prev_layer_size: usize = data.len();
         let mut nodes: Vec<Vec<H256>> = vec![data];
         let mut layer: usize = 0;
@@ -48,6 +46,7 @@ impl MerkleTree {
     }
 
     pub fn append(&mut self, data: &mut Vec<H256>) {
+        if data.is_empty() {return;}
         let mut append_begin = self.nodes[0].len();
         // if it's odd, minus 1 to make it even
         append_begin -= append_begin & 0x01;
@@ -106,7 +105,6 @@ impl MerkleTree {
     }
 
     /// Returns the Merkle Proof of data at index i
-    // todo: Lei check this
     pub fn proof(&self, index: usize) -> Vec<H256> {
         if self.nodes.len() == 1 || index >= self.nodes[0].len() { return vec![]; }
         let mut results = vec![];
@@ -149,17 +147,17 @@ impl MerkleTree {
                 } else {
                     let mut ctx = ring::digest::Context::new(&ring::digest::SHA256);
                     let left_index = index << 1;
-                    let right_index =
-                        if left_index >= self.nodes[layer - 1].len() - 1 {
-                            // special case for odd number, we duplicate this node
-                            left_index
-                        } else {
-                            left_index + 1
-                        };
-                    let left_hash: [u8; 32] = (&self.nodes[layer - 1][left_index]).into();
-                    let right_hash: [u8; 32] = (&self.nodes[layer - 1][right_index]).into();
-                    ctx.update(&left_hash[..]);
-                    ctx.update(&right_hash[..]);
+                    if left_index < self.nodes[layer - 1].len() - 1 {
+                        let left_hash: [u8; 32] = (&self.nodes[layer - 1][left_index]).into();
+                        let right_hash: [u8; 32] = (&self.nodes[layer - 1][left_index + 1]).into();
+                        ctx.update(&left_hash[..]);
+                        ctx.update(&right_hash[..]);
+                    } else {
+                        // special case for odd number, we duplicate this node
+                        let left_hash: [u8; 32] = (&self.nodes[layer - 1][left_index]).into();
+                        ctx.update(&left_hash[..]);
+                        ctx.update(&left_hash[..]);
+                    }
                     let digest = ctx.finish();
                     digest.into()
                 };
@@ -359,7 +357,7 @@ mod tests {
         }
         let input_hash: Vec<H256> = input_data.iter().map(|x|x.hash()).collect();
         let merkle_tree = MerkleTree::new(input_hash.clone());
-        for top in 1..limit-1 {
+        for top in 0..limit-1 {
             //create merkle tree using only top inputs
             let input_hash_minus: Vec<H256> = input_hash.iter().take(top).cloned().collect();
             let mut merkle_tree_minus = MerkleTree::new(input_hash_minus);

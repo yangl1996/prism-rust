@@ -24,6 +24,13 @@ impl Content {
             proposer_refs,
         }
     }
+
+    pub fn ref_roots_to_hash(&self, transaction_root: H256, proposer_root: H256) -> H256 {
+        let mut bytes = [0u8;64];
+        bytes[..32].copy_from_slice(transaction_root.as_ref());
+        bytes[32..64].copy_from_slice(proposer_root.as_ref());
+        return ring::digest::digest(&ring::digest::SHA256, &bytes).into();
+    }
 }
 
 impl PayloadSize for Content {
@@ -36,10 +43,7 @@ impl Hashable for Content {
     fn hash(&self) -> H256 {
         let tx_merkle_tree = MerkleTree::new(self.transaction_refs.clone());
         let prop_merkle_tree = MerkleTree::new(self.proposer_refs.clone());
-        let mut bytes = [0u8;64];
-        bytes[..32].copy_from_slice(tx_merkle_tree.root().as_ref());
-        bytes[32..64].copy_from_slice(prop_merkle_tree.root().as_ref());
-        return ring::digest::digest(&ring::digest::SHA256, &bytes).into();
+        return self.ref_roots_to_hash(tx_merkle_tree.root(), prop_merkle_tree.root());
     }
 }
 
