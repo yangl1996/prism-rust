@@ -107,8 +107,8 @@ func check(nodesFile string, verbose bool) {
 						fmt.Printf("Proposer leader differs among nodes at level %v\n", i)
 
 						if verbose {
-							for i := range node_list {
-								n := node_list[i]
+							for idx := range node_list {
+								n := node_list[idx]
 								fmt.Printf("%v: %v\n", n, leaders[n][i])
 							}
 						}
@@ -173,8 +173,8 @@ func check(nodesFile string, verbose bool) {
 		} else {
 			fmt.Println("Wallets have different balances ranging between", min, "and", max)
 			if verbose {
-				for i := range node_list {
-					n := node_list[i]
+				for idx := range node_list {
+					n := node_list[idx]
 					fmt.Printf("%v: %v\n", n, balance[n])
 				}
 			}
@@ -231,8 +231,8 @@ func check(nodesFile string, verbose bool) {
 					fmt.Println("UTXO hash differs among nodes")
 
 					if verbose {
-						for i := range node_list {
-							n := node_list[i]
+						for idx := range node_list {
+							n := node_list[idx]
 							fmt.Printf("%v: %v\n", n, utxohash[n])
 						}
 					}
