@@ -43,6 +43,6 @@ pub fn update_ledger(
         remove.append(&mut transactions);
     }
 
-    let coin_diff = utxodb.apply_diff(&add, &remove).unwrap();
+    let coin_diff = utxodb.apply_diff(&add, &remove, diff.2).unwrap();
     wallet.apply_diff(&coin_diff.0, &coin_diff.1).unwrap();
 }

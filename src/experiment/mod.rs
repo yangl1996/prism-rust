@@ -29,7 +29,7 @@ pub fn ico(
         authorization: vec![],
         hash: RefCell::new(None)
     };
-    let diff = utxodb.apply_diff(&[funding], &[]).unwrap();
+    let diff = utxodb.apply_diff(&[funding], &[], Some(0)).unwrap();
     wallet.apply_diff(&diff.0, &diff.1).unwrap();
     Ok(())
 }

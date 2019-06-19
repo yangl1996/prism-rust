@@ -400,7 +400,7 @@ impl BlockChain {
         return Ok(());
     }
 
-    pub fn update_ledger(&self) -> Result<(Vec<H256>, Vec<H256>)> {
+    pub fn update_ledger(&self) -> Result<(Vec<H256>, Vec<H256>, Option<u64>)> {
         let proposer_node_vote_cf = self.db.cf_handle(PROPOSER_NODE_VOTE_CF).unwrap();
         let proposer_node_level_cf = self.db.cf_handle(PROPOSER_NODE_LEVEL_CF).unwrap();
         let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
@@ -669,9 +669,9 @@ impl BlockChain {
                 let t: Vec<H256> = get_value!(transaction_ref_neighbor_cf, block).unwrap();
                 added_transaction_blocks.extend(&t);
             }
-            return Ok((added_transaction_blocks, removed_transaction_blocks));
+            return Ok((added_transaction_blocks, removed_transaction_blocks, Some(proposer_ledger_tip.clone())));
         } else {
-            return Ok((vec![], vec![]));
+            return Ok((vec![], vec![], None));
         }
     }
 

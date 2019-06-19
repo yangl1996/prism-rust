@@ -2,8 +2,13 @@ use crate::crypto::hash::Hashable;
 use crate::crypto::hash::H256;
 use crate::transaction::{CoinId, Input, Output, Transaction};
 use bincode::serialize;
-use rocksdb::{Options, DB};
+use rocksdb::{self, Options, DB, ColumnFamilyDescriptor};
 use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
+
+
+
+const COINS_CF: &str = "COINS";
+const SNAPSHOT_CF: &str = "SNAPSHOT";
 
 pub struct UtxoDatabase {
     pub db: rocksdb::DB, // coin id to output
@@ -12,7 +17,9 @@ pub struct UtxoDatabase {
 impl UtxoDatabase {
     /// Open the database at the given path, and create a new one if one is missing.
     fn open<P: AsRef<std::path::Path>>(path: P) -> Result<Self, rocksdb::Error> {
-        let cfs = vec![];
+        let coins_cf = ColumnFamilyDescriptor::new(COINS_CF, Options::default());
+        let snapshot_cf = ColumnFamilyDescriptor::new(SNAPSHOT_CF, Options::default());
+        let cfs = vec![coins_cf, snapshot_cf];
         let mut opts = Options::default();
         opts.create_if_missing(true);
         opts.create_missing_column_families(true);
@@ -31,7 +38,8 @@ impl UtxoDatabase {
 
     /// Check whether the given coin is in the UTXO set.
     pub fn contains(&self, coin: &CoinId) -> Result<bool, rocksdb::Error> {
-        let result = self.db.get(serialize(&coin).unwrap())?;
+        let coins_cf = self.db.cf_handle(COINS_CF).unwrap();
+        let result = self.db.get_pinned_cf(coins_cf, serialize(&coin).unwrap())?;
         match result {
             Some(_) => return Ok(true),
             None => return Ok(false),
@@ -54,7 +62,9 @@ impl UtxoDatabase {
         &self,
         added: &[Transaction],
         removed: &[Transaction],
+        proposer_ledger_tip: Option<u64>
     ) -> Result<(Vec<Input>, Vec<Input>), rocksdb::Error> {
+        let coins_cf = self.db.cf_handle(COINS_CF).unwrap();
         let mut added_coins: Vec<Input> = vec![];
         let mut removed_coins: Vec<Input> = vec![];
         // revert the transactions
@@ -79,7 +89,7 @@ impl UtxoDatabase {
                     valid = false;
                     break;
                 }
-                batch.delete(&id_ser)?;
+                batch.delete_cf(coins_cf, &id_ser)?;
                 let coin = Input {
                     coin: id,
                     value: out.value,
@@ -99,7 +109,7 @@ impl UtxoDatabase {
                         recipient: input.owner,
                     };
                     batch
-                        .put(serialize(&input.coin).unwrap(), serialize(&out).unwrap())?;
+                        .put_cf(coins_cf, serialize(&input.coin).unwrap(), serialize(&out).unwrap())?;
                     added_coins.push(input.clone());
                 }
                 //write the transaction as a batch
@@ -124,7 +134,7 @@ impl UtxoDatabase {
                     valid = false;
                     break;
                 }
-                batch.delete(&id_ser)?;
+                batch.delete_cf(coins_cf, &id_ser)?;
             }
             
             if valid {
@@ -139,7 +149,7 @@ impl UtxoDatabase {
                         index: idx as u32,
                     };
                     batch
-                        .put(serialize(&id).unwrap(), serialize(&output).unwrap())?;
+                        .put_cf(coins_cf, serialize(&id).unwrap(), serialize(&output).unwrap())?;
                     let coin = Input {
                         coin: id,
                         value: output.value,
@@ -154,6 +164,16 @@ impl UtxoDatabase {
                     PERFORMANCE_COUNTER.record_confirm_transaction(&t);
                 }
             }
+        }
+
+        // storing the snapshot.
+        match proposer_ledger_tip {
+            Some(tip) => {
+                let snapshot = self.snapshot().unwrap();
+                let snapshot_cf = self.db.cf_handle(SNAPSHOT_CF).unwrap();
+                self.db.put_cf(snapshot_cf, &serialize(&tip).unwrap(), &serialize(&snapshot).unwrap());
+            },
+            None => {}
         }
         return Ok((added_coins, removed_coins));
     }
