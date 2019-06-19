@@ -212,10 +212,10 @@ impl Context {
                     self.server.broadcast(Message::NewBlockHashes(hashes.clone()));
 
                     // process each block
-                    let mut to_process: VecDeque<Block> = VecDeque::from_iter(blocks);
+                    let mut to_process: Vec<Block> = blocks;
                     let mut to_request: Vec<H256> = vec![];
                     let mut context_update_sig = vec![];
-                    while let Some(block) = to_process.pop_front() {
+                    while let Some(block) = to_process.pop() {
                         // check data availability
                         // make sure checking data availability and buffering are one atomic
                         // operation. see the comments in buffer.rs
@@ -286,7 +286,7 @@ impl Context {
                                 );
                         }
                         for b in resolved_by_current.drain(..) {
-                            to_process.push_back(b);
+                            to_process.push(b);
                         }
                     }
                     // tell the miner to update the context
