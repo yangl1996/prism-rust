@@ -39,4 +39,6 @@ pub fn new_validated_block(
 
     // insert the new block into the blockchain
     chain.insert_block(&block).unwrap();
+    info!("Block Path 4: Added block {} to blockchain", block.hash());
+
 }

@@ -358,8 +358,6 @@ impl BlockChain {
                     }
                     drop(proposer_best);
                 }
-
-                info!("Adding proposer block {} at timestamp {} at level {}", block_hash, block.header.timestamp, self_level);
             }
             Content::Voter(content) => {
                 // add voter parent

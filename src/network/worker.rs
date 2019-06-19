@@ -228,7 +228,7 @@ impl Context {
                         match data_availability {
                             BlockResult::Pass => drop(buffer),
                             BlockResult::MissingReferences(r) => {
-                                info!("Block Path 3: Added block {} to buffer because it is missing {:?}", block.hash(), r);
+                                info!("Block Path 3: Added block {} to buffer because it hash following missing blocks {:?}", block.hash(), r);
                                 debug!(
                                     "Missing {} referred blocks for block {:.8}",
                                     r.len(),
@@ -285,6 +285,7 @@ impl Context {
                         let mut resolved_by_current = buffer.satisfy(block.hash());
                         drop(buffer);
                         if !resolved_by_current.is_empty() {
+                            info!("Block Path 5: Block {} resolves the following dependent blocks {:?}", block.hash(), resolved_by_current);
                             debug!(
                                 "Resolved dependency for {} buffered blocks",
                                 resolved_by_current.len()
