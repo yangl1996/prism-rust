@@ -34,7 +34,7 @@ fn validate_block() {
     // TODO: we remove the duplicate?
     // assert_result!(check_data_availability(&proposer_1, &blockchain, &blockdb), BlockResult::Duplicate);
     let proposer_ = proposer_block(generate_random_hash(), timestamp, vec![], vec![]);
-    assert_result!(check_data_availability(&proposer_, &blockchain, &blockdb),  BlockResult::MissingParent(_));
+    assert_result!(check_data_availability(&proposer_, &blockchain, &blockdb),  BlockResult::MissingReferences(_));
     let proposer_ = proposer_block(parent, timestamp, vec![generate_random_hash()], vec![]);
     assert_result!(check_data_availability(&proposer_, &blockchain, &blockdb),  BlockResult::MissingReferences(_));
     let proposer_ = proposer_block(parent, timestamp, vec![], vec![generate_random_hash()]);

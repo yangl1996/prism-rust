@@ -184,21 +184,17 @@ impl Context {
             }
 
             // check whether there is new content through context update channel
-            // use a loop to get multiple messages
-<<<<<<< HEAD
+            // use try_iter to get multiple messages
             let mut voter_msg = vec![];
             let mut contains_proposer = false;
             let mut contains_transaction = false;
-            let mut cnt = 0usize;
             for sig in self.context_update_chan.try_iter() {
-                cnt += 1;
                 match sig {
                     ContextUpdateSignal::NewProposerBlock => contains_proposer = true,
                     ContextUpdateSignal::NewVoterBlock(chain) => voter_msg.push(chain),
                     ContextUpdateSignal::NewTransactionBlock => contains_transaction = true,
                 };
             }
-            info!("Chan try iter size: {}", cnt);
             /*
             loop {
                 match self.context_update_chan.try_recv() {
