@@ -24,6 +24,7 @@ type BlockchainSnapshot struct {
 
 func check(nodesFile string, verbose bool) {
 	nodes := make(map[string]string)
+	node_list := make([]string, 0)
 	file, err := os.Open(nodesFile)
 	if err != nil {
 		fmt.Println("Error opening node list:", err)
@@ -38,6 +39,7 @@ func check(nodesFile string, verbose bool) {
 		port := s[5]
 		url := fmt.Sprintf("http://%v:%v", ip, port)
 		nodes[name] = url
+		node_list = append(node_list, name)
 	}
 	if err := scanner.Err(); err != nil {
 		fmt.Println("Error reading node list:", err)
@@ -105,8 +107,9 @@ func check(nodesFile string, verbose bool) {
 						fmt.Printf("Proposer leader differs among nodes at level %v\n", i)
 
 						if verbose {
-							for k, v := range leaders {
-								fmt.Printf("%v: %v\n", k, v[i])
+							for i := range node_list {
+								n := node_list[i]
+								fmt.Printf("%v: %v\n", n, leaders[n][i])
 							}
 						}
 						return
@@ -170,8 +173,9 @@ func check(nodesFile string, verbose bool) {
 		} else {
 			fmt.Println("Wallets have different balances ranging between", min, "and", max)
 			if verbose {
-				for k, v := range balance {
-					fmt.Printf("%v: %v\n", k, v)
+				for i := range node_list {
+					n := node_list[i]
+					fmt.Printf("%v: %v\n", n, balance[n])
 				}
 			}
 			return
@@ -227,8 +231,9 @@ func check(nodesFile string, verbose bool) {
 					fmt.Println("UTXO hash differs among nodes")
 
 					if verbose {
-						for k, v := range utxohash {
-							fmt.Printf("%v: %v\n", k, v)
+						for i := range node_list {
+							n := node_list[i]
+							fmt.Printf("%v: %v\n", n, utxohash[n])
 						}
 					}
 					return
