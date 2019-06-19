@@ -18,8 +18,13 @@ type UTXOSnapshot struct {
 	Hash string
 }
 
+type BlockchainSnapshot struct {
+	Leaders []string
+}
+
 func check(nodesFile string, verbose bool) {
 	nodes := make(map[string]string)
+	node_list := make([]string, 0)
 	file, err := os.Open(nodesFile)
 	if err != nil {
 		fmt.Println("Error opening node list:", err)
@@ -34,28 +39,116 @@ func check(nodesFile string, verbose bool) {
 		port := s[5]
 		url := fmt.Sprintf("http://%v:%v", ip, port)
 		nodes[name] = url
+		node_list = append(node_list, name)
 	}
 	if err := scanner.Err(); err != nil {
 		fmt.Println("Error reading node list:", err)
 		os.Exit(1)
 	}
 
+	// check leader sequence
+	leaders := make(map[string][]string)
+	failed := false
+	var m0 sync.Mutex
+	var wg0 sync.WaitGroup
+	for k, v := range nodes {
+		url := v + "/blockchain/snapshot"
+		node := k
+		wg0.Add(1)
+		go func(node, url string) {
+			defer wg0.Done()
+			resp, err := http.Get(url)
+			if err != nil {
+				m0.Lock()
+				failed = true
+				m0.Unlock()
+				return // the node is not running yet
+			}
+			defer resp.Body.Close()
+
+			data := BlockchainSnapshot{}
+			err = json.NewDecoder(resp.Body).Decode(&data)
+			if err != nil {
+				m0.Lock()
+				failed = true
+				m0.Unlock()
+				return
+			}
+			m0.Lock()
+			leaders[node] = data.Leaders
+			m0.Unlock()
+		}(node, url)
+	}
+	wg0.Wait()
+	if !failed {
+		min_ledger_tip := ^uint(0)
+		max_ledger_tip := uint(0)
+		for _, l := range leaders {
+			levels := uint(len(l))
+			if levels < min_ledger_tip {
+				min_ledger_tip = levels
+			}
+			if levels > max_ledger_tip {
+				max_ledger_tip = levels
+			}
+		}
+		if min_ledger_tip == max_ledger_tip {
+			fmt.Printf("Ledger depth %v is consistent across nodes\n", min_ledger_tip)
+		} else {
+			fmt.Printf("Lowest ledger tip: %v, highest ledger tip: %v\n", min_ledger_tip, max_ledger_tip)
+			if verbose {
+				for idx := range node_list {
+					n := node_list[idx]
+					fmt.Printf("%10v: %v\n", n, len(leaders[n]))
+				}
+			}
+		}
+
+		// check if the leader blocks are consistent for each level
+		for i := uint(0); i < min_ledger_tip; i++ {
+			inited := false
+			base := ""
+			for _, v := range leaders {
+				if !inited {
+					base = v[i]
+					inited = true
+				} else {
+					if v[i] != base {
+						fmt.Printf("Proposer leader differs among nodes at level %v\n", i)
+
+						if verbose {
+							for idx := range node_list {
+								n := node_list[idx]
+								fmt.Printf("%10v: %v\n", n, leaders[n][i])
+							}
+						}
+						return
+					}
+				}
+			}
+		}
+		fmt.Printf("Proposer leaders are consistent until level %v\n", min_ledger_tip);
+	} else {
+		fmt.Println("Failed to query some of the nodes")
+		return
+	}
+
 	// check balance
 	balance := make(map[string]uint)
-	failed := false
-	var m sync.Mutex
-	var wg sync.WaitGroup
+	failed = false
+	var m1 sync.Mutex
+	var wg1 sync.WaitGroup
 	for k, v := range nodes {
 		url := v + "/wallet/balance"
 		node := k
-		wg.Add(1)
+		wg1.Add(1)
 		go func(node, url string) {
-			defer wg.Done()
+			defer wg1.Done()
 			resp, err := http.Get(url)
 			if err != nil {
-				m.Lock()
+				m1.Lock()
 				failed = true
-				m.Unlock()
+				m1.Unlock()
 				return // the node is not running yet
 			}
 			defer resp.Body.Close()
@@ -63,17 +156,17 @@ func check(nodesFile string, verbose bool) {
 			data := WalletBalance{}
 			err = json.NewDecoder(resp.Body).Decode(&data)
 			if err != nil {
-				m.Lock()
+				m1.Lock()
 				failed = true
-				m.Unlock()
+				m1.Unlock()
 				return
 			}
-			m.Lock()
+			m1.Lock()
 			balance[node] = data.Balance
-			m.Unlock()
+			m1.Unlock()
 		}(node, url)
 	}
-	wg.Wait()
+	wg1.Wait()
 	if !failed {
 		min := ^uint(0)
 		max := uint(0)
@@ -90,8 +183,9 @@ func check(nodesFile string, verbose bool) {
 		} else {
 			fmt.Println("Wallets have different balances ranging between", min, "and", max)
 			if verbose {
-				for k, v := range balance {
-					fmt.Printf("%v: %v\n", k, v)
+				for idx := range node_list {
+					n := node_list[idx]
+					fmt.Printf("%10v: %v\n", n, balance[n])
 				}
 			}
 			return
@@ -101,7 +195,7 @@ func check(nodesFile string, verbose bool) {
 		return
 	}
 
-	// check utxodb 
+	// check utxodb
 	utxohash := make(map[string]string)
 	failed = false
 	var m2 sync.Mutex
@@ -147,15 +241,16 @@ func check(nodesFile string, verbose bool) {
 					fmt.Println("UTXO hash differs among nodes")
 
 					if verbose {
-						for k, v := range utxohash {
-							fmt.Printf("%v: %v\n", k, v)
+						for idx := range node_list {
+							n := node_list[idx]
+							fmt.Printf("%10v: %v\n", n, utxohash[n])
 						}
 					}
 					return
 				}
 			}
 		}
-		fmt.Println("UTXO hash" + base + "is consistent across nodes")
+		fmt.Println("UTXO hash " + base + " is consistent across nodes")
 	} else {
 		fmt.Println("Failed to query some of the nodes")
 	}

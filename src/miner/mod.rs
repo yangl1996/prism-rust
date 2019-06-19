@@ -34,15 +34,16 @@ enum ControlSignal {
     Exit,
 }
 
+#[derive(Ord, Eq, PartialOrd, PartialEq)]
 pub enum ContextUpdateSignal {
     // TODO: New transaction comes, we update transaction block's content
     //NewTx,//should be called: mem pool change
     // New proposer block comes, we need to update all contents' parent
     NewProposerBlock,
-    // New transaction block comes, we need to update proposer content's tx ref
-    NewTransactionBlock,
     // New voter block comes, we need to update that voter chain
     NewVoterBlock(u16),
+    // New transaction block comes, we need to update proposer content's tx ref
+    NewTransactionBlock,
 }
 
 enum OperatingState {
@@ -184,6 +185,7 @@ impl Context {
 
             // check whether there is new content through context update channel
             // use a loop to get multiple messages
+<<<<<<< HEAD
             let mut voter_msg = vec![];
             let mut contains_proposer = false;
             let mut contains_transaction = false;

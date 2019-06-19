@@ -21,8 +21,6 @@ pub enum BlockResult {
     WrongSortitionId,
     /// The content Merkle proof is incorrect.
     WrongSortitionProof,
-    /// The parent block is missing.
-    MissingParent(H256),
     /// Some references are missing.
     MissingReferences(Vec<H256>),
     /// Proposer Ref level > parent
@@ -46,7 +44,6 @@ impl std::fmt::Display for BlockResult {
             BlockResult::WrongSortitionId => write!(f, "Sortition id is not same as content type"),
             BlockResult::WrongSortitionProof => write!(f, "Sortition Merkle proof is incorrect"),
             BlockResult::Duplicate => write!(f, "block already exists"),
-            BlockResult::MissingParent(_) => write!(f, "parent block not in system"),
             BlockResult::MissingReferences(_) => write!(f, "referred blocks not in system"),
             BlockResult::WrongProposerRef => write!(f, "referred proposer blocks level larger than parent"),
             BlockResult::WrongChainNumber => write!(f, "chain number out of range"),
@@ -129,15 +126,14 @@ pub fn check_data_availability(
     blockchain: &BlockChain,
     blockdb: &BlockDatabase,
 ) -> BlockResult {
+    let mut missing = vec![];
 
     // check whether the parent exists
     let parent = block.header.parent;
     let parent_availability = check_proposer_block_exists(parent, blockdb, blockchain);
     if !parent_availability {
-        return BlockResult::MissingParent(parent);
+        missing.push(parent);
     }
-
-    // TODO: check timestamp
 
     // match the block type and check content
     match &block.content {
@@ -146,21 +142,27 @@ pub fn check_data_availability(
             let missing_refs =
                 proposer_block::get_missing_references(&content, blockchain, blockdb);
             if !missing_refs.is_empty() {
-                return BlockResult::MissingReferences(missing_refs);
+                missing.extend_from_slice(&missing_refs);
             }
-            return BlockResult::Pass;
         }
         Content::Voter(content) => {
             // check for missing references
             let missing_refs = voter_block::get_missing_references(&content, blockchain, blockdb);
             if !missing_refs.is_empty() {
-                return BlockResult::MissingReferences(missing_refs);
+                missing.extend_from_slice(&missing_refs);
             }
-            return BlockResult::Pass;
         }
         Content::Transaction(_) => {
-            return BlockResult::Pass;
+            // TODO: note that we don't care about blockdb here, since all blocks at this stage
+            // should have been inserted into the blockdb
         }
+    }
+
+    if !missing.is_empty() {
+        return BlockResult::MissingReferences(missing);
+    }
+    else {
+        return BlockResult::Pass;
     }
 }
 

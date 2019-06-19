@@ -1,9 +1,9 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
-	"flag"
 )
 
 func main() {
@@ -18,7 +18,7 @@ func main() {
 	plotDataDirFlag := plotCommand.String("datadir", "data", "Sets the path to the directory holding RRD files")
 	plotContentFlag := plotCommand.String("content", "txrate", "Sets the content to plot, possible values are txrate, blockdelay, queue, mining")
 	plotNodeFlag := plotCommand.String("node", "node_0", "Sets the node to plot")
-	plotStepFlag := plotCommand.Uint("step", 1, "Sets the step of the plot")
+	plotWindowFlag := plotCommand.Uint("window", 1, "Sets the sliding window of the plot")
 	plotOutputFlag := plotCommand.String("output", "output.png", "Sets the output path")
 
 	checkCommand := flag.NewFlagSet("check", flag.ExitOnError)
@@ -36,7 +36,7 @@ func main() {
 		log(*intervalFlag, *durationFlag, *nodeListFlag, *dataDirFlag)
 	case "plot":
 		plotCommand.Parse(os.Args[2:])
-		plot(*plotNodeListFlag, *plotDataDirFlag, *plotContentFlag, *plotNodeFlag, *plotOutputFlag, *plotStepFlag)
+		plot(*plotNodeListFlag, *plotDataDirFlag, *plotContentFlag, *plotNodeFlag, *plotOutputFlag, *plotWindowFlag)
 	case "check":
 		checkCommand.Parse(os.Args[2:])
 		check(*checkNodeListFlag, *checkVerboseFlag)
