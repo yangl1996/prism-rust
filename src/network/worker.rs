@@ -31,6 +31,7 @@ pub struct Context {
     context_update_chan: mpsc::Sender<ContextUpdateSignal>,
     server: ServerHandle,
     buffer: Arc<Mutex<BlockBuffer>>,
+    recent_blocks: Arc<Mutex<HashSet<H256>>>
 }
 
 pub fn new(
@@ -55,6 +56,7 @@ pub fn new(
         context_update_chan: ctx_update_sink,
         server: server.clone(),
         buffer: Arc::new(Mutex::new(BlockBuffer::new())),
+        recent_blocks: Arc::new(Mutex::new(HashSet::new())),
     };
     return ctx;
 }
@@ -152,15 +154,26 @@ impl Context {
                     for encoded_block in &encoded_blocks {
                         let block: Block = bincode::deserialize(&encoded_block).unwrap();
                         let hash = block.hash();
+
+                        // check POW here. If POW does not pass, discard the block at this
+                        // stage
+                        let pow_check = validation::check_pow_sortition_id(&block);
+
+                        // check whether the block is being processed
+                        let mut recent_blocks = self.recent_blocks.lock().unwrap();
+                        if recent_blocks.contains(&hash) {
+                            drop(recent_blocks);
+                            continue;
+                        }
+                        // register this block as being processed
+                        recent_blocks.insert(hash);
+                        drop(recent_blocks);
                         
                         // detect duplicates
                         if self.blockdb.contains(&hash).unwrap() {
                             continue;
                         }
 
-                        // check POW here. If POW does not pass, discard the block at this
-                        // stage
-                        let pow_check = validation::check_pow_sortition_id(&block);
                         match pow_check {
                             BlockResult::Pass => {}
                             _ => continue
@@ -168,6 +181,11 @@ impl Context {
 
                         // store the block into database
                         self.blockdb.insert_encoded(&hash, &encoded_block).unwrap();
+
+                        // now that this block is store, remove the reference
+                        let mut recent_blocks = self.recent_blocks.lock().unwrap();
+                        recent_blocks.remove(&hash);
+                        drop(recent_blocks);
 
                         blocks.push(block);
                         hashes.push(hash);
