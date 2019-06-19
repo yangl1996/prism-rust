@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-func plot(nodesFile, dataDir, content, node, output string, step uint) {
+func plot(nodesFile, dataDir, content, node, output string, window uint) {
 	nodes := make(map[string]string)
 	file, err := os.Open(nodesFile)
 	if err != nil {
@@ -41,8 +41,8 @@ func plot(nodesFile, dataDir, content, node, output string, step uint) {
 		genSum := ""
 		nodeConfirmSet := ""
 		for n, p := range nodes {
-			g.Def(n+"_gen", p, "generated_tx", "AVERAGE", fmt.Sprintf("step=%v", step))
-			g.Def(n+"_confirm", p, "confirmed_tx", "AVERAGE", fmt.Sprintf("step=%v", step))
+			g.Def(n+"_gen", p, "generated_tx", "AVERAGE")
+			g.Def(n+"_confirm", p, "confirmed_tx", "AVERAGE")
 			if genSum == "" {
 				genSum = n + "_gen"
 			} else {
@@ -50,39 +50,54 @@ func plot(nodesFile, dataDir, content, node, output string, step uint) {
 			}
 			nodeConfirmSet += n + "_confirm,"
 		}
-		g.Def(node+"_tx_blk_confirm", nodes[node], "confirmed_tx_blk", "AVERAGE")	// don't use step here, since we want the timestamp
+		g.Def(node+"_tx_blk_confirm", nodes[node], "confirmed_tx_blk", "AVERAGE")
 		g.CDef("gen_sum", genSum)
 		g.CDef("confirm_max", fmt.Sprintf("%s%v,SMAX", nodeConfirmSet, len(nodes)))
 		g.CDef("confirm_min", fmt.Sprintf("%s%v,SMIN", nodeConfirmSet, len(nodes)))
 		g.CDef("confirm_avg", fmt.Sprintf("%s%v,AVG", nodeConfirmSet, len(nodes)))
 		g.CDef("min_max_diff", "confirm_max,confirm_min,-")
-		// plot the lines
-		g.Line(1.0, "gen_sum", "00FF00", "Total Generated")
-		g.Line(1.0, node+"_confirm", "FF0000", node+" Confirmed")
-		g.Line(1.0, "confirm_min", "")
-		g.Area("min_max_diff", "0000FF15", "STACK") // this area is stacked on confirm_min, so we should sub min
-		g.Line(1.0, "confirm_avg", "0000FF", "Avg Confirmed")
+		// enable sliding window if necessary
+		if window != 1 {
+			trend_cmd := fmt.Sprintf(",%v,TRENDNAN", window)
+			g.CDef(node+"_confirm_wa", node+"_confirm"+trend_cmd)
+			g.CDef("gen_sum_wa", "gen_sum"+trend_cmd)
+			g.CDef("confirm_max_wa", "confirm_max"+trend_cmd)
+			g.CDef("confirm_min_wa", "confirm_min"+trend_cmd)
+			g.CDef("confirm_avg_wa", "confirm_avg"+trend_cmd)
+			g.CDef("min_max_diff_wa", "confirm_max_wa,confirm_min_wa,-")
+			g.Line(1.0, "gen_sum_wa", "00FF00", "Total Generated")
+			g.Line(1.0, node+"_confirm_wa", "FF0000", node+" Confirmed")
+			g.Line(1.0, "confirm_min_wa", "")
+			g.Area("min_max_diff_wa", "0000FF15", "STACK") // this area is stacked on confirm_min, so we should sub min
+			g.Line(1.0, "confirm_avg_wa", "0000FF", "Avg Confirmed")
+		} else {
+			g.Line(1.0, "gen_sum", "00FF00", "Total Generated")
+			g.Line(1.0, node+"_confirm", "FF0000", node+" Confirmed")
+			g.Line(1.0, "confirm_min", "")
+			g.Area("min_max_diff", "0000FF15", "STACK") // this area is stacked on confirm_min, so we should sub min
+			g.Line(1.0, "confirm_avg", "0000FF", "Avg Confirmed")
+		}
 		g.Tick(node+"_tx_blk_confirm", "808080", "1.0", "Tx Block Confirmation")
 		g.SetVLabel("Tx/s")
 		g.SetTitle("Transaction Rate (" + node + ")")
 	case "blockdelay":
-		g.Def(node+"_proposer_delay", nodes[node], "proposer_delay_mean", "AVERAGE", fmt.Sprintf("step=%v", step))
-		g.Def(node+"_voter_delay", nodes[node], "voter_delay_mean", "AVERAGE", fmt.Sprintf("step=%v", step))
-		g.Def(node+"_tx_delay", nodes[node], "tx_delay_mean", "AVERAGE", fmt.Sprintf("step=%v", step))
+		g.Def(node+"_proposer_delay", nodes[node], "proposer_delay_mean", "AVERAGE", fmt.Sprintf("window=%v", window))
+		g.Def(node+"_voter_delay", nodes[node], "voter_delay_mean", "AVERAGE", fmt.Sprintf("window=%v", window))
+		g.Def(node+"_tx_delay", nodes[node], "tx_delay_mean", "AVERAGE", fmt.Sprintf("window=%v", window))
 		g.Line(1.0, node+"_proposer_delay", "FF0000", "Proposer")
 		g.Line(1.0, node+"_voter_delay", "00FF00", "Voter")
 		g.Line(1.0, node+"_tx_delay", "0000FF", "Tx")
 		g.SetVLabel("Latency (ms)")
 		g.SetTitle("Block Latency (" + node + ")")
 	case "queue":
-		g.Def(node+"_queue", nodes[node], "queue_length", "AVERAGE", fmt.Sprintf("step=%v", step))
+		g.Def(node+"_queue", nodes[node], "queue_length", "AVERAGE", fmt.Sprintf("window=%v", window))
 		g.Line(1.0, node+"_queue", "0000FF")
 		g.SetVLabel("Queue Length (Msg)")
 		g.SetTitle("Queue Length (" + node + ")")
 	case "mining":
-		g.Def(node+"_mined_proposer", nodes[node], "mined_proposer", "AVERAGE", fmt.Sprintf("step=%v", step))
-		g.Def(node+"_mined_voter", nodes[node], "mined_voter", "AVERAGE", fmt.Sprintf("step=%v", step))
-		g.Def(node+"_mined_tx", nodes[node], "mined_tx", "AVERAGE", fmt.Sprintf("step=%v", step))
+		g.Def(node+"_mined_proposer", nodes[node], "mined_proposer", "AVERAGE", fmt.Sprintf("window=%v", window))
+		g.Def(node+"_mined_voter", nodes[node], "mined_voter", "AVERAGE", fmt.Sprintf("window=%v", window))
+		g.Def(node+"_mined_tx", nodes[node], "mined_tx", "AVERAGE", fmt.Sprintf("window=%v", window))
 		g.Line(1.0, node+"_mined_proposer", "FF0000", "Proposer")
 		g.Line(1.0, node+"_mined_voter", "00FF00", "Voter")
 		g.Line(1.0, node+"_mined_tx", "0000FF", "Tx")
