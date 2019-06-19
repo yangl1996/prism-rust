@@ -105,11 +105,24 @@ impl Server {
                             respond_json!(req, resp);
                         }
                         "/utxo/snapshot" => {
-                            let hash = utxodb.snapshot().unwrap();
-                            let resp = UtxoSnapshotResponse {
-                                hash: hash.to_string(),
+                            let params = url.query_pairs();
+                            let params: HashMap<_, _> = params.into_owned().collect();
+                            let level = match params.get("level") {
+                                Some(l) => {
+                                    let hash = utxodb.get_snapshot_at_level(l.parse::<u64>().unwrap()).unwrap().unwrap();
+                                    let resp = UtxoSnapshotResponse {
+                                        hash: hash.to_string(),
+                                    };
+                                    respond_json!(req, resp);
+                                },
+                                None => {
+                                    let hash = utxodb.snapshot().unwrap();
+                                    let resp = UtxoSnapshotResponse {
+                                        hash: hash.to_string(),
+                                    };
+                                    respond_json!(req, resp);
+                                }
                             };
-                            respond_json!(req, resp);
                         }
                         "/wallet/balance" => {
                             let resp = WalletBalanceResponse {
