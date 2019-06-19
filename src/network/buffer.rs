@@ -38,21 +38,17 @@ impl BlockBuffer {
     }
 
     pub fn satisfy(&mut self, hash: H256) -> Vec<Block> {
-        let mut stack: Vec<H256> = vec![hash];
         let mut resolved_blocks: Vec<Block> = vec![];
 
-        while let Some(hash) = stack.pop() {
-            // mark this block as resolved in the graph, and iterate through all of its dependends
-            // to see whether we can unblock some (check whether we are the only neighbor)
-            let dependents = self.dependency_graph.neighbors_directed(hash, Incoming);
-            for node in dependents {
-                if self.dependency_graph.edges(node).count() == 1 && self.blocks.contains_key(&node) {
-                    stack.push(node);
-                    resolved_blocks.push(self.blocks.remove(&node).unwrap());
-                }
+        // mark this block as resolved in the graph, and iterate through all of its dependends
+        // to see whether we can unblock some (check whether we are the only neighbor)
+        let dependents = self.dependency_graph.neighbors_directed(hash, Incoming);
+        for node in dependents {
+            if self.dependency_graph.edges(node).count() == 1 && self.blocks.contains_key(&node) {
+                resolved_blocks.push(self.blocks.remove(&node).unwrap());
             }
-            self.dependency_graph.remove_node(hash);
         }
+        self.dependency_graph.remove_node(hash);
         return resolved_blocks;
     }
 }
