@@ -211,13 +211,6 @@ impl Context {
                         let data_availability = validation::check_data_availability(&block, &self.chain, &self.blockdb);
                         match data_availability {
                             BlockResult::Pass => drop(buffer),
-                            BlockResult::MissingParent(p) => {
-                                debug!("Missing parent block for block {:.8}", block.hash());
-                                buffer.insert(block, &vec![p]);
-                                to_request.push(p);
-                                drop(buffer);
-                                continue;
-                            }
                             BlockResult::MissingReferences(r) => {
                                 debug!(
                                     "Missing {} referred blocks for block {:.8}",
