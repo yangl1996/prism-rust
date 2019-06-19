@@ -1,6 +1,8 @@
 use super::buffer::BlockBuffer;
 use super::message::{self, Message};
 use super::peer;
+use std::iter::FromIterator;
+use std::collections::VecDeque;
 use crate::block::{Block, Content};
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
@@ -64,10 +66,11 @@ pub fn new(
 impl Context {
     pub fn start(self) {
         let num_worker = self.num_worker;
-        for _ in 0..num_worker {
+        for i in 0..num_worker {
             let cloned = self.clone();
             thread::spawn(move || {
                 cloned.worker_loop();
+                warn!("Worker thread {} exited", i);
             });
         }
     }
@@ -203,6 +206,9 @@ impl Context {
                     
                     // tell peers about the new blocks
                     // TODO: we will do this only in a reasonable network topology
+                    if hashes.is_empty() {
+                        continue;   // end processing this message
+                    }
                     self.server.broadcast(Message::NewBlockHashes(hashes.clone()));
 
                     // process each block
@@ -279,19 +285,21 @@ impl Context {
                                 resolved_by_current.len()
                                 );
                         }
-                        to_process.append(&mut resolved_by_current);
+                        for b in resolved_by_current.drain(..) {
+                            to_process.push(b);
+                        }
                     }
-                    if !to_request.is_empty() {
-                        to_request.sort();
-                        to_request.dedup();
-                        peer.write(Message::GetBlocks(to_request));
-                    }
-
                     // tell the miner to update the context
                     for sig in context_update_sig {
                         self.context_update_chan
                             .send(sig)
                             .unwrap();
+                    }
+
+                    if !to_request.is_empty() {
+                        to_request.sort();
+                        to_request.dedup();
+                        peer.write(Message::GetBlocks(to_request));
                     }
                 }
                 Message::Bootstrap(after) => {

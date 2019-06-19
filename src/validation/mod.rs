@@ -33,7 +33,6 @@ pub enum BlockResult {
     ZeroValue,
     InsufficientInput,
     WrongSignature,
-    Duplicate,
 }
 
 impl std::fmt::Display for BlockResult {
@@ -43,7 +42,6 @@ impl std::fmt::Display for BlockResult {
             BlockResult::WrongPoW => write!(f, "PoW larger than difficulty"),
             BlockResult::WrongSortitionId => write!(f, "Sortition id is not same as content type"),
             BlockResult::WrongSortitionProof => write!(f, "Sortition Merkle proof is incorrect"),
-            BlockResult::Duplicate => write!(f, "block already exists"),
             BlockResult::MissingReferences(_) => write!(f, "referred blocks not in system"),
             BlockResult::WrongProposerRef => write!(f, "referred proposer blocks level larger than parent"),
             BlockResult::WrongChainNumber => write!(f, "chain number out of range"),
@@ -220,32 +218,22 @@ fn check_proposer_block_exists(
     blockdb: &BlockDatabase,
     blockchain: &BlockChain,
 ) -> bool {
-    let in_db = match blockdb.contains(&hash) {
-        Err(e) => panic!("Database error {}", e),
-        Ok(b) => b,
-    };
-
     let in_chain = match blockchain.contains_proposer(&hash) {
         Err(e) => panic!("Blockchain error {}", e),
         Ok(b) => b,
     };
 
-    return in_db && in_chain;
+    return in_chain;
 }
 
 /// Check whether a voter block exists in the block database and the blockchain.
 fn check_voter_block_exists(hash: H256, blockdb: &BlockDatabase, blockchain: &BlockChain) -> bool {
-    let in_db = match blockdb.contains(&hash) {
-        Err(e) => panic!("Database error {}", e),
-        Ok(b) => b
-    };
-
     let in_chain = match blockchain.contains_voter(&hash) {
         Err(e) => panic!("Blockchain error {}", e),
         Ok(b) => b,
     };
 
-    return in_db && in_chain;
+    return in_chain;
 }
 
 /// Check whether a transaction block exists in the block database.

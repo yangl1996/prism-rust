@@ -1,20 +1,25 @@
 use crate::block::Block;
 use crate::crypto::hash::{Hashable, H256};
-use petgraph::prelude::*;
 use std::collections::{HashMap, HashSet};
 
 pub struct BlockBuffer {
     /// All blocks that have been received but not processed.
     blocks: HashMap<H256, Block>,
-    /// All block hashes that we have heard of, but not processed.
-    dependency_graph: DiGraphMap<H256, ()>,
+    // TODO: we could use a sorted vector for better performance
+    /// Mapping between all blocks that have been received and not processed, and their
+    /// dependencies
+    dependency: HashMap<H256, HashSet<H256>>,
+    /// Mapping between all blocks that have not been processed (but either received or
+    /// not), and their dependents
+    dependent: HashMap<H256, HashSet<H256>>,
 }
 
 impl BlockBuffer {
     pub fn new() -> Self {
         return Self {
             blocks: HashMap::new(),
-            dependency_graph: DiGraphMap::new(),
+            dependency: HashMap::new(),
+            dependent: HashMap::new(),
         };
     }
 
@@ -30,28 +35,33 @@ impl BlockBuffer {
 
         self.blocks.insert(hash, block);
 
-        self.dependency_graph.add_node(hash);
+        let mut dependency = HashSet::new();
         for dep_hash in dependencies {
-            self.dependency_graph.add_node(*dep_hash);
-            self.dependency_graph.add_edge(hash, *dep_hash, ());
+            dependency.insert(*dep_hash);
+            if !self.dependent.contains_key(&dep_hash) {
+                let dependent = HashSet::new();
+                self.dependent.insert(*dep_hash, dependent);
+            }
+            let mut dependent = self.dependent.get_mut(&dep_hash).unwrap();
+            dependent.insert(hash);
         }
+        self.dependency.insert(hash, dependency);
     }
 
+    /// Mark that the given block has been processed.
     pub fn satisfy(&mut self, hash: H256) -> Vec<Block> {
-        let mut stack: Vec<H256> = vec![hash];
         let mut resolved_blocks: Vec<Block> = vec![];
 
-        while let Some(hash) = stack.pop() {
-            // mark this block as resolved in the graph, and iterate through all of its dependends
-            // to see whether we can unblock some (check whether we are the only neighbor)
-            let dependents = self.dependency_graph.neighbors_directed(hash, Incoming);
-            for node in dependents {
-                if self.dependency_graph.edges(node).count() == 1 && self.blocks.contains_key(&node) {
-                    stack.push(node);
+        // get what blocks are blocked by the block being satisfied
+        if let Some(dependents) = self.dependent.remove(&hash) {
+            for node in &dependents {
+                let mut dependency = self.dependency.get_mut(&node).unwrap();
+                dependency.remove(&hash);
+                if dependency.is_empty() {
+                    self.dependency.remove(&node).unwrap();
                     resolved_blocks.push(self.blocks.remove(&node).unwrap());
                 }
             }
-            self.dependency_graph.remove_node(hash);
         }
         return resolved_blocks;
     }
