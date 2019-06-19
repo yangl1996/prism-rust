@@ -272,7 +272,7 @@ impl BlockChain {
         let mut wb = WriteBatch::default();
 
         macro_rules! get_value {
-            ($cf:expr, $key:expr) => {{
+            ($cf:expr, $key:expr) => {
                 deserialize(
                     &self
                     .db
@@ -280,27 +280,27 @@ impl BlockChain {
                     .unwrap(),
                 )
                 .unwrap()
-            }}
+            }
         }
 
         macro_rules! put_value {
-            ($cf:expr, $key:expr, $value:expr) => {{
+            ($cf:expr, $key:expr, $value:expr) => {
             wb.put_cf(
                 $cf,
                 serialize(&$key).unwrap(),
                 serialize(&$value).unwrap(),
             )?;
-            }}
+            }
         }
 
         macro_rules! merge_value {
-            ($cf:expr, $key:expr, $value:expr) => {{
+            ($cf:expr, $key:expr, $value:expr) => {
             wb.merge_cf(
                 $cf,
                 serialize(&$key).unwrap(),
                 serialize(&$value).unwrap(),
             )?;
-            }}
+            }
         }
 
         // insert parent link
@@ -410,24 +410,24 @@ impl BlockChain {
         let transaction_ref_neighbor_cf = self.db.cf_handle(TRANSACTION_REF_NEIGHBOR_CF).unwrap();
 
         macro_rules! get_value {
-            ($cf:expr, $key:expr) => {{
+            ($cf:expr, $key:expr) => {
                 match self.db.get_cf($cf, serialize(&$key).unwrap())? {
                     Some(raw) => Some(deserialize(&raw).unwrap()),
                     None => None,
                 }
-            }}
+            }
         }
 
         // apply the vote diff while tracking the votes of which proposer levels are affected
         let mut wb = WriteBatch::default();
         macro_rules! merge_value {
-            ($cf:expr, $key:expr, $value:expr) => {{
+            ($cf:expr, $key:expr, $value:expr) => {
             wb.merge_cf(
                 $cf,
                 serialize(&$key).unwrap(),
                 serialize(&$value).unwrap(),
             )?;
-            }}
+            }
         }
 
         let mut voter_ledger_tips = self.voter_ledger_tips.lock().unwrap();
@@ -461,30 +461,30 @@ impl BlockChain {
         // recompute the leader of each level that was affected
         let mut wb = WriteBatch::default();
         macro_rules! merge_value {
-            ($cf:expr, $key:expr, $value:expr) => {{
+            ($cf:expr, $key:expr, $value:expr) => {
             wb.merge_cf(
                 $cf,
                 serialize(&$key).unwrap(),
                 serialize(&$value).unwrap(),
             )?;
-            }}
+            }
         }
         macro_rules! put_value {
-            ($cf:expr, $key:expr, $value:expr) => {{
+            ($cf:expr, $key:expr, $value:expr) => {
             wb.put_cf(
                 $cf,
                 serialize(&$key).unwrap(),
                 serialize(&$value).unwrap(),
             )?;
-            }}
+            }
         }
         macro_rules! delete_value {
-            ($cf:expr, $key:expr) => {{
+            ($cf:expr, $key:expr) => {
             wb.delete_cf(
                 $cf,
                 serialize(&$key).unwrap(),
             )?;
-            }}
+            }
         }
         let mut change_begin: Option<u64> = None;
         for level in &affected {
@@ -579,30 +579,30 @@ impl BlockChain {
             let mut added: Vec<H256> = vec![];
             let mut wb = WriteBatch::default();
             macro_rules! merge_value {
-                ($cf:expr, $key:expr, $value:expr) => {{
+                ($cf:expr, $key:expr, $value:expr) => {
                     wb.merge_cf(
                         $cf,
                         serialize(&$key).unwrap(),
                         serialize(&$value).unwrap(),
                         )?;
-                }}
+                }
             }
             macro_rules! put_value {
-                ($cf:expr, $key:expr, $value:expr) => {{
+                ($cf:expr, $key:expr, $value:expr) => {
                     wb.put_cf(
                         $cf,
                         serialize(&$key).unwrap(),
                         serialize(&$value).unwrap(),
                         )?;
-                }}
+                }
             }
             macro_rules! delete_value {
-                ($cf:expr, $key:expr) => {{
+                ($cf:expr, $key:expr) => {
                     wb.delete_cf(
                         $cf,
                         serialize(&$key).unwrap(),
                         )?;
-                }}
+                }
             }
 
             // deconfirm the blocks from change_begin all the way to previous ledger tip
@@ -684,7 +684,7 @@ impl BlockChain {
         let voter_parent_neighbor_cf = self.db.cf_handle(VOTER_PARENT_NEIGHBOR_CF).unwrap();
 
         macro_rules! get_value {
-            ($cf:expr, $key:expr) => {{
+            ($cf:expr, $key:expr) => {
                 deserialize(
                     &self
                     .db
@@ -692,7 +692,7 @@ impl BlockChain {
                     .unwrap(),
                 )
                 .unwrap()
-            }}
+            }
         }
 
         let mut to: H256 = to;

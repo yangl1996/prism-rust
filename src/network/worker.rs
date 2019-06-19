@@ -166,11 +166,13 @@ impl Context {
                             _ => continue
                         }
 
+                        info!("Block Path: 1. Received block {}. Adding it to recent_blocks", hash);
                         // check whether the block is being processed. note that here we use lock
                         // to make sure that the hash either in recent_blocks, or blockdb, so we
                         // don't have a single duplicate
                         let mut recent_blocks = self.recent_blocks.lock().unwrap();
                         if recent_blocks.contains(&hash) {
+                            info!("Block Path: x. Received block {} again", hash);
                             drop(recent_blocks);
                             continue;
                         }
@@ -183,6 +185,7 @@ impl Context {
                         // and lock/unlocks
                         // detect duplicates
                         if self.blockdb.contains(&hash).unwrap() {
+                            info!("Block Path: x. Received block {} again", hash);
                             let mut recent_blocks = self.recent_blocks.lock().unwrap();
                             recent_blocks.remove(&hash);
                             continue;
@@ -190,6 +193,7 @@ impl Context {
 
                         // store the block into database
                         self.blockdb.insert_encoded(&hash, &encoded_block).unwrap();
+                        info!("Block Path 2: Added block {} to blockdb and removing it from recent_block", hash);
 
                         // now that this block is store, remove the reference
                         let mut recent_blocks = self.recent_blocks.lock().unwrap();
@@ -224,6 +228,7 @@ impl Context {
                         match data_availability {
                             BlockResult::Pass => drop(buffer),
                             BlockResult::MissingReferences(r) => {
+                                info!("Block Path 3: Added block {} to buffer because it is missing {:?}", block.hash(), r);
                                 debug!(
                                     "Missing {} referred blocks for block {:.8}",
                                     r.len(),
