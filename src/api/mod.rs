@@ -107,22 +107,26 @@ impl Server {
                         "/utxo/snapshot" => {
                             let params = url.query_pairs();
                             let params: HashMap<_, _> = params.into_owned().collect();
+                            let mut resp: UtxoSnapshotResponse;
                             let level = match params.get("level") {
                                 Some(l) => {
-                                    let hash = utxodb.get_snapshot_at_level(l.parse::<u64>().unwrap()).unwrap().unwrap();
-                                    let resp = UtxoSnapshotResponse {
-                                        hash: hash.to_string(),
-                                    };
-                                    respond_json!(req, resp);
+                                    let hash_option = utxodb.get_snapshot_at_level(l.parse::<u64>().unwrap()).unwrap();
+                                    match hash_option {
+                                        Some(hash) => {
+                                            resp = UtxoSnapshotResponse { hash: hash.to_string() };
+                                        },
+                                        None => {
+                                            // There is no utxo_db hash at this level
+                                            resp = UtxoSnapshotResponse { hash: "".to_string() };  //Todo: to clean
+                                        }
+                                    }
                                 },
                                 None => {
                                     let hash = utxodb.snapshot().unwrap();
-                                    let resp = UtxoSnapshotResponse {
-                                        hash: hash.to_string(),
-                                    };
-                                    respond_json!(req, resp);
+                                    resp = UtxoSnapshotResponse { hash: hash.to_string()};
                                 }
                             };
+                            respond_json!(req, resp);
                         }
                         "/wallet/balance" => {
                             let resp = WalletBalanceResponse {
