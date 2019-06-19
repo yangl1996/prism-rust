@@ -92,7 +92,17 @@ func check(nodesFile string, verbose bool) {
 				max_ledger_tip = levels
 			}
 		}
-		fmt.Printf("Lowest ledger tip: %v, highest ledger tip: %v\n", min_ledger_tip, max_ledger_tip)
+		if min_ledger_tip == max_ledger_tip {
+			fmt.Printf("Ledger depth %v is consistent across nodes\n", min_ledger_tip)
+		} else {
+			fmt.Printf("Lowest ledger tip: %v, highest ledger tip: %v\n", min_ledger_tip, max_ledger_tip)
+			if verbose {
+				for idx := range node_list {
+					n := node_list[idx]
+					fmt.Printf("%10v: %v\n", n, len(leaders[n]))
+				}
+			}
+		}
 
 		// check if the leader blocks are consistent for each level
 		for i := uint(0); i < min_ledger_tip; i++ {
@@ -109,7 +119,7 @@ func check(nodesFile string, verbose bool) {
 						if verbose {
 							for idx := range node_list {
 								n := node_list[idx]
-								fmt.Printf("%v: %v\n", n, leaders[n][i])
+								fmt.Printf("%10v: %v\n", n, leaders[n][i])
 							}
 						}
 						return
@@ -175,7 +185,7 @@ func check(nodesFile string, verbose bool) {
 			if verbose {
 				for idx := range node_list {
 					n := node_list[idx]
-					fmt.Printf("%v: %v\n", n, balance[n])
+					fmt.Printf("%10v: %v\n", n, balance[n])
 				}
 			}
 			return
@@ -233,7 +243,7 @@ func check(nodesFile string, verbose bool) {
 					if verbose {
 						for idx := range node_list {
 							n := node_list[idx]
-							fmt.Printf("%v: %v\n", n, utxohash[n])
+							fmt.Printf("%10v: %v\n", n, utxohash[n])
 						}
 					}
 					return
