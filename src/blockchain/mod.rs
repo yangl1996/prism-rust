@@ -890,7 +890,7 @@ impl BlockChain {
         let ledger_tip_level = *proposer_ledger_tip;
         let mut leaders = vec![];
         drop(proposer_ledger_tip);
-        for level in 0..ledger_tip_level {
+        for level in 0..=ledger_tip_level {
             match snapshot
                 .get_cf(proposer_leader_sequence_cf, serialize(&level).unwrap())?
             {
