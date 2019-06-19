@@ -13,6 +13,7 @@ use tiny_http::Server as HTTPServer;
 use std::collections::HashMap;
 use url::Url;
 use log::{info};
+use crate::blockchain::BlockChain;
 
 pub struct Server {
     transaction_generator_handle: mpsc::Sender<transaction_generator::ControlSignal>,
@@ -20,6 +21,7 @@ pub struct Server {
     miner: MinerHandle,
     wallet: Arc<Wallet>,
     utxodb: Arc<UtxoDatabase>,
+    blockchain: Arc<BlockChain>,
 }
 
 #[derive(Serialize)]
@@ -36,6 +38,11 @@ struct WalletBalanceResponse {
 #[derive(Serialize)]
 struct UtxoSnapshotResponse {
     hash: String,
+}
+
+#[derive(Serialize)]
+struct BlockchainSnapshotResponse {
+    leaders: Vec<String>
 }
 
 macro_rules! respond_result {
@@ -61,7 +68,7 @@ macro_rules! respond_json {
 }
 
 impl Server {
-    pub fn start(addr: std::net::SocketAddr, wallet: &Arc<Wallet>, utxodb: &Arc<UtxoDatabase>, server: &ServerHandle, miner: &MinerHandle, mempool: &Arc<Mutex<MemoryPool>>, txgen_control_chan: mpsc::Sender<transaction_generator::ControlSignal>) {
+    pub fn start(addr: std::net::SocketAddr, wallet: &Arc<Wallet>, blockchain: &Arc<BlockChain>, utxodb: &Arc<UtxoDatabase>, server: &ServerHandle, miner: &MinerHandle, mempool: &Arc<Mutex<MemoryPool>>, txgen_control_chan: mpsc::Sender<transaction_generator::ControlSignal>) {
         let handle = HTTPServer::http(&addr).unwrap();
         let server = Self {
             handle: handle,
@@ -69,6 +76,7 @@ impl Server {
             miner: miner.clone(),
             wallet: Arc::clone(wallet),
             utxodb: Arc::clone(utxodb),
+            blockchain: Arc::clone(blockchain),
         };
         thread::spawn(move || {
             for req in server.handle.incoming_requests() {
@@ -76,6 +84,7 @@ impl Server {
                 let miner = server.miner.clone();
                 let wallet = Arc::clone(&server.wallet);
                 let utxodb = Arc::clone(&server.utxodb);
+                let blockchain = Arc::clone(&server.blockchain);
                 thread::spawn(move || {
                     // a valid url requires a base
                     let base_url = Url::parse(&format!("http://{}/", &addr)).unwrap();
@@ -87,10 +96,18 @@ impl Server {
                         }
                     };
                     match url.path() {
+                        "/blockchain/snapshot" => {
+                            let leaders = blockchain.proposer_leaders().unwrap();
+                            let leader_hash_strings: Vec<String> = leaders.iter().map(|x| x.to_string()).collect();
+                            let resp = BlockchainSnapshotResponse {
+                                leaders: leader_hash_strings,
+                            };
+                            respond_json!(req, resp);
+                        }
                         "/utxo/snapshot" => {
-                            let hash = utxodb.snapshot();
+                            let hash = utxodb.snapshot().unwrap();
                             let resp = UtxoSnapshotResponse {
-                                hash: format!("{}", hash.unwrap()),
+                                hash: hash.to_string(),
                             };
                             respond_json!(req, resp);
                         }

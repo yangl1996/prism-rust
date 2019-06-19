@@ -882,6 +882,27 @@ impl BlockChain {
             None => Ok(false),
         };
     }
+
+    pub fn proposer_leaders(&self) -> Result<Vec<H256>> {
+        let proposer_leader_sequence_cf = self.db.cf_handle(PROPOSER_LEADER_SEQUENCE_CF).unwrap();
+        let proposer_ledger_tip = self.proposer_ledger_tip.lock().unwrap();
+        let snapshot = self.db.snapshot();
+        let ledger_tip_level = *proposer_ledger_tip;
+        let mut leaders = vec![];
+        drop(proposer_ledger_tip);
+        for level in 0..ledger_tip_level {
+            match snapshot
+                .get_cf(proposer_leader_sequence_cf, serialize(&level).unwrap())?
+            {
+                Some(d) => {
+                    let hash: H256 = deserialize(&d).unwrap();
+                    leaders.push(hash);
+                }
+                None => unreachable!()
+            }
+        }
+        return Ok(leaders);
+    }
 }
 
 impl BlockChain {
