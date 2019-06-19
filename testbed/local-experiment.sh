@@ -61,7 +61,7 @@ function kill_prism() {
 }
 
 
-binary_path=${PRISM_BINARY-../target/debug/prism}
+binary_path=${PRISM_BINARY-../target/release/prism}
 num_nodes=$1
 
 # generate keypairs and addresses

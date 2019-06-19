@@ -184,38 +184,48 @@ impl Context {
 
             // check whether there is new content through context update channel
             // use a loop to get multiple messages
-            let mut context_update_msg = vec![];
+            let mut voter_msg = vec![];
             let mut contains_proposer = false;
+            let mut contains_transaction = false;
+            let mut cnt = 0usize;
+            for sig in self.context_update_chan.try_iter() {
+                cnt += 1;
+                match sig {
+                    ContextUpdateSignal::NewProposerBlock => contains_proposer = true,
+                    ContextUpdateSignal::NewVoterBlock(chain) => voter_msg.push(chain),
+                    ContextUpdateSignal::NewTransactionBlock => contains_transaction = true,
+                };
+            }
+            info!("Chan try iter size: {}", cnt);
+            /*
             loop {
                 match self.context_update_chan.try_recv() {
                     Ok(sig) => {
                         // TODO: Only update block contents of the relevant structures
-                        // TODO: make a partial update function of Merkle.
-                        if let ContextUpdateSignal::NewProposerBlock = sig {
-                            contains_proposer = true;
-                        }
-                        context_update_msg.push(sig);
+                        match sig {
+                            ContextUpdateSignal::NewProposerBlock => contains_proposer = true,
+                            ContextUpdateSignal::NewVoterBlock(chain) => voter_msg.push(chain),
+                            ContextUpdateSignal::NewTransactionBlock => contains_transaction = true,
+                        };
                     }
                     Err(TryRecvError::Empty) => break,
                     Err(TryRecvError::Disconnected) => panic!("Miner context update channel detached"),
                 }
-            }
+            }*/
             if contains_proposer {
+                // we hear a proposer block, so update all contents
                 self.update_all_contents();
             } else {
                 // we didn't hear a proposer block, so don't need to update all contents
-                for sig in &context_update_msg {
-                    match *sig {
-                        ContextUpdateSignal::NewProposerBlock => unreachable!(),
-                        ContextUpdateSignal::NewVoterBlock(chain) => self.update_voter_content(chain),
-                        ContextUpdateSignal::NewTransactionBlock => {
-                            self.update_refed_transaction();
-                            self.update_transaction_content();
-                        }
-                    }
+                for chain in &voter_msg {
+                    self.update_voter_content(*chain);
+                }
+                if contains_transaction {
+                    self.append_refed_transaction();
+                    self.update_transaction_content();
                 }
             }
-            if !context_update_msg.is_empty() {
+            if contains_proposer || contains_transaction || !voter_msg.is_empty() {
                 header = self.create_header();
             }
 
@@ -288,7 +298,7 @@ impl Context {
                     Content::Proposer(_) => self.update_all_contents(),
                     Content::Voter(content) => self.update_voter_content(content.chain_number),
                     Content::Transaction(_) => {
-                        self.update_refed_transaction();
+                        self.append_refed_transaction();
                         self.update_transaction_content();
                     }
                 }
@@ -341,10 +351,12 @@ impl Context {
     /// Update the block to be mined
     fn update_all_contents(&mut self) {
         // get mutex of blockchain and get all required data
-        self.proposer_parent_hash = self.blockchain.best_proposer().unwrap();
-        self.difficulty = self.get_difficulty(&self.proposer_parent_hash);
         let transaction_block_refs = self.blockchain.unreferred_transactions();
         let mut proposer_block_refs = self.blockchain.unreferred_proposers();
+        // get best proposer after get unreferred_proposers to avoid unreferred_proposers are newer
+        // than best proposer
+        self.proposer_parent_hash = self.blockchain.best_proposer().unwrap();
+        self.difficulty = self.get_difficulty(&self.proposer_parent_hash);
         proposer_block_refs
             .iter()
             .position(|item| *item == self.proposer_parent_hash)
@@ -404,8 +416,8 @@ impl Context {
         self.content = content;
     }
 
-    /// Update the transaction ref of proposer content
-    fn update_refed_transaction(&mut self) {
+    /// Update the transaction ref of proposer content, only append the new refs
+    fn append_refed_transaction(&mut self) {
         let mut transaction_block_refs = self.blockchain.unreferred_transactions();
         let idx: usize = PROPOSER_INDEX as usize;
         if let Content::Proposer(ref mut content) = self.content.get_mut(idx).unwrap() {
@@ -420,6 +432,28 @@ impl Context {
             self.content_merkle_tree.update(idx, content_hash);
         } else { unreachable!(); }
     }
+
+    /*
+    /// Update proposer refs, (don't update best proposer, etc)
+    fn update_proposer_refs(&mut self) {
+        let idx: usize = PROPOSER_INDEX as usize;
+        let transaction_block_refs = self.blockchain.unreferred_transactions();
+        let mut proposer_block_refs = self.blockchain.unreferred_proposers();
+        proposer_block_refs
+            .iter()
+            .position(|item| *item == self.proposer_parent_hash)
+            .map(|i| proposer_block_refs.remove(i));
+        // Update proposer content, and create the Merkle trees of two kinds of refs.
+        self.proposer_content_transaction_refs = MerkleTree::new(transaction_block_refs.clone());
+        self.proposer_content_proposer_refs = MerkleTree::new(proposer_block_refs.clone());
+        let proposer_content = proposer::Content::new(
+            transaction_block_refs,
+            proposer_block_refs,
+        );
+        let proposer_content_hash = proposer_content.ref_roots_to_hash(self.proposer_content_transaction_refs.root(), self.proposer_content_proposer_refs.root());
+        self.content[idx] = proposer_content;
+        self.content_merkle_tree.update(idx, proposer_content_hash);
+    }*/
 
     /// Update one voter chain's content with chain number
     fn update_voter_content(&mut self, chain: u16) {
@@ -602,7 +636,7 @@ mod tests {
                 panic!("Miner mine a block that doesn't pass validation!\n\tResult: {:?},\n\tBlock: {:?}\n\tContent Hash: {}", result, block, block.content.hash() );
             }
         }
-        miner.update_refed_transaction();
+        miner.append_refed_transaction();
         for nonce in 0..100 {
             let mut header = miner.create_header();
             header.nonce = nonce;
