@@ -289,17 +289,17 @@ impl Context {
                             to_process.push_back(b);
                         }
                     }
-                    if !to_request.is_empty() {
-                        to_request.sort();
-                        to_request.dedup();
-                        peer.write(Message::GetBlocks(to_request));
-                    }
-
                     // tell the miner to update the context
                     for sig in context_update_sig {
                         self.context_update_chan
                             .send(sig)
                             .unwrap();
+                    }
+
+                    if !to_request.is_empty() {
+                        to_request.sort();
+                        to_request.dedup();
+                        peer.write(Message::GetBlocks(to_request));
                     }
                 }
                 Message::Bootstrap(after) => {
