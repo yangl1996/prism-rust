@@ -158,8 +158,14 @@ impl Context {
                         // check POW here. If POW does not pass, discard the block at this
                         // stage
                         let pow_check = validation::check_pow_sortition_id(&block);
+                        match pow_check {
+                            BlockResult::Pass => {}
+                            _ => continue
+                        }
 
-                        // check whether the block is being processed
+                        // check whether the block is being processed. note that here we use lock
+                        // to make sure that the hash either in recent_blocks, or blockdb, so we
+                        // don't have a single duplicate
                         let mut recent_blocks = self.recent_blocks.lock().unwrap();
                         if recent_blocks.contains(&hash) {
                             drop(recent_blocks);
@@ -169,14 +175,14 @@ impl Context {
                         recent_blocks.insert(hash);
                         drop(recent_blocks);
                         
+                        // TODO: consider the ordering here. I'd expect a lot of duplicate blocks
+                        // to proceed to this step, which means a lot of useless database lookups
+                        // and lock/unlocks
                         // detect duplicates
                         if self.blockdb.contains(&hash).unwrap() {
+                            let mut recent_blocks = self.recent_blocks.lock().unwrap();
+                            recent_blocks.remove(&hash);
                             continue;
-                        }
-
-                        match pow_check {
-                            BlockResult::Pass => {}
-                            _ => continue
                         }
 
                         // store the block into database
