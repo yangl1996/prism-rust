@@ -10,6 +10,7 @@ use crate::utxodb::UtxoDatabase;
 use crate::wallet::Wallet;
 use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 use std::sync::Mutex;
+use log::{debug, info, warn};
 
 pub fn new_validated_block(
     block: &Block,
