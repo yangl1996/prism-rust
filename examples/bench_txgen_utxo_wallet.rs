@@ -13,7 +13,7 @@ use log::{debug, error, info};
 use std::process;
 
 const REPEAT: usize = 1000;
-const TX_COUNT: usize = 20000;
+const TX_COUNT: usize = 2000;
 
 fn main() {
 
@@ -89,24 +89,27 @@ fn main() {
       }
     }
     let tx_generate_end = Instant::now();
-    utxo_update_time += tx_generate_end.duration_since(tx_generate_start).as_micros() as f64;
+    let local_tx_generate_time = tx_generate_end.duration_since(tx_generate_start).as_micros() as f64;
+    tx_generate_time +=local_tx_generate_time;
 
     // 2. Pass the tx through utxo
     let utxo_update_start = Instant::now();
     let coin_diff = utxodb.apply_diff(&txs, &[], None).unwrap();
     let utxo_update_end = Instant::now();
-    tx_generate_time += utxo_update_end.duration_since(utxo_update_start).as_micros() as f64;
+    let local_utxo_update_time = utxo_update_end.duration_since(utxo_update_start).as_micros() as f64;
+    utxo_update_time += local_utxo_update_time;
 
     //3. Pass the coin diff through wallet
     let wallet_update_start = Instant::now();
     wallet.apply_diff(&coin_diff.0, &coin_diff.1).unwrap();
     let wallet_update_end = Instant::now();
-    wallet_update_time += wallet_update_end.duration_since(wallet_update_start).as_micros() as f64;
+    let local_wallet_update_time = wallet_update_end.duration_since(wallet_update_start).as_micros() as f64;
+    wallet_update_time += local_wallet_update_time;
 
 
-    println!("{} Wallet tx gen rate {}",i, ((i*TX_COUNT) as f64)*1000_000.0/tx_generate_time);
-    println!("{} Utxodb apply diff rate {}",i, ((i*TX_COUNT) as f64)*1000_000.0/utxo_update_time);
-    println!("{} Wallet apply diff rate {} \n",i, ((i*TX_COUNT) as f64)*1000_000.0/wallet_update_time);
+    println!("{} Wallet tx gen: Local rate {}. Global rate {}",i, (TX_COUNT as f64)*1000_000.0/local_tx_generate_time , ((i*TX_COUNT) as f64)*1000_000.0/tx_generate_time);
+    println!("{} Utxodb apply diff: Local rate {}. Global rate {}",i, (TX_COUNT as f64)*1000_000.0/local_utxo_update_time, ((i*TX_COUNT) as f64)*1000_000.0/utxo_update_time);
+    println!("{} Wallet apply diff: Local rate {}. Global rate {} \n",i, (TX_COUNT as f64)*1000_000.0/local_wallet_update_time, ((i*TX_COUNT) as f64)*1000_000.0/wallet_update_time);
 //    println!("The wallet {} coins after {} repeat .Tx len {}. Coin diff {}:{}\n", wallet.number_of_coins(), i, txs.len(), coin_diff.0.len(), coin_diff.1.len());
   }
 
