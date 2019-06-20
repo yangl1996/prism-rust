@@ -130,7 +130,7 @@ impl UtxoDatabase {
             let mut batch = rocksdb::WriteBatch::default();
             for input in &t.input {
                 let id_ser = serialize(&input.coin).unwrap();
-                if self.db.get(&id_ser)?.is_none() {
+                if self.db.get_cf(coins_cf, &id_ser)?.is_none() {
                     valid = false;
                     break;
                 }
