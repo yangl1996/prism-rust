@@ -183,7 +183,7 @@ function sync_payload_single
 
 function start_prism_single
 {
-	ssh $1 -- 'mkdir -p /home/ubuntu/log && bash /home/ubuntu/payload/scripts/start-prism.sh &>/home/ubuntu/log/start.log'
+	ssh $1 -- 'sudo mkdir -p /tmp/prism && mkdir -p /home/ubuntu/log && bash /home/ubuntu/payload/scripts/start-prism.sh &>/home/ubuntu/log/start.log'
 }
 
 function stop_prism_single
