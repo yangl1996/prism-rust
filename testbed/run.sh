@@ -168,7 +168,12 @@ function install_perf_single
 
 function mount_tmpfs_single
 {
-	ssh $1 -- 'sudo rm -rf /tmp/prism && sudo mkdir /tmp/prism && sudo mount -t tmpfs -o rw,size=20G tmpfs /tmp/prism'
+	ssh $1 -- 'sudo rm -rf /tmp/prism && sudo mkdir /tmp/prism && sudo mount -t tmpfs -o rw,size=20g tmpfs /tmp/prism'
+}
+
+function unmount_tmpfs_single
+{
+	ssh $1 -- 'sudo umount /tmp/prism && rm -rf /tmp/prism'
 }
 
 function sync_payload_single
@@ -414,6 +419,7 @@ case "$1" in
 		  install-tools         Install tools
 		  fix-config            Fix SSH config
 		  mount-ramdisk         Mount RAM disk
+		  unmount-ramdisk       Unmount RAM disk
 
 		Run Experiment
 
@@ -447,6 +453,8 @@ case "$1" in
 		fix_ssh_config ;;
 	mount-ramdisk)
 		execute_on_all mount_tmpfs ;;
+	unmount-ramdisk)
+		execute_on_all unmount_tmpfs ;;
 	install-tools)
 		execute_on_all install_perf ;;
 	gen-payload)
