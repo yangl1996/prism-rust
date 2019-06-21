@@ -166,6 +166,11 @@ function install_perf_single
 	ssh $1 -- 'rm -f rust-unmangle && rm -rf FlameGraph && sudo apt-get update -y && sudo apt-get install linux-tools-aws linux-tools-4.15.0-1032-aws binutils -y && wget https://github.com/yangl1996/rust-unmangle/raw/master/rust-unmangle && git clone https://github.com/brendangregg/FlameGraph.git && chmod +x rust-unmangle && echo export PATH=$PATH:/home/ubuntu:/home/ubuntu/FlameGraph >> /home/ubuntu/.profile'
 }
 
+function mount_tmpfs_single
+{
+	ssh $1 -- 'sudo rm -rf /tmp/prism && sudo mkdir /tmp/prism && sudo mount -t tmpfs -o rw,size=20G tmpfs /tmp/prism'
+}
+
 function sync_payload_single
 {
 	rsync -rz payload/$1/ $1:/home/ubuntu/payload
@@ -214,7 +219,7 @@ function get_performance_single
 
 function start_transactions_single
 {
-	curl -s "http://$3:$4/transaction-generator/set-arrival-distribution?interval=100&distribution=uniform"
+	curl -s "http://$3:$4/transaction-generator/set-arrival-distribution?interval=50&distribution=uniform"
 	curl -s "http://$3:$4/transaction-generator/set-value-distribution?min=100&max=100&distribution=uniform"
 	curl -s "http://$3:$4/transaction-generator/start?throttle=100000"
 }
@@ -407,7 +412,8 @@ case "$1" in
 		  start-instances n     Start n EC2 instances
 		  stop-instances        Terminate EC2 instances
 		  install-tools         Install tools
-	          fix-config            Fix SSH config
+		  fix-config            Fix SSH config
+		  mount-ramdisk         Mount RAM disk
 
 		Run Experiment
 
@@ -439,6 +445,8 @@ case "$1" in
 		stop_instances ;;
 	fix-config)
 		fix_ssh_config ;;
+	mount-ramdisk)
+		execute_on_all mount_tmpfs ;;
 	install-tools)
 		execute_on_all install_perf ;;
 	gen-payload)
