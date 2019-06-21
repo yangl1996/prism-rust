@@ -3,12 +3,10 @@ use crate::config::*;
 use crate::crypto::hash::{Hashable, H256};
 
 use bincode::{deserialize, serialize};
-use log::{debug, info, trace};
+use log::info;
 use rocksdb::{ColumnFamilyDescriptor, Options, WriteBatch, DB};
 use std::collections::{BTreeSet, HashMap, HashSet, BTreeMap};
-use std::mem;
 use std::sync::Mutex;
-use std::time;
 
 // Column family names for node/chain metadata
 const PROPOSER_NODE_LEVEL_CF: &str = "PROPOSER_NODE_LEVEL"; // hash to node level (u64)
@@ -37,7 +35,7 @@ pub struct BlockChain {
     db: DB,
     proposer_best_level: Mutex<u64>,
     voter_best: Vec<Mutex<(H256, u64)>>,
-    unreferred_transactions: Mutex<HashSet<H256>>,
+    unreferred_transactions: Mutex<(HashSet<H256>, Vec<H256>)>,
     unreferred_proposers: Mutex<HashSet<H256>>,
     unconfirmed_proposers: Mutex<HashSet<H256>>,
     proposer_ledger_tip: Mutex<u64>,
@@ -143,7 +141,7 @@ impl BlockChain {
             db: db,
             proposer_best_level: Mutex::new( 0),
             voter_best: voter_best,
-            unreferred_transactions: Mutex::new(HashSet::new()),
+            unreferred_transactions: Mutex::new((HashSet::new(),Vec::new())),
             unreferred_proposers: Mutex::new(HashSet::new()),
             unconfirmed_proposers: Mutex::new(HashSet::new()),
             proposer_ledger_tip: Mutex::new(0),
@@ -347,8 +345,9 @@ impl BlockChain {
 
                     let mut unreferred_transactions = self.unreferred_transactions.lock().unwrap();
                     for ref_hash in &content.transaction_refs {
-                        unreferred_transactions.remove(&ref_hash);
+                        unreferred_transactions.0.remove(&ref_hash);
                     }
+                    unreferred_transactions.1.clear();
                     drop(unreferred_transactions);
 
                     // set best block info
@@ -388,12 +387,13 @@ impl BlockChain {
                 }
                 drop(voter_best);
             }
-            Content::Transaction(content) => {
+            Content::Transaction(_) => {
                 // TODO: this is actually useless
                 self.db.write(wb)?;
                 // mark itself as unreferred
                 let mut unreferred_transactions = self.unreferred_transactions.lock().unwrap();
-                unreferred_transactions.insert(block_hash);
+                unreferred_transactions.0.insert(block_hash);
+                unreferred_transactions.1.push(block_hash);
                 drop(unreferred_transactions);
             }
         }
@@ -775,15 +775,24 @@ impl BlockChain {
 
     pub fn unreferred_transactions(&self) -> Vec<H256> {
         // TODO: does ordering matter?
-        let unreferred_transactions = self.unreferred_transactions.lock().unwrap();
-        let list: Vec<H256> = unreferred_transactions.iter().cloned().collect();
+        let mut unreferred_transactions = self.unreferred_transactions.lock().unwrap();
+        let list: Vec<H256> = unreferred_transactions.0.iter().cloned().collect();
+        unreferred_transactions.1.clear();
+        drop(unreferred_transactions);
+        return list;
+    }
+
+    pub fn unreferred_transactions_diff(&self) -> Vec<H256> {
+        // TODO: does ordering matter?
+        let mut unreferred_transactions = self.unreferred_transactions.lock().unwrap();
+        let list: Vec<H256> = unreferred_transactions.1.drain(..).collect();
         drop(unreferred_transactions);
         return list;
     }
 
     /// Get the list of unvoted proposer blocks that a voter chain should vote for, given the tip
     /// of the particular voter chain.
-    pub fn unvoted_proposer(&self, tip: &H256, proposer_parent: &H256) -> Result<Vec<H256>> {
+    pub fn unvoted_proposer(&self, tip: &H256, proposer_parent: &H256) -> Result<Option<Vec<H256>>> {
         let voter_node_voted_level_cf = self.db.cf_handle(VOTER_NODE_VOTED_LEVEL_CF).unwrap();
         let proposer_node_level_cf = self.db.cf_handle(PROPOSER_NODE_LEVEL_CF).unwrap();
         let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
@@ -804,6 +813,13 @@ impl BlockChain {
         )
             .unwrap();
 
+        if first_vote_level > last_vote_level {
+            // this case means tip's parent is higher than my parent, which is impossible and we
+            // should not return anything. (issue # 82)
+            // notice this should not be confused with first_vote_level==last_vote_level, where we
+            // can safely return empty vector.
+            return Ok(None);
+        }
         // get the first block we heard on each proposer level
         let mut list: Vec<H256> = vec![];
         for level in first_vote_level + 1..=last_vote_level {
@@ -816,7 +832,7 @@ impl BlockChain {
             .unwrap();
             list.push(blocks[0]);//Note: the last vote in list could be other proposer that at the same level of proposer_parent
         }
-        return Ok(list);
+        return Ok(Some(list));
     }
 
     /// Get the level of the proposer block
@@ -1334,7 +1350,7 @@ impl BlockChain {
 
         // TODO: transaction_unreferred may be inconsistent with other things
         let transaction_unreferred_ = self.unreferred_transactions.lock().unwrap();
-        let transaction_unreferred: Vec<String> = transaction_unreferred_
+        let transaction_unreferred: Vec<String> = transaction_unreferred_.0
             .iter()
             .map(|h| h.to_string())
             .collect();
@@ -2180,7 +2196,7 @@ mod tests {
     fn unvoted_proposer() {
         let db = BlockChain::new("/tmp/prism_test_blockchain_unvoted_proposer.rocksdb").unwrap();
         assert_eq!(
-            db.unvoted_proposer(&VOTER_GENESIS_HASHES[0], &db.best_proposer().unwrap()).unwrap(),
+            db.unvoted_proposer(&VOTER_GENESIS_HASHES[0], &db.best_proposer().unwrap()).unwrap().unwrap(),
             vec![]
         );
 
@@ -2210,7 +2226,7 @@ mod tests {
         );
         db.insert_block(&new_proposer_block_2).unwrap();
         assert_eq!(
-            db.unvoted_proposer(&VOTER_GENESIS_HASHES[0], &db.best_proposer().unwrap()).unwrap(),
+            db.unvoted_proposer(&VOTER_GENESIS_HASHES[0], &db.best_proposer().unwrap()).unwrap().unwrap(),
             vec![new_proposer_block_1.hash()]
         );
 
@@ -2232,11 +2248,11 @@ mod tests {
         db.insert_block(&new_voter_block).unwrap();
 
         assert_eq!(
-            db.unvoted_proposer(&VOTER_GENESIS_HASHES[0], &db.best_proposer().unwrap()).unwrap(),
+            db.unvoted_proposer(&VOTER_GENESIS_HASHES[0], &db.best_proposer().unwrap()).unwrap().unwrap(),
             vec![new_proposer_block_1.hash()]
         );
         assert_eq!(
-            db.unvoted_proposer(&new_voter_block.hash(), &db.best_proposer().unwrap()).unwrap(),
+            db.unvoted_proposer(&new_voter_block.hash(), &db.best_proposer().unwrap()).unwrap().unwrap(),
             vec![]
         );
     }

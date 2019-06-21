@@ -20,7 +20,6 @@ use memory_pool::MemoryPool;
 use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
 use std::time::SystemTime;
 use std::time;
-use std::collections::HashSet;
 
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -195,21 +194,6 @@ impl Context {
                     ContextUpdateSignal::NewTransactionBlock => contains_transaction = true,
                 };
             }
-            /*
-            loop {
-                match self.context_update_chan.try_recv() {
-                    Ok(sig) => {
-                        // TODO: Only update block contents of the relevant structures
-                        match sig {
-                            ContextUpdateSignal::NewProposerBlock => contains_proposer = true,
-                            ContextUpdateSignal::NewVoterBlock(chain) => voter_msg.push(chain),
-                            ContextUpdateSignal::NewTransactionBlock => contains_transaction = true,
-                        };
-                    }
-                    Err(TryRecvError::Empty) => break,
-                    Err(TryRecvError::Disconnected) => panic!("Miner context update channel detached"),
-                }
-            }*/
             if contains_proposer {
                 // we hear a proposer block, so update all contents
                 self.update_all_contents();
@@ -351,7 +335,10 @@ impl Context {
         // get mutex of blockchain and get all required data
         let transaction_block_refs = self.blockchain.unreferred_transactions();
         let mut proposer_block_refs = self.blockchain.unreferred_proposers();
-        // get best proposer after get unreferred_proposers to avoid unreferred_proposers are newer
+        let voter_parent_hash: Vec<H256> = (0..NUM_VOTER_CHAINS)
+            .map(|i| self.blockchain.best_voter(i as usize))
+            .collect();
+        // get best proposer after get unreferred_proposers and voter_parent_hash to avoid they are newer
         // than best proposer
         self.proposer_parent_hash = self.blockchain.best_proposer().unwrap();
         self.difficulty = self.get_difficulty(&self.proposer_parent_hash);
@@ -359,16 +346,12 @@ impl Context {
             .iter()
             .position(|item| *item == self.proposer_parent_hash)
             .map(|i| proposer_block_refs.remove(i));
-
-        let voter_parent_hash: Vec<H256> = (0..NUM_VOTER_CHAINS)
-            .map(|i| self.blockchain.best_voter(i as usize))
-            .collect();
         let proposer_block_votes: Vec<Vec<H256>> = (0..NUM_VOTER_CHAINS)
             .map(|i| {
                 self.blockchain
                     .unvoted_proposer(&voter_parent_hash[i as usize], &self.proposer_parent_hash)
                     .unwrap()
-                    .clone()
+                    .unwrap()
             })
             .collect();
         // get mutex of mempool and get all required data
@@ -416,55 +399,41 @@ impl Context {
 
     /// Update the transaction ref of proposer content, only append the new refs
     fn append_refed_transaction(&mut self) {
-        let mut transaction_block_refs = self.blockchain.unreferred_transactions();
         let idx: usize = PROPOSER_INDEX as usize;
         if let Content::Proposer(ref mut content) = self.content.get_mut(idx).unwrap() {
-            let previous_transaction_refs: HashSet<H256> = content.transaction_refs.iter().cloned().collect();
-            // get the newly refs
-            transaction_block_refs.retain(|h|!previous_transaction_refs.contains(h));
-            // add to the merkle tree, to avoid re-creating merkle tree every time.
-            self.proposer_content_transaction_refs.append(&mut transaction_block_refs.clone());
-            // add to content
-            content.transaction_refs.append(&mut transaction_block_refs);
-            let content_hash = content.ref_roots_to_hash(self.proposer_content_transaction_refs.root(), self.proposer_content_proposer_refs.root());
-            self.content_merkle_tree.update(idx, content_hash);
+            let mut transaction_block_refs = self.blockchain.unreferred_transactions_diff();
+            if !transaction_block_refs.is_empty() {
+                // add to content
+                content.transaction_refs.extend(&transaction_block_refs);
+                // add to the merkle tree, to avoid re-creating merkle tree every time.
+                self.proposer_content_transaction_refs.append(&mut transaction_block_refs);
+                let content_hash = content.ref_roots_to_hash(self.proposer_content_transaction_refs.root(), self.proposer_content_proposer_refs.root());
+                self.content_merkle_tree.update(idx, content_hash);
+            }
         } else { unreachable!(); }
     }
-
-    /*
-    /// Update proposer refs, (don't update best proposer, etc)
-    fn update_proposer_refs(&mut self) {
-        let idx: usize = PROPOSER_INDEX as usize;
-        let transaction_block_refs = self.blockchain.unreferred_transactions();
-        let mut proposer_block_refs = self.blockchain.unreferred_proposers();
-        proposer_block_refs
-            .iter()
-            .position(|item| *item == self.proposer_parent_hash)
-            .map(|i| proposer_block_refs.remove(i));
-        // Update proposer content, and create the Merkle trees of two kinds of refs.
-        self.proposer_content_transaction_refs = MerkleTree::new(transaction_block_refs.clone());
-        self.proposer_content_proposer_refs = MerkleTree::new(proposer_block_refs.clone());
-        let proposer_content = proposer::Content::new(
-            transaction_block_refs,
-            proposer_block_refs,
-        );
-        let proposer_content_hash = proposer_content.ref_roots_to_hash(self.proposer_content_transaction_refs.root(), self.proposer_content_proposer_refs.root());
-        self.content[idx] = proposer_content;
-        self.content_merkle_tree.update(idx, proposer_content_hash);
-    }*/
 
     /// Update one voter chain's content with chain number
     fn update_voter_content(&mut self, chain: u16) {
         let idx: usize = (FIRST_VOTER_INDEX + chain) as usize;
-        let voter_parent = self.blockchain.best_voter(chain as usize);
-        let votes = self.blockchain
-            .unvoted_proposer(&voter_parent, &self.proposer_parent_hash).unwrap();
-        self.content[idx] = Content::Voter(voter::Content::new(
-            chain,
-            voter_parent,
-            votes,
-        ));
-        self.content_merkle_tree.update(idx, self.content[idx].hash());
+        if let Content::Voter(content) = self.content.get(idx).unwrap() {
+            let voter_parent = self.blockchain.best_voter(chain as usize);
+            if voter_parent != content.voter_parent {
+                // we have to check if below function `unvoted_proposer(voter_parent, self.proposer_parent_hash)` result is None or not.
+                if let Some(votes) = self.blockchain.unvoted_proposer(&voter_parent, &self.proposer_parent_hash).unwrap() {
+                    self.content[idx] = Content::Voter(voter::Content::new(
+                            chain,
+                            voter_parent,
+                            votes,
+                            ));
+                    self.content_merkle_tree.update(idx, self.content[idx].hash());
+                } else {
+                    // TODO: this branch means `self.proposer_parent_hash` needs to be updated.
+                }
+            }
+        } else {
+            unreachable!();
+        }
     }
 
     /// Update transaction block's content
@@ -576,7 +545,7 @@ mod tests {
                 blockchain
                     .unvoted_proposer(&voter_parent_hash[i as usize], &parent)
                     .unwrap()
-                    .clone()
+                    .unwrap()
             })
             .collect();
         for (i, (voter_parent, proposer_block_votes)) in voter_parent_hash
