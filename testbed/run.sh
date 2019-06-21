@@ -168,12 +168,12 @@ function install_perf_single
 
 function mount_tmpfs_single
 {
-	ssh $1 -- 'sudo rm -rf /tmp/prism && sudo mkdir /tmp/prism && sudo mount -t tmpfs -o rw,size=20g tmpfs /tmp/prism'
+	ssh $1 -- 'sudo rm -rf /tmp/prism && sudo mkdir -m 777 /tmp/prism && sudo mount -t tmpfs -o rw,size=20g tmpfs /tmp/prism'
 }
 
 function unmount_tmpfs_single
 {
-	ssh $1 -- 'sudo umount /tmp/prism && rm -rf /tmp/prism'
+	ssh $1 -- 'sudo umount /tmp/prism && sudo rm -rf /tmp/prism'
 }
 
 function sync_payload_single
@@ -183,7 +183,7 @@ function sync_payload_single
 
 function start_prism_single
 {
-	ssh $1 -- 'sudo mkdir -p /tmp/prism && mkdir -p /home/ubuntu/log && bash /home/ubuntu/payload/scripts/start-prism.sh &>/home/ubuntu/log/start.log'
+	ssh $1 -- 'sudo mkdir -m 777 -p /tmp/prism && mkdir -p /home/ubuntu/log && bash /home/ubuntu/payload/scripts/start-prism.sh &>/home/ubuntu/log/start.log'
 }
 
 function stop_prism_single
