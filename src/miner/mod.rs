@@ -200,11 +200,10 @@ impl Context {
             } else {
                 // we didn't hear a proposer block, so don't need to update all contents
                 for chain in &voter_msg {
-                    self.update_voter_content(*chain);
+                    self.update_on_voter_block(*chain);
                 }
                 if contains_transaction {
-                    self.append_refed_transaction();
-                    self.update_transaction_content();
+                    self.update_on_transacion_block();
                 }
             }
             if contains_proposer || contains_transaction || !voter_msg.is_empty() {
@@ -278,11 +277,8 @@ impl Context {
                 // after we mined this block, we update the context based on this block
                 match &mined_block.content {
                     Content::Proposer(_) => self.update_all_contents(),
-                    Content::Voter(content) => self.update_voter_content(content.chain_number),
-                    Content::Transaction(_) => {
-                        self.append_refed_transaction();
-                        self.update_transaction_content();
-                    }
+                    Content::Voter(content) => self.update_on_voter_block(content.chain_number),
+                    Content::Transaction(_) => self.update_on_transacion_block(),
                 }
                 header = self.create_header();
             }
@@ -397,8 +393,19 @@ impl Context {
         self.content = content;
     }
 
-    /// Update the transaction ref of proposer content, only append the new refs
-    fn append_refed_transaction(&mut self) {
+    /// Update content when getting a transaction block
+    fn update_on_transacion_block(&mut self) {
+        // Update transaction block's content
+        let mempool = self.tx_mempool.lock().unwrap();
+        let transactions = mempool.get_transactions(TRANSACTION_BLOCK_TX_LIMIT);
+        drop(mempool);
+        let idx: usize = TRANSACTION_INDEX as usize;
+        self.content[idx] = Content::Transaction(transaction::Content::new(
+                transactions,
+                ));
+        self.content_merkle_tree.update(idx, self.content[idx].hash());
+
+        // Update the transaction ref of proposer content, but only append the new refs
         let idx: usize = PROPOSER_INDEX as usize;
         if let Content::Proposer(ref mut content) = self.content.get_mut(idx).unwrap() {
             let mut transaction_block_refs = self.blockchain.unreferred_transactions_diff();
@@ -413,8 +420,8 @@ impl Context {
         } else { unreachable!(); }
     }
 
-    /// Update one voter chain's content with chain number
-    fn update_voter_content(&mut self, chain: u16) {
+    /// When getting a voter block, update the voter chain's content with chain number
+    fn update_on_voter_block(&mut self, chain: u16) {
         let idx: usize = (FIRST_VOTER_INDEX + chain) as usize;
         if let Content::Voter(content) = self.content.get(idx).unwrap() {
             let voter_parent = self.blockchain.best_voter(chain as usize);
@@ -436,17 +443,6 @@ impl Context {
         }
     }
 
-    /// Update transaction block's content
-    fn update_transaction_content(&mut self) {
-        let mempool = self.tx_mempool.lock().unwrap();
-        let transactions = mempool.get_transactions(TRANSACTION_BLOCK_TX_LIMIT);
-        drop(mempool);
-        let idx: usize = TRANSACTION_INDEX as usize;
-        self.content[idx] = Content::Transaction(transaction::Content::new(
-            transactions,
-        ));
-        self.content_merkle_tree.update(idx, self.content[idx].hash());
-    }
 
     /// Calculate the difficulty for the block to be mined
     // TODO: shall we make a dedicated type for difficulty?
@@ -593,7 +589,7 @@ mod tests {
             let voter = voter_block(parent, 3,chain, blockchain.best_voter(chain as usize), vec![]);
             blockdb.insert(&voter);
             blockchain.insert_block(&voter);
-            miner.update_voter_content(chain);
+            miner.update_on_voter_block(chain);
             let header = miner.create_header();
             // Here, we assume difficulty is large enough s.t. we can get a block every time
             let block = miner.assemble_block(header);
@@ -603,7 +599,7 @@ mod tests {
                 panic!("Miner mine a block that doesn't pass validation!\n\tResult: {:?},\n\tBlock: {:?}\n\tContent Hash: {}", result, block, block.content.hash() );
             }
         }
-        miner.append_refed_transaction();
+        miner.update_on_transacion_block();
         for nonce in 0..100 {
             let mut header = miner.create_header();
             header.nonce = nonce;
