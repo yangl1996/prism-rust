@@ -1,37 +1,31 @@
 use crate::crypto::hash::H256;
 
 // Network parameters
-pub const NETWORK_CAPACITY: u32 = 20000_000; // the expected network usage in KByte/s
-pub const NETWORK_DELAY: f32 = 2.0; // the expected block propagation delay in seconds
+pub const NETWORK_DELAY: f32 = 2.0; // the expected block propagation delay (in seconds)
 
 // Design parameters
 pub const NUM_VOTER_CHAINS: u16 = 100 as u16; // more chains means better latency
-pub const TX_BLOCK_SIZE_BYTES: u32 = 64_000; // the maximum size of a transaction block
+pub const TX_BLOCK_SIZE: u32 = 64_000; // the maximum size of a transaction block (in Bytes)
+pub const TX_THROUGHPUT: u32 = 30000; // the transaction throughput we want to support (in Tx/s)
+pub const TX_BLOCK_TRANSACTIONS: u32 = TX_BLOCK_SIZE / AVG_TX_SIZE;
 
-// All the parameters below are function of the above parameters
-pub const TX_THROUGHPUT: u32 = NETWORK_CAPACITY*4/5; // the network throughput that is expected to be used by transaction blocks
-pub const CHAIN_MINING_RATE: f32 = 0.2/(NETWORK_DELAY); // mining rate of the proposer chain and each voter chain in Blks/s
+pub const AVG_TX_SIZE: u32 = 280;   // average size of a transaction (in Bytes)
+pub const TX_MINING_RATE: f32 = TX_THROUGHPUT as f32 / TX_BLOCK_TRANSACTIONS as f32;
+pub const CHAIN_MINING_RATE: f32 = 0.2/ NETWORK_DELAY; // mining rate of the proposer chain and each voter chain in Blks/s
 
 // Do not change from here
 
-// Mining rate ratio of Prop:Voter(total):Tx
-pub const RATIO: (f32, f32, f32) = (1.0, NUM_VOTER_CHAINS as f32, (TX_THROUGHPUT as f32)/((TX_BLOCK_SIZE_BYTES as f32)*CHAIN_MINING_RATE) ); 
+// Mining rate of each type (Proposer : Voter (all chains) : Transaction, in Blks/s)
+pub const RATIO: (f32, f32, f32) = (CHAIN_MINING_RATE, CHAIN_MINING_RATE * (NUM_VOTER_CHAINS as f32), TX_MINING_RATE); 
 
-// Mining rates
-pub const TOTAL_MINING_RANGE: u32 = 10000; // This is only used for resolution
-pub const CHAIN_MINING_RANGE: u32 = ((TOTAL_MINING_RANGE as f32)/(RATIO.0+RATIO.1+RATIO.2)) as u32;
-// Total for the voter chains
-pub const VOTER_MINING_RANGE: u32 = CHAIN_MINING_RANGE * (NUM_VOTER_CHAINS as u32);
-// Proposer tree
-pub const PROPOSER_MINING_RANGE: u32 = CHAIN_MINING_RANGE;
-// Transaction blocks
-pub const TRANSACTION_MINING_RANGE: u32 = TOTAL_MINING_RANGE - PROPOSER_MINING_RANGE - VOTER_MINING_RANGE;
+// Sortition ranges
+pub const TOTAL_MINING_RANGE: u32 = 10000; // This is for resolution
+pub const RATE_DIFFICULTY_MULTIPLIER: f32 = (TOTAL_MINING_RANGE as f32) / (RATIO.0 + RATIO.1 + RATIO.2);
 
-//Block content size limits
-pub const AVG_TX_SIZE_BYTES: u32 = 280;
-pub const TRANSACTION_BLOCK_TX_LIMIT: u32 = TX_BLOCK_SIZE_BYTES/AVG_TX_SIZE_BYTES; // Max number of tx included in a tx block
-pub const PROPOSER_BLOCK_TX_BLOCK_REF_LIMIT: u32 = 3*TRANSACTION_MINING_RANGE/PROPOSER_MINING_RANGE; // Max number of tx blocks referred by a prop block.
-pub const PROPOSER_BLOCK_PROP_BLOCK_REF_LIMIT: u32 = 10; // Max number of prop blocks referred by a prop block.
+// Width of the acceptance range for each type of block
+pub const VOTER_MINING_RANGE: u32 = (RATE_DIFFICULTY_MULTIPLIER * RATIO.1) as u32;
+pub const PROPOSER_MINING_RANGE: u32 = (RATE_DIFFICULTY_MULTIPLIER * RATIO.0) as u32;
+pub const TRANSACTION_MINING_RANGE: u32 = (RATE_DIFFICULTY_MULTIPLIER * RATIO.2) as u32;
 
 // Chain id
 pub const TRANSACTION_INDEX: u16 = 1;

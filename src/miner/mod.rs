@@ -346,7 +346,7 @@ impl Context {
             .collect();
         // get mutex of mempool and get all required data
         let mempool = self.tx_mempool.lock().unwrap();
-        let transactions = mempool.get_transactions(TRANSACTION_BLOCK_TX_LIMIT);
+        let transactions = mempool.get_transactions(TX_BLOCK_TRANSACTIONS);
         drop(mempool);
 
         // update the contents and the parents based on current view
@@ -411,7 +411,7 @@ impl Context {
     /// Update transaction block's content
     fn update_transaction_content(&mut self) {
         let mempool = self.tx_mempool.lock().unwrap();
-        let transactions = mempool.get_transactions(TRANSACTION_BLOCK_TX_LIMIT);
+        let transactions = mempool.get_transactions(TX_BLOCK_TRANSACTIONS);
         drop(mempool);
         let idx: usize = TRANSACTION_INDEX as usize;
         self.content[idx] = Content::Transaction(transaction::Content::new(
