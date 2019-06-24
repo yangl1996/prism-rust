@@ -203,7 +203,8 @@ pub fn check_content_semantic(
                     return BlockResult::InsufficientInput;
                 }
 
-                if !transaction::check_signature(&transaction) {
+                // TODO: batch-verify signatures
+                if !transaction::check_num_authorizations(&transaction) {
                     return BlockResult::WrongSignature;
                 }
             }

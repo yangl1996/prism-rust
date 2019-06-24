@@ -69,7 +69,6 @@ pub mod tests {
     use super::super::transaction::tests::*;
     use super::super::proposer::Content as ProposerContent;
 
-    use crate::crypto::sign::{KeyPair, PubKey, Signable, Signature};
     use crate::crypto::hash::{Hashable, H256};
     use crate::crypto::merkle::MerkleTree;
     use crate::transaction::{CoinId, Input, Output, Authorization, Transaction};

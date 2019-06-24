@@ -1,9 +1,10 @@
 use std::cell::RefCell;
 use std::hash::{Hash, Hasher};
 use crate::crypto::hash::{Hashable, H256};
-use crate::crypto::sign::{KeyPair, PubKey, Signable, Signature};
 use bincode::serialize;
 use crate::experiment::performance_counter::PayloadSize;
+use ed25519_dalek::PublicKey;
+use ed25519_dalek::Signature;
 
 /// A unique identifier of a transaction output, a.k.a. a coin.
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -82,37 +83,20 @@ impl Hashable for Transaction {
     }
 }
 
+/*
 impl Hash for Transaction {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.input.hash(state);
         self.output.hash(state);
-        self.authorization.hash(state);
     }
 }
-
-impl Signable for Transaction {
-    fn sign(&self, keypair: &KeyPair) -> Signature {
-        // note that we only want to sign the inputs and the outputs
-        let raw_inputs = serialize(&self.input).unwrap();
-        let raw_outputs = serialize(&self.output).unwrap();
-        let raw = [&raw_inputs[..], &raw_outputs[..]].concat(); // we can also use Vec extend, don't know which is better
-        keypair.sign(&raw)
-    }
-
-    fn verify(&self, public_key: &PubKey, signature: &Signature) -> bool {
-        // note that we only sign the inputs and the outputs
-        let raw_inputs = serialize(&self.input).unwrap();
-        let raw_outputs = serialize(&self.output).unwrap();
-        let raw = [&raw_inputs[..], &raw_outputs[..]].concat(); // we can also use Vec extend, don't know which is better
-        public_key.verify(&raw, signature)
-    }
-}
+*/
 
 /// Authorization of the transaction by the owner of an input coin.
-#[derive(Serialize, Deserialize, Debug, Hash, Copy, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
 pub struct Authorization {
     /// The public key of the owner.
-    pub pubkey: PubKey,
+    pub pubkey: PublicKey,
     /// The signature of the transaction input and output
     pub signature: Signature,
 }
@@ -148,6 +132,7 @@ pub mod tests {
         }
     }
 
+    /*
     pub fn generate_random_transaction() -> Transaction {
         let mut rng = rand::thread_rng();
         let unsigned = Transaction {
@@ -167,4 +152,5 @@ pub mod tests {
             ..unsigned
         }
     }
+    */
 }

@@ -22,6 +22,11 @@ use std::sync::mpsc;
 use std::convert::TryInto;
 use std::thread;
 use std::time;
+use rand::Rng;
+use rand::rngs::OsRng;
+use ed25519_dalek::Keypair;
+use ed25519_dalek::Signature;
+use prism::transaction::Address;
 
 fn main() {
     // parse command line arguments
@@ -52,11 +57,12 @@ fn main() {
     // match subcommands
     match matches.subcommand() {
         ("keygen", Some(m)) => {
-            let keypair = prism::crypto::sign::KeyPair::random();
-            let base64_encoded = base64::encode(&keypair.pkcs8_bytes);
+            let mut csprng: OsRng = OsRng::new().unwrap();
+            let keypair: Keypair = Keypair::generate(&mut csprng);
+            let base64_encoded = base64::encode(&keypair.to_bytes().to_vec());
             println!("{}", base64_encoded);
             if m.is_present("display_address") {
-                let addr = keypair.public_key().hash();
+                let addr: Address = ring::digest::digest(&ring::digest::SHA256, &keypair.public.as_bytes().as_ref()).into();
                 let base64_encoded = base64::encode(&addr);
                 eprintln!("{}", base64_encoded);
             }
@@ -110,7 +116,7 @@ fn main() {
                     process::exit(1);
                 }
             };
-            let keypair = prism::crypto::sign::KeyPair::from_pkcs8(decoded);
+            let keypair = Keypair::from_bytes(&decoded).unwrap();
             match wallet.load_keypair(keypair) {
                 Ok(a) => info!("Loaded key pair for address {}", &a),
                 Err(e) => {

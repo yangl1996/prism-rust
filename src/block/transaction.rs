@@ -40,7 +40,6 @@ impl Hashable for Content {
 pub mod tests {
     use super::super::header::tests::*;
     use super::super::transaction::Content as TxContent;
-    use crate::crypto::sign::{KeyPair, PubKey, Signable, Signature};
     use crate::crypto::hash::{Hashable, H256};
     use crate::crypto::merkle::MerkleTree;
     use crate::transaction::{CoinId, Input, Output, Authorization, Transaction};

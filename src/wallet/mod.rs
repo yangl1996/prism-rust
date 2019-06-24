@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 use crate::crypto::hash::Hashable;
-use crate::crypto::sign::{KeyPair, PubKey, Signable};
+use ed25519_dalek::{Keypair, Signature};
 use crate::transaction::{Address, Authorization, CoinId, Input, Output, Transaction};
 use bincode::{deserialize, serialize};
 use std::{error, fmt};
@@ -8,6 +8,8 @@ use std::convert::TryInto;
 use std::sync::Mutex;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use rand::Rng;
+use rand::rngs::OsRng;
 
 pub const COIN_CF: &str = "COIN";
 pub const KEYPAIR_CF: &str = "KEYPAIR";     // &Address to &KeyPairPKCS8
@@ -19,7 +21,7 @@ pub struct Wallet {
     /// The underlying RocksDB handle.
     db: rocksdb::DB,
     /// Keep key pair (in pkcs8 bytes) in memory for performance, it's duplicated in database as well.
-    key_pair: Mutex<HashMap<Address, Vec<u8>>>,
+    keypairs: Mutex<HashMap<Address, Keypair>>,
     counter: AtomicUsize,
 }
 
@@ -65,7 +67,7 @@ impl Wallet {
         db_opts.create_missing_column_families(true);
         db_opts.create_if_missing(true);
         let handle = rocksdb::DB::open_cf_descriptors(&db_opts, path, vec![coin_cf, keypair_cf])?;
-        return Ok(Self { db: handle, key_pair: Mutex::new(HashMap::new()), counter: AtomicUsize::new(0), });
+        return Ok(Self { db: handle, keypairs: Mutex::new(HashMap::new()), counter: AtomicUsize::new(0), });
     }
 
     pub fn new<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
@@ -80,42 +82,30 @@ impl Wallet {
     /// Generate a new key pair
     pub fn generate_keypair(&self) -> Result<Address> {
         let cf = self.db.cf_handle(KEYPAIR_CF).unwrap();
-        let keypair = KeyPair::random();
-        let k: Address = keypair.public_key().hash();
-        let v = keypair.pkcs8_bytes;
-        self.db.put_cf(cf, &k, &v)?;
-        let mut key_pair = self.key_pair.lock().unwrap();
-        key_pair.insert(k,v);
-        Ok(k)
+        let mut csprng: OsRng = OsRng::new().unwrap();
+        let keypair: Keypair = Keypair::generate(&mut csprng);
+        return self.load_keypair(keypair);
     }
 
-    pub fn load_keypair(&self, keypair: KeyPair) -> Result<Address> {
+    pub fn load_keypair(&self, keypair: Keypair) -> Result<Address> {
         let cf = self.db.cf_handle(KEYPAIR_CF).unwrap();
-        let addr: Address = keypair.public_key().hash();
-        self.db.put_cf(cf, &addr, &keypair.pkcs8_bytes)?;
-        let mut key_pair = self.key_pair.lock().unwrap();
-        key_pair.insert(addr,keypair.pkcs8_bytes);
+        let addr: Address = ring::digest::digest(&ring::digest::SHA256, &keypair.public.as_bytes().as_ref()).into();
+        self.db.put_cf(cf, &addr, &keypair.to_bytes().to_vec())?;
+        let mut keypairs = self.keypairs.lock().unwrap();
+        keypairs.insert(addr, keypair);
         Ok(addr)
     }
 
     /// Get the list of addresses for which we have a key pair
     pub fn addresses(&self) -> Result<Vec<Address>> {
-        let key_pair = self.key_pair.lock().unwrap();
-        let addrs = key_pair.keys().cloned().collect();
+        let keypairs = self.keypairs.lock().unwrap();
+        let addrs = keypairs.keys().cloned().collect();
         Ok(addrs)
     }
 
-    fn keypair(&self, addr: &Address) -> Result<KeyPair> {
-        let key_pair = self.key_pair.lock().unwrap();
-        if let Some(v) = key_pair.get(addr) {
-            return Ok(KeyPair::from_pkcs8(v.clone()));
-        }
-        Err(WalletError::MissingKeyPair)
-    }
-
     fn contains_keypair(&self, addr: &Address) -> bool {
-        let key_pair = self.key_pair.lock().unwrap();
-        if key_pair.contains_key(addr) {
+        let keypairs = self.keypairs.lock().unwrap();
+        if keypairs.contains_key(addr) {
             return true;
         }
         false
@@ -214,12 +204,21 @@ impl Wallet {
         let mut authorization = vec![];
         owners.sort_unstable();
         owners.dedup();
+        let raw_inputs = bincode::serialize(&unsigned.input).unwrap();
+        let raw_outputs = bincode::serialize(&unsigned.output).unwrap();
+        let raw_unsigned = [&raw_inputs[..], &raw_outputs[..]].concat();
         for owner in owners.iter() {
-            let keypair = self.keypair(&owner)?;
-            authorization.push(Authorization {
-                pubkey: keypair.public_key(),
-                signature: unsigned.sign(&keypair),
-            });
+            let keypairs = self.keypairs.lock().unwrap();
+            if let Some(v) = keypairs.get(&owner) {
+                authorization.push(Authorization {
+                    pubkey: v.public,
+                    signature: v.sign(&raw_unsigned),
+                });
+            }
+            else {
+                return Err(WalletError::MissingKeyPair);
+            }
+            drop(keypairs);
         }
         self.counter.fetch_sub(unsigned.input.len(), Ordering::Relaxed);
         Ok(Transaction {
