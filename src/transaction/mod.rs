@@ -83,15 +83,6 @@ impl Hashable for Transaction {
     }
 }
 
-/*
-impl Hash for Transaction {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.input.hash(state);
-        self.output.hash(state);
-    }
-}
-*/
-
 /// Authorization of the transaction by the owner of an input coin.
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
 pub struct Authorization {
