@@ -9,7 +9,7 @@
 5. Execute `mkdir -p ~/.ssh/config.d`
 6. Start a local Ubuntu 18.04 VM that has Rust toolchain, `clang`, `build-essential` installed,
    is accessible by `ssh prism`, and can read the Github repository (preferably through SSH
-   agent forwarding)
+   agent forwarding). We currently target Rust nightly.
 
 ## Usage
 

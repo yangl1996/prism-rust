@@ -99,6 +99,7 @@ function build_prism
 	echo "Copying local repository to build machine"
 	rsync -ar ../Cargo.toml prism:~/prism/
 	rsync -ar ../src prism:~/prism/
+	rsync -ar ../.cargo prism:~/prism/
 	echo "Building Prism binary"
 	ssh prism -- 'cd ~/prism && /home/prism/.cargo/bin/cargo build --release' &> log/prism_build.log
 	if [ $# -ne 1 ]; then
