@@ -20,7 +20,7 @@ use memory_pool::MemoryPool;
 use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
 use std::time::SystemTime;
 use std::time;
-
+use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use rand::distributions::Distribution;
@@ -408,7 +408,9 @@ impl Context {
         // Update the transaction ref of proposer content, but only append the new refs
         let idx: usize = PROPOSER_INDEX as usize;
         if let Content::Proposer(ref mut content) = self.content.get_mut(idx).unwrap() {
-            let mut transaction_block_refs = self.blockchain.unreferred_transactions_diff();
+            let mut transaction_block_refs = self.blockchain.unreferred_transactions();
+            let original_transaction_block_refs: HashSet<H256> = content.transaction_refs.iter().cloned().collect();
+            transaction_block_refs.retain(|x|!original_transaction_block_refs.contains(x));
             if !transaction_block_refs.is_empty() {
                 // add to content
                 content.transaction_refs.extend(&transaction_block_refs);

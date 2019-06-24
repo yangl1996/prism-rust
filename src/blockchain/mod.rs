@@ -35,7 +35,7 @@ pub struct BlockChain {
     db: DB,
     proposer_best_level: Mutex<u64>,
     voter_best: Vec<Mutex<(H256, u64)>>,
-    unreferred_transactions: Mutex<(HashSet<H256>, Vec<H256>)>,
+    unreferred_transactions: Mutex<HashSet<H256>>,
     unreferred_proposers: Mutex<HashSet<H256>>,
     unconfirmed_proposers: Mutex<HashSet<H256>>,
     proposer_ledger_tip: Mutex<u64>,
@@ -141,7 +141,7 @@ impl BlockChain {
             db: db,
             proposer_best_level: Mutex::new( 0),
             voter_best: voter_best,
-            unreferred_transactions: Mutex::new((HashSet::new(),Vec::new())),
+            unreferred_transactions: Mutex::new(HashSet::new()),
             unreferred_proposers: Mutex::new(HashSet::new()),
             unconfirmed_proposers: Mutex::new(HashSet::new()),
             proposer_ledger_tip: Mutex::new(0),
@@ -345,9 +345,8 @@ impl BlockChain {
 
                     let mut unreferred_transactions = self.unreferred_transactions.lock().unwrap();
                     for ref_hash in &content.transaction_refs {
-                        unreferred_transactions.0.remove(&ref_hash);
+                        unreferred_transactions.remove(&ref_hash);
                     }
-                    unreferred_transactions.1.clear();
                     drop(unreferred_transactions);
 
                     // set best block info
@@ -392,8 +391,7 @@ impl BlockChain {
                 self.db.write(wb)?;
                 // mark itself as unreferred
                 let mut unreferred_transactions = self.unreferred_transactions.lock().unwrap();
-                unreferred_transactions.0.insert(block_hash);
-                unreferred_transactions.1.push(block_hash);
+                unreferred_transactions.insert(block_hash);
                 drop(unreferred_transactions);
             }
         }
@@ -775,17 +773,8 @@ impl BlockChain {
 
     pub fn unreferred_transactions(&self) -> Vec<H256> {
         // TODO: does ordering matter?
-        let mut unreferred_transactions = self.unreferred_transactions.lock().unwrap();
-        let list: Vec<H256> = unreferred_transactions.0.iter().cloned().collect();
-        unreferred_transactions.1.clear();
-        drop(unreferred_transactions);
-        return list;
-    }
-
-    pub fn unreferred_transactions_diff(&self) -> Vec<H256> {
-        // TODO: does ordering matter?
-        let mut unreferred_transactions = self.unreferred_transactions.lock().unwrap();
-        let list: Vec<H256> = unreferred_transactions.1.drain(..).collect();
+        let unreferred_transactions = self.unreferred_transactions.lock().unwrap();
+        let list: Vec<H256> = unreferred_transactions.iter().cloned().collect();
         drop(unreferred_transactions);
         return list;
     }
@@ -1350,7 +1339,7 @@ impl BlockChain {
 
         // TODO: transaction_unreferred may be inconsistent with other things
         let transaction_unreferred_ = self.unreferred_transactions.lock().unwrap();
-        let transaction_unreferred: Vec<String> = transaction_unreferred_.0
+        let transaction_unreferred: Vec<String> = transaction_unreferred_
             .iter()
             .map(|h| h.to_string())
             .collect();
