@@ -177,6 +177,16 @@ function unmount_tmpfs_single
 	ssh $1 -- 'sudo umount /tmp/prism && sudo rm -rf /tmp/prism'
 }
 
+function mount_nvme_single
+{
+	ssh $1 -- 'sudo rm -rf /tmp/prism && sudo mkdir -m 777 /tmp/prism && sudo mkfs -F -t ext4 /dev/nvme0n1 && sudo mount /dev/nvme0n1 /tmp/prism'
+}
+
+function unmount_nvme_single
+{
+	ssh $1 -- 'sudo umount /tmp/prism && sudo rm -rf /tmp/prism'
+}
+
 function sync_payload_single
 {
 	rsync -rz payload/$1/ $1:/home/ubuntu/payload
@@ -232,7 +242,7 @@ function start_transactions_single
 
 function start_mining_single
 {
-	curl -s "http://$3:$4/miner/start?lambda=130000&lazy=false"
+	curl -s "http://$3:$4/miner/start?lambda=80000&lazy=false"
 }
 
 function stop_transactions_single
@@ -421,6 +431,8 @@ case "$1" in
 		  fix-config            Fix SSH config
 		  mount-ramdisk         Mount RAM disk
 		  unmount-ramdisk       Unmount RAM disk
+		  mount-nvme            Mount NVME 
+		  unmount-nvme          Unmount NVME
 
 		Run Experiment
 
@@ -456,6 +468,10 @@ case "$1" in
 		execute_on_all mount_tmpfs ;;
 	unmount-ramdisk)
 		execute_on_all unmount_tmpfs ;;
+	mount-nvme)
+		execute_on_all mount_nvme ;;
+	unmount-nvme)
+		execute_on_all unmount_nvme ;;
 	install-tools)
 		execute_on_all install_perf ;;
 	gen-payload)
