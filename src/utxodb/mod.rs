@@ -52,16 +52,13 @@ impl UtxoDatabase {
     /// Remove the given transactions, then add another set of transactions.
     pub fn apply_diff(
         &self,
-        added: &[Transaction],
-        removed: &[Transaction],
+        added: &[(Transaction, H256)],
+        removed: &[(Transaction, H256)],
     ) -> Result<(Vec<Input>, Vec<Input>), rocksdb::Error> {
         let mut added_coins: Vec<Input> = vec![];
         let mut removed_coins: Vec<Input> = vec![];
         // revert the transactions
-        for t in removed.iter().rev() {
-            // remove the output
-            let transaction_hash = t.hash();
-
+        for (t, transaction_hash) in removed.iter().rev() {
             // NOTE: we only undo the transaction if the outputs are there (it means that the
             // transaction was valid when we added it)
             let mut valid = true;
@@ -71,7 +68,7 @@ impl UtxoDatabase {
 
             for (idx, out) in t.output.iter().enumerate() {
                 let id = CoinId {
-                    hash: transaction_hash,
+                    hash: *transaction_hash,
                     index: idx as u32,
                 };
                 let id_ser = serialize(&id).unwrap();
@@ -113,7 +110,7 @@ impl UtxoDatabase {
         }
 
         // apply new transactions
-        for t in added.iter() {
+        for (t, transaction_hash) in added.iter() {
             // NOTE: we only add the transaction if the inputs are valid and are unspent
             let mut valid = true;
             // use batch for the transaction
@@ -132,10 +129,9 @@ impl UtxoDatabase {
                 removed_coins.extend(&t.input);
 
                 // add the output
-                let transaction_hash = t.hash();
                 for (idx, output) in t.output.iter().enumerate() {
                     let id = CoinId {
-                        hash: transaction_hash,
+                        hash: *transaction_hash,
                         index: idx as u32,
                     };
                     batch

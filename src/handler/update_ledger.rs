@@ -1,7 +1,7 @@
 use crate::block::{Block, Content};
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
-use crate::crypto::hash::Hashable;
+use crate::crypto::hash::{Hashable, H256};
 use crate::miner::memory_pool::MemoryPool;
 use crate::network::message;
 use crate::network::server::Handle as ServerHandle;
@@ -14,21 +14,25 @@ use std::sync::Mutex;
 pub fn update_transaction_sequence (
     blockdb: &BlockDatabase,
     chain: &BlockChain,
-) -> (Vec<Transaction>, Vec<Transaction>) {
+) -> (Vec<(Transaction, H256)>, Vec<(Transaction, H256)>) {
     let diff = chain.update_ledger().unwrap();
     PERFORMANCE_COUNTER.record_confirm_transaction_blocks(diff.0.len());
     PERFORMANCE_COUNTER.record_deconfirm_transaction_blocks(diff.1.len());
 
     // gather the transaction diff and apply on utxo database
-    let mut add: Vec<Transaction> = vec![];
-    let mut remove: Vec<Transaction> = vec![];
+    let mut add: Vec<(Transaction, H256)> = vec![];
+    let mut remove: Vec<(Transaction, H256)> = vec![];
     for hash in diff.0 {
         let block = blockdb.get(&hash).unwrap().unwrap();
         let content = match block.content {
             Content::Transaction(data) => data,
             _ => unreachable!(),
         };
-        let mut transactions = content.transactions.clone();
+        let mut transactions = content.transactions.iter().map(|t| (t.clone(), t.hash())).collect();
+        // TODO: precompute the hash here. Note that although lazy-eval for tx hash, and we could have 
+        // just called hash() here without storing the results (the results will be cached in the struct),
+        // such function call will be optimized away by LLVM. As a result, we have to manually pass the hash
+        // here. The same for added transactions below. This is a very ugly hack.
         add.append(&mut transactions);
     }
     for hash in diff.1 {
@@ -37,13 +41,13 @@ pub fn update_transaction_sequence (
             Content::Transaction(data) => data,
             _ => unreachable!(),
         };
-        let mut transactions = content.transactions.clone();
+        let mut transactions = content.transactions.iter().map(|t| (t.clone(), t.hash())).collect();
         remove.append(&mut transactions);
     }
     return (add, remove);
 }
 
-pub fn update_utxo(add: &[Transaction], remove: &[Transaction], utxodb: &UtxoDatabase) -> (Vec<Input>, Vec<Input>) 
+pub fn update_utxo(add: &[(Transaction, H256)], remove: &[(Transaction, H256)], utxodb: &UtxoDatabase) -> (Vec<Input>, Vec<Input>) 
 {
     let coin_diff = utxodb.apply_diff(&add, &remove).unwrap();
     return coin_diff;

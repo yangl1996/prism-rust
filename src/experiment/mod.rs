@@ -5,7 +5,7 @@ pub mod performance_counter;
 use crate::utxodb::UtxoDatabase;
 use crate::transaction::{CoinId, Input, Output, Transaction};
 use crate::wallet::Wallet;
-use crate::crypto::hash::H256;
+use crate::crypto::hash::{H256, Hashable};
 
 pub fn ico(
     recipients: &[H256], // addresses of all the ico recipients
@@ -29,7 +29,8 @@ pub fn ico(
         authorization: vec![],
         hash: RefCell::new(None)
     };
-    let diff = utxodb.apply_diff(&[funding], &[]).unwrap();
+    let hash = funding.hash();
+    let diff = utxodb.apply_diff(&[(funding, hash)], &[]).unwrap();
     wallet.apply_diff(&diff.0, &diff.1).unwrap();
     Ok(())
 }
