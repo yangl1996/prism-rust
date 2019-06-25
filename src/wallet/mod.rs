@@ -211,8 +211,8 @@ impl Wallet {
             let keypairs = self.keypairs.lock().unwrap();
             if let Some(v) = keypairs.get(&owner) {
                 authorization.push(Authorization {
-                    pubkey: v.public,
-                    signature: v.sign(&raw_unsigned),
+                    pubkey: v.public.to_bytes().to_vec(),
+                    signature: v.sign(&raw_unsigned).to_bytes().to_vec(),
                 });
             }
             else {

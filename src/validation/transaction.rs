@@ -30,7 +30,7 @@ pub fn check_num_authorizations(transaction: &Transaction) -> bool {
     // check that all owners have signed the transaction
     if owners.len() != transaction.authorization.len() { return false; }
     let owners_match = owners.iter().zip(transaction.authorization.iter()).all(|(owner, authorization)| {
-        let addr: Address = ring::digest::digest(&ring::digest::SHA256, &authorization.pubkey.as_bytes().as_ref()).into();
+        let addr: Address = ring::digest::digest(&ring::digest::SHA256, &authorization.pubkey).into();
         addr == *owner
     });
     if !owners_match {
@@ -54,8 +54,8 @@ pub fn check_signature_batch(transactions: &[Transaction]) -> bool {
 
     for (idx, tx) in transactions.iter().enumerate() {
         for a in &tx.authorization {
-            public_keys.push(a.pubkey);
-            signatures.push(a.signature);
+            public_keys.push(PublicKey::from_bytes(&a.pubkey).unwrap());
+            signatures.push(Signature::from_bytes(&a.signature).unwrap());
             messages.push(&raw_messages[idx]);
         }
     }

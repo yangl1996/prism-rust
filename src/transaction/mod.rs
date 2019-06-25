@@ -84,12 +84,12 @@ impl Hashable for Transaction {
 }
 
 /// Authorization of the transaction by the owner of an input coin.
-#[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct Authorization {
     /// The public key of the owner.
-    pub pubkey: PublicKey,
+    pub pubkey: Vec<u8>,
     /// The signature of the transaction input and output
-    pub signature: Signature,
+    pub signature: Vec<u8>,
 }
 
 #[cfg(any(test, feature = "test-utilities"))]

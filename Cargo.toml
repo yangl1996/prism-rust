@@ -39,4 +39,4 @@ base64 = "0.10"
 [dependencies.ed25519-dalek]
 version = "1.0.0-pre.1"
 default-features = false
-features = ["serde", "avx2_backend", "std"]
+features = ["avx2_backend", "std"]
