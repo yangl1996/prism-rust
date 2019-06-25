@@ -132,9 +132,25 @@ fn main() {
     let blockchain_copy = Arc::clone(&blockchain);
     let utxodb_copy = Arc::clone(&utxodb);
     let wallet_copy = Arc::clone(&wallet);
+    let (tx_diff_tx, tx_diff_rx) = mpsc::sync_channel(2);
+    let (coin_diff_tx, coin_diff_rx) = mpsc::sync_channel(2);
     thread::spawn(move || {
         loop {
-            update_ledger(&blockdb_copy, &blockchain_copy, &utxodb_copy, &wallet_copy);
+            let tx_diff = update_ledger::update_transaction_sequence(&blockdb_copy, &blockchain_copy);
+            tx_diff_tx.send(tx_diff).unwrap();
+        }
+    });
+    thread::spawn(move || {
+        loop {
+            let tx_diff = tx_diff_rx.recv().unwrap();
+            let coin_diff = update_ledger::update_utxo(&tx_diff.0, &tx_diff.1, &utxodb_copy);
+            coin_diff_tx.send(coin_diff).unwrap();
+        }
+    });
+    thread::spawn(move || {
+        loop {
+            let coin_diff = coin_diff_rx.recv().unwrap();
+            update_ledger::update_wallet(&coin_diff.0, &coin_diff.1, &wallet_copy);
         }
     });
 
