@@ -164,7 +164,7 @@ function remove_payload_single
 
 function install_perf_single
 {
-	ssh $1 -- 'rm -f rust-unmangle && rm -rf FlameGraph && sudo apt-get update -y && sudo apt-get install linux-tools-aws linux-tools-4.15.0-1032-aws binutils -y && wget https://github.com/yangl1996/rust-unmangle/raw/master/rust-unmangle && git clone https://github.com/brendangregg/FlameGraph.git && chmod +x rust-unmangle && echo export PATH=$PATH:/home/ubuntu:/home/ubuntu/FlameGraph >> /home/ubuntu/.profile'
+	ssh $1 -- 'rm -f rustfilt && rm -rf FlameGraph && sudo apt-get update -y && sudo apt-get install linux-tools-aws linux-tools-4.15.0-1032-aws binutils -y && wget https://github.com/yangl1996/rustfilt/releases/download/1/rustfilt && git clone https://github.com/brendangregg/FlameGraph.git && chmod +x rustfilt && echo export PATH=$PATH:/home/ubuntu:/home/ubuntu/FlameGraph >> /home/ubuntu/.profile'
 }
 
 function mount_tmpfs_single
