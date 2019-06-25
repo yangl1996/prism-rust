@@ -99,8 +99,11 @@ impl UtxoDatabase {
                         .put(serialize(&input.coin).unwrap(), serialize(&out).unwrap())?;
                     added_coins.push(input.clone());
                 }
-                //write the transaction as a batch
-                self.db.write(batch)?;
+                // write the transaction as a batch
+                // TODO: we don't write to wal here, so should the program crash, the db will be in
+                // an inconsistent state. The solution here is to manually flush the memtable to
+                // the disk at certain time, and manually log the state (e.g. voter tips, etc.)
+                self.db.write_without_wal(batch)?;
 
                 // TODO: it's a hack. The purpose is to ignore ICO transaction
                 if !t.input.is_empty() {
@@ -143,8 +146,11 @@ impl UtxoDatabase {
                     };
                     added_coins.push(coin);
                 }
-                //write the transaction as a batch
-                self.db.write(batch)?;
+                // write the transaction as a batch
+                // TODO: we don't write to wal here, so should the program crash, the db will be in
+                // an inconsistent state. The solution here is to manually flush the memtable to
+                // the disk at certain time, and manually log the state (e.g. voter tips, etc.)
+                self.db.write_without_wal(batch)?;
 
                 if !t.input.is_empty() {
                     PERFORMANCE_COUNTER.record_confirm_transaction(&t);
