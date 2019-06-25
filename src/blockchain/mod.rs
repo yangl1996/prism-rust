@@ -783,7 +783,7 @@ impl BlockChain {
 
     /// Get the list of unvoted proposer blocks that a voter chain should vote for, given the tip
     /// of the particular voter chain.
-    pub fn unvoted_proposer(&self, tip: &H256, proposer_parent: &H256) -> Result<Vec<H256>> {
+    pub fn unvoted_proposer(&self, tip: &H256, proposer_parent: &H256) -> Result<Option<Vec<H256>>> {
         let voter_node_voted_level_cf = self.db.cf_handle(VOTER_NODE_VOTED_LEVEL_CF).unwrap();
         let proposer_node_level_cf = self.db.cf_handle(PROPOSER_NODE_LEVEL_CF).unwrap();
         let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
@@ -804,6 +804,14 @@ impl BlockChain {
         )
             .unwrap();
 
+        if first_vote_level > last_vote_level {
+            // this case means tip's parent is higher than my parent, which is impossible and we
+            // should not return anything. (issue # 82)
+            // notice this should not be confused with first_vote_level==last_vote_level, where we
+            // can safely return empty vector.
+            return Ok(None);
+        }
+
         // get the first block we heard on each proposer level
         let mut list: Vec<H256> = vec![];
         for level in first_vote_level + 1..=last_vote_level {
@@ -816,7 +824,7 @@ impl BlockChain {
             .unwrap();
             list.push(blocks[0]);//Note: the last vote in list could be other proposer that at the same level of proposer_parent
         }
-        return Ok(list);
+        return Ok(Some(list));
     }
 
     /// Get the level of the proposer block
@@ -2180,7 +2188,7 @@ mod tests {
     fn unvoted_proposer() {
         let db = BlockChain::new("/tmp/prism_test_blockchain_unvoted_proposer.rocksdb").unwrap();
         assert_eq!(
-            db.unvoted_proposer(&VOTER_GENESIS_HASHES[0], &db.best_proposer().unwrap()).unwrap(),
+            db.unvoted_proposer(&VOTER_GENESIS_HASHES[0], &db.best_proposer().unwrap()).unwrap().unwrap(),
             vec![]
         );
 
@@ -2210,7 +2218,7 @@ mod tests {
         );
         db.insert_block(&new_proposer_block_2).unwrap();
         assert_eq!(
-            db.unvoted_proposer(&VOTER_GENESIS_HASHES[0], &db.best_proposer().unwrap()).unwrap(),
+            db.unvoted_proposer(&VOTER_GENESIS_HASHES[0], &db.best_proposer().unwrap()).unwrap().unwrap(),
             vec![new_proposer_block_1.hash()]
         );
 
@@ -2232,11 +2240,11 @@ mod tests {
         db.insert_block(&new_voter_block).unwrap();
 
         assert_eq!(
-            db.unvoted_proposer(&VOTER_GENESIS_HASHES[0], &db.best_proposer().unwrap()).unwrap(),
+            db.unvoted_proposer(&VOTER_GENESIS_HASHES[0], &db.best_proposer().unwrap()).unwrap().unwrap(),
             vec![new_proposer_block_1.hash()]
         );
         assert_eq!(
-            db.unvoted_proposer(&new_voter_block.hash(), &db.best_proposer().unwrap()).unwrap(),
+            db.unvoted_proposer(&new_voter_block.hash(), &db.best_proposer().unwrap()).unwrap().unwrap(),
             vec![]
         );
     }

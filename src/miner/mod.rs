@@ -324,26 +324,27 @@ impl Context {
     /// Update the block to be mined
     fn update_all_contents(&mut self) {
         // get mutex of blockchain and get all required data
-        self.proposer_parent_hash = self.blockchain.best_proposer().unwrap();
-        self.difficulty = self.get_difficulty(&self.proposer_parent_hash);
         let transaction_block_refs = self.blockchain.unreferred_transactions();
         let mut proposer_block_refs = self.blockchain.unreferred_proposers();
+        let voter_parent_hash: Vec<H256> = (0..NUM_VOTER_CHAINS)
+            .map(|i| self.blockchain.best_voter(i as usize))
+            .collect();
+        // get best proposer after get unreferred_proposers and voter_parent_hash to avoid they are newer
+        // than best proposer
+        self.proposer_parent_hash = self.blockchain.best_proposer().unwrap();
+        self.difficulty = self.get_difficulty(&self.proposer_parent_hash);
         proposer_block_refs
             .iter()
             .position(|item| *item == self.proposer_parent_hash)
             .map(|i| proposer_block_refs.remove(i));
-
-        let voter_parent_hash: Vec<H256> = (0..NUM_VOTER_CHAINS)
-            .map(|i| self.blockchain.best_voter(i as usize))
-            .collect();
         let proposer_block_votes: Vec<Vec<H256>> = (0..NUM_VOTER_CHAINS)
             .map(|i| {
                 self.blockchain
                     .unvoted_proposer(&voter_parent_hash[i as usize], &self.proposer_parent_hash)
                     .unwrap()
-                    .clone()
+                    .unwrap()
             })
-            .collect();
+        .collect();
         // get mutex of mempool and get all required data
         let mempool = self.tx_mempool.lock().unwrap();
         let transactions = mempool.get_transactions(TX_BLOCK_TRANSACTIONS);
@@ -397,15 +398,26 @@ impl Context {
     /// Update one voter chain's content with chain number
     fn update_voter_content(&mut self, chain: u16) {
         let idx: usize = (FIRST_VOTER_INDEX + chain) as usize;
-        let voter_parent = self.blockchain.best_voter(chain as usize);
-        let votes = self.blockchain
-            .unvoted_proposer(&voter_parent, &self.proposer_parent_hash).unwrap();
-        self.content[idx] = Content::Voter(voter::Content::new(
-            chain,
-            voter_parent,
-            votes,
-        ));
-        self.content_merkle_tree.update(idx, &self.content[idx]);
+        if let Content::Voter(content) = self.content.get(idx).unwrap() {
+            let voter_parent = self.blockchain.best_voter(chain as usize);
+            if voter_parent != content.voter_parent {
+                // we have to check if below function `unvoted_proposer(voter_parent, self.proposer_parent_hash)` result is None or not.
+                if let Some(votes) = self.blockchain.unvoted_proposer(&voter_parent, &self.proposer_parent_hash).unwrap() {
+                    self.content[idx] = Content::Voter(voter::Content::new(
+                            chain,
+                            voter_parent,
+                            votes,
+                            ));
+                    self.content_merkle_tree.update(idx, &self.content[idx]);
+                } else {
+                    // TODO: this branch means `self.proposer_parent_hash` needs to be updated. So
+                    // update_all_contents here.
+                    self.update_all_contents();
+                }
+            }
+        } else {
+            unreachable!();
+        }
     }
 
     /// Update transaction block's content
@@ -517,7 +529,7 @@ mod tests {
                 blockchain
                     .unvoted_proposer(&voter_parent_hash[i as usize], &parent)
                     .unwrap()
-                    .clone()
+                    .unwrap()
             })
             .collect();
         for (i, (voter_parent, proposer_block_votes)) in voter_parent_hash
