@@ -5,7 +5,7 @@ function wait_for_line() {
 }
 
 mkdir -p /home/ubuntu/log
-rm -rf /tmp/prism*
+sudo rm -rf /tmp/prism/*
 
 echo "Launching Prism nodes"
 for script in /home/ubuntu/payload/prism-payload/*.sh; do
