@@ -31,6 +31,7 @@ pub fn ico(
     };
     let hash = funding.hash();
     let diff = utxodb.apply_diff(&[(funding, hash)], &[]).unwrap();
+    utxodb.flush()?;
     wallet.apply_diff(&diff.0, &diff.1).unwrap();
     Ok(())
 }

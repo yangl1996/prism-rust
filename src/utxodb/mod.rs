@@ -2,7 +2,7 @@ use crate::crypto::hash::Hashable;
 use crate::crypto::hash::H256;
 use crate::transaction::{CoinId, Input, Output, Transaction};
 use bincode::serialize;
-use rocksdb::{Options, DB};
+use rocksdb::*;
 use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 
 pub struct UtxoDatabase {
@@ -14,8 +14,21 @@ impl UtxoDatabase {
     fn open<P: AsRef<std::path::Path>>(path: P) -> Result<Self, rocksdb::Error> {
         let cfs = vec![];
         let mut opts = Options::default();
+        opts.set_prefix_extractor( SliceTransform::create_fixed_prefix(32));
+        let mut block_opts = BlockBasedOptions::default();
+        block_opts.set_index_type(BlockBasedIndexType::HashSearch);
+        opts.set_block_based_table_factory(&block_opts);
+        let mut memtable_opts = MemtableFactory::HashSkipList {
+            bucket_count: 1 << 20,
+            height: 8,
+            branching_factor: 4
+        };
+        opts.set_allow_concurrent_memtable_write(false);
+        opts.set_memtable_factory(memtable_opts);
+        opts.optimize_for_point_lookup(256);
         opts.create_if_missing(true);
         opts.create_missing_column_families(true);
+        opts.increase_parallelism(8);
 
         let db = DB::open_cf_descriptors(&opts, path, cfs)?;
         return Ok(Self { db: db });
@@ -38,15 +51,14 @@ impl UtxoDatabase {
         };
     }
 
-    pub fn snapshot(&self) -> Result<H256, rocksdb::Error> {
+    pub fn snapshot(&self) -> Result<ethbloom::Bloom, rocksdb::Error> {
         let iter = self.db.iterator(rocksdb::IteratorMode::Start);
-        let mut ctx = ring::digest::Context::new(&ring::digest::SHA256);
+        let mut bloom = ethbloom::Bloom::default();
         for (k, v) in iter {
-            ctx.update(k.as_ref());
-            ctx.update(v.as_ref());
+            bloom.accrue(ethbloom::Input::Raw(k.as_ref()));
+            bloom.accrue(ethbloom::Input::Raw(v.as_ref()));
         }
-        let hash = ctx.finish();
-        return Ok(hash.into());
+        return Ok(bloom);
     }
 
     /// Remove the given transactions, then add another set of transactions.
@@ -158,6 +170,12 @@ impl UtxoDatabase {
             }
         }
         return Ok((added_coins, removed_coins));
+    }
+
+    pub fn flush(&self) -> Result<(), rocksdb::Error> {
+        let mut flush_opt = rocksdb::FlushOptions::default();
+        flush_opt.set_wait(true);
+        self.db.flush_opt(&flush_opt)
     }
 }
 

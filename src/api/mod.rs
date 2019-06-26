@@ -37,7 +37,7 @@ struct WalletBalanceResponse {
 
 #[derive(Serialize)]
 struct UtxoSnapshotResponse {
-    hash: String,
+    bloom: String,
 }
 
 #[derive(Serialize)]
@@ -105,9 +105,9 @@ impl Server {
                             respond_json!(req, resp);
                         }
                         "/utxo/snapshot" => {
-                            let hash = utxodb.snapshot().unwrap();
+                            let bloom = utxodb.snapshot().unwrap();
                             let resp = UtxoSnapshotResponse {
-                                hash: hash.to_string(),
+                                bloom : base64::encode(&bloom.as_bytes()),
                             };
                             respond_json!(req, resp);
                         }

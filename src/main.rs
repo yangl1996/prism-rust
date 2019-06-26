@@ -132,8 +132,8 @@ fn main() {
     let blockchain_copy = Arc::clone(&blockchain);
     let utxodb_copy = Arc::clone(&utxodb);
     let wallet_copy = Arc::clone(&wallet);
-    let (tx_diff_tx, tx_diff_rx) = mpsc::sync_channel(2);
-    let (coin_diff_tx, coin_diff_rx) = mpsc::sync_channel(2);
+    let (tx_diff_tx, tx_diff_rx) = mpsc::sync_channel(3);
+    let (coin_diff_tx, coin_diff_rx) = mpsc::sync_channel(3);
     thread::spawn(move || {
         loop {
             let tx_diff = update_ledger::update_transaction_sequence(&blockdb_copy, &blockchain_copy);
