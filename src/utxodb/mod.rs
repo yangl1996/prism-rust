@@ -51,14 +51,21 @@ impl UtxoDatabase {
         };
     }
 
-    pub fn snapshot(&self) -> Result<ethbloom::Bloom, rocksdb::Error> {
-        let iter = self.db.iterator(rocksdb::IteratorMode::Start);
-        let mut bloom = ethbloom::Bloom::default();
-        for (k, v) in iter {
-            bloom.accrue(ethbloom::Input::Raw(k.as_ref()));
-            bloom.accrue(ethbloom::Input::Raw(v.as_ref()));
+    pub fn snapshot(&self) -> Result<Vec<u8>, rocksdb::Error> {
+        let mut iter_opt = rocksdb::ReadOptions::default();
+        iter_opt.set_prefix_same_as_start(false);
+        iter_opt.set_total_order_seek(true);
+        let iter = self.db.iterator_opt(rocksdb::IteratorMode::Start, &iter_opt);
+        let mut inited = false;
+        let mut checksum: Vec<u8> = vec![];
+        for (k, _) in iter {
+            if !inited {
+                checksum = vec![0; k.as_ref().len()];
+                inited = true;
+            }
+            checksum = checksum.iter().zip(k.as_ref()).map(|(&c, &k)| c ^ k).collect();
         }
-        return Ok(bloom);
+        return Ok(checksum);
     }
 
     /// Remove the given transactions, then add another set of transactions.

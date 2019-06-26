@@ -15,7 +15,7 @@ type WalletBalance struct {
 }
 
 type UTXOSnapshot struct {
-	Bloom string
+	Checksum string
 }
 
 type BlockchainSnapshot struct {
@@ -224,7 +224,7 @@ func check(nodesFile string, verbose bool) {
 				return
 			}
 			m2.Lock()
-			utxohash[node] = data.Bloom
+			utxohash[node] = data.Checksum
 			m2.Unlock()
 		}(node, url)
 	}
@@ -238,7 +238,7 @@ func check(nodesFile string, verbose bool) {
 				inited = true
 			} else {
 				if v != base {
-					fmt.Println("UTXO bloom filter differs among nodes")
+					fmt.Println("UTXO checksum differs among nodes")
 
 					if verbose {
 						for idx := range node_list {
@@ -250,7 +250,7 @@ func check(nodesFile string, verbose bool) {
 				}
 			}
 		}
-		fmt.Println("UTXO bloom filter " + base[0:16] + "... is consistent across nodes")
+		fmt.Println("UTXO checksum " + base[0:16] + "... is consistent across nodes")
 	} else {
 		fmt.Println("Failed to query some of the nodes")
 	}
