@@ -44,7 +44,7 @@ impl UtxoDatabase {
 
     /// Check whether the given coin is in the UTXO set.
     pub fn contains(&self, coin: &CoinId) -> Result<bool, rocksdb::Error> {
-        let result = self.db.get(serialize(&coin).unwrap())?;
+        let result = self.db.get_pinned(serialize(&coin).unwrap())?;
         match result {
             Some(_) => return Ok(true),
             None => return Ok(false),
@@ -91,7 +91,7 @@ impl UtxoDatabase {
                     index: idx as u32,
                 };
                 let id_ser = serialize(&id).unwrap();
-                if self.db.get(&id_ser)?.is_none() {
+                if self.db.get_pinned(&id_ser)?.is_none() {
                     valid = false;
                     break;
                 }
@@ -139,7 +139,7 @@ impl UtxoDatabase {
             let mut batch = rocksdb::WriteBatch::default();
             for input in &t.input {
                 let id_ser = serialize(&input.coin).unwrap();
-                if self.db.get(&id_ser)?.is_none() {
+                if self.db.get_pinned(&id_ser)?.is_none() {
                     valid = false;
                     break;
                 }
