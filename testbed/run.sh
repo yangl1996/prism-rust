@@ -129,11 +129,16 @@ function prepare_payload
 	fi
 	echo "Deleting existing files"
 	rm -rf payload
-	rm -rf binary
 	mkdir -p payload
-	mkdir -p binary
+	mkdir -p payload/common/binary
+	mkdir -p payload/common/scripts
+
 	echo "Download binaries"
-	scp prism:/home/prism/prism/target/release/prism-copy binary/prism
+	scp prism:/home/prism/prism/target/release/prism-copy payload/common/binary/prism
+	cp scripts/start-prism.sh payload/common/scripts/start-prism.sh
+	cp scripts/stop-prism.sh payload/common/scripts/stop-prism.sh
+
+	echo "Generate etcd config files for each EC2 instance"
 	local instances=`cat instances.txt`
 	local instance_ids=""
 	for instance in $instances ;
@@ -142,24 +147,43 @@ function prepare_payload
 		local ip
 		local lan
 		IFS=',' read -r id ip lan <<< "$instance"
-		echo "Generating config files for $id"
-		python3 scripts/gen_etcd_config.py $id $lan instances.txt
-		echo "Copying binaries for $id"
 		mkdir -p payload/$id
-		cp -r binary payload/$id/binary
-		mkdir -p payload/$id/scripts
-		cp scripts/start-prism.sh payload/$id/scripts/start-prism.sh
-		cp scripts/stop-prism.sh payload/$id/scripts/stop-prism.sh
+		python3 scripts/gen_etcd_config.py $id $lan instances.txt
 	done
+
+	echo "Generate prism config files and keypairs for each node"
 	python3 scripts/gen_prism_payload.py instances.txt $1
+
+	echo "Compressing payload files"
+	local instances=`cat instances.txt`
+	local instance_ids=""
+	for instance in $instances ;
+	do
+		local id
+		IFS=',' read -r id _ <<< "$instance"
+		tar cvzf payload/$id.tar.gz -C payload/$id . &> /dev/null
+		rm -rf payload/$id
+	done
+	tar cvzf payload/common.tar.gz -C payload/common . &> /dev/null
+	rm -rf payload/common
+
 	tput setaf 2
 	echo "Payload written"
 	tput sgr0
 }
 
-function remove_payload_single
+function sync_payload
 {
-	ssh $1 -- 'rm -rf /home/ubuntu/payload'
+	echo "Uploading payload to S3"
+	aws s3 rm --quiet --recursive s3://prism-binary/payload
+	aws s3 sync --quiet payload s3://prism-binary/payload
+	echo "Downloading payload on each instance"
+	execute_on_all get_payload
+}
+
+function get_payload_single
+{
+	ssh $1 -- "rm -f /home/ubuntu/*.tar.gz && rm -rf /home/ubuntu/payload && wget https://prism-binary.s3.amazonaws.com/payload/$1.tar.gz -O local.tar.gz && wget https://prism-binary.s3.amazonaws.com/payload/common.tar.gz && mkdir -p /home/ubuntu/payload && tar xf local.tar.gz -C /home/ubuntu/payload && tar xf common.tar.gz -C /home/ubuntu/payload"
 }
 
 function install_perf_single
@@ -185,11 +209,6 @@ function mount_nvme_single
 function unmount_nvme_single
 {
 	ssh $1 -- 'sudo umount /tmp/prism && sudo rm -rf /tmp/prism'
-}
-
-function sync_payload_single
-{
-	rsync -rz payload/$1/ $1:/home/ubuntu/payload
 }
 
 function start_prism_single
@@ -479,8 +498,7 @@ case "$1" in
 	build)
 		build_prism $2 ;;
 	sync-payload)
-		execute_on_all remove_payload
-		execute_on_all sync_payload ;;
+		sync_payload ;;
 	start-prism)
 		start_prism ;;
 	stop-prism)
