@@ -28,6 +28,7 @@ impl UtxoDatabase {
         opts.optimize_for_point_lookup(256);
         opts.create_if_missing(true);
         opts.create_missing_column_families(true);
+        opts.increase_parallelism(16);
 
         let db = DB::open_cf_descriptors(&opts, path, cfs)?;
         return Ok(Self { db: db });
