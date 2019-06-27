@@ -188,7 +188,7 @@ function get_payload_single
 
 function install_perf_single
 {
-	ssh $1 -- 'rm -f rustfilt && rm -rf FlameGraph && sudo apt-get update -y && sudo apt-get install linux-tools-aws linux-tools-4.15.0-1032-aws binutils -y && wget https://github.com/yangl1996/rustfilt/releases/download/1/rustfilt && git clone https://github.com/brendangregg/FlameGraph.git && chmod +x rustfilt && sudo apt-get install -y c++filt && echo export PATH=$PATH:/home/ubuntu:/home/ubuntu/FlameGraph >> /home/ubuntu/.profile'
+	ssh $1 -- 'rm -f rustfilt && rm -rf inferno && sudo apt-get update -y && sudo apt-get install linux-tools-aws linux-tools-4.15.0-1032-aws binutils -y && wget https://github.com/yangl1996/rustfilt/releases/download/1/rustfilt && wget https://github.com/yangl1996/inferno/releases/download/bin/linux64.tar.gz && mkdir -p inferno && tar xf linux64.tar.gz -C inferno && chmod +x rustfilt && chmod +x inferno/* && sudo apt-get install -y c++filt && echo export PATH=$PATH:/home/ubuntu:/home/ubuntu/inferno >> /home/ubuntu/.profile'
 }
 
 function mount_tmpfs_single
@@ -255,13 +255,13 @@ function get_performance_single
 function start_transactions_single
 {
 	curl -s "http://$3:$4/transaction-generator/set-arrival-distribution?interval=50&distribution=uniform"
-	curl -s "http://$3:$4/transaction-generator/set-value-distribution?min=100&max=100&distribution=uniform"
+	curl -s "http://$3:$4/transaction-generator/set-value-distribution?min=25&max=25&distribution=uniform"
 	curl -s "http://$3:$4/transaction-generator/start?throttle=8000"
 }
 
 function start_mining_single
 {
-	curl -s "http://$3:$4/miner/start?lambda=45000&lazy=false"
+	curl -s "http://$3:$4/miner/start?lambda=80000&lazy=false"
 }
 
 function stop_transactions_single
@@ -379,6 +379,37 @@ function read_log
 	done
 }
 
+function capture_stack_trace 
+{
+	local nodes=`cat nodes.txt`
+	local pids=''
+	for node in $nodes; do
+		local name
+		local host
+		IFS=',' read -r name host _ <<< "$node"
+		if [ $name == $1 ]; then
+			command_string='sudo perf record -p $(pgrep -f /binary/prism.*'
+			command_string="$command_string$1.*) -a --call-graph dwarf -F $2 -o /home/ubuntu/perf.data -- sleep $3"
+			echo "$command_string" | ssh $host &> /dev/null
+		fi
+	done
+}
+
+function generate_flamegraph
+{
+	local nodes=`cat nodes.txt`
+	local pids=''
+	for node in $nodes; do
+		local name
+		local host
+		IFS=',' read -r name host _ <<< "$node"
+		if [ $name == $1 ]; then
+			echo "sudo perf script -i perf.data | inferno-collapse-perf | rustfilt | c++filt | inferno-flamegraph > flame.svg" | ssh $host
+			scp "$host:~/flame.svg" .
+		fi
+	done
+}
+
 function show_visualization
 {
 	local nodes=`cat nodes.txt`
@@ -468,6 +499,8 @@ case "$1" in
 		  
 		  get-perf              Get performance data
 		  show-vis              Open the visualization page for the given node
+		  profile node f d      Capture stack trace for node with frequency f and duration d
+		  flamegraph node       Generate and download flamegraph for node
 
 		Connect to Testbed
 
@@ -513,6 +546,10 @@ case "$1" in
 		show_performance $2 ;;
 	show-vis)
 		show_visualization $2 ;;
+	profile)
+		capture_stack_trace $2 $3 $4 ;;
+	flamegraph)
+		generate_flamegraph $2 ;;
 	run-all)
 		run_on_all "${@:2}" ;;
 	ssh)
