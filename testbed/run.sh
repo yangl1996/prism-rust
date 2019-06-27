@@ -255,7 +255,7 @@ function get_performance_single
 function start_transactions_single
 {
 	curl -s "http://$3:$4/transaction-generator/set-arrival-distribution?interval=50&distribution=uniform"
-	curl -s "http://$3:$4/transaction-generator/set-value-distribution?min=25&max=25&distribution=uniform"
+	curl -s "http://$3:$4/transaction-generator/set-value-distribution?min=100&max=100&distribution=uniform"
 	curl -s "http://$3:$4/transaction-generator/start?throttle=8000"
 }
 
@@ -404,7 +404,7 @@ function generate_flamegraph
 		local host
 		IFS=',' read -r name host _ <<< "$node"
 		if [ $name == $1 ]; then
-			echo "sudo perf script -i perf.data | inferno-collapse-perf | rustfilt | c++filt | inferno-flamegraph > flame.svg" | ssh $host
+			echo "sudo perf script -i perf.data | inferno-collapse-perf | rustfilt | c++filt | inferno-flamegraph > flame.svg" | ssh $host &> /dev/null
 			scp "$host:~/flame.svg" .
 		fi
 	done
