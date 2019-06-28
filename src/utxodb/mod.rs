@@ -17,6 +17,8 @@ impl UtxoDatabase {
         opts.set_prefix_extractor( SliceTransform::create_fixed_prefix(32));
         let mut block_opts = BlockBasedOptions::default();
         block_opts.set_index_type(BlockBasedIndexType::HashSearch);
+        block_opts.set_cache_index_and_filter_blocks(true);
+        block_opts.set_block_size(1 << 22);
         opts.set_block_based_table_factory(&block_opts);
         let mut memtable_opts = MemtableFactory::HashSkipList {
             bucket_count: 1 << 20,
