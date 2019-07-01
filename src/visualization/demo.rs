@@ -29,6 +29,10 @@ pub struct VoterBlock {
     pub parent: String,
     /// Voting chain number
     pub chain: u16,
+    /// Voter parent
+    pub voter_parent: String,
+    /// Votes
+    pub votes: Vec<String>,
 }
 #[derive(Serialize)]
 pub struct TransactionBlock {
@@ -38,29 +42,37 @@ pub struct TransactionBlock {
     pub parent: String,
 }
 #[derive(Serialize)]
-pub enum DemoBlock {
+pub struct UpdatedLedger {
+    /// Hash of proposer blocks that are added to ledger 
+    pub added: Vec<String>,
+    /// Hash of proposer blocks that are removed from ledger 
+    pub removed: Vec<String>,
+}
+#[derive(Serialize)]
+pub enum DemoMsg {
     ProposerBlock(ProposerBlock),
     VoterBlock(VoterBlock),
     TransactionBlock(TransactionBlock),
+    UpdatedLedger(UpdatedLedger),
 }
 
-impl From<&Block> for String {
+impl From<&Block> for DemoMsg {
     fn from(block: &Block) -> Self {
         let hash = block.hash();
         let parent = block.header.parent;
         match &block.content {
             Content::Proposer(content) => {
                 let b = ProposerBlock { id: hash.to_string(), parent: parent.to_string(), transaction_refs: content.transaction_refs.iter().map(|x|x.to_string()).collect(), proposer_refs: content.proposer_refs.iter().map(|x|x.to_string()).collect()};
-                serde_json::to_string_pretty(&DemoBlock::ProposerBlock(b)).unwrap()
+                DemoMsg::ProposerBlock(b)
             }
             Content::Voter(content) => {
-                let b = VoterBlock { id: hash.to_string(), parent: parent.to_string(), chain: content.chain_number };
-                serde_json::to_string_pretty(&DemoBlock::VoterBlock(b)).unwrap()
+                let b = VoterBlock { id: hash.to_string(), parent: parent.to_string(), chain: content.chain_number, voter_parent: content.voter_parent.to_string(), votes: content.votes.iter().map(|x|x.to_string()).collect()};
+                DemoMsg::VoterBlock(b)
             }
             Content::Transaction(_) => {
                 let b = TransactionBlock { id: hash.to_string(), parent: parent.to_string() };
-                serde_json::to_string_pretty(&DemoBlock::TransactionBlock(b)).unwrap()
-}
+                DemoMsg::TransactionBlock(b)
+            }
         }
     }
 }
@@ -71,10 +83,24 @@ impl Server {
         Ok(Self { handle: Mutex::new(file) })
     }
 
-    pub fn send(&self, block: &Block) -> std::io::Result<()> {
-        let json: String = block.into();
+    pub fn insert_block(&self, block: &Block) -> std::io::Result<()> {
+        let msg: DemoMsg = block.into();
+        let json: String = serde_json::to_string_pretty(&msg).unwrap();
         let mut handle = self.handle.lock().unwrap();
-        writeln!(handle, "{}", json).unwrap();
+        writeln!(handle, "{}", json)?;
+        Ok(())
+    }
+
+    pub fn update_ledger(&self, added: &[H256], removed: &[H256]) -> std::io::Result<()> {
+        if added.is_empty() && removed.is_empty() {
+            return Ok(());
+        }
+        let added = added.iter().map(|x|x.to_string()).collect();
+        let removed = removed.iter().map(|x|x.to_string()).collect();
+        let msg: DemoMsg = DemoMsg::UpdatedLedger(UpdatedLedger{added, removed});
+        let json: String = serde_json::to_string_pretty(&msg).unwrap();
+        let mut handle = self.handle.lock().unwrap();
+        writeln!(handle, "{}", json)?;
         Ok(())
     }
 

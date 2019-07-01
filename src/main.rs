@@ -128,16 +128,21 @@ fn main() {
         }
     }
 
+    // create WebSocket here
+    let demo_server = DemoServer::new("/tmp/demo.txt").unwrap();
+    let demo_server = Arc::new(demo_server);
+
     // start thread to update ledger
     let blockdb_copy = Arc::clone(&blockdb);
     let blockchain_copy = Arc::clone(&blockchain);
     let utxodb_copy = Arc::clone(&utxodb);
     let wallet_copy = Arc::clone(&wallet);
+    let demo_server_copy = Arc::clone(&demo_server);
     let (tx_diff_tx, tx_diff_rx) = mpsc::sync_channel(3);
     let (coin_diff_tx, coin_diff_rx) = mpsc::sync_channel(3);
     thread::spawn(move || {
         loop {
-            let tx_diff = update_ledger::update_transaction_sequence(&blockdb_copy, &blockchain_copy);
+            let tx_diff = update_ledger::update_transaction_sequence(&blockdb_copy, &blockchain_copy, &demo_server_copy);
             tx_diff_tx.send(tx_diff).unwrap();
         }
     });
@@ -175,9 +180,6 @@ fn main() {
     let (server_ctx, server) = server::new(p2p_addr, msg_tx).unwrap();
     server_ctx.start().unwrap();
 
-    // create WebSocket here
-    let demo_server = DemoServer::new("/tmp/demo.txt").unwrap();
-    let demo_server = Arc::new(demo_server);
 
     // start the worker
     let worker_ctx = worker::new(16, msg_rx, &blockchain, &blockdb, &utxodb, &wallet, &mempool, ctx_tx, &server, &demo_server );

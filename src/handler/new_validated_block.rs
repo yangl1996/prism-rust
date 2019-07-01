@@ -40,7 +40,7 @@ pub fn new_validated_block(
     };
 
     // send the block to demo server
-    demo_server.send(block).unwrap();
+    demo_server.insert_block(block).unwrap();
 
     // insert the new block into the blockchain
     chain.insert_block(&block).unwrap();
