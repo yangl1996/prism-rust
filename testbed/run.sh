@@ -410,6 +410,12 @@ function generate_flamegraph
 	done
 }
 
+function open_dashboard
+{
+	# start grafana simple json data server
+	~/go/bin/grafana-rrd-server -r data/ -s 1
+}
+
 function show_visualization
 {
 	local nodes=`cat nodes.txt`
@@ -502,6 +508,7 @@ case "$1" in
 		  show-vis              Open the visualization page for the given node
 		  profile node f d      Capture stack trace for node with frequency f and duration d
 		  flamegraph node       Generate and download flamegraph for node
+		  open-dashboard        Open the performance dashboard
 
 		Connect to Testbed
 
@@ -551,6 +558,8 @@ case "$1" in
 		capture_stack_trace $2 $3 $4 ;;
 	flamegraph)
 		generate_flamegraph $2 ;;
+	open-dashboard)
+		open_dashboard ;;
 	run-all)
 		run_on_all "${@:2}" ;;
 	ssh)
