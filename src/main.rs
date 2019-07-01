@@ -129,7 +129,7 @@ fn main() {
 
     // start thread to update ledger
     let ledger_manager = LedgerManager::new(&blockdb, &blockchain, &utxodb, &wallet);
-    ledger_manager.start(3, 0);
+    ledger_manager.start(3, 8);
 
     // parse p2p server address
     let p2p_addr = matches.value_of("peer_addr").unwrap().parse::<net::SocketAddr>().unwrap_or_else(|e| {

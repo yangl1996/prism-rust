@@ -44,27 +44,40 @@ impl LedgerManager {
             }
         });
 
-        // start thread that writes to utxo database
+        // start thread that dispatches jobs to utxo manager
         let utxodb = Arc::clone(&self.utxodb);
-        let (coin_diff_tx, coin_diff_rx) = mpsc::sync_channel(buffer_size);
+        let (transaction_tx, transaction_rx) = mpsc::channel();
+        let (notification_tx, notification_rx) = mpsc::channel();
+        let (coin_diff_tx, coin_diff_rx) = mpsc::channel();
         thread::spawn(move || {
             loop {
-                let (added_tx, removed_tx) = tx_diff_rx.recv().unwrap();
-                let mut added_coins = vec![];
-                let mut removed_coins = vec![];
-                for (t, h) in removed_tx.iter().rev() {
-                    let mut diff = utxodb.remove_transaction(&t, *h).unwrap();
-                    added_coins.extend(diff.0);
-                    removed_coins.extend(diff.1);
+                // get the diff
+                let (mut added_tx, mut removed_tx) = tx_diff_rx.recv().unwrap();
+
+                // dispatch transactions
+                let count = added_tx.len() + removed_tx.len();
+                for (t, h) in removed_tx.drain(..).rev() {
+                    transaction_tx.send((false, t, h)).unwrap();
                 }
-                for (t, h) in added_tx.iter() {
-                    let mut diff = utxodb.add_transaction(&t, *h).unwrap();
-                    added_coins.extend(diff.0);
-                    removed_coins.extend(diff.1);
+                for (t, h) in added_tx.drain(..) {
+                    transaction_tx.send((true, t, h)).unwrap();
                 }
-                coin_diff_tx.send((added_coins, removed_coins)).unwrap();
+
+                // collect notification
+                for _ in 0..count {
+                    notification_rx.recv().unwrap();
+                }
             }
         });
+
+        // start utxo manager
+        let utxo_manager = UtxoManager {
+            utxodb: Arc::clone(&self.utxodb),
+            transaction_chan: Arc::new(Mutex::new(transaction_rx)),
+            coin_chan: coin_diff_tx,
+            notification_chan: notification_tx,
+        };
+        utxo_manager.start(num_workers);
 
         // start thread that writes to wallet
         let wallet = Arc::clone(&self.wallet);
@@ -74,6 +87,45 @@ impl LedgerManager {
                 wallet.apply_diff(&coin_diff.0, &coin_diff.1);
             }
         });
+    }
+}
+
+#[derive(Clone)]
+struct UtxoManager {
+    utxodb: Arc<UtxoDatabase>,
+    /// Channel for dispatching jobs (add/delete, transaction, hash of transaction).
+    transaction_chan: Arc<Mutex<mpsc::Receiver<(bool, Transaction, H256)>>>,
+    /// Channel for returning added and removed coins.
+    coin_chan: mpsc::Sender<(Vec<Input>, Vec<Input>)>,
+    /// Channel for notifying the dispatcher about the completion of processing this transaction.
+    notification_chan: mpsc::Sender<H256>,
+}
+
+impl UtxoManager {
+    fn start(self, num_workers: usize) {
+        for i in 0..num_workers {
+            let cloned = self.clone();
+            thread::spawn(move || {
+                cloned.worker_loop();
+            });
+        }
+    }
+
+    fn worker_loop(&self) {
+        loop {
+            let chan = self.transaction_chan.lock().unwrap();
+            let (add, transaction, hash) = chan.recv().unwrap();
+            drop(chan);
+            if add {
+                let diff = self.utxodb.add_transaction(&transaction, hash).unwrap();
+                self.coin_chan.send(diff).unwrap();
+            }
+            else {
+                let diff = self.utxodb.remove_transaction(&transaction, hash).unwrap();
+                self.coin_chan.send(diff).unwrap();
+            }
+            self.notification_chan.send(hash).unwrap();
+        }
     }
 }
 
