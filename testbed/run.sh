@@ -457,6 +457,7 @@ function stop_prism
 
 function run_experiment
 {
+	rm data/*
 	echo "Starting Prism nodes"
 	start_prism
 	echo "All nodes started, starting transaction generation"
