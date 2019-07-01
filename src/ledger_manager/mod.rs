@@ -13,12 +13,13 @@ use std::sync::Mutex;
 use std::sync::Arc;
 use std::sync::mpsc;
 use std::thread;
+use std::collections::HashSet;
 
 pub struct LedgerManager {
     blockdb: Arc<BlockDatabase>,
     chain: Arc<BlockChain>,
     utxodb: Arc<UtxoDatabase>,
-    wallet: Arc<Wallet>
+    wallet: Arc<Wallet>,
 }
 
 impl LedgerManager {
@@ -48,9 +49,20 @@ impl LedgerManager {
         let (coin_diff_tx, coin_diff_rx) = mpsc::sync_channel(buffer_size);
         thread::spawn(move || {
             loop {
-                let tx_diff = tx_diff_rx.recv().unwrap();
-                let coin_diff = utxodb.apply_diff(&tx_diff.0, &tx_diff.1);
-                coin_diff_tx.send(coin_diff).unwrap();
+                let (added_tx, removed_tx) = tx_diff_rx.recv().unwrap();
+                let mut added_coins = vec![];
+                let mut removed_coins = vec![];
+                for (t, h) in removed_tx.iter().rev() {
+                    let mut diff = utxodb.remove_transaction(&t, *h).unwrap();
+                    added_coins.extend(diff.0);
+                    removed_coins.extend(diff.1);
+                }
+                for (t, h) in added_tx.iter() {
+                    let mut diff = utxodb.add_transaction(&t, *h).unwrap();
+                    added_coins.extend(diff.0);
+                    removed_coins.extend(diff.1);
+                }
+                coin_diff_tx.send((added_coins, removed_coins)).unwrap();
             }
         });
 
@@ -58,7 +70,7 @@ impl LedgerManager {
         let wallet = Arc::clone(&self.wallet);
         thread::spawn(move || {
             loop {
-                let coin_diff = coin_diff_rx.recv().unwrap().unwrap();
+                let coin_diff = coin_diff_rx.recv().unwrap();
                 wallet.apply_diff(&coin_diff.0, &coin_diff.1);
             }
         });

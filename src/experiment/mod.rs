@@ -41,7 +41,7 @@ pub fn ico(
                     hash: RefCell::new(None),
                 };
                 let hash = tx.hash();
-                let diff = utxodb.apply_diff(&[(tx, hash)], &[]).unwrap();
+                let diff = utxodb.add_transaction(&tx, hash).unwrap();
                 wallet.apply_diff(&diff.0, &diff.1).unwrap();
             }
         });

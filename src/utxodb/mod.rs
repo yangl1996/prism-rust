@@ -70,114 +70,111 @@ impl UtxoDatabase {
         return Ok(checksum);
     }
 
-    /// Remove the given transactions, then add another set of transactions.
-    pub fn apply_diff(
+    pub fn add_transaction(
         &self,
-        added: &[(Transaction, H256)],
-        removed: &[(Transaction, H256)],
-    ) -> Result<(Vec<Input>, Vec<Input>), rocksdb::Error> {
+        t: &Transaction,
+        hash: H256) -> Result<(Vec<Input>, Vec<Input>), rocksdb::Error> {
         let mut added_coins: Vec<Input> = vec![];
         let mut removed_coins: Vec<Input> = vec![];
-        // revert the transactions
-        for (t, transaction_hash) in removed.iter().rev() {
-            // NOTE: we only undo the transaction if the outputs are there (it means that the
-            // transaction was valid when we added it)
-            let mut valid = true;
-            let mut removed_coins_t: Vec<Input> = vec![];
-            // use batch for the transaction
-            let mut batch = rocksdb::WriteBatch::default();
 
-            for (idx, out) in t.output.iter().enumerate() {
-                let id = CoinId {
-                    hash: *transaction_hash,
-                    index: idx as u32,
-                };
-                let id_ser = serialize(&id).unwrap();
-                if self.db.get_pinned(&id_ser)?.is_none() {
-                    valid = false;
-                    break;
-                }
-                batch.delete(&id_ser)?;
-                let coin = Input {
-                    coin: id,
-                    value: out.value,
-                    owner: out.recipient,
-                };
-                removed_coins_t.push(coin);
+        // use batch for the transaction
+        let mut batch = rocksdb::WriteBatch::default();
+
+        // check whether the inputs used in this transaction are all unspent
+        for input in &t.input {
+            let id_ser = serialize(&input.coin).unwrap();
+            if self.db.get_pinned(&id_ser)?.is_none() {
+                return Ok((vec![], vec![]));
             }
-
-            if valid {
-                // remove the outputs
-                removed_coins.append(&mut removed_coins_t);
-
-                // add back the input
-                for input in &t.input {
-                    let out = Output {
-                        value: input.value,
-                        recipient: input.owner,
-                    };
-                    batch
-                        .put(serialize(&input.coin).unwrap(), serialize(&out).unwrap())?;
-                    added_coins.push(input.clone());
-                }
-                // write the transaction as a batch
-                // TODO: we don't write to wal here, so should the program crash, the db will be in
-                // an inconsistent state. The solution here is to manually flush the memtable to
-                // the disk at certain time, and manually log the state (e.g. voter tips, etc.)
-                self.db.write_without_wal(batch)?;
-
-                // TODO: it's a hack. The purpose is to ignore ICO transaction
-                if !t.input.is_empty() {
-                    PERFORMANCE_COUNTER.record_deconfirm_transaction(&t);
-                }
-            }
+            batch.delete(&id_ser)?;
         }
 
-        // apply new transactions
-        for (t, transaction_hash) in added.iter() {
-            // NOTE: we only add the transaction if the inputs are valid and are unspent
-            let mut valid = true;
-            // use batch for the transaction
-            let mut batch = rocksdb::WriteBatch::default();
-            for input in &t.input {
-                let id_ser = serialize(&input.coin).unwrap();
-                if self.db.get_pinned(&id_ser)?.is_none() {
-                    valid = false;
-                    break;
-                }
-                batch.delete(&id_ser)?;
-            }
-            
-            if valid {
-                // remove the input
-                removed_coins.extend(&t.input);
+        // remove the input
+        removed_coins = t.input.clone();
 
-                // add the output
-                for (idx, output) in t.output.iter().enumerate() {
-                    let id = CoinId {
-                        hash: *transaction_hash,
-                        index: idx as u32,
-                    };
-                    batch
-                        .put(serialize(&id).unwrap(), serialize(&output).unwrap())?;
-                    let coin = Input {
-                        coin: id,
-                        value: output.value,
-                        owner: output.recipient,
-                    };
-                    added_coins.push(coin);
-                }
-                // write the transaction as a batch
-                // TODO: we don't write to wal here, so should the program crash, the db will be in
-                // an inconsistent state. The solution here is to manually flush the memtable to
-                // the disk at certain time, and manually log the state (e.g. voter tips, etc.)
-                self.db.write_without_wal(batch)?;
-
-                if !t.input.is_empty() {
-                    PERFORMANCE_COUNTER.record_confirm_transaction(&t);
-                }
-            }
+        // now that we have confirmed that all inputs are unspent, we will add the outputs and
+        // commit to database
+        for (idx, output) in t.output.iter().enumerate() {
+            let id = CoinId {
+                hash: hash,
+                index: idx as u32,
+            };
+            batch
+                .put(serialize(&id).unwrap(), serialize(&output).unwrap())?;
+            let coin = Input {
+                coin: id,
+                value: output.value,
+                owner: output.recipient,
+            };
+            added_coins.push(coin);
         }
+        // write the transaction as a batch
+        // TODO: we don't write to wal here, so should the program crash, the db will be in
+        // an inconsistent state. The solution here is to manually flush the memtable to
+        // the disk at certain time, and manually log the state (e.g. voter tips, etc.)
+        self.db.write_without_wal(batch)?;
+
+        if !t.input.is_empty() {
+            PERFORMANCE_COUNTER.record_confirm_transaction(&t);
+        }
+
+        return Ok((added_coins, removed_coins));
+    }
+
+    pub fn remove_transaction(
+        &self,
+        t: &Transaction,
+        hash: H256) -> Result<(Vec<Input>, Vec<Input>), rocksdb::Error> {
+        let mut removed_coins: Vec<Input> = vec![];
+        let mut added_coins: Vec<Input> = vec![];
+
+        // use batch when committing
+        let mut batch = rocksdb::WriteBatch::default();
+
+        // check whether the outputs of this transaction are there. if so, this transaction was
+        // valid when it was originally added
+        for (idx, out) in t.output.iter().enumerate() {
+            let id = CoinId {
+                hash: hash,
+                index: idx as u32,
+            };
+            let id_ser = serialize(&id).unwrap();
+            if self.db.get_pinned(&id_ser)?.is_none() {
+                return Ok((vec![], vec![]));
+            }
+            batch.delete(&id_ser)?;
+
+            // reconstruct the output coin that is being deleted
+            let coin = Input {
+                coin: id,
+                value: out.value,
+                owner: out.recipient,
+            };
+            removed_coins.push(coin);
+        }
+
+        // now that we have checked that this transaction was valid when originally added, we will
+        // add back the input and commit to database
+        for input in &t.input {
+            let out = Output {
+                value: input.value,
+                recipient: input.owner,
+            };
+            batch
+                .put(serialize(&input.coin).unwrap(), serialize(&out).unwrap())?;
+            added_coins.push(input.clone());
+        }
+        // write the transaction as a batch
+        // TODO: we don't write to wal here, so should the program crash, the db will be in
+        // an inconsistent state. The solution here is to manually flush the memtable to
+        // the disk at certain time, and manually log the state (e.g. voter tips, etc.)
+        self.db.write_without_wal(batch)?;
+
+        // TODO: it's a hack. The purpose is to ignore ICO transaction
+        if !t.input.is_empty() {
+            PERFORMANCE_COUNTER.record_deconfirm_transaction(&t);
+        }
+
         return Ok((added_coins, removed_coins));
     }
 
