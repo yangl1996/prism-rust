@@ -14,7 +14,6 @@ use prism::network::worker;
 use prism::experiment::transaction_generator::TransactionGenerator;
 use prism::miner;
 use prism::crypto::hash::{H256, Hashable};
-use prism::handler::update_ledger;
 use std::net;
 use std::process;
 use std::sync::Arc;
@@ -27,6 +26,7 @@ use rand::rngs::OsRng;
 use ed25519_dalek::Keypair;
 use ed25519_dalek::Signature;
 use prism::transaction::Address;
+use prism::ledger_manager::LedgerManager;
 
 fn main() {
     // parse command line arguments
@@ -128,31 +128,8 @@ fn main() {
     }
 
     // start thread to update ledger
-    let blockdb_copy = Arc::clone(&blockdb);
-    let blockchain_copy = Arc::clone(&blockchain);
-    let utxodb_copy = Arc::clone(&utxodb);
-    let wallet_copy = Arc::clone(&wallet);
-    let (tx_diff_tx, tx_diff_rx) = mpsc::sync_channel(3);
-    let (coin_diff_tx, coin_diff_rx) = mpsc::sync_channel(3);
-    thread::spawn(move || {
-        loop {
-            let tx_diff = update_ledger::update_transaction_sequence(&blockdb_copy, &blockchain_copy);
-            tx_diff_tx.send(tx_diff).unwrap();
-        }
-    });
-    thread::spawn(move || {
-        loop {
-            let tx_diff = tx_diff_rx.recv().unwrap();
-            let coin_diff = update_ledger::update_utxo(&tx_diff.0, &tx_diff.1, &utxodb_copy);
-            coin_diff_tx.send(coin_diff).unwrap();
-        }
-    });
-    thread::spawn(move || {
-        loop {
-            let coin_diff = coin_diff_rx.recv().unwrap();
-            update_ledger::update_wallet(&coin_diff.0, &coin_diff.1, &wallet_copy);
-        }
-    });
+    let ledger_manager = LedgerManager::new(&blockdb, &blockchain, &utxodb, &wallet);
+    ledger_manager.start(3, 0);
 
     // parse p2p server address
     let p2p_addr = matches.value_of("peer_addr").unwrap().parse::<net::SocketAddr>().unwrap_or_else(|e| {
