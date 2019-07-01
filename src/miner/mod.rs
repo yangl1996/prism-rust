@@ -26,6 +26,7 @@ use std::thread;
 use rand::distributions::Distribution;
 
 use rand::Rng;
+use crate::visualization::demo::Server as DemoServer;
 
 enum ControlSignal {
     Start(u64, bool), // the number controls the lambda of interval between block generation
@@ -68,6 +69,7 @@ pub struct Context {
     difficulty: H256,
     operating_state: OperatingState,
     server: ServerHandle,
+    demo_server: Arc<DemoServer>,
 }
 
 #[derive(Clone)]
@@ -82,6 +84,7 @@ pub fn new(
     blockdb: &Arc<BlockDatabase>,
     ctx_update_source: Receiver<ContextUpdateSignal>,
     server: &ServerHandle,
+    demo_server: &Arc<DemoServer>,
 ) -> (Context, Handle) {
     let (signal_chan_sender, signal_chan_receiver) = channel();
     let ctx = Context {
@@ -96,6 +99,7 @@ pub fn new(
         difficulty: *DEFAULT_DIFFICULTY,
         operating_state: OperatingState::Paused,
         server: server.clone(),
+        demo_server: Arc::clone(demo_server),
     };
 
     let handle = Handle {
@@ -259,6 +263,7 @@ impl Context {
                         &self.blockdb,
                         &self.blockchain,
                         &self.server,
+                        &self.demo_server,
                     );
                     //                debug!("Mined block {:.8}", mined_block.hash());
                     // if we are stepping, pause the miner loop
