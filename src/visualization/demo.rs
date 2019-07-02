@@ -34,8 +34,8 @@ pub struct Handle {
     chan: mpsc::Sender<String>
 }
 */
-pub struct Server<F: Factory> {
-    handle: WebSocket<F>
+pub struct Server {
+    handle: Sender
 }
 
 #[derive(Serialize)]
@@ -105,8 +105,8 @@ impl From<&Block> for DemoMsg {
     }
 }
 
-impl<F> Server<F> where F: Factory {
-    pub fn new(url: &str) -> Result<Server<impl Factory>>{
+impl Server {
+    pub fn new(url: &str) -> Result<Server> {
         let mut ws = ws::WebSocket::new(|_| {
             move |msg| {
                 Ok(())
@@ -117,13 +117,17 @@ impl<F> Server<F> where F: Factory {
                 ErrorKind::Internal,
                 format!("Unable to parse {} as url due to {:?}", url, err)))?;
         ws.connect(parsed)?;
-        Ok(Server {handle: ws})
+        Ok(Server {handle: ws.broadcaster()})
     }
 
+    pub fn test(&self, s: &str) -> Result<()> {
+        self.handle.send(s)
+        //self.chan.send(json).unwrap();
+    }
     pub fn insert_block(&self, block: &Block) -> Result<()> {
         let msg: DemoMsg = block.into();
         let json: String = serde_json::to_string_pretty(&msg).unwrap();
-        self.handle.broadcaster().send(json)
+        self.handle.send(json)
         //self.chan.send(json).unwrap();
     }
 
@@ -135,7 +139,7 @@ impl<F> Server<F> where F: Factory {
         let removed = removed.iter().map(|x|x.to_string()).collect();
         let msg: DemoMsg = DemoMsg::UpdatedLedger(UpdatedLedger{added, removed});
         let json: String = serde_json::to_string_pretty(&msg).unwrap();
-        self.handle.broadcaster().send(json)
+        self.handle.send(json)
     }
 
 }
