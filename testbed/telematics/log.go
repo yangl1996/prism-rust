@@ -36,7 +36,7 @@ type Report struct {
 	Data Snapshot
 }
 
-func log(interval, duration uint, nodesFile, dataDir string) {
+func log(interval, duration uint, nodesFile, dataDir string, grafana bool) {
 	fmt.Println("Parsing node list")
 	nodes := make(map[string]string)
 	file, err := os.Open(nodesFile)
@@ -94,31 +94,58 @@ func log(interval, duration uint, nodesFile, dataDir string) {
 		}
 	}
 
-	n := path.Clean(dataDir + "/aggregated.rrd")
-	cr := rrd.NewCreator(n, time.Now(), interval)
-	cr.DS("confirmed_tx", "COUNTER", interval*2, 0, "U")
-	cr.DS("deconfirmed_tx", "COUNTER", interval*2, 0, "U")
-	cr.DS("generated_tx", "COUNTER", interval*2, 0, "U")
-	cr.DS("queue_length", "GAUGE", interval*2, 0, "U")
-	cr.DS("mined_proposer", "COUNTER", interval*2, 0, "U")
-	cr.DS("mined_voter", "COUNTER", interval*2, 0, "U")
-	cr.DS("mined_tx", "COUNTER", interval*2, 0, "U")
-	cr.DS("proposer_delay_sum", "COUNTER", interval*2, 0, "U")
-	cr.DS("voter_delay_sum", "COUNTER", interval*2, 0, "U")
-	cr.DS("tx_delay_sum", "COUNTER", interval*2, 0, "U")
-	cr.DS("received_proposer", "COUNTER", interval*2, 0, "U")
-	cr.DS("received_voter", "COUNTER", interval*2, 0, "U")
-	cr.DS("received_tx", "COUNTER", interval*2, 0, "U")
-	cr.DS("confirmed_tx_blk", "COUNTER", interval*2, 0, "U")
-	cr.DS("deconfirmed_tx_blk", "COUNTER", interval*2, 0, "U")
-	cr.DS("proposer_delay_mean", "COMPUTE", "proposer_delay_sum,received_proposer,/")
-	cr.DS("voter_delay_mean", "COMPUTE", "voter_delay_sum,received_voter,/")
-	cr.DS("tx_delay_mean", "COMPUTE", "tx_delay_sum,received_tx,/")
-	cr.RRA("LAST", 0, 1, duration/interval)
-	err = cr.Create(true)
-	if err != nil {
-		fmt.Println("Error creating round-robin database:", err)
-		os.Exit(1)
+	if grafana {
+		n := path.Clean(dataDir + "/average.rrd")
+		cr := rrd.NewCreator(n, time.Now(), interval)
+		cr.DS("confirmed_tx", "COUNTER", interval*2, 0, "U")
+		cr.DS("deconfirmed_tx", "COUNTER", interval*2, 0, "U")
+		cr.DS("generated_tx", "COUNTER", interval*2, 0, "U")
+		cr.DS("queue_length", "GAUGE", interval*2, 0, "U")
+		cr.DS("mined_proposer", "COUNTER", interval*2, 0, "U")
+		cr.DS("mined_voter", "COUNTER", interval*2, 0, "U")
+		cr.DS("mined_tx", "COUNTER", interval*2, 0, "U")
+		cr.DS("proposer_delay_sum", "COUNTER", interval*2, 0, "U")
+		cr.DS("voter_delay_sum", "COUNTER", interval*2, 0, "U")
+		cr.DS("tx_delay_sum", "COUNTER", interval*2, 0, "U")
+		cr.DS("received_proposer", "COUNTER", interval*2, 0, "U")
+		cr.DS("received_voter", "COUNTER", interval*2, 0, "U")
+		cr.DS("received_tx", "COUNTER", interval*2, 0, "U")
+		cr.DS("confirmed_tx_blk", "COUNTER", interval*2, 0, "U")
+		cr.DS("deconfirmed_tx_blk", "COUNTER", interval*2, 0, "U")
+		cr.DS("proposer_delay_mean", "COMPUTE", "proposer_delay_sum,received_proposer,/")
+		cr.DS("voter_delay_mean", "COMPUTE", "voter_delay_sum,received_voter,/")
+		cr.DS("tx_delay_mean", "COMPUTE", "tx_delay_sum,received_tx,/")
+		cr.RRA("LAST", 0, 1, duration/interval)
+		err = cr.Create(true)
+		if err != nil {
+			fmt.Println("Error creating round-robin database:", err)
+			os.Exit(1)
+		}
+		n = path.Clean(dataDir + "/accumulative.rrd")
+		cr = rrd.NewCreator(n, time.Now(), interval)
+		cr.DS("confirmed_tx", "GAUGE", interval*2, 0, "U")
+		cr.DS("deconfirmed_tx", "GAUGE", interval*2, 0, "U")
+		cr.DS("generated_tx", "GAUGE", interval*2, 0, "U")
+		cr.DS("mined_proposer", "GAUGE", interval*2, 0, "U")
+		cr.DS("mined_voter", "GAUGE", interval*2, 0, "U")
+		cr.DS("mined_tx", "GAUGE", interval*2, 0, "U")
+		cr.DS("proposer_delay_sum", "GAUGE", interval*2, 0, "U")
+		cr.DS("voter_delay_sum", "GAUGE", interval*2, 0, "U")
+		cr.DS("tx_delay_sum", "GAUGE", interval*2, 0, "U")
+		cr.DS("received_proposer", "GAUGE", interval*2, 0, "U")
+		cr.DS("received_voter", "GAUGE", interval*2, 0, "U")
+		cr.DS("received_tx", "GAUGE", interval*2, 0, "U")
+		cr.DS("confirmed_tx_blk", "GAUGE", interval*2, 0, "U")
+		cr.DS("deconfirmed_tx_blk", "GAUGE", interval*2, 0, "U")
+		cr.DS("proposer_delay_mean", "COMPUTE", "proposer_delay_sum,received_proposer,/")
+		cr.DS("voter_delay_mean", "COMPUTE", "voter_delay_sum,received_voter,/")
+		cr.DS("tx_delay_mean", "COMPUTE", "tx_delay_sum,received_tx,/")
+		cr.RRA("LAST", 0, 1, duration/interval)
+		err = cr.Create(true)
+		if err != nil {
+			fmt.Println("Error creating round-robin database:", err)
+			os.Exit(1)
+		}
 	}
 
 	fmt.Println("Start logging data")
@@ -128,7 +155,12 @@ func log(interval, duration uint, nodesFile, dataDir string) {
 	}
 
 	// start displaying data and logging aggregated value
-	updater := rrd.NewUpdater("data/aggregated.rrd")
+	var avgUpdater *rrd.Updater
+	var accUpdater *rrd.Updater
+	if grafana {
+		avgUpdater = rrd.NewUpdater("data/average.rrd")
+		accUpdater = rrd.NewUpdater("data/accumulative.rrd")
+	}
 	t := time.NewTicker(time.Duration(interval) * time.Second)
 	prev := make(map[string]Snapshot)
 	curr := make(map[string]Snapshot)
@@ -237,10 +269,17 @@ func log(interval, duration uint, nodesFile, dataDir string) {
 				tm.Printf("           Delay - Transaction    %8.3g  %8.3g\n", float64(cavg.Total_transaction_block_delay)/float64(cavg.Received_transaction_blocks), float64(cavg.Total_transaction_block_delay-pavg.Total_transaction_block_delay)/float64(cavg.Received_transaction_blocks-pavg.Received_transaction_blocks))
 				tm.Flush()
 				// log the aggregated value
-				err = updater.Update(time.Now(), cavg.Confirmed_transactions, cavg.Deconfirmed_transactions, cavg.Generated_transactions, cavg.Incoming_message_queue, cavg.Mined_proposer_blocks, cavg.Mined_voter_blocks, cavg.Mined_transaction_blocks, cavg.Total_proposer_block_delay, cavg.Total_voter_block_delay, cavg.Total_transaction_block_delay, cavg.Received_proposer_blocks, cavg.Received_voter_blocks, cavg.Received_transaction_blocks, cavg.Confirmed_transaction_blocks, cavg.Deconfirmed_transaction_blocks)
-				if err != nil {
-					// sometimes we get error if interval is set to 1 and the timer goes a bit faster
-					continue
+				if grafana {
+					err = avgUpdater.Update(time.Now(), cavg.Confirmed_transactions, cavg.Deconfirmed_transactions, cavg.Generated_transactions, cavg.Incoming_message_queue, cavg.Mined_proposer_blocks, cavg.Mined_voter_blocks, cavg.Mined_transaction_blocks, cavg.Total_proposer_block_delay, cavg.Total_voter_block_delay, cavg.Total_transaction_block_delay, cavg.Received_proposer_blocks, cavg.Received_voter_blocks, cavg.Received_transaction_blocks, cavg.Confirmed_transaction_blocks, cavg.Deconfirmed_transaction_blocks)
+					if err != nil {
+						// sometimes we get error if interval is set to 1 and the timer goes a bit faster
+						continue
+					}
+					err = accUpdater.Update(time.Now(), cavg.Confirmed_transactions, cavg.Deconfirmed_transactions, cavg.Generated_transactions, cavg.Mined_proposer_blocks, cavg.Mined_voter_blocks, cavg.Mined_transaction_blocks, cavg.Total_proposer_block_delay, cavg.Total_voter_block_delay, cavg.Total_transaction_block_delay, cavg.Received_proposer_blocks, cavg.Received_voter_blocks, cavg.Received_transaction_blocks, cavg.Confirmed_transaction_blocks, cavg.Deconfirmed_transaction_blocks)
+					if err != nil {
+						// sometimes we get error if interval is set to 1 and the timer goes a bit faster
+						continue
+					}
 				}
 			}
 		}

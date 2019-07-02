@@ -12,6 +12,7 @@ func main() {
 	durationFlag := logCommand.Uint("duration", 3600, "Sets the duration of the log")
 	nodeListFlag := logCommand.String("nodelist", "nodes.txt", "Sets the path to the node list file")
 	dataDirFlag := logCommand.String("datadir", "data", "Sets the path to the directory to hold data")
+	grafanaFlag := logCommand.Bool("grafana", false, "Record extra data for displaying on Grafana")
 
 	plotCommand := flag.NewFlagSet("plot", flag.ExitOnError)
 	plotNodeListFlag := plotCommand.String("nodelist", "nodes.txt", "Sets the path to the node list file")
@@ -33,7 +34,7 @@ func main() {
 	switch os.Args[1] {
 	case "log":
 		logCommand.Parse(os.Args[2:])
-		log(*intervalFlag, *durationFlag, *nodeListFlag, *dataDirFlag)
+		log(*intervalFlag, *durationFlag, *nodeListFlag, *dataDirFlag, *grafanaFlag)
 	case "plot":
 		plotCommand.Parse(os.Args[2:])
 		plot(*plotNodeListFlag, *plotDataDirFlag, *plotContentFlag, *plotNodeFlag, *plotOutputFlag, *plotWindowFlag)

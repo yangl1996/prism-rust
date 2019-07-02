@@ -52,7 +52,7 @@ func plot(nodesFile, dataDir, content, node, output string, window uint) {
 			if window != 1 {
 				// if we are doing windowed average, we will be computing the min, max, avg of the
 				// windowed average value
-				g.CDef(n+"_confirm_wa", n+"_confirm" + trend_cmd)
+				g.CDef(n+"_confirm_wa", n+"_confirm"+trend_cmd)
 				nodeConfirmSet += n + "_confirm_wa,"
 			} else {
 				nodeConfirmSet += n + "_confirm,"
