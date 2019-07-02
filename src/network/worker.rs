@@ -20,7 +20,6 @@ use std::collections::HashSet;
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
-use crate::visualization::demo::Server as DemoServer;
 
 
 #[derive(Clone)]
@@ -36,7 +35,6 @@ pub struct Context {
     server: ServerHandle,
     buffer: Arc<Mutex<BlockBuffer>>,
     recent_blocks: Arc<Mutex<HashSet<H256>>>,
-    demo_server: Arc<DemoServer>,
 }
 
 pub fn new(
@@ -49,7 +47,6 @@ pub fn new(
     mempool: &Arc<Mutex<MemoryPool>>,
     ctx_update_sink: mpsc::Sender<ContextUpdateSignal>,
     server: &ServerHandle,
-    demo_server: &Arc<DemoServer>,
 ) -> Context {
     let ctx = Context {
         msg_chan: Arc::new(Mutex::new(msg_src)),
@@ -63,7 +60,6 @@ pub fn new(
         server: server.clone(),
         buffer: Arc::new(Mutex::new(BlockBuffer::new())),
         recent_blocks: Arc::new(Mutex::new(HashSet::new())),
-        demo_server: Arc::clone(demo_server),
     };
     return ctx;
 }
@@ -275,7 +271,6 @@ impl Context {
                             &self.blockdb,
                             &self.chain,
                             &self.server,
-                            &self.demo_server,
                             );
                         context_update_sig.push(match &block.content {
                             Content::Proposer(_) => ContextUpdateSignal::NewProposerBlock,

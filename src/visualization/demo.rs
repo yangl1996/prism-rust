@@ -2,54 +2,77 @@ use crate::block::{Block, Content};
 use crate::crypto::hash::{Hashable, H256};
 
 use std::convert::From;
-use std::fs::File;
-use std::sync::Mutex;
-use std::io::prelude::*;
+use std::thread;
 
-pub struct Server {
-    handle: Mutex<File>
+use std::sync::mpsc;
+use ws::{connect, Sender, Result, Handler, Handshake};
+
+pub fn new(url: String) -> Handle {
+    let (sender, receiver) = mpsc::channel();
+    thread::Builder::new()
+        .name("demo websocket server".to_owned())
+        .spawn(move || {
+            connect(url, |out| {
+                Context {
+                    out,
+                    chan: receiver
+                }
+            }).unwrap()
+        })
+        .unwrap();
+    Handle { chan: sender }
+}
+
+pub struct Context {
+    out: Sender,
+    chan: mpsc::Receiver<String>,
+}
+
+#[derive(Clone)]
+pub struct Handle {
+    chan: mpsc::Sender<String>
 }
 
 #[derive(Serialize)]
-pub struct ProposerBlock {
+struct ProposerBlock {
     /// Hash of this block
-    pub id: String,
+    id: String,
     /// Proposer parent
-    pub parent: String,
+    parent: String,
     /// Transaction refs
-    pub transaction_refs: Vec<String>,
+    transaction_refs: Vec<String>,
     /// Proposer refs
-    pub proposer_refs: Vec<String>,
+    proposer_refs: Vec<String>,
 }
 #[derive(Serialize)]
-pub struct VoterBlock {
+struct VoterBlock {
     /// Hash of this block
-    pub id: String,
+    id: String,
     /// Proposer parent
-    pub parent: String,
+    parent: String,
     /// Voting chain number
-    pub chain: u16,
+    chain: u16,
     /// Voter parent
-    pub voter_parent: String,
+    voter_parent: String,
     /// Votes
-    pub votes: Vec<String>,
+    votes: Vec<String>,
 }
 #[derive(Serialize)]
-pub struct TransactionBlock {
+struct TransactionBlock {
     /// Hash of this block
-    pub id: String,
+    id: String,
     /// Proposer parent
-    pub parent: String,
+    parent: String,
 }
 #[derive(Serialize)]
-pub struct UpdatedLedger {
+struct UpdatedLedger {
     /// Hash of proposer blocks that are added to ledger 
-    pub added: Vec<String>,
+    added: Vec<String>,
     /// Hash of proposer blocks that are removed from ledger 
-    pub removed: Vec<String>,
+    removed: Vec<String>,
 }
 #[derive(Serialize)]
-pub enum DemoMsg {
+enum DemoMsg {
     ProposerBlock(ProposerBlock),
     VoterBlock(VoterBlock),
     TransactionBlock(TransactionBlock),
@@ -77,37 +100,35 @@ impl From<&Block> for DemoMsg {
     }
 }
 
-impl Server {
-    pub fn new<P: AsRef<std::path::Path>>(path: P) -> std::io::Result<Self> {
-        let file = File::create(path)?;
-        Ok(Self { handle: Mutex::new(file) })
-    }
 
-    pub fn insert_block(&self, block: &Block) -> std::io::Result<()> {
+impl Handle {
+
+    pub fn insert_block(&self, block: &Block) {
         let msg: DemoMsg = block.into();
         let json: String = serde_json::to_string_pretty(&msg).unwrap();
-        let mut handle = self.handle.lock().unwrap();
-        writeln!(handle, "{}", json)?;
-        Ok(())
+        self.chan.send(json).unwrap();
     }
 
-    pub fn update_ledger(&self, added: &[H256], removed: &[H256]) -> std::io::Result<()> {
+    pub fn update_ledger(&self, added: &[H256], removed: &[H256]) {
         if added.is_empty() && removed.is_empty() {
-            return Ok(());
+            return;
         }
         let added = added.iter().map(|x|x.to_string()).collect();
         let removed = removed.iter().map(|x|x.to_string()).collect();
         let msg: DemoMsg = DemoMsg::UpdatedLedger(UpdatedLedger{added, removed});
         let json: String = serde_json::to_string_pretty(&msg).unwrap();
-        let mut handle = self.handle.lock().unwrap();
-        writeln!(handle, "{}", json)?;
+        self.chan.send(json).unwrap();
+    }
+
+}
+
+impl Handler for Context {
+    fn on_open(&mut self, _shake: Handshake) -> Result<()> {
+        //let chan_copy = self.chan.clone();
+        for msg in self.chan.iter() {
+            self.out.send(msg).unwrap();
+        }
         Ok(())
     }
 
-    /*
-    pub fn print(&self) {
-        let handle = self.handle.lock().unwrap();
-        println!("{:?}", handle);
-    }
-    */
 }

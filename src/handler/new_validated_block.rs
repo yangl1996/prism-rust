@@ -10,7 +10,6 @@ use crate::utxodb::UtxoDatabase;
 use crate::wallet::Wallet;
 use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 use std::sync::Mutex;
-use crate::visualization::demo::Server as DemoServer;
 
 pub fn new_validated_block(
     block: &Block,
@@ -18,7 +17,6 @@ pub fn new_validated_block(
     blockdb: &BlockDatabase,
     chain: &BlockChain,
     server: &ServerHandle,
-    demo_server: &DemoServer,
 ) {
     PERFORMANCE_COUNTER.record_process_block(&block);
 
@@ -38,9 +36,6 @@ pub fn new_validated_block(
         }
         _ => (),
     };
-
-    // send the block to demo server
-    demo_server.insert_block(block).unwrap();
 
     // insert the new block into the blockchain
     chain.insert_block(&block).unwrap();
