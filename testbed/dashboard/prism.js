@@ -24,7 +24,7 @@ var ARGS;
 
 // Initialize a skeleton with nothing but a rows array and service object
 dashboard = {
-	rows : [],
+	panels: [],
 };
 
 // Set a title
@@ -74,87 +74,119 @@ for (var i = 0; i < nodes; i++) {
 }
 
 // transaction rate row
-dashboard.rows.push({
-	title: 'Transaction Rate',
-	height: '400px',
-	panels: [
+dashboard.panels.push({
+	"cacheTimeout": null,
+	"format": "short",
+	"postfix": "Tx/s",
+	"postfixFontSize": "50%",
+	"targets": [
 		{
-			"cacheTimeout": null,
-			"format": "short",
-			"postfix": "Tx/s",
-			"postfixFontSize": "50%",
-			"targets": [
-				{
-					"refId": "A",
-					"target": "average:confirmed_tx",
-					"type": "timeserie"
-				}
-			],
-			"title": "Current Confirmation Rate",
-			"type": "singlestat",
-			"valueFontSize": "80%",
-			"valueName": "current",
-			"sparkline": {
-				"fillColor": "rgba(31, 118, 189, 0.18)",
-				"full": false,
-				"lineColor": "rgb(31, 120, 193)",
-				"show": true
-			},
-			span: 2
-		},
-		{
-			title: 'Transaction Count',
-			type: 'graph',
-			span: 4,
-			fill: 1,
-			linewidth: 2,
-			targets: [
-				{
-					"refId": "A",
-					"target": "accumulative:confirmed_tx",
-					"type": "timeserie"
-				},
-				{
-					"refId": "B",
-					"target": "accumulative:generated_tx",
-					"type": "timeserie"
-				}
-			],
-			tooltip: {
-				shared: true
-			},
-			legend: {
-				"avg": false,
-				"current": false,
-				"max": false,
-				"min": false,
-				"show": false,
-				"total": false,
-				"values": false
-			},
-		},
-		{
-			title: 'Per-node Confirmation Rate',
-			type: 'graph',
-			span: 6,
-			fill: 0,
-			linewidth: 1,
-			targets: txRateTargets,
-			tooltip: {
-				shared: true
-			},
-			legend: {
-				"avg": false,
-				"current": false,
-				"max": false,
-				"min": false,
-				"show": false,
-				"total": false,
-				"values": false
-			},
+			"refId": "A",
+			"target": "average:confirmed_tx",
+			"type": "timeserie"
 		}
-	]
+	],
+	"title": "Current Confirmation Rate",
+	gridPos: {
+		"h": 8,
+		"w": 4,
+		"x": 0,
+		"y": 2
+	},
+	"type": "singlestat",
+	"valueFontSize": "80%",
+	"valueName": "current",
+	"sparkline": {
+		"fillColor": "rgba(31, 118, 189, 0.18)",
+		"full": false,
+		"lineColor": "rgb(31, 120, 193)",
+		"show": true
+	}
 });
 
+dashboard.panels.push({
+	title: 'Transaction Count',
+	gridPos: {
+		"h": 10,
+		"w": 8,
+		"x": 4,
+		"y": 0
+	},
+	type: 'graph',
+	fill: 1,
+	linewidth: 2,
+	targets: [
+		{
+			"refId": "A",
+			"target": "accumulative:confirmed_tx",
+			"type": "timeserie"
+		},
+		{
+			"refId": "B",
+			"target": "accumulative:generated_tx",
+			"type": "timeserie"
+		}
+	],
+	tooltip: {
+		shared: true
+	},
+	legend: {
+		"avg": true,
+		"current": false,
+		"max": false,
+		"min": false,
+		"show": true,
+		"total": false,
+		"values": true
+	}
+});
+dashboard.panels.push({
+	title: 'Per-node Confirmation Rate',
+	gridPos: {
+		"h": 10,
+		"w": 12,
+		"x": 12,
+		"y": 0
+	},
+	type: 'graph',
+	fill: 0,
+	linewidth: 1,
+	targets: txRateTargets,
+	tooltip: {
+		shared: true
+	},
+	legend: {
+		"avg": false,
+		"current": false,
+		"max": false,
+		"min": false,
+		"show": false,
+		"total": false,
+		"values": false
+	},
+});
+dashboard.panels.push({
+	"cacheTimeout": null,
+	"format": "short",
+	"postfix": "Tx/s",
+	"postfixFontSize": "50%",
+	"targets": [
+		{
+			"refId": "A",
+			"target": "average:confirmed_tx",
+			"type": "timeserie"
+		}
+	],
+	"title": "Average Confirmation Rate",
+	gridPos: {
+		"h": 2,
+		"w": 4,
+		"x": 0,
+		"y": 0
+	},
+	"type": "singlestat",
+	"valueFontSize": "80%",
+	"valueName": "avg",
+});
 
 return dashboard;
