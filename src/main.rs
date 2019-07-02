@@ -27,6 +27,7 @@ use rand::rngs::OsRng;
 use ed25519_dalek::Keypair;
 use ed25519_dalek::Signature;
 use prism::transaction::Address;
+use prism::visualization::demo;
 
 fn main() {
     // parse command line arguments
@@ -47,6 +48,7 @@ fn main() {
      (@arg init_fund_value: --("fund-value") [INT] default_value("100") "Sets the value of each initial fund coin")
      (@arg load_key_path: --("load-key") ... [PATH] "Loads a key pair into the wallet from the given address")
      (@arg mempool_size: --("mempool-size") ... [SIZE] default_value("500000") "Sets the size limit of the memory pool")
+     (@arg demo_addr: --demo [ADDR] default_value("ws://127.0.0.1:9000") "Sets the IP address and the port of the demo websocket to connect to")
      (@subcommand keygen =>
       (about: "Generates Prism wallet key pair")
       (@arg display_address: --addr "Prints the address of the key pair to STDERR")
@@ -127,16 +129,20 @@ fn main() {
         }
     }
 
+    // connect to demo websocket server
+    let demo_sender = demo::new(&matches.value_of("demo_addr").unwrap());
+
     // start thread to update ledger
     let blockdb_copy = Arc::clone(&blockdb);
     let blockchain_copy = Arc::clone(&blockchain);
     let utxodb_copy = Arc::clone(&utxodb);
     let wallet_copy = Arc::clone(&wallet);
+    let demo_sender_copy = demo_sender.clone();
     let (tx_diff_tx, tx_diff_rx) = mpsc::sync_channel(3);
     let (coin_diff_tx, coin_diff_rx) = mpsc::sync_channel(3);
     thread::spawn(move || {
         loop {
-            let tx_diff = update_ledger::update_transaction_sequence(&blockdb_copy, &blockchain_copy);
+            let tx_diff = update_ledger::update_transaction_sequence(&blockdb_copy, &blockchain_copy, &demo_sender_copy);
             tx_diff_tx.send(tx_diff).unwrap();
         }
     });
@@ -176,11 +182,11 @@ fn main() {
 
 
     // start the worker
-    let worker_ctx = worker::new(16, msg_rx, &blockchain, &blockdb, &utxodb, &wallet, &mempool, ctx_tx, &server);
+    let worker_ctx = worker::new(16, msg_rx, &blockchain, &blockdb, &utxodb, &wallet, &mempool, ctx_tx, &server, demo_sender.clone() );
     worker_ctx.start();
 
     // start the miner
-    let (miner_ctx, miner) = miner::new(&mempool, &blockchain, &blockdb, ctx_rx, &server);
+    let (miner_ctx, miner) = miner::new(&mempool, &blockchain, &blockdb, ctx_rx, &server, demo_sender.clone());
     miner_ctx.start();
 
     // connect to known peers

@@ -10,6 +10,7 @@ use crate::utxodb::UtxoDatabase;
 use crate::wallet::Wallet;
 use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 use std::sync::Mutex;
+use crate::visualization::demo;
 
 pub fn new_validated_block(
     block: &Block,
@@ -17,7 +18,11 @@ pub fn new_validated_block(
     blockdb: &BlockDatabase,
     chain: &BlockChain,
     server: &ServerHandle,
+    demo_sender: &std::sync::mpsc::Sender<String>
 ) {
+    let msg = demo::insert_block_msg(block);
+    demo_sender.send(msg).unwrap();
+
     PERFORMANCE_COUNTER.record_process_block(&block);
 
     // if this block is a transaction, remove transactions from mempool

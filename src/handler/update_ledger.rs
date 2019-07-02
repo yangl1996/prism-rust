@@ -10,14 +10,19 @@ use crate::utxodb::UtxoDatabase;
 use crate::wallet::Wallet;
 use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 use std::sync::Mutex;
+use crate::visualization::demo;
 
 pub fn update_transaction_sequence (
     blockdb: &BlockDatabase,
     chain: &BlockChain,
+    demo_sender: &std::sync::mpsc::Sender<String>,
 ) -> (Vec<(Transaction, H256)>, Vec<(Transaction, H256)>) {
     let diff = chain.update_ledger().unwrap();
 
-    //demo_server.update_ledger(&diff.2, &diff.3).unwrap();
+    if !(diff.2.is_empty() && diff.3.is_empty()) {
+        let msg = demo::update_ledger_msg(&diff.2, &diff.3);
+        demo_sender.send(msg).unwrap();
+    }
 
     PERFORMANCE_COUNTER.record_confirm_transaction_blocks(diff.0.len());
     PERFORMANCE_COUNTER.record_deconfirm_transaction_blocks(diff.1.len());

@@ -68,6 +68,7 @@ pub struct Context {
     difficulty: H256,
     operating_state: OperatingState,
     server: ServerHandle,
+    demo_sender: Sender<String>
 }
 
 #[derive(Clone)]
@@ -82,6 +83,7 @@ pub fn new(
     blockdb: &Arc<BlockDatabase>,
     ctx_update_source: Receiver<ContextUpdateSignal>,
     server: &ServerHandle,
+    demo_sender: Sender<String>
 ) -> (Context, Handle) {
     let (signal_chan_sender, signal_chan_receiver) = channel();
     let ctx = Context {
@@ -96,6 +98,7 @@ pub fn new(
         difficulty: *DEFAULT_DIFFICULTY,
         operating_state: OperatingState::Paused,
         server: server.clone(),
+        demo_sender
     };
 
     let handle = Handle {
@@ -259,6 +262,7 @@ impl Context {
                         &self.blockdb,
                         &self.blockchain,
                         &self.server,
+                        &self.demo_sender
                     );
                     //                debug!("Mined block {:.8}", mined_block.hash());
                     // if we are stepping, pause the miner loop

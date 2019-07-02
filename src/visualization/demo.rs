@@ -3,43 +3,11 @@ use crate::crypto::hash::{Hashable, H256};
 
 use std::convert::From;
 use std::thread;
+use log::warn;
 
 use std::sync::mpsc;
 use websocket::client::ClientBuilder;
-use websocket::client::sync::Client;
-use websocket::stream::sync::TcpStream;
 use websocket::message::OwnedMessage;
-
-/*
-pub fn new(url: String) -> Handle {
-    let (sender, receiver) = mpsc::channel();
-    thread::Builder::new()
-        .name("demo websocket server".to_owned())
-        .spawn(move || {
-            connect(url, |out| {
-                Context {
-                    out,
-                    chan: receiver
-                }
-            }).unwrap()
-        })
-        .unwrap();
-    Handle { chan: sender }
-}
-
-pub struct Context {
-    out: Sender,
-    chan: mpsc::Receiver<String>,
-}
-
-#[derive(Clone)]
-pub struct Handle {
-    chan: mpsc::Sender<String>
-}
-*/
-pub struct Server {
-    handle: Client<TcpStream>
-}
 
 #[derive(Serialize)]
 struct ProposerBlock {
@@ -108,50 +76,42 @@ impl From<&Block> for DemoMsg {
     }
 }
 
-impl Server {
-    pub fn new(url: &str) -> Server {
-        let client = ClientBuilder::new(url)
-		.unwrap()
-		.add_protocol("rust-websocket")
-		.connect_insecure()
-		.unwrap();
-        Server {handle: client}
-    }
-
-    pub fn test(&mut self, s: &str) {
-        self.handle.send_message(&OwnedMessage::Text(s.to_string())).unwrap();
-        //self.chan.send(json).unwrap();
-    }
-    /*
-    pub fn insert_block(&self, block: &Block) -> Result<()> {
-        let msg: DemoMsg = block.into();
-        let json: String = serde_json::to_string_pretty(&msg).unwrap();
-        self.handle.send(json)
-        //self.chan.send(json).unwrap();
-    }
-
-    pub fn update_ledger(&self, added: &[H256], removed: &[H256]) -> Result<()> {
-        if added.is_empty() && removed.is_empty() {
-            return Ok(());
+pub fn new(url: &str) -> mpsc::Sender<String> {
+    let (sender, receiver) = mpsc::channel();
+    let client_builder = ClientBuilder::new(url);
+    if let Ok(client_builder) = client_builder {
+        let client = client_builder
+            .add_protocol("rust-websocket")
+            .connect_insecure();
+        if let Ok(mut client) = client {
+            thread::spawn(move|| {
+                for msg in receiver.iter() {
+                    if client.send_message(&OwnedMessage::Text(msg)).is_err() {break;}
+                }
+            });
+        } else {
+            warn!("Fail to connect to demo websocket {}.", url);
         }
-        let added = added.iter().map(|x|x.to_string()).collect();
-        let removed = removed.iter().map(|x|x.to_string()).collect();
-        let msg: DemoMsg = DemoMsg::UpdatedLedger(UpdatedLedger{added, removed});
-        let json: String = serde_json::to_string_pretty(&msg).unwrap();
-        self.handle.send(json)
+    } else {
+        warn!("Fail to connect to demo websocket {}.", url);
     }
-    */
-
+    sender
 }
-/*
-impl Handler for Context {
-    fn on_open(&mut self, _shake: Handshake) -> Result<()> {
-        //let chan_copy = self.chan.clone();
-        for msg in self.chan.iter() {
-            self.out.send(msg).unwrap();
-        }
-        Ok(())
+
+pub fn insert_block_msg(block: &Block) -> String {
+    let msg: DemoMsg = block.into();
+    let json: String = serde_json::to_string_pretty(&msg).unwrap();
+    json
+}
+
+pub fn update_ledger_msg(added: &[H256], removed: &[H256]) -> String {
+    if added.is_empty() && removed.is_empty() {
+        return String::from("");
     }
-
+    let added = added.iter().map(|x|x.to_string()).collect();
+    let removed = removed.iter().map(|x|x.to_string()).collect();
+    let msg: DemoMsg = DemoMsg::UpdatedLedger(UpdatedLedger{added, removed});
+    let json: String = serde_json::to_string_pretty(&msg).unwrap();
+    json
 }
-*/
+
