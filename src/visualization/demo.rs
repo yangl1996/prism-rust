@@ -5,7 +5,10 @@ use std::convert::From;
 use std::thread;
 
 use std::sync::mpsc;
-use ws::{WebSocket, Factory, Error, ErrorKind, Sender, Result, Handler, Handshake};
+use websocket::client::ClientBuilder;
+use websocket::client::sync::Client;
+use websocket::stream::sync::TcpStream;
+use websocket::message::OwnedMessage;
 
 /*
 pub fn new(url: String) -> Handle {
@@ -35,7 +38,7 @@ pub struct Handle {
 }
 */
 pub struct Server {
-    handle: Sender
+    handle: Client<TcpStream>
 }
 
 #[derive(Serialize)]
@@ -106,24 +109,20 @@ impl From<&Block> for DemoMsg {
 }
 
 impl Server {
-    pub fn new(url: &str) -> Result<Server> {
-        let mut ws = ws::WebSocket::new(|_| {
-            move |msg| {
-                Ok(())
-            }
-        })?;
-        let parsed = url::Url::parse(url)
-            .map_err(|err| Error::new(
-                ErrorKind::Internal,
-                format!("Unable to parse {} as url due to {:?}", url, err)))?;
-        ws.connect(parsed)?;
-        Ok(Server {handle: ws.broadcaster()})
+    pub fn new(url: &str) -> Server {
+        let client = ClientBuilder::new(url)
+		.unwrap()
+		.add_protocol("rust-websocket")
+		.connect_insecure()
+		.unwrap();
+        Server {handle: client}
     }
 
-    pub fn test(&self, s: &str) -> Result<()> {
-        self.handle.send(s)
+    pub fn test(&mut self, s: &str) {
+        self.handle.send_message(&OwnedMessage::Text(s.to_string())).unwrap();
         //self.chan.send(json).unwrap();
     }
+    /*
     pub fn insert_block(&self, block: &Block) -> Result<()> {
         let msg: DemoMsg = block.into();
         let json: String = serde_json::to_string_pretty(&msg).unwrap();
@@ -141,6 +140,7 @@ impl Server {
         let json: String = serde_json::to_string_pretty(&msg).unwrap();
         self.handle.send(json)
     }
+    */
 
 }
 /*
