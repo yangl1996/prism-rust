@@ -5,8 +5,9 @@ use std::convert::From;
 use std::thread;
 
 use std::sync::mpsc;
-use ws::{connect, Sender, Result, Handler, Handshake};
+use ws::{WebSocket, Factory, Error, ErrorKind, Sender, Result, Handler, Handshake};
 
+/*
 pub fn new(url: String) -> Handle {
     let (sender, receiver) = mpsc::channel();
     thread::Builder::new()
@@ -31,6 +32,10 @@ pub struct Context {
 #[derive(Clone)]
 pub struct Handle {
     chan: mpsc::Sender<String>
+}
+*/
+pub struct Server<F: Factory> {
+    handle: WebSocket<F>
 }
 
 #[derive(Serialize)]
@@ -100,28 +105,41 @@ impl From<&Block> for DemoMsg {
     }
 }
 
-
-impl Handle {
-
-    pub fn insert_block(&self, block: &Block) {
-        let msg: DemoMsg = block.into();
-        let json: String = serde_json::to_string_pretty(&msg).unwrap();
-        self.chan.send(json).unwrap();
+impl<F> Server<F> where F: Factory {
+    pub fn new(url: &str) -> Result<Server<impl Factory>>{
+        let mut ws = ws::WebSocket::new(|_| {
+            move |msg| {
+                Ok(())
+            }
+        })?;
+        let parsed = url::Url::parse(url)
+            .map_err(|err| Error::new(
+                ErrorKind::Internal,
+                format!("Unable to parse {} as url due to {:?}", url, err)))?;
+        ws.connect(parsed)?;
+        Ok(Server {handle: ws})
     }
 
-    pub fn update_ledger(&self, added: &[H256], removed: &[H256]) {
+    pub fn insert_block(&self, block: &Block) -> Result<()> {
+        let msg: DemoMsg = block.into();
+        let json: String = serde_json::to_string_pretty(&msg).unwrap();
+        self.handle.broadcaster().send(json)
+        //self.chan.send(json).unwrap();
+    }
+
+    pub fn update_ledger(&self, added: &[H256], removed: &[H256]) -> Result<()> {
         if added.is_empty() && removed.is_empty() {
-            return;
+            return Ok(());
         }
         let added = added.iter().map(|x|x.to_string()).collect();
         let removed = removed.iter().map(|x|x.to_string()).collect();
         let msg: DemoMsg = DemoMsg::UpdatedLedger(UpdatedLedger{added, removed});
         let json: String = serde_json::to_string_pretty(&msg).unwrap();
-        self.chan.send(json).unwrap();
+        self.handle.broadcaster().send(json)
     }
 
 }
-
+/*
 impl Handler for Context {
     fn on_open(&mut self, _shake: Handshake) -> Result<()> {
         //let chan_copy = self.chan.clone();
@@ -132,3 +150,4 @@ impl Handler for Context {
     }
 
 }
+*/
