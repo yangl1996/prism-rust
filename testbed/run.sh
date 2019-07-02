@@ -414,6 +414,7 @@ function open_dashboard
 {
 	# start grafana simple json data server
 	~/go/bin/grafana-rrd-server -r data/ -s 1
+	open 'http://localhost:3000/dashboard/script/prism.js?orgId=1&nodes=20'
 }
 
 function show_visualization
