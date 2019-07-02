@@ -21,7 +21,7 @@ pub fn ico(
 
     // start a bunch of worker threads to commit those coins
     let mut workers = vec![];
-    for _ in 0..8 {
+    for _ in 0..16 {
         let recipients = Arc::clone(&recipients);
         let utxodb = Arc::clone(&utxodb);
         let wallet = Arc::clone(&wallet);

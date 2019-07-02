@@ -9,11 +9,10 @@ use crate::transaction::{Transaction, Input};
 use crate::utxodb::UtxoDatabase;
 use crate::wallet::Wallet;
 use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
-use std::sync::Mutex;
 use std::sync::Arc;
-use std::sync::mpsc;
+use crossbeam::channel;
 use std::thread;
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 
 pub struct LedgerManager {
     blockdb: Arc<BlockDatabase>,
@@ -36,7 +35,7 @@ impl LedgerManager {
         // start thread that updates transaction sequence
         let blockdb = Arc::clone(&self.blockdb);
         let chain = Arc::clone(&self.chain);
-        let (tx_diff_tx, tx_diff_rx) = mpsc::sync_channel(buffer_size);
+        let (tx_diff_tx, tx_diff_rx) = channel::bounded(buffer_size);
         thread::spawn(move || {
             loop {
                 let tx_diff = update_transaction_sequence(&blockdb, &chain);
@@ -46,26 +45,96 @@ impl LedgerManager {
 
         // start thread that dispatches jobs to utxo manager
         let utxodb = Arc::clone(&self.utxodb);
-        let (transaction_tx, transaction_rx) = mpsc::channel();
-        let (notification_tx, notification_rx) = mpsc::channel();
-        let (coin_diff_tx, coin_diff_rx) = mpsc::channel();
+        // Scoreboard notes the transaction ID of the coins that is being looked up, may be added,
+        // or may be deleted. Before dispatching a transaction, we first check whether the input
+        // and output are used by transactions being processed. If no, we will dispatch this
+        // transaction. Otherwise, we will wait until this situation clears. This prevents Read
+        // After Write (must ins/del then check), Write After Read (must check then ins/del), and
+        // Write After Write (must ins then del) hazards. We can also do this at CoinId level, but
+        // doing this at transaction hash level should be pretty sufficient.
+        let mut scoreboard: HashSet<H256> = HashSet::new();
+        // Transaction coins keeps the mapping between transaction ID and the entries in the
+        // scoreboard that this transaction is responsible for.
+        let mut transaction_coins: HashMap<H256, Vec<H256>> = HashMap::new();
+        let (transaction_tx, transaction_rx) = channel::bounded(buffer_size * num_workers);
+        let (notification_tx, notification_rx) = channel::unbounded();
+        let (coin_diff_tx, coin_diff_rx) = channel::unbounded();
+
         thread::spawn(move || {
             loop {
                 // get the diff
                 let (mut added_tx, mut removed_tx) = tx_diff_rx.recv().unwrap();
 
                 // dispatch transactions
-                let count = added_tx.len() + removed_tx.len();
                 for (t, h) in removed_tx.drain(..).rev() {
+                    // drain the notification channel so that we mark all finished transaction as
+                    // finished
+                    for processed in notification_rx.try_iter() {
+                        let finished_coins = transaction_coins.remove(&processed).unwrap();
+                        for hash in &finished_coins {
+                            scoreboard.remove(&hash);
+                        }
+                    }
+
+                    // collect the tx hash of all coins this tx will touch
+                    let mut touched_coin_transaction_hash: HashSet<H256> = HashSet::new();
+                    touched_coin_transaction_hash.insert(h);    // the transaction hash of all output coins
+                    for input in &t.input {
+                        touched_coin_transaction_hash.insert(input.coin.hash);  // tx hash of input coin
+                    }
+
+                    // wait until we are not touching hot coins
+                    while !scoreboard.is_disjoint(&touched_coin_transaction_hash) {
+                        let processed = notification_rx.recv().unwrap();
+                        let finished_coins = transaction_coins.remove(&processed).unwrap();
+                        for hash in &finished_coins {
+                            scoreboard.remove(&hash);
+                        }
+                    }
+
+                    // mark the coins that we will be touching as hot
+                    let mut touched: Vec<H256> = vec![];
+                    for hash in touched_coin_transaction_hash.drain() {
+                        touched.push(hash);
+                        scoreboard.insert(hash);
+                    }
+                    transaction_coins.insert(h, touched);
                     transaction_tx.send((false, t, h)).unwrap();
                 }
                 for (t, h) in added_tx.drain(..) {
-                    transaction_tx.send((true, t, h)).unwrap();
-                }
+                    // drain the notification channel so that we mark all finished transaction as
+                    // finished
+                    for processed in notification_rx.try_iter() {
+                        let finished_coins = transaction_coins.remove(&processed).unwrap();
+                        for hash in &finished_coins {
+                            scoreboard.remove(&hash);
+                        }
+                    }
 
-                // collect notification
-                for _ in 0..count {
-                    notification_rx.recv().unwrap();
+                    // collect the tx hash of all coins this tx will touch
+                    let mut touched_coin_transaction_hash: HashSet<H256> = HashSet::new();
+                    touched_coin_transaction_hash.insert(h);    // the transaction hash of all output coins
+                    for input in &t.input {
+                        touched_coin_transaction_hash.insert(input.coin.hash);  // tx hash of input coin
+                    }
+
+                    // wait until we are not touching hot coins
+                    while !scoreboard.is_disjoint(&touched_coin_transaction_hash) {
+                        let processed = notification_rx.recv().unwrap();
+                        let finished_coins = transaction_coins.remove(&processed).unwrap();
+                        for hash in &finished_coins {
+                            scoreboard.remove(&hash);
+                        }
+                    }
+
+                    // mark the coins that we will be touching as hot
+                    let mut touched: Vec<H256> = vec![];
+                    for hash in touched_coin_transaction_hash.drain() {
+                        touched.push(hash);
+                        scoreboard.insert(hash);
+                    }
+                    transaction_coins.insert(h, touched);
+                    transaction_tx.send((true, t, h)).unwrap();
                 }
             }
         });
@@ -73,7 +142,7 @@ impl LedgerManager {
         // start utxo manager
         let utxo_manager = UtxoManager {
             utxodb: Arc::clone(&self.utxodb),
-            transaction_chan: Arc::new(Mutex::new(transaction_rx)),
+            transaction_chan: transaction_rx,
             coin_chan: coin_diff_tx,
             notification_chan: notification_tx,
         };
@@ -94,11 +163,11 @@ impl LedgerManager {
 struct UtxoManager {
     utxodb: Arc<UtxoDatabase>,
     /// Channel for dispatching jobs (add/delete, transaction, hash of transaction).
-    transaction_chan: Arc<Mutex<mpsc::Receiver<(bool, Transaction, H256)>>>,
+    transaction_chan: channel::Receiver<(bool, Transaction, H256)>,
     /// Channel for returning added and removed coins.
-    coin_chan: mpsc::Sender<(Vec<Input>, Vec<Input>)>,
+    coin_chan: channel::Sender<(Vec<Input>, Vec<Input>)>,
     /// Channel for notifying the dispatcher about the completion of processing this transaction.
-    notification_chan: mpsc::Sender<H256>,
+    notification_chan: channel::Sender<H256>,
 }
 
 impl UtxoManager {
@@ -113,9 +182,7 @@ impl UtxoManager {
 
     fn worker_loop(&self) {
         loop {
-            let chan = self.transaction_chan.lock().unwrap();
-            let (add, transaction, hash) = chan.recv().unwrap();
-            drop(chan);
+            let (add, transaction, hash) = self.transaction_chan.recv().unwrap();
             if add {
                 let diff = self.utxodb.add_transaction(&transaction, hash).unwrap();
                 self.coin_chan.send(diff).unwrap();
