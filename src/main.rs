@@ -17,7 +17,6 @@ use prism::crypto::hash::{H256, Hashable};
 use std::net;
 use std::process;
 use std::sync::Arc;
-use std::sync::mpsc;
 use std::convert::TryInto;
 use std::thread;
 use std::time;
@@ -27,6 +26,7 @@ use ed25519_dalek::Keypair;
 use ed25519_dalek::Signature;
 use prism::transaction::Address;
 use prism::ledger_manager::LedgerManager;
+use crossbeam::channel;
 
 fn main() {
     // parse command line arguments
@@ -144,8 +144,8 @@ fn main() {
     });
 
     // create channels between server and worker, worker and miner, miner and worker
-    let (msg_tx, msg_rx) = mpsc::channel();
-    let (ctx_tx, ctx_rx) = mpsc::channel();
+    let (msg_tx, msg_rx) = channel::unbounded();
+    let (ctx_tx, ctx_rx) = channel::unbounded();
 
     // start the p2p server
     let (server_ctx, server) = server::new(p2p_addr, msg_tx).unwrap();

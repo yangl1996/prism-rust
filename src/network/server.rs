@@ -4,6 +4,7 @@ use log::{debug, error, info, warn};
 use mio::{self, net};
 use mio_extras::channel;
 use std::sync::mpsc;
+use crossbeam::channel as cbchannel;
 use std::thread;
 use std::time;
 use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
@@ -13,7 +14,7 @@ const MAX_EVENT: usize = 1024;
 
 pub fn new(
     addr: std::net::SocketAddr,
-    msg_sink: mpsc::Sender<(Vec<u8>, peer::Handle)>,
+    msg_sink: cbchannel::Sender<(Vec<u8>, peer::Handle)>,
 ) -> std::io::Result<(Context, Handle)> {
     let (control_signal_sender, control_signal_receiver) = channel::channel();
     let handle = Handle {
@@ -35,7 +36,7 @@ pub struct Context {
     addr: std::net::SocketAddr,
     poll: mio::Poll,
     control_chan: channel::Receiver<ControlSignal>,
-    new_msg_chan: mpsc::Sender<(Vec<u8>, peer::Handle)>,
+    new_msg_chan: cbchannel::Sender<(Vec<u8>, peer::Handle)>,
     handle: Handle,
 }
 
@@ -424,7 +425,7 @@ pub struct Handle {
 
 impl Handle {
     pub fn connect(&self, addr: std::net::SocketAddr) -> std::io::Result<peer::Handle> {
-        let (sender, receiver) = mpsc::channel();
+        let (sender, receiver) = cbchannel::unbounded();
         let request = ConnectRequest {
             addr: addr,
             result_chan: sender,
@@ -449,5 +450,5 @@ enum ControlSignal {
 
 struct ConnectRequest {
     addr: std::net::SocketAddr,
-    result_chan: mpsc::Sender<std::io::Result<peer::Handle>>,
+    result_chan: cbchannel::Sender<std::io::Result<peer::Handle>>,
 }

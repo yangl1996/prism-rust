@@ -17,7 +17,7 @@ use crate::network::message::Message;
 use log::info;
 
 use memory_pool::MemoryPool;
-use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
+use crossbeam::channel::{unbounded, Receiver, Sender, TryRecvError};
 use std::time::SystemTime;
 use std::time;
 
@@ -83,7 +83,7 @@ pub fn new(
     ctx_update_source: Receiver<ContextUpdateSignal>,
     server: &ServerHandle,
 ) -> (Context, Handle) {
-    let (signal_chan_sender, signal_chan_receiver) = channel();
+    let (signal_chan_sender, signal_chan_receiver) = unbounded();
     let ctx = Context {
         tx_mempool: Arc::clone(tx_mempool),
         blockchain: Arc::clone(blockchain),
@@ -456,7 +456,6 @@ mod tests {
     use crate::block::{Content, proposer, transaction, voter};
     use crate::block::tests::{proposer_block, voter_block, transaction_block};
     use std::sync::{Arc, Mutex};
-    use std::sync::mpsc::channel;
     use super::memory_pool::MemoryPool;
     use super::{Context, OperatingState};
     use crate::config;
