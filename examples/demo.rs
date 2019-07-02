@@ -10,7 +10,7 @@ fn main() {
         // The handler needs to take ownership of out, so we use move
         move |msg| {
             // Handle messages received on this connection
-            println!("Server got message '{}'. ", msg);
+            println!("{}", msg);
 
             Ok(())
         }
