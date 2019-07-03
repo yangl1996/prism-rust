@@ -18,7 +18,7 @@ pub fn new_validated_block(
     blockdb: &BlockDatabase,
     chain: &BlockChain,
     server: &ServerHandle,
-    demo_sender: &std::sync::mpsc::Sender<String>
+    demo_sender: &crossbeam::Sender<String>
 ) {
     let msg = demo::insert_block_msg(block);
     demo_sender.send(msg).unwrap();

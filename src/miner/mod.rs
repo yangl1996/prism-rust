@@ -68,7 +68,7 @@ pub struct Context {
     difficulty: H256,
     operating_state: OperatingState,
     server: ServerHandle,
-    demo_sender: Sender<String>
+    demo_sender: crossbeam::Sender<String>
 }
 
 #[derive(Clone)]
@@ -83,7 +83,7 @@ pub fn new(
     blockdb: &Arc<BlockDatabase>,
     ctx_update_source: Receiver<ContextUpdateSignal>,
     server: &ServerHandle,
-    demo_sender: Sender<String>
+    demo_sender: crossbeam::Sender<String>
 ) -> (Context, Handle) {
     let (signal_chan_sender, signal_chan_receiver) = channel();
     let ctx = Context {

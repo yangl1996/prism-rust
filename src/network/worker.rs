@@ -35,7 +35,7 @@ pub struct Context {
     server: ServerHandle,
     buffer: Arc<Mutex<BlockBuffer>>,
     recent_blocks: Arc<Mutex<HashSet<H256>>>,
-    demo_sender: mpsc::Sender<String>
+    demo_sender: crossbeam::Sender<String>
 }
 
 pub fn new(
@@ -48,7 +48,7 @@ pub fn new(
     mempool: &Arc<Mutex<MemoryPool>>,
     ctx_update_sink: mpsc::Sender<ContextUpdateSignal>,
     server: &ServerHandle,
-    demo_sender: mpsc::Sender<String>
+    demo_sender: crossbeam::Sender<String>
 ) -> Context {
     let ctx = Context {
         msg_chan: Arc::new(Mutex::new(msg_src)),

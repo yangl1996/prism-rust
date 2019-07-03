@@ -3,11 +3,12 @@ use crate::crypto::hash::{Hashable, H256};
 
 use std::convert::From;
 use std::thread;
-use log::warn;
+use std::time::Duration;
+use log::{debug, warn};
 
 use std::sync::mpsc;
-use websocket::client::ClientBuilder;
-use websocket::message::OwnedMessage;
+use url::Url;
+use tungstenite::{Message, connect};
 
 #[derive(Serialize)]
 struct ProposerBlock {
@@ -76,25 +77,53 @@ impl From<&Block> for DemoMsg {
     }
 }
 
-pub fn new(url: &str) -> mpsc::Sender<String> {
-    let (sender, receiver) = mpsc::channel();
-    let client_builder = ClientBuilder::new(url);
-    if let Ok(client_builder) = client_builder {
-        let client = client_builder
-            .add_protocol("rust-websocket")
-            .connect_insecure();
-        if let Ok(mut client) = client {
-            thread::spawn(move|| {
-                for msg in receiver.iter() {
-                    if client.send_message(&OwnedMessage::Text(msg)).is_err() {break;}
+pub fn new(url: &str) -> crossbeam::Sender<String> {
+    let (sender, receiver) = crossbeam::channel::unbounded::<String>();
+    let url = url.to_owned();
+    let mut msg_buffer: Option<String> = None;
+    thread::spawn(move|| {
+        let parsed = match Url::parse(url.as_str()) {
+            Ok(x) => x,
+            Err(e) => {
+                warn!("Fail to parse '{}' due to {}.", url, e);
+                loop { thread::park();}
+            },
+        };
+        loop {
+            let (mut socket, _response) = match connect(parsed.clone()) {
+                Ok(x) => x,
+                Err(e) => {
+                    warn!("{}", e);
+                    debug!("Retry connecting to websocket {} in 1000 ms.", url);
+                    thread::sleep(Duration::from_millis(1000));
+                    continue;
                 }
-            });
-        } else {
-            warn!("Fail to connect to demo websocket {}.", url);
+            };
+            if let Some(msg) = &msg_buffer {
+                match socket.write_message(Message::Text(msg.clone())) {
+                    Ok(_) => msg_buffer = None,
+                    Err(e) => {
+                        warn!("{}", e);
+                        debug!("Retry connecting to websocket {} in 1000 ms.", url);
+                        thread::sleep(Duration::from_millis(1000));
+                        continue;
+                    }
+                };
+            }
+            for msg in receiver.iter() {
+                match socket.write_message(Message::Text(msg.clone())) {
+                    Ok(_) => (),
+                    Err(e) => {
+                        msg_buffer = Some(msg);
+                        warn!("{}", e);
+                        debug!("Retry connecting to websocket {} in 1000 ms.", url);
+                        thread::sleep(Duration::from_millis(1000));
+                        break;
+                    }
+                };
+            }
         }
-    } else {
-        warn!("Fail to connect to demo websocket {}.", url);
-    }
+    });
     sender
 }
 
