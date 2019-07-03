@@ -81,7 +81,7 @@ let transactionScreen = svg.append('g')
             .on('click', () => focusTransactionPool())
 
 const transactionBlockSize = 20
-const ledgerBlockSize = 10
+const ledgerBlockSize = 20
 let transactionBlocks = []
 let transactionBlockId = 0
 

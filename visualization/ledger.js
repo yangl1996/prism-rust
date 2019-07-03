@@ -1,5 +1,8 @@
 const ledgerHeight = proposerScreenHeight/2
 const ledgerX = 3*width/8
+const blocksToAdd = 10
+
+const ledgerScale = d3.scaleLinear().domain([0, ledgerHeight]).range([0, ledgerBlockSize])
 
 const removeFromTransactionPool = transactionBlockIds => {
   // Filter out transaction blocks
@@ -15,34 +18,60 @@ const removeFromTransactionPool = transactionBlockIds => {
 const scrollLedger = () => {
   // Calculate lowest ledger block
   let maxY = 0
-  ledgerGroup.selectAll('.ledger')
-     .attr('y', d => {
-       maxY = d._y>maxY ? d._y: maxY
-       return d._y
-     })
-
+  let size = 0.1
+  const ledgerScale = d3.scaleLinear().domain([ledgerGroup.selectAll('.ledger').size(), 0]).range([ledgerBlockSize, 0])
   // Determine shift amount for ledger blocks and reference links
-  const shiftAmount = maxY==0 ? ledgerHeight : ledgerHeight - maxY - ledgerBlockSize
+  let _y = 0
   ledgerGroup.selectAll('.ledger')
      .transition()
      .duration(t)
-     .attr('y', d => {
-       d._y= d._y+shiftAmount
-       return d._y
-     })
-    .on('end', d => {
-      if(d._y<0) d3.select('#ledgerBlock'+d.blockId).remove()
+    .attr('width', (d, i) => {
+      return ledgerScale(i)
     })
+    .attr('height', (d, i) => {
+      return ledgerScale(i)
+    })
+    .attr('y', (d, i) => {
+      _y += ledgerScale(i)/2
+      return _y
+     })
+
+  _y = 0
+  let linkOffset = 0
   ledgerGroup.selectAll('.ledgerLink')
     .transition()
      .duration(t)
-     .attr('y2', d => {
-       d.target.y2= d.target.y2+shiftAmount
-       return d.target.y2
+     .attr('y2', (d, i) => {
+       const ledgerBlockId = d.linkId.split('to')[1]
+       if(ledgerGroup.select('#ledgerBlock'+ledgerBlockId).size()==0) {
+         linkOffset+=1
+         return 0
+       }
+       _y += ledgerScale(i-linkOffset)/2
+       return _y + ledgerScale(i)/2
      })
-    .on('end', d => {
-      if(d.source.y2<0 && d.target.y2<0) d3.select('#referenceLink'+d.linkId).remove()
-    })
+
+  let removals = ledgerGroup.selectAll('.ledger').size()-5*blocksToAdd
+  ledgerGroup.selectAll('.ledger').each((d, i) => {
+    if(removals>=0){
+      ledgerGroup.select('#'+'ledgerBlock'+d.blockId)
+        .transition()
+        .duration(t)
+        .style('opacity', 0)
+        .remove()
+      removals-=1
+    }
+   })
+
+  ledgerGroup.selectAll('.ledgerLink')
+             .attr('y1', (d, i) => {
+               if(d.source.y2<=0) {
+                 ledgerGroup.select('#referenceLink'+d.linkId).remove()
+                 return
+               }
+               return d.source.y2 
+             })
+
 }
 
 const drawLedger = (ledgerBlocks, referenceLinks, scrolled) => {
@@ -66,10 +95,10 @@ const drawLedger = (ledgerBlocks, referenceLinks, scrolled) => {
           .attr('id', d => 'ledgerBlock' + d.blockId)
           .attr('x', d => d.x)
           .attr('y', d => d.y)
-          .attr('width', (d, i) => ledgerBlockSize)
-          .attr('height', (d, i) => ledgerBlockSize)
+          .attr('width', ledgerBlockSize)
+          .attr('height', ledgerBlockSize)
           .attr('fill', d => 'grey')
-          .attr('stroke', d => 'white')
+          .attr('stroke', d => 'black')
           .attr('opacity',1.0)
           .transition()
           .duration((d, i) => 100*i + t)
@@ -100,7 +129,7 @@ const drawLedger = (ledgerBlocks, referenceLinks, scrolled) => {
                      if(scrolled) d.source.y2 = d.source.y2+2*proposerBlockSize
                      return d.source.y2
                    })
-                   .attr('x2', d=>d.target.x2)
+                   .attr('x2', d=>d.target.x2-ledgerBlockSize/2)
                    .attr('y2', d=>d.target.y2+5*ledgerBlockSize)
                    .transition()
                    .duration(t)
@@ -130,7 +159,7 @@ const captureTransactionBlocks = (transactionBlockIds, proposerBlockId, scrolled
   let ledgerBlocks = []
   let _y = ledgerHeight
   for(let i=0; i<transactionBlocks.length; i++){
-    if(ledgerBlocks.length>10) break
+    if(ledgerBlocks.length>blocksToAdd-1) break
     let tb = transactionBlocks[i]
     for(let j=0; j<transactionBlockIds.length; j++) {
       if(tb.blockId==transactionBlockIds[j]){
