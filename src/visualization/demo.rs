@@ -6,7 +6,6 @@ use std::thread;
 use std::time::Duration;
 use log::{debug, warn};
 
-use std::sync::mpsc;
 use url::Url;
 use tungstenite::{Message, connect};
 
@@ -16,6 +15,8 @@ struct ProposerBlock {
     id: String,
     /// Proposer parent
     parent: String,
+    /// Miner id
+    miner: String,
     /// Transaction refs
     transaction_refs: Vec<String>,
     /// Proposer refs
@@ -27,6 +28,8 @@ struct VoterBlock {
     id: String,
     /// Proposer parent
     parent: String,
+    /// Miner id
+    miner: String,
     /// Voting chain number
     chain: u16,
     /// Voter parent
@@ -40,6 +43,8 @@ struct TransactionBlock {
     id: String,
     /// Proposer parent
     parent: String,
+    /// Miner id
+    miner: String,
 }
 #[derive(Serialize)]
 struct UpdatedLedger {
@@ -60,17 +65,28 @@ impl From<&Block> for DemoMsg {
     fn from(block: &Block) -> Self {
         let hash = block.hash();
         let parent = block.header.parent;
+        let ip =  {
+            let mut bytes: [u8;4] = [0;4];
+            bytes.copy_from_slice(&block.header.extra_content[26..30]);
+            bytes
+        };
+        let port = {
+            let mut bytes: [u8;2] = [0;2];
+            bytes.copy_from_slice(&block.header.extra_content[30..32]);
+            u16::from_be_bytes(bytes)
+        };
+        let miner = format!("{}.{}.{}.{}:{}",ip[0],ip[1],ip[2],ip[3],port);
         match &block.content {
             Content::Proposer(content) => {
-                let b = ProposerBlock { id: hash.to_string(), parent: parent.to_string(), transaction_refs: content.transaction_refs.iter().map(|x|x.to_string()).collect(), proposer_refs: content.proposer_refs.iter().map(|x|x.to_string()).collect()};
+                let b = ProposerBlock { id: hash.to_string(), parent: parent.to_string(), miner, transaction_refs: content.transaction_refs.iter().map(|x|x.to_string()).collect(), proposer_refs: content.proposer_refs.iter().map(|x|x.to_string()).collect()};
                 DemoMsg::ProposerBlock(b)
             }
             Content::Voter(content) => {
-                let b = VoterBlock { id: hash.to_string(), parent: parent.to_string(), chain: content.chain_number, voter_parent: content.voter_parent.to_string(), votes: content.votes.iter().map(|x|x.to_string()).collect()};
+                let b = VoterBlock { id: hash.to_string(), parent: parent.to_string(), miner, chain: content.chain_number, voter_parent: content.voter_parent.to_string(), votes: content.votes.iter().map(|x|x.to_string()).collect()};
                 DemoMsg::VoterBlock(b)
             }
             Content::Transaction(_) => {
-                let b = TransactionBlock { id: hash.to_string(), parent: parent.to_string() };
+                let b = TransactionBlock { id: hash.to_string(), parent: parent.to_string(), miner };
                 DemoMsg::TransactionBlock(b)
             }
         }

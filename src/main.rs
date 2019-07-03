@@ -185,8 +185,27 @@ fn main() {
     let worker_ctx = worker::new(16, msg_rx, &blockchain, &blockdb, &utxodb, &wallet, &mempool, ctx_tx, &server, demo_sender.clone() );
     worker_ctx.start();
 
+    // pass extra content to miner. extra content contains peer_addr which shows the node id
+    let extra_content = {
+        let mut bytes: [u8;32] = [0;32];
+        let port: [u8;2] = p2p_addr.port().to_be_bytes();
+        bytes[30..32].copy_from_slice(&port[..]);
+        match p2p_addr.ip() {
+            net::IpAddr::V4(v4) => {
+                let v4: u32 = v4.into();
+                let v4: [u8; 4] = v4.to_be_bytes();
+                bytes[26..30].copy_from_slice(&v4[..]);
+            }
+            net::IpAddr::V6(v6) => {
+                let v6: u128 = v6.into();
+                let v6: [u8; 16] = v6.to_be_bytes();
+                bytes[14..30].copy_from_slice(&v6[..]);
+            }
+        };
+        bytes
+    };
     // start the miner
-    let (miner_ctx, miner) = miner::new(&mempool, &blockchain, &blockdb, ctx_rx, &server, demo_sender.clone());
+    let (miner_ctx, miner) = miner::new(&mempool, &blockchain, &blockdb, ctx_rx, &server, extra_content, demo_sender.clone());
     miner_ctx.start();
 
     // connect to known peers

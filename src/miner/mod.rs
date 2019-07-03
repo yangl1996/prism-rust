@@ -68,6 +68,7 @@ pub struct Context {
     difficulty: H256,
     operating_state: OperatingState,
     server: ServerHandle,
+    extra_content: [u8; 32],
     demo_sender: crossbeam::Sender<String>
 }
 
@@ -83,6 +84,7 @@ pub fn new(
     blockdb: &Arc<BlockDatabase>,
     ctx_update_source: Receiver<ContextUpdateSignal>,
     server: &ServerHandle,
+    extra_content: [u8; 32],
     demo_sender: crossbeam::Sender<String>
 ) -> (Context, Handle) {
     let (signal_chan_sender, signal_chan_receiver) = channel();
@@ -98,6 +100,7 @@ pub fn new(
         difficulty: *DEFAULT_DIFFICULTY,
         operating_state: OperatingState::Paused,
         server: server.clone(),
+        extra_content,
         demo_sender
     };
 
@@ -314,7 +317,7 @@ impl Context {
         let nonce: u32 = 0; // we will update this value in-place when mining
         let timestamp: u128= get_time();
         let content_merkle_root = self.content_merkle_tree.root();
-        let extra_content: [u8; 32] = [0; 32]; // TODO: Add miner id?
+        let extra_content: [u8; 32] = self.extra_content.clone();
         return Header::new(
             self.proposer_parent_hash,
             timestamp,
