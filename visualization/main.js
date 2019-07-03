@@ -12,26 +12,13 @@ const aScale = d3.scaleLinear().domain([0, transTime]).range([1.0, 0.6])
 const bScale = d3.scaleLinear().domain([0, transTime]).range([0.0, -0.002])
 const cScale = d3.scaleLinear().domain([0, transTime]).range([0, 250])
 
-const writeHello = () => {console.log('hello')}
-
-
-
-let M = `matrix3d(1.0, 0, 0, 0, 0, ${aScale(0)}, 0, ${bScale(0)}, 0, 0, 1, 0, 0, ${cScale(0)}, 0, 1)`
-
-
+let M = `matrix3d(1.0, 0, 0, 0, 0, ${aScale(5000)}, 0, ${bScale(5000)}, 0, 0, 1, 0, 0, ${cScale(5000)}, 0, 1)`
 let svgTransform = d3.select('body').append('svg')
     .style('position', 'absolute')
     .attr('width', width)
     .attr('height', height)
     .attr('id', 'svgTransform')
     .style('transform', M)
-
-
-let interval = d3.interval((elapsed) => {
-  if(elapsed>transTime) interval.stop()
-  M = `matrix3d(1.0, 0, 0, 0, 0, ${aScale(elapsed)}, 0, ${bScale(elapsed)}, 0, 0, 1, 0, 0, ${cScale(elapsed)}, 0, 1)`
-  svgTransform.style('transform', M)
-}, tStep)
 
 
 const t = 1000
@@ -126,7 +113,6 @@ let worldMapScreen = svgTransform.append('g')
 
 const nodeRadius = 10
 let nodes = []
-let nodeId = 0
 
 let ledgerGroup = svg.append('g')
                      .attr('class', 'ledger')

@@ -1,3 +1,4 @@
+let nodeIndex = 0
 let cities = [
   [-6.13,39.31],
   [35.68,139.76],

@@ -3,32 +3,30 @@ websocket.onmessage = function (event) {
   const data = JSON.parse(event.data)
   console.log(data)
   if('VoterBlock' in data){
-    if(nodeId>1){
-      const chain = data['VoterBlock']['chain']
-      const votingBlockId = data['VoterBlock']['id']
-      const randomChain = Math.floor(Math.random() * Math.floor(numChains))
-      const sourceNodeId = Math.floor(Math.random() * Math.floor(nodeId))
-      const parentId = chainsData[chain].blocks[chainsData[chain].blocks.length-1].blockId
-      mineVotingBlock(chain, votingBlockId, sourceNodeId, parentId)
-    }
+    const chain = data['VoterBlock']['chain']
+    const votingBlockId = data['VoterBlock']['id']
+    const randomChain = Math.floor(Math.random() * Math.floor(numChains))
+    const sourceNodeId = data['VoterBlock']['miner']
+    const parentId = chainsData[chain].blocks[chainsData[chain].blocks.length-1].blockId
+    mineVotingBlock(chain, votingBlockId, sourceNodeId, parentId)
   }
 
   if('ProposerBlock' in data){
-    if(nodeId>1){
-      const proposerBlockId = data['ProposerBlock']['id']
-      const parent = proposerBlocks.find(el => el.blockId==data['ProposerBlock']['parent'])
-      const sourceNodeId = Math.floor(Math.random() * Math.floor(nodeId))
-      let transactionBlockIds = data['ProposerBlock']['transaction_refs']
-      addProposerBlock(proposerBlockId, parent, sourceNodeId, transactionBlockIds)
-    }
+    const proposerBlockId = data['ProposerBlock']['id']
+    const parent = proposerBlocks.find(el => el.blockId==data['ProposerBlock']['parent'])
+    const sourceNodeId = data['ProposerBlock']['miner']
+    let transactionBlockIds = data['ProposerBlock']['transaction_refs']
+    addProposerBlock(proposerBlockId, parent, sourceNodeId, transactionBlockIds)
   }
 
   if('TransactionBlock' in data){
-    if(nodeId>1){
-      const transactionBlockId = data['TransactionBlock']['id']
-      const sourceNodeId = Math.floor(Math.random() * Math.floor(nodeId))
-      addTransactionBlock(transactionBlockId, sourceNodeId)
-    }
+    const transactionBlockId = data['TransactionBlock']['id']
+    const sourceNodeId = data['TransactionBlock']['miner']
+    addTransactionBlock(transactionBlockId, sourceNodeId)
+  }
+  if('UpdatedLedger' in data){
+    for(let id in data['UpdatedLedger']['added'])
+      confirmBlock(id)
   }
 }
 /* 

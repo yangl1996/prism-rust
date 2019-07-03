@@ -80,8 +80,7 @@ const castVotes = (votingChain) => {
 
 const mineVotingBlock = (votingChain, votingBlockId, sourceNodeId, parentId) => {
   // 1) Ping source node by finding id
-  const sourceNode = nodes.find(node => node.nodeId==sourceNodeId) 
-  pingNode(sourceNode)
+  pingNode(sourceNodeId)
   if(votingChain>=numChainsToDisplay) return
   // 2) Draw voting block
   // 3) Draw voting link
