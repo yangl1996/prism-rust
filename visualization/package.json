@@ -1,0 +1,10 @@
+{
+  "name": "prism-visualization",
+  "version": "1.0.0",
+  "main": "index.js",
+  "author": "Vishaal Agartha",
+  "license": "MIT",
+  "dependencies": {
+    "ws": "^7.0.1"
+  }
+}

@@ -2,3 +2,6 @@
 **/*.rs.bk
 .idea
 .DS_Store
+visualization/node_modules
+demo/node_modules
+*.log
