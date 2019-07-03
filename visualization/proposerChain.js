@@ -133,6 +133,7 @@ const scrollProposerChain = () => {
 }
 
 const addProposerBlock = (blockId, parent=null, sourceNodeId, transactionBlockIds) => {
+  pingNode(sourceNodeId)
   const newNode = {parent, blockId, children: [], sourceNodeId, finalizationLevel: 0.3, finalized: false} 
   if(parent) parent.children.push(newNode)
   proposerBlocks.push(newNode)
