@@ -184,6 +184,7 @@ impl Context {
                         if self.blockdb.contains(&hash).unwrap() {
                             let mut recent_blocks = self.recent_blocks.lock().unwrap();
                             recent_blocks.remove(&hash);
+                            drop(recent_blocks);
                             continue;
                         }
 
