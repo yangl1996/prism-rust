@@ -15,19 +15,15 @@ impl UtxoDatabase {
         let cfs = vec![];
         let mut opts = Options::default();
         opts.set_prefix_extractor( SliceTransform::create_fixed_prefix(32));
-        let mut block_opts = BlockBasedOptions::default();
-        block_opts.set_index_type(BlockBasedIndexType::HashSearch);
-        block_opts.set_cache_index_and_filter_blocks(true);
-        block_opts.set_block_size(1 << 22);
-        opts.set_block_based_table_factory(&block_opts);
+        opts.set_allow_concurrent_memtable_write(false);
         let mut memtable_opts = MemtableFactory::HashSkipList {
             bucket_count: 1 << 20,
             height: 8,
             branching_factor: 4
         };
-        opts.set_allow_concurrent_memtable_write(false);
         opts.set_memtable_factory(memtable_opts);
-        opts.optimize_for_point_lookup(256);
+        // https://github.com/facebook/rocksdb/blob/671d15cbdd3839acb54cb21a2aa82efca4917155/options/options.cc#L509
+        opts.optimize_for_point_lookup(512);
         opts.create_if_missing(true);
         opts.create_missing_column_families(true);
         opts.increase_parallelism(16);
