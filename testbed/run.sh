@@ -101,16 +101,16 @@ function build_prism
 	rsync -ar ../src prism:~/prism/
 	rsync -ar ../.cargo prism:~/prism/
 	echo "Building Prism binary"
-	ssh prism -- 'cd ~/prism && /home/prism/.cargo/bin/cargo build --release' &> log/prism_build.log
+	ssh prism -- 'cd ~/prism && ~/.cargo/bin/cargo build --release' &> log/prism_build.log
 	if [ $# -ne 1 ]; then
 		echo "Stripping symbol"
-		ssh prism -- 'cp /home/prism/prism/target/release/prism /home/prism/prism/target/release/prism-copy && strip /home/prism/prism/target/release/prism-copy'
+		ssh prism -- 'cp ~/prism/target/release/prism ~/prism/target/release/prism-copy && strip ~/prism/target/release/prism-copy'
 	else
 		if [ "$1" = "nostrip" ]; then
-			ssh prism -- 'cp /home/prism/prism/target/release/prism /home/prism/prism/target/release/prism-copy'
+			ssh prism -- 'cp ~/prism/target/release/prism ~/prism/target/release/prism-copy'
 		else
 			echo "Stripping symbol"
-			ssh prism -- 'cp /home/prism/prism/target/release/prism /home/prism/prism/target/release/prism-copy && strip /home/prism/prism/target/release/prism-copy'
+			ssh prism -- 'cp ~/prism/target/release/prism ~/prism/target/release/prism-copy && strip ~/prism/target/release/prism-copy'
 		fi
 	fi
 	tput setaf 2
@@ -134,7 +134,7 @@ function prepare_payload
 	mkdir -p payload/common/scripts
 
 	echo "Download binaries"
-	scp prism:/home/prism/prism/target/release/prism-copy payload/common/binary/prism
+	scp prism:~/prism/target/release/prism-copy payload/common/binary/prism
 	cp scripts/start-prism.sh payload/common/scripts/start-prism.sh
 	cp scripts/stop-prism.sh payload/common/scripts/stop-prism.sh
 
