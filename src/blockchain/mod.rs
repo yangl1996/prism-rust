@@ -429,7 +429,9 @@ impl BlockChain {
         for chain_num in 0..NUM_VOTER_CHAINS {
             // get the diff of votes on this voter chain
             let from = voter_ledger_tips[chain_num as usize];
-            let to = self.voter_best[chain_num as usize].lock().unwrap().0;
+            let voter_best = self.voter_best[chain_num as usize].lock().unwrap();
+            let to = voter_best.0;
+            drop(voter_best);
             voter_ledger_tips[chain_num as usize] = to;
 
             let (added, removed) = self.vote_diff(from, to)?;
