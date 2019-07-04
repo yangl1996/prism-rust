@@ -473,7 +473,13 @@ function run_experiment
 	rm -f experiment.txt
 	echo "START $start_time" >> experiment.txt
 	echo "Running experiment"
-	echo "Logging started"
+}
+
+function show_demo
+{
+	run_experiment
+	echo "Demo Started"
+	~/go/bin/grafana-rrd-server -r data/ -s 1 &
 	./telematics/telematics log -duration 7200 -grafana
 }
 
@@ -502,6 +508,7 @@ case "$1" in
 		  start-prism           Start Prism nodes on each remote server
 		  stop-prism            Stop Prism nodes on each remote server
 		  run-exp               Run the experiment
+		  show-demo             Start the demo workflow
 		  stop-tx               Stop generating transactions
 		  stop-mine             Stop mining
 
@@ -549,6 +556,8 @@ case "$1" in
 		stop_prism ;;
 	run-exp)
 		run_experiment ;;
+	show-demo)
+		show_demo ;;
 	stop-tx)
 		query_api stop_transactions 0 ;;
 	stop-mine)
