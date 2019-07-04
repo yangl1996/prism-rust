@@ -27,6 +27,8 @@ impl UtxoDatabase {
         opts.create_if_missing(true);
         opts.create_missing_column_families(true);
         opts.increase_parallelism(16);
+        opts.set_max_background_flushes(2);
+        opts.set_max_write_buffer_number(32);
 
         let db = DB::open_cf_descriptors(&opts, path, cfs)?;
         return Ok(Self { db: db });
