@@ -94,12 +94,39 @@ func plot(nodesFile, dataDir, content, node, output string, window uint) {
 		g.SetVLabel("Queue Length (Msg)")
 		g.SetTitle("Queue Length (" + node + ")")
 	case "mining":
-		g.Def(node+"_mined_proposer", nodes[node], "mined_proposer", "AVERAGE", fmt.Sprintf("step=%v", window))
-		g.Def(node+"_mined_voter", nodes[node], "mined_voter", "AVERAGE", fmt.Sprintf("step=%v", window))
-		g.Def(node+"_mined_tx", nodes[node], "mined_tx", "AVERAGE", fmt.Sprintf("step=%v", window))
-		g.Line(1.0, node+"_mined_proposer", "FF0000", "Proposer")
-		g.Line(1.0, node+"_mined_voter", "00FF00", "Voter")
-		g.Line(1.0, node+"_mined_tx", "0000FF", "Tx")
+		minePropSum := ""
+		mineVoterSum := ""
+		mineTxSum := ""
+		for n, p := range nodes {
+			g.Def(n+"_mined_proposer", p, "mined_proposer", "AVERAGE")
+			g.Def(n+"_mined_voter", p, "mined_voter", "AVERAGE")
+			g.Def(n+"_mined_tx", p, "mined_tx", "AVERAGE")
+			if minePropSum == "" {
+				minePropSum = n + "_mined_proposer"
+			} else {
+				minePropSum += "," + n + "_mined_proposer,+"
+			}
+			if mineVoterSum == "" {
+				mineVoterSum = n + "_mined_voter"
+			} else {
+				mineVoterSum += "," + n + "_mined_voter,+"
+			}
+			if mineTxSum == "" {
+				mineTxSum = n + "_mined_tx"
+			} else {
+				mineTxSum += "," + n + "_mined_tx,+"
+			}
+		}
+		g.CDef("mined_proposer_sum", minePropSum)
+		g.CDef("mined_voter_sum", mineVoterSum)
+		g.CDef("mined_tx_sum", mineTxSum)
+		//g.Line(1.0, node+"_mined_proposer", "FF0000", node + " Proposer")
+		//g.Line(1.0, node+"_mined_voter", "00FF00", node + " Voter")
+		//g.Line(1.0, node+"_mined_tx", "0000FF", node + " Tx")
+		g.Line(1.0, "mined_proposer_sum", "FF0000", "Total Proposer")
+		g.Line(1.0, "mined_voter_sum", "00FF00", "Total Voter")
+		g.Line(1.0, "mined_tx_sum", "0000FF", "Total Tx")
+		g.Tick("mined_proposer_sum", "808080", "1.0", "Proposer Mined")
 		g.SetVLabel("Mining Rate (Blk/s)")
 		g.SetTitle("Mining Rate (" + node + ")")
 	default:
