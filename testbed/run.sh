@@ -473,6 +473,8 @@ function run_experiment
 	rm -f experiment.txt
 	echo "START $start_time" >> experiment.txt
 	echo "Running experiment"
+	echo "Logging started"
+	./telematics/telematics log -duration 7200 -grafana
 }
 
 mkdir -p log
