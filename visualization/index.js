@@ -1,9 +1,10 @@
 const WebSocket = require('ws')
 
-const wss = new WebSocket.Server({ port: 9000 })
+const wss = new WebSocket.Server({ host: '127.0.0.1', port: 9000 })
 let visSocket = null
 let prismSocket = null
 
+console.log('Waiting for incoming of visualization and prism')
 wss.on('connection', ws => {
   if(ws.protocol=='visualization'){
     visSocket = ws
