@@ -1,4 +1,4 @@
-let websocket = new WebSocket('ws://127.0.0.1:9000/');
+let websocket = new WebSocket('ws://127.0.0.1:9000', 'visualization');
 websocket.onmessage = function (event) {
   const data = JSON.parse(event.data)
   console.log(data)

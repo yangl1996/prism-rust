@@ -5,7 +5,7 @@ let visSocket = null
 let prismSocket = null
 
 wss.on('connection', ws => {
-  if(visSocket==null){
+  if(ws.protocol=='visualization'){
     visSocket = ws
     console.log('Connected to visualization')
   }
@@ -20,4 +20,8 @@ wss.on('connection', ws => {
         visSocket.send(`${message}`)
     })
   }
+})
+
+wss.on('close', ws => {
+  console.log(ws, 'closed')
 })

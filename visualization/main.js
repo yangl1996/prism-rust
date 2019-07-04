@@ -69,7 +69,7 @@ let proposerScreen = svg.append('g')
 const proposerBlockSize = 20
 let proposerBlocks = []
 let proposerBlockId = 0
-const finalizationThreshold = 0.35
+const finalizationThreshold = 10000
 
 // Transaction Screen sizes
 let transactionScreenWidth = width/3, transactionScreenHeight = height
