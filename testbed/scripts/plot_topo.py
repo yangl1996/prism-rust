@@ -28,39 +28,28 @@ with open(topology) as fin:
 assert set(topo['nodes'])==set(nodes), 'nodes file and topology file not compatible'
 for edge in topo['connections']:
     G.add_edge(edge['from'], edge['to'])
+stripped_nodes = [node.strip('node_') for node in nodes]
+labels = dict(zip(nodes, stripped_nodes))
+legends = '\n'.join(['{:7}: {}'.format(n,p) for n,p in zip(nodes, public_ips)])
 
 # you can pick one layout in these lines
 # pos = nx.spring_layout(G)
-# pos = nx.spectral_layout(G)
-pos = nx.shell_layout(G)
-
-# draw noip plot
-plt.figure(figsize=(12,9))
-
-nx.draw_networkx(G, pos, with_labels=False, edge_color='gray')
-plt.tick_params(axis='x', which='both', bottom=False, top=False, labelbottom=False)
-plt.tick_params(axis='y', which='both', right=False, left=False, labelleft=False)
-plt.axis('off')
-    
-for node in nodes:
-    x,y = pos[node]
-    plt.text(x,y+0.1,s=node, fontsize=14, horizontalalignment='center')
-
-plt.savefig('topology_noip.png')
-plt.savefig('topology_noip.svg')
+pos = nx.spectral_layout(G)
+# pos = nx.shell_layout(G)
 
 # draw ip plot
 plt.figure(figsize=(12,9))
 
-nx.draw_networkx(G, pos, with_labels=False, edge_color='gray')
-plt.tick_params(axis='x', which='both', bottom=False, top=False, labelbottom=False)
-plt.tick_params(axis='y', which='both', right=False, left=False, labelleft=False)
+nx.draw_networkx(G, pos, with_labels=True, edge_color='gray', labels=labels, fontsize=14, font_color='white')
 plt.axis('off')
     
-for node, ip in zip(nodes, public_ips):
-    x,y = pos[node]
-    plt.text(x,y+0.16,s=node, fontsize=14, horizontalalignment='center')
-    plt.text(x,y+0.08,s=ip, fontsize=14, horizontalalignment='center')
+#for node, ip in zip(nodes, public_ips):
+#    x,y = pos[node]
+#    plt.text(x,y+0.16,s=node, fontsize=14, horizontalalignment='center')
+#    plt.text(x,y+0.08,s=ip, fontsize=14, horizontalalignment='center')
+plt.annotate(legends, xy=(1,0.1), xycoords='axes fraction', fontsize=14)
+
+plt.tight_layout()
 
 plt.savefig('topology.png')
 plt.savefig('topology.svg')
