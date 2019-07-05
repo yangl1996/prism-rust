@@ -19,17 +19,27 @@ function start_instances
 		esac
 	done
 	echo "Launching $1 AWS EC2 instances"
-	aws ec2 run-instances --launch-template LaunchTemplateId=$LAUNCH_TEMPLATE --count $1 > log/aws_start.log
-	local instances=`jq -r '.Instances[].InstanceId ' log/aws_start.log`
-	echo "Waiting for network interfaces to attach"
-	sleep 3
+	local instances=`aws ec2 run-instances --launch-template LaunchTemplateId=$LAUNCH_TEMPLATE --count $1 --query 'Instances[*].InstanceId' | jq -r '. | join(" ")'`
 	rm -f instances.txt
 	rm -f ~/.ssh/config.d/prism
 	echo "Querying public IPs and writing to SSH config"
-	for instance in $instances ;
+	while [ 1 ]
 	do
-		local ip=`aws ec2 describe-instances --instance-ids $instance | jq -r '.Reservations[0].Instances[0].PublicIpAddress'`
-		local lan=`aws ec2 describe-instances --instance-ids $instance | jq -r '.Reservations[0].Instances[0].PrivateIpAddress'`
+		rawdetails=`aws ec2 describe-instances --instance-ids $instances --query 'Reservations[*].Instances[*].{publicip:PublicIpAddress,id:InstanceId,privateip:PrivateIpAddress}[]'`
+		if echo $rawdetails | jq '.[].publicip' | grep null ; then
+			echo "Waiting for public IP addresses to be assigned"
+			sleep 3
+			continue
+		else
+			details=`echo "$rawdetails" | jq -c '.[]'`
+			break
+		fi
+	done
+	for instancedetail in $details;
+	do
+		local instance=`echo $instancedetail | jq -r '.id'`
+		local ip=`echo $instancedetail | jq -r '.publicip'`
+		local lan=`echo $instancedetail | jq -r '.privateip'`
 		echo "$instance,$ip,$lan" >> instances.txt
 		echo "Host $instance" >> ~/.ssh/config.d/prism
 		echo "    Hostname $ip" >> ~/.ssh/config.d/prism
