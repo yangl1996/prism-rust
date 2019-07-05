@@ -19,7 +19,7 @@ pub const CHAIN_MINING_RATE: f32 = 0.2/ NETWORK_DELAY; // mining rate of the pro
 pub const RATIO: (f32, f32, f32) = (CHAIN_MINING_RATE, CHAIN_MINING_RATE * (NUM_VOTER_CHAINS as f32), TX_MINING_RATE); 
 
 // Sortition ranges
-pub const TOTAL_MINING_RANGE: u32 = 10000; // This is for resolution
+pub const TOTAL_MINING_RANGE: u32 = 10000000; // This is for resolution
 pub const RATE_DIFFICULTY_MULTIPLIER: f32 = (TOTAL_MINING_RANGE as f32) / (RATIO.0 + RATIO.1 + RATIO.2);
 
 // Width of the acceptance range for each type of block
