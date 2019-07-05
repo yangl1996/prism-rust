@@ -489,6 +489,7 @@ function show_demo
 {
 	run_experiment
 	echo "Demo Started"
+	pkill grafana-rrd-server
 	~/go/bin/grafana-rrd-server -r data/ -s 1 &
 	./telematics/telematics log -duration 7200 -grafana
 }
