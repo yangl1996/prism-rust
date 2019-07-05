@@ -26,7 +26,7 @@ function start_instances
 	while [ 1 ]
 	do
 		rawdetails=`aws ec2 describe-instances --instance-ids $instances --query 'Reservations[*].Instances[*].{publicip:PublicIpAddress,id:InstanceId,privateip:PrivateIpAddress}[]'`
-		if echo $rawdetails | jq '.[].publicip' | grep null ; then
+		if echo $rawdetails | jq '.[].publicip' | grep null &> /dev/null ; then
 			echo "Waiting for public IP addresses to be assigned"
 			sleep 3
 			continue
