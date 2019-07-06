@@ -323,7 +323,6 @@ impl BlockChain {
                 put_value!(proposer_node_level_cf, block_hash, self_level as u64);
                 merge_value!(proposer_tree_level_cf, self_level, block_hash);
 
-                self.db.write(wb)?;
 
                 // mark this new proposer block as unconfirmed
                 let mut unconfirmed_proposers = self.unconfirmed_proposers.lock().unwrap();
@@ -371,7 +370,6 @@ impl BlockChain {
                 // set the voted level to be until proposer parent
                 let proposer_parent_level: u64 = get_value!(proposer_node_level_cf, parent_hash);
                 put_value!(voter_node_voted_level_cf, block_hash, proposer_parent_level as u64);
-                self.db.write(wb)?;
 
                 let mut voter_best = self.voter_best[self_chain as usize].lock().unwrap();
                 // update best block
@@ -383,13 +381,13 @@ impl BlockChain {
             }
             Content::Transaction(content) => {
                 // TODO: this is actually useless
-                self.db.write(wb)?;
                 // mark itself as unreferred
                 let mut unreferred_transactions = self.unreferred_transactions.lock().unwrap();
                 unreferred_transactions.insert(block_hash);
                 drop(unreferred_transactions);
             }
         }
+        self.db.write(wb)?;
         return Ok(());
     }
 
@@ -872,6 +870,19 @@ impl BlockChain {
         return match self
             .db
             .get_cf(voter_node_level_cf, serialize(&hash).unwrap())?
+        {
+            Some(_) => Ok(true),
+            None => Ok(false),
+        };
+    }
+
+    /// Check whether the given transaction block exists in the database.
+    // TODO: we can't tell whether it's is a transaction block!
+    pub fn contains_transaction(&self, hash: &H256) -> Result<bool> {
+        let parent_neighbor_cf = self.db.cf_handle(PARENT_NEIGHBOR_CF).unwrap();
+        return match self
+            .db
+            .get_cf(parent_neighbor_cf, serialize(&hash).unwrap())?
         {
             Some(_) => Ok(true),
             None => Ok(false),
