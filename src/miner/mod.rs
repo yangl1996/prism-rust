@@ -267,6 +267,7 @@ impl Context {
                     }
                 }
                 // after we mined this block, we update the context based on this block
+                // TODO: no need to update here. just put a message in the queue
                 match &mined_block.content {
                     Content::Proposer(_) => self.update_all_contents(),
                     Content::Voter(content) => self.update_voter_content(content.chain_number),
