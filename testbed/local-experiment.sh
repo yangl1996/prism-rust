@@ -80,7 +80,7 @@ done
 p2p_port=6000
 api_port=7000
 vis_port=8000
-dem_port=9000
+dem_port=8080
 
 pids=""
 
