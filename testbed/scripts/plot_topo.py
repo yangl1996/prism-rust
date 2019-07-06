@@ -34,16 +34,20 @@ for edge in topo['connections']:
 pos = nx.spectral_layout(G)
 # pos = nx.shell_layout(G)
 
-# draw ip plot
+# draw ip plot (white)
 plt.figure(figsize=(12,9))
 
-nx.draw_networkx(G, pos, with_labels=False, edge_color='gray')
+nx.draw_networkx(G, pos, with_labels=False, node_color='white', edge_color='white', width=2, arrowstyle='->', arrowsize=14)
 plt.axis('off')
-    
+
 for node, ip in zip(nodes, public_ips):
     x,y = pos[node]
-    #plt.text(x,y+0.16,s=node, fontsize=14, horizontalalignment='center')
-    plt.text(x,y+0.06,s=ip, fontsize=14, horizontalalignment='center')
+    # get some offset of the position
+    if y>=0:
+        y += 0.06
+    else:
+        y -= 0.09
+    plt.text(x,y,s='IP: {}'.format(ip), color='gray', fontsize=11, horizontalalignment='center')
 
 # plot a legend showing ips
 # legends = '\n'.join(['{:7}: {}'.format(n,p) for n,p in zip(nodes, public_ips)])
@@ -51,6 +55,28 @@ for node, ip in zip(nodes, public_ips):
 
 plt.tight_layout()
 
-plt.savefig('topology.png')
-plt.savefig('topology.svg')
+plt.savefig('topology.svg', transparent=True)
+
+# draw ip plot (black)
+plt.figure(figsize=(12,9))
+
+nx.draw_networkx(G, pos, with_labels=False, width=2, arrowstyle='->', arrowsize=14)
+plt.axis('off')
+
+for node, ip in zip(nodes, public_ips):
+    x,y = pos[node]
+    # get some offset of the position
+    if y>=0:
+        y += 0.06
+    else:
+        y -= 0.09
+    plt.text(x,y,s='IP: {}'.format(ip), color='gray', fontsize=11, horizontalalignment='center')
+
+# plot a legend showing ips
+# legends = '\n'.join(['{:7}: {}'.format(n,p) for n,p in zip(nodes, public_ips)])
+# plt.annotate(legends, xy=(1,0.1), xycoords='axes fraction', fontsize=14)
+
+plt.tight_layout()
+
+plt.savefig('topology_black.svg', transparent=True)
 
