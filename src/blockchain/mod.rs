@@ -323,28 +323,50 @@ impl BlockChain {
                 put_value!(proposer_node_level_cf, block_hash, self_level as u64);
                 merge_value!(proposer_tree_level_cf, self_level, block_hash);
 
+                // mark ourself as unreferred proposer
+                // This should happen before committing to the database, since we want this
+                // add operation to happen before later block deletes it. NOTE: we could do this
+                // after committing to the database. The solution is to add a "pre-delete" set in
+                // unreferred_proposers that collects the entries to delete before they are even
+                // inserted. If we have this, we don't need to add/remove entries in order.
+                let mut unreferred_proposers = self.unreferred_proposers.lock().unwrap();
+                unreferred_proposers.insert(block_hash);
+                drop(unreferred_proposers);
 
-                // mark this new proposer block as unconfirmed
-                let mut unconfirmed_proposers = self.unconfirmed_proposers.lock().unwrap();
-                unconfirmed_proposers.insert(block_hash);
-                drop(unconfirmed_proposers);
+                self.db.write(wb)?;
 
-                // remove ref'ed blocks from unreferred list, mark itself as unreferred
+                // removed referenced proposer and transaction blocks from the unreferred list
+                // This could happen after committing to the database. It's because that we are
+                // only removing transaction blocks here, and the entries we are trying to remove
+                // are guaranteed to be already there (since they are inserted before the
+                // corresponding transaction blocks are committed).
                 let mut unreferred_proposers = self.unreferred_proposers.lock().unwrap();
                 for ref_hash in &content.proposer_refs {
                     unreferred_proposers.remove(&ref_hash);
                 }
                 unreferred_proposers.remove(&parent_hash);
-                unreferred_proposers.insert(block_hash);
                 drop(unreferred_proposers);
-
                 let mut unreferred_transactions = self.unreferred_transactions.lock().unwrap();
                 for ref_hash in &content.transaction_refs {
                     unreferred_transactions.remove(&ref_hash);
                 }
                 drop(unreferred_transactions);
 
+                // mark this new proposer block as unconfirmed
+                // This should happen after committing to database, since we may follow this to
+                // access data in the database.
+                let mut unconfirmed_proposers = self.unconfirmed_proposers.lock().unwrap();
+                unconfirmed_proposers.insert(block_hash);
+                drop(unconfirmed_proposers);
+
                 // set best block info
+                // This should happen after writing to db, because other modules will follow
+                // proposer_best to query its metadata. We need to get the metadata into database
+                // before we can "announce" this block to other modules. Also, this does not create
+                // race condition, since this update is "stateless" - we are not append/removing
+                // from a record.
+                // Also, this should happen at the very end, since we will access all metadata of
+                // the proposer best block.
                 let mut proposer_best = self.proposer_best_level.lock().unwrap();
                 if self_level > *proposer_best {
                     *proposer_best = self_level;
@@ -371,6 +393,13 @@ impl BlockChain {
                 let proposer_parent_level: u64 = get_value!(proposer_node_level_cf, parent_hash);
                 put_value!(voter_node_voted_level_cf, block_hash, proposer_parent_level as u64);
 
+                self.db.write(wb)?;
+
+                // This should happen after writing to db, because other modules will follow
+                // voter_best to query its metadata. We need to get the metadata into database
+                // before we can "announce" this block to other modules. Also, this does not create
+                // race condition, since this update is "stateless" - we are not append/removing
+                // from a record.
                 let mut voter_best = self.voter_best[self_chain as usize].lock().unwrap();
                 // update best block
                 if self_level > voter_best.1 {
@@ -380,14 +409,17 @@ impl BlockChain {
                 drop(voter_best);
             }
             Content::Transaction(content) => {
-                // TODO: this is actually useless
                 // mark itself as unreferred
+                // Note that this could happen before committing to db, because no module will try
+                // to access transaction content based on pointers in unreferred_transactions.
                 let mut unreferred_transactions = self.unreferred_transactions.lock().unwrap();
                 unreferred_transactions.insert(block_hash);
                 drop(unreferred_transactions);
+
+                // This db write is only to facilitate check_existence
+                self.db.write(wb)?;
             }
         }
-        self.db.write(wb)?;
         return Ok(());
     }
 
