@@ -10,7 +10,7 @@ use url::Url;
 use tungstenite::{Message, connect};
 
 #[derive(Serialize)]
-struct ProposerBlock {
+pub struct ProposerBlock {
     /// Hash of this block
     id: String,
     /// Proposer parent
@@ -23,7 +23,7 @@ struct ProposerBlock {
     proposer_refs: Vec<String>,
 }
 #[derive(Serialize)]
-struct VoterBlock {
+pub struct VoterBlock {
     /// Hash of this block
     id: String,
     /// Proposer parent
@@ -38,7 +38,7 @@ struct VoterBlock {
     votes: Vec<String>,
 }
 #[derive(Serialize)]
-struct TransactionBlock {
+pub struct TransactionBlock {
     /// Hash of this block
     id: String,
     /// Proposer parent
@@ -47,14 +47,14 @@ struct TransactionBlock {
     miner: String,
 }
 #[derive(Serialize)]
-struct UpdatedLedger {
+pub struct UpdatedLedger {
     /// Hash of proposer blocks that are added to ledger 
     added: Vec<String>,
     /// Hash of proposer blocks that are removed from ledger 
     removed: Vec<String>,
 }
 #[derive(Serialize)]
-enum DemoMsg {
+pub enum DemoMsg {
     ProposerBlock(ProposerBlock),
     VoterBlock(VoterBlock),
     TransactionBlock(TransactionBlock),
@@ -93,16 +93,36 @@ impl From<&Block> for DemoMsg {
     }
 }
 
-pub fn new(url: &str) -> crossbeam::Sender<String> {
-    let (sender, receiver) = crossbeam::channel::unbounded::<String>();
+pub fn new(url: &str, transaction_ratio: u32, voter_max: u16) -> crossbeam::Sender<DemoMsg> {
+    let (sender, receiver) = crossbeam::channel::unbounded::<DemoMsg>();
     let url = url.to_owned();
     thread::spawn(move|| {
         if let Ok(parsed) = Url::parse(url.as_str()) {
             if let Ok((mut socket, _response)) = connect(parsed) {
+                let mut transaction_cnt: u32 = 0;
                 for msg in receiver.iter() {
-                    match socket.write_message(Message::Text(msg)) {
+                    match &msg {
+                        DemoMsg::TransactionBlock(_) => {
+                            transaction_cnt +=1 ;
+                            if transaction_cnt == transaction_ratio {
+                                transaction_cnt = 0;
+                            } else {
+                                continue;
+                            }
+                        }
+                        DemoMsg::VoterBlock(block) => {
+                            if block.chain >= voter_max {
+                                continue;
+                            }
+                        }
+                        _ => {}
+                    }
+                    match socket.write_message(Message::Text(serde_json::to_string_pretty(&msg).unwrap())) {
                         Ok(_) => (),
-                        Err(e) => warn!("{}", e),
+                        Err(e) => {
+                            warn!("{}, drop demo msg receiver", e);
+                            break;
+                        }
                     };
                 }
             } else {
@@ -115,20 +135,15 @@ pub fn new(url: &str) -> crossbeam::Sender<String> {
     sender
 }
 
-pub fn insert_block_msg(block: &Block) -> String {
+pub fn insert_block_msg(block: &Block) -> DemoMsg {
     let msg: DemoMsg = block.into();
-    let json: String = serde_json::to_string_pretty(&msg).unwrap();
-    json
+    msg
 }
 
-pub fn update_ledger_msg(added: &[H256], removed: &[H256]) -> String {
-    if added.is_empty() && removed.is_empty() {
-        return String::from("");
-    }
+pub fn update_ledger_msg(added: &[H256], removed: &[H256]) -> DemoMsg {
     let added = added.iter().map(|x|x.to_string()).collect();
     let removed = removed.iter().map(|x|x.to_string()).collect();
     let msg: DemoMsg = DemoMsg::UpdatedLedger(UpdatedLedger{added, removed});
-    let json: String = serde_json::to_string_pretty(&msg).unwrap();
-    json
+    msg
 }
 

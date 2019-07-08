@@ -15,7 +15,7 @@ use crate::visualization::demo;
 pub fn update_transaction_sequence (
     blockdb: &BlockDatabase,
     chain: &BlockChain,
-    demo_sender: &crossbeam::Sender<String>,
+    demo_sender: &crossbeam::Sender<demo::DemoMsg>,
 ) -> (Vec<(Transaction, H256)>, Vec<(Transaction, H256)>) {
     let diff = chain.update_ledger().unwrap();
 

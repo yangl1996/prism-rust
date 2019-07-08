@@ -49,6 +49,8 @@ fn main() {
      (@arg load_key_path: --("load-key") ... [PATH] "Loads a key pair into the wallet from the given address")
      (@arg mempool_size: --("mempool-size") ... [SIZE] default_value("500000") "Sets the size limit of the memory pool")
      (@arg demo_addr: --demo [ADDR] default_value("ws://127.0.0.1:9000") "Sets the IP address and the port of the demo websocket to connect to")
+     (@arg demo_transaction_ratio: --("demo-tran-ratio") [INT] default_value("1") "Sets the ratio of transaction blocks in demo")
+     (@arg demo_voter_max: --("demo-vote-max") [INT] default_value("1000") "Sets the max voter chain to show in demo")
      (@subcommand keygen =>
       (about: "Generates Prism wallet key pair")
       (@arg display_address: --addr "Prints the address of the key pair to STDERR")
@@ -130,7 +132,15 @@ fn main() {
     }
 
     // connect to demo websocket server
-    let demo_sender = demo::new(&matches.value_of("demo_addr").unwrap());
+    let demo_transaction_ratio = matches.value_of("demo_transaction_ratio").unwrap().parse::<u32>().unwrap_or_else(|e| {
+        error!("Error parsing number of demo_transaction_ratio: {}", e);
+        process::exit(1);
+    });
+    let demo_voter_max = matches.value_of("demo_voter_max").unwrap().parse::<u16>().unwrap_or_else(|e| {
+        error!("Error parsing number of demo_voter_max: {}", e);
+        process::exit(1);
+    });
+    let demo_sender = demo::new(&matches.value_of("demo_addr").unwrap(), demo_transaction_ratio, demo_voter_max);
 
     // start thread to update ledger
     let blockdb_copy = Arc::clone(&blockdb);
