@@ -333,9 +333,28 @@ impl BlockChain {
                 unreferred_proposers.insert(block_hash);
                 drop(unreferred_proposers);
 
-                self.db.write(wb)?;
+                // mark outself as unconfirmed proposer
+                // This could happen before committing to database, since this block has to become
+                // the leader or be referred by a leader. However, both requires the block to be
+                // committed to the database. For the same reason, this should not happen after
+                // committing to the database (think about the case where this block immediately
+                // becomes the leader and is ready to be confirmed).
+                let mut unconfirmed_proposers = self.unconfirmed_proposers.lock().unwrap();
+                unconfirmed_proposers.insert(block_hash);
+                drop(unconfirmed_proposers);
 
-                // removed referenced proposer and transaction blocks from the unreferred list
+                // commit to the database and update proposer best in the same atomic operation
+                // These two happen together to ensure that if a voter/proposer/transaction block
+                // depend on this proposer block, the miner must have already known about this
+                // proposer block and is using it as the proposer parent.
+                let mut proposer_best = self.proposer_best_level.lock().unwrap();
+                self.db.write(wb)?;
+                if self_level > *proposer_best {
+                    *proposer_best = self_level;
+                }
+                drop(proposer_best);
+
+                // remove referenced proposer and transaction blocks from the unreferred list
                 // This could happen after committing to the database. It's because that we are
                 // only removing transaction blocks here, and the entries we are trying to remove
                 // are guaranteed to be already there (since they are inserted before the
@@ -352,26 +371,7 @@ impl BlockChain {
                 }
                 drop(unreferred_transactions);
 
-                // mark this new proposer block as unconfirmed
-                // This should happen after committing to database, since we may follow this to
-                // access data in the database.
-                let mut unconfirmed_proposers = self.unconfirmed_proposers.lock().unwrap();
-                unconfirmed_proposers.insert(block_hash);
-                drop(unconfirmed_proposers);
 
-                // set best block info
-                // This should happen after writing to db, because other modules will follow
-                // proposer_best to query its metadata. We need to get the metadata into database
-                // before we can "announce" this block to other modules. Also, this does not create
-                // race condition, since this update is "stateless" - we are not append/removing
-                // from a record.
-                // Also, this should happen at the very end, since we will access all metadata of
-                // the proposer best block.
-                let mut proposer_best = self.proposer_best_level.lock().unwrap();
-                if self_level > *proposer_best {
-                    *proposer_best = self_level;
-                }
-                drop(proposer_best);
 
                 info!("Adding proposer block {} at timestamp {} at level {}", block_hash, block.header.timestamp, self_level);
             }

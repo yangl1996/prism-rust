@@ -146,6 +146,7 @@ fn main() {
     // create channels between server and worker, worker and miner, miner and worker
     let (msg_tx, msg_rx) = channel::unbounded();
     let (ctx_tx, ctx_rx) = channel::unbounded();
+    let ctx_tx_miner = ctx_tx.clone();
 
     // start the p2p server
     let (server_ctx, server) = server::new(p2p_addr, msg_tx).unwrap();
@@ -156,7 +157,7 @@ fn main() {
     worker_ctx.start();
 
     // start the miner
-    let (miner_ctx, miner) = miner::new(&mempool, &blockchain, &blockdb, ctx_rx, &server);
+    let (miner_ctx, miner) = miner::new(&mempool, &blockchain, &blockdb, ctx_rx, &ctx_tx_miner, &server);
     miner_ctx.start();
 
     // connect to known peers
