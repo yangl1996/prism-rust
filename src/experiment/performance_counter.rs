@@ -4,6 +4,7 @@ use crate::block::Block;
 use crate::block::Content as BlockContent;
 use crate::wallet::WalletError;
 use std::time::SystemTime;
+use crate::config::*;
 
 lazy_static! {
     pub static ref PERFORMANCE_COUNTER: Counter = {
@@ -49,6 +50,8 @@ pub struct Counter {
     incoming_message_queue: AtomicIsize,
     total_transaction_block_confirmation_latency: AtomicUsize,
     total_transaction_block_squared_confirmation_latency: AtomicUsize,
+    proposer_main_chain_length: AtomicUsize,
+    voter_main_chain_length_sum: AtomicIsize,
 }
 
 #[derive(Serialize)]
@@ -86,6 +89,8 @@ pub struct Snapshot {
     pub incoming_message_queue: isize,
     pub total_transaction_block_confirmation_latency: usize,
     pub total_transaction_block_squared_confirmation_latency: usize,
+    pub proposer_main_chain_length: usize,
+    pub voter_main_chain_length_sum: isize,
 }
 
 impl Counter {
@@ -124,6 +129,8 @@ impl Counter {
             incoming_message_queue: AtomicIsize::new(0),
             total_transaction_block_confirmation_latency: AtomicUsize::new(0),
             total_transaction_block_squared_confirmation_latency: AtomicUsize::new(0),
+            proposer_main_chain_length: AtomicUsize::new(0),
+            voter_main_chain_length_sum: AtomicIsize::new(0),
         }
     }
 
@@ -196,6 +203,21 @@ impl Counter {
         }
     }
 
+    pub fn record_update_proposer_main_chain(&self, new_height: usize) {
+        self.proposer_main_chain_length.store(new_height, Ordering::Relaxed);
+    }
+
+    pub fn record_update_voter_main_chain(&self, prev_height: usize, new_height: usize) {
+        if prev_height <= new_height {
+            let diff: isize = (new_height - prev_height) as isize;
+            self.voter_main_chain_length_sum.fetch_add(diff, Ordering::Relaxed);
+        }
+        else {
+            let diff: isize = (prev_height - new_height) as isize;
+            self.voter_main_chain_length_sum.fetch_sub(diff, Ordering::Relaxed);
+        }
+    }
+
     pub fn record_confirm_transaction_block(&self, b: &Block) {
         let mined_time = b.header.timestamp;
         let current_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis();
@@ -242,6 +264,13 @@ impl Counter {
         } else {
             incoming_message_queue
         };
+
+        let voter_main_chain_length_sum = self.voter_main_chain_length_sum.load(Ordering::Relaxed);
+        let voter_main_chain_length_sum = if voter_main_chain_length_sum < 0 {
+            0
+        } else {
+            voter_main_chain_length_sum
+        };
         return Snapshot {
             generated_transactions: self.generated_transactions.load(Ordering::Relaxed),
             generated_transaction_bytes: self.generated_transaction_bytes.load(Ordering::Relaxed),
@@ -276,6 +305,8 @@ impl Counter {
             incoming_message_queue: incoming_message_queue,
             total_transaction_block_confirmation_latency: self.total_transaction_block_confirmation_latency.load(Ordering::Relaxed),
             total_transaction_block_squared_confirmation_latency: self.total_transaction_block_squared_confirmation_latency.load(Ordering::Relaxed),
+            proposer_main_chain_length: self.proposer_main_chain_length.load(Ordering::Relaxed),
+            voter_main_chain_length_sum: voter_main_chain_length_sum,
         };
     }
 }

@@ -9,6 +9,7 @@ use std::collections::{BTreeSet, HashMap, HashSet, BTreeMap};
 use std::mem;
 use std::sync::Mutex;
 use std::time;
+use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 
 // Column family names for node/chain metadata
 const PROPOSER_NODE_LEVEL_CF: &str = "PROPOSER_NODE_LEVEL"; // hash to node level (u64)
@@ -351,6 +352,7 @@ impl BlockChain {
                 self.db.write(wb)?;
                 if self_level > *proposer_best {
                     *proposer_best = self_level;
+                    PERFORMANCE_COUNTER.record_update_proposer_main_chain(self_level as usize);
                 }
                 drop(proposer_best);
 
@@ -370,8 +372,6 @@ impl BlockChain {
                     unreferred_transactions.remove(&ref_hash);
                 }
                 drop(unreferred_transactions);
-
-
 
                 info!("Adding proposer block {} at timestamp {} at level {}", block_hash, block.header.timestamp, self_level);
             }
@@ -403,6 +403,7 @@ impl BlockChain {
                 let mut voter_best = self.voter_best[self_chain as usize].lock().unwrap();
                 // update best block
                 if self_level > voter_best.1 {
+                    PERFORMANCE_COUNTER.record_update_voter_main_chain(voter_best.1 as usize, self_level as usize);
                     voter_best.0 = block_hash;
                     voter_best.1 = self_level;
                 }
