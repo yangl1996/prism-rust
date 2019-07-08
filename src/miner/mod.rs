@@ -227,12 +227,14 @@ impl Context {
             }
 
             // handle context updates
+            let mut touched_content: BTreeSet<u16> = BTreeSet::new();
             // update voter parents
             for voter_chain in new_voter_block.iter() {
                 let chain_id: usize = (FIRST_VOTER_INDEX + voter_chain) as usize;
                 let voter_parent = self.blockchain.best_voter(*voter_chain as usize);
                 if let Content::Voter(c) = &mut self.contents[chain_id] {
                     c.voter_parent = voter_parent;
+                    touched_content.insert(chain_id as u16);
                 }
                 else {
                     unreachable!();
@@ -247,6 +249,7 @@ impl Context {
                 let chain_id: usize = TRANSACTION_INDEX as usize;
                 if let Content::Transaction(c) = &mut self.contents[TRANSACTION_INDEX as usize] {
                     c.transactions = transactions;
+                    touched_content.insert(TRANSACTION_INDEX);
                 }
                 else {
                     unreachable!();
@@ -258,9 +261,14 @@ impl Context {
             // note that if there are new proposer blocks, we will need to refresh tx refs in the
             // next step. In that case, don't bother doing it here.
             if new_transaction_block && !new_proposer_block {
-                // TODO: limit the number of transaction references here
                 if let Content::Proposer(c) = &mut self.contents[PROPOSER_INDEX as usize] {
-                    c.transaction_refs = self.blockchain.unreferred_transactions();
+                    // only update the references if we are not running out of quota
+                    if c.transaction_refs.len() < PROPOSER_BLOCK_TX_REFS as usize {
+                        let mut refs = self.blockchain.unreferred_transactions();
+                        refs.truncate(PROPOSER_BLOCK_TX_REFS as usize);
+                        c.transaction_refs = refs;
+                        touched_content.insert(PROPOSER_INDEX);
+                    }
                 } 
                 else { 
                     unreachable!(); 
@@ -285,8 +293,11 @@ impl Context {
                 // block
                 if new_proposer_block {
                     if let Content::Proposer(c) = &mut self.contents[PROPOSER_INDEX as usize] {
-                        c.transaction_refs = self.blockchain.unreferred_transactions();
+                        let mut refs = self.blockchain.unreferred_transactions();
+                        refs.truncate(PROPOSER_BLOCK_TX_REFS as usize);
+                        c.transaction_refs = refs;
                         c.proposer_refs = self.blockchain.unreferred_proposers();
+                        touched_content.insert(PROPOSER_INDEX);
                     } 
                     else { 
                         unreachable!(); 
@@ -317,6 +328,7 @@ impl Context {
                     };
                     if let Content::Voter(c) = &mut self.contents[chain_id] {
                         c.votes = self.blockchain.unvoted_proposer(&voter_parent, &self.header.parent).unwrap();
+                        touched_content.insert(chain_id as u16);
                     }
                     else {
                         unreachable!();
@@ -334,6 +346,7 @@ impl Context {
                     };
                     if let Content::Voter(c) = &mut self.contents[chain_id] {
                         c.votes = self.blockchain.unvoted_proposer(&voter_parent, &self.header.parent).unwrap();
+                        touched_content.insert(chain_id as u16);
                     }
                     else {
                         unreachable!();
@@ -358,7 +371,9 @@ impl Context {
                 }
                 if new_transaction_block {
                     self.content_merkle_tree.update(TRANSACTION_INDEX as usize, &self.contents[TRANSACTION_INDEX as usize]);
-                    self.content_merkle_tree.update(PROPOSER_INDEX as usize, &self.contents[PROPOSER_INDEX as usize]);
+                    if touched_content.contains(&PROPOSER_INDEX) {
+                        self.content_merkle_tree.update(PROPOSER_INDEX as usize, &self.contents[PROPOSER_INDEX as usize]);
+                    }
                 }
             }
 
