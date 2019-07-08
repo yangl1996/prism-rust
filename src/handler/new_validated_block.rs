@@ -21,7 +21,8 @@ pub fn new_validated_block(
     demo_sender: &crossbeam::Sender<String>
 ) {
     let msg = demo::insert_block_msg(block);
-    demo_sender.send(msg).unwrap();
+    // demo_sender ignores the result
+    match demo_sender.send(msg) { _ => ()};
 
     PERFORMANCE_COUNTER.record_process_block(&block);
 

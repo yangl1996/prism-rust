@@ -21,7 +21,8 @@ pub fn update_transaction_sequence (
 
     if !(diff.2.is_empty() && diff.3.is_empty()) {
         let msg = demo::update_ledger_msg(&diff.2, &diff.3);
-        demo_sender.send(msg).unwrap();
+        // demo_sender ignores the result
+        match demo_sender.send(msg) { _ => ()};
     }
 
     PERFORMANCE_COUNTER.record_confirm_transaction_blocks(diff.0.len());

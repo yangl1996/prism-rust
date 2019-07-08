@@ -96,48 +96,20 @@ impl From<&Block> for DemoMsg {
 pub fn new(url: &str) -> crossbeam::Sender<String> {
     let (sender, receiver) = crossbeam::channel::unbounded::<String>();
     let url = url.to_owned();
-    let mut msg_buffer: Option<String> = None;
     thread::spawn(move|| {
-        let parsed = match Url::parse(url.as_str()) {
-            Ok(x) => x,
-            Err(e) => {
-                warn!("Fail to parse '{}' due to {}.", url, e);
-                loop { thread::park();}
-            },
-        };
-        loop {
-            let (mut socket, _response) = match connect(parsed.clone()) {
-                Ok(x) => x,
-                Err(e) => {
-                    warn!("{}", e);
-                    debug!("Retry connecting to websocket {} in 1000 ms.", url);
-                    thread::sleep(Duration::from_millis(1000));
-                    continue;
+        if let Ok(parsed) = Url::parse(url.as_str()) {
+            if let Ok((mut socket, _response)) = connect(parsed) {
+                for msg in receiver.iter() {
+                    match socket.write_message(Message::Text(msg)) {
+                        Ok(_) => (),
+                        Err(e) => warn!("{}", e),
+                    };
                 }
-            };
-            if let Some(msg) = &msg_buffer {
-                match socket.write_message(Message::Text(msg.clone())) {
-                    Ok(_) => msg_buffer = None,
-                    Err(e) => {
-                        warn!("{}", e);
-                        debug!("Retry connecting to websocket {} in 1000 ms.", url);
-                        thread::sleep(Duration::from_millis(1000));
-                        continue;
-                    }
-                };
+            } else {
+                warn!("Fail to connect to websocket {}.", url);
             }
-            for msg in receiver.iter() {
-                match socket.write_message(Message::Text(msg.clone())) {
-                    Ok(_) => (),
-                    Err(e) => {
-                        msg_buffer = Some(msg);
-                        warn!("{}", e);
-                        debug!("Retry connecting to websocket {} in 1000 ms.", url);
-                        thread::sleep(Duration::from_millis(1000));
-                        break;
-                    }
-                };
-            }
+        } else {
+            warn!("Fail to parse '{}'.", url);
         }
     });
     sender
