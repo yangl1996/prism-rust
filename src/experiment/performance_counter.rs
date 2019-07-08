@@ -47,6 +47,8 @@ pub struct Counter {
     received_voter_blocks: AtomicUsize,
     received_transaction_blocks: AtomicUsize,
     incoming_message_queue: AtomicIsize,
+    total_transaction_block_confirmation_latency: AtomicUsize,
+    total_transaction_block_squared_confirmation_latency: AtomicUsize,
 }
 
 #[derive(Serialize)]
@@ -82,6 +84,8 @@ pub struct Snapshot {
     pub received_voter_blocks: usize,
     pub received_transaction_blocks: usize,
     pub incoming_message_queue: isize,
+    pub total_transaction_block_confirmation_latency: usize,
+    pub total_transaction_block_squared_confirmation_latency: usize,
 }
 
 impl Counter {
@@ -118,6 +122,8 @@ impl Counter {
             received_voter_blocks: AtomicUsize::new(0),
             received_transaction_blocks: AtomicUsize::new(0),
             incoming_message_queue: AtomicIsize::new(0),
+            total_transaction_block_confirmation_latency: AtomicUsize::new(0),
+            total_transaction_block_squared_confirmation_latency: AtomicUsize::new(0),
         }
     }
 
@@ -190,8 +196,17 @@ impl Counter {
         }
     }
 
-    pub fn record_confirm_transaction_blocks(&self, num_blocks: usize) {
-        self.confirmed_transaction_blocks.fetch_add(num_blocks, Ordering::Relaxed);
+    pub fn record_confirm_transaction_block(&self, b: &Block) {
+        let mined_time = b.header.timestamp;
+        let current_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis();
+        let delay = if current_time <= mined_time {
+            0
+        } else {
+            current_time - mined_time
+        };
+        self.total_transaction_block_confirmation_latency.fetch_add(delay as usize, Ordering::Relaxed);
+        self.total_transaction_block_squared_confirmation_latency.fetch_add((delay * delay) as usize, Ordering::Relaxed);
+        self.confirmed_transaction_blocks.fetch_add(1, Ordering::Relaxed);
     }
 
     pub fn record_deconfirm_transaction_blocks(&self, num_blocks: usize) {
@@ -259,6 +274,8 @@ impl Counter {
             received_voter_blocks: self.received_voter_blocks.load(Ordering::Relaxed),
             received_transaction_blocks: self.received_transaction_blocks.load(Ordering::Relaxed),
             incoming_message_queue: incoming_message_queue,
+            total_transaction_block_confirmation_latency: self.total_transaction_block_confirmation_latency.load(Ordering::Relaxed),
+            total_transaction_block_squared_confirmation_latency: self.total_transaction_block_squared_confirmation_latency.load(Ordering::Relaxed),
         };
     }
 }

@@ -74,9 +74,9 @@ func plot(nodesFile, dataDir, content, node, output string, window uint) {
 			g.Line(1.0, node+"_confirm", "FF0000", node+" Confirmed")
 		}
 		g.Line(1.0, "confirm_min", "")
-		g.Area("min_max_diff", "0000FF15", "STACK") // this area is stacked on confirm_min, so we should sub min
+		g.Area("min_max_diff", "0000FF20", "STACK") // this area is stacked on confirm_min, so we should sub min
 		g.Line(1.0, "confirm_avg", "0000FF", "Avg Confirmed")
-		g.Tick(node+"_tx_blk_confirm", "808080", "1.0", "Tx Block Confirmation")
+		g.Tick(node+"_tx_blk_confirm", "00FFFF20", "1.0", "Tx Block Confirmation")
 		g.SetVLabel("Tx/s")
 		g.SetTitle("Transaction Rate (" + node + ")")
 	case "blockdelay":
@@ -88,6 +88,11 @@ func plot(nodesFile, dataDir, content, node, output string, window uint) {
 		g.Line(1.0, node+"_tx_delay", "0000FF", "Tx")
 		g.SetVLabel("Latency (ms)")
 		g.SetTitle("Block Latency (" + node + ")")
+	case "confirm":
+		g.Def(node+"_txblk_cfm", nodes[node], "txblk_cfm_mean", "AVERAGE", fmt.Sprintf("step=%v", window))
+		g.Line(1.0, node+"_txblk_cfm", "0000FF", "Tx Block")
+		g.SetVLabel("Latency (ms)")
+		g.SetTitle("Confirmation Latency (" + node + ")")
 	case "queue":
 		g.Def(node+"_queue", nodes[node], "queue_length", "AVERAGE", fmt.Sprintf("step=%v", window))
 		g.Line(1.0, node+"_queue", "0000FF")

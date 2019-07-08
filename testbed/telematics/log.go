@@ -29,6 +29,7 @@ type Snapshot struct {
 	Received_transaction_blocks    int
 	Confirmed_transaction_blocks   int
 	Deconfirmed_transaction_blocks int
+	Total_transaction_block_confirmation_latency int
 }
 
 type Report struct {
@@ -83,9 +84,11 @@ func log(interval, duration uint, nodesFile, dataDir string, grafana bool) {
 		c.DS("received_tx", "COUNTER", interval*2, 0, "U")
 		c.DS("confirmed_tx_blk", "COUNTER", interval*2, 0, "U")
 		c.DS("deconfirmed_tx_blk", "COUNTER", interval*2, 0, "U")
+		c.DS("txblk_cfm_sum", "COUNTER", interval*2, 0, "U")
 		c.DS("proposer_delay_mean", "COMPUTE", "proposer_delay_sum,received_proposer,/")
 		c.DS("voter_delay_mean", "COMPUTE", "voter_delay_sum,received_voter,/")
 		c.DS("tx_delay_mean", "COMPUTE", "tx_delay_sum,received_tx,/")
+		c.DS("txblk_cfm_mean", "COMPUTE", "txblk_cfm_sum,confirmed_tx_blk,/,1000,/")
 		c.RRA("LAST", 0, 1, duration/interval)
 		err = c.Create(true)
 		if err != nil {
@@ -112,9 +115,11 @@ func log(interval, duration uint, nodesFile, dataDir string, grafana bool) {
 		cr.DS("received_tx", "COUNTER", interval*2, 0, "U")
 		cr.DS("confirmed_tx_blk", "COUNTER", interval*2, 0, "U")
 		cr.DS("deconfirmed_tx_blk", "COUNTER", interval*2, 0, "U")
+		cr.DS("txblk_cfm_sum", "COUNTER", interval*2, 0, "U")
 		cr.DS("proposer_delay_mean", "COMPUTE", "proposer_delay_sum,received_proposer,/")
 		cr.DS("voter_delay_mean", "COMPUTE", "voter_delay_sum,received_voter,/")
 		cr.DS("tx_delay_mean", "COMPUTE", "tx_delay_sum,received_tx,/")
+		cr.DS("txblk_cfm_mean", "COMPUTE", "txblk_cfm_sum,confirmed_tx_blk,/,1000,/")
 		cr.RRA("LAST", 0, 1, duration/interval)
 		err = cr.Create(true)
 		if err != nil {
@@ -137,9 +142,11 @@ func log(interval, duration uint, nodesFile, dataDir string, grafana bool) {
 		cr.DS("received_tx", "GAUGE", interval*2, 0, "U")
 		cr.DS("confirmed_tx_blk", "GAUGE", interval*2, 0, "U")
 		cr.DS("deconfirmed_tx_blk", "GAUGE", interval*2, 0, "U")
+		cr.DS("txblk_cfm_sum", "GAUGE", interval*2, 0, "U")
 		cr.DS("proposer_delay_mean", "COMPUTE", "proposer_delay_sum,received_proposer,/")
 		cr.DS("voter_delay_mean", "COMPUTE", "voter_delay_sum,received_voter,/")
 		cr.DS("tx_delay_mean", "COMPUTE", "tx_delay_sum,received_tx,/")
+		cr.DS("txblk_cfm_mean", "COMPUTE", "txblk_cfm_sum,confirmed_tx_blk,/,1000,/")
 		cr.RRA("LAST", 0, 1, duration/interval)
 		err = cr.Create(true)
 		if err != nil {
@@ -196,6 +203,7 @@ func log(interval, duration uint, nodesFile, dataDir string, grafana bool) {
 					ctot.Received_transaction_blocks += v.Received_transaction_blocks
 					ctot.Confirmed_transaction_blocks += v.Confirmed_transaction_blocks
 					ctot.Deconfirmed_transaction_blocks += v.Deconfirmed_transaction_blocks
+					ctot.Total_transaction_block_confirmation_latency += v.Total_transaction_block_confirmation_latency
 				}
 				cavg := Snapshot{
 					Generated_transactions:         ctot.Generated_transactions,
@@ -213,6 +221,7 @@ func log(interval, duration uint, nodesFile, dataDir string, grafana bool) {
 					Received_transaction_blocks:    ctot.Received_transaction_blocks,
 					Confirmed_transaction_blocks:   ctot.Confirmed_transaction_blocks / len(curr),
 					Deconfirmed_transaction_blocks: ctot.Deconfirmed_transaction_blocks / len(curr),
+					Total_transaction_block_confirmation_latency: ctot.Total_transaction_block_confirmation_latency / len(curr),
 				}
 				ptot := Snapshot{}
 				for _, v := range prev {
@@ -231,6 +240,7 @@ func log(interval, duration uint, nodesFile, dataDir string, grafana bool) {
 					ptot.Received_transaction_blocks += v.Received_transaction_blocks
 					ptot.Confirmed_transaction_blocks += v.Confirmed_transaction_blocks
 					ptot.Deconfirmed_transaction_blocks += v.Deconfirmed_transaction_blocks
+					ptot.Total_transaction_block_confirmation_latency += v.Total_transaction_block_confirmation_latency
 				}
 				pavg := Snapshot{
 					Generated_transactions:         ptot.Generated_transactions,
@@ -248,6 +258,7 @@ func log(interval, duration uint, nodesFile, dataDir string, grafana bool) {
 					Received_transaction_blocks:    ptot.Received_transaction_blocks,
 					Confirmed_transaction_blocks:   ptot.Confirmed_transaction_blocks / len(prev),
 					Deconfirmed_transaction_blocks: ptot.Deconfirmed_transaction_blocks / len(prev),
+					Total_transaction_block_confirmation_latency: ptot.Total_transaction_block_confirmation_latency / len(prev),
 				}
 				// display the values
 				tm.Clear()
@@ -267,15 +278,16 @@ func log(interval, duration uint, nodesFile, dataDir string, grafana bool) {
 				tm.Printf("           Delay -    Proposer    %8.3g  %8.3g\n", float64(cavg.Total_proposer_block_delay)/float64(cavg.Received_proposer_blocks), float64(cavg.Total_proposer_block_delay-pavg.Total_proposer_block_delay)/float64(cavg.Received_proposer_blocks-pavg.Received_proposer_blocks))
 				tm.Printf("           Delay -       Voter    %8.3g  %8.3g\n", float64(cavg.Total_voter_block_delay)/float64(cavg.Received_voter_blocks), float64(cavg.Total_voter_block_delay-pavg.Total_voter_block_delay)/float64(cavg.Received_voter_blocks-pavg.Received_voter_blocks))
 				tm.Printf("           Delay - Transaction    %8.3g  %8.3g\n", float64(cavg.Total_transaction_block_delay)/float64(cavg.Received_transaction_blocks), float64(cavg.Total_transaction_block_delay-pavg.Total_transaction_block_delay)/float64(cavg.Received_transaction_blocks-pavg.Received_transaction_blocks))
+				tm.Printf("    Confirmation -       Block    %8.3g  %8.3g\n", float64(cavg.Total_transaction_block_confirmation_latency)/float64(cavg.Confirmed_transaction_blocks)/1000.0, float64(cavg.Total_transaction_block_confirmation_latency-pavg.Total_transaction_block_confirmation_latency)/float64(cavg.Confirmed_transaction_blocks-pavg.Confirmed_transaction_blocks)/1000.0)
 				tm.Flush()
 				// log the aggregated value
 				if grafana {
-					err = avgUpdater.Update(time.Now(), cavg.Confirmed_transactions, cavg.Deconfirmed_transactions, cavg.Generated_transactions, cavg.Incoming_message_queue, cavg.Mined_proposer_blocks, cavg.Mined_voter_blocks, cavg.Mined_transaction_blocks, cavg.Total_proposer_block_delay, cavg.Total_voter_block_delay, cavg.Total_transaction_block_delay, cavg.Received_proposer_blocks, cavg.Received_voter_blocks, cavg.Received_transaction_blocks, cavg.Confirmed_transaction_blocks, cavg.Deconfirmed_transaction_blocks)
+					err = avgUpdater.Update(time.Now(), cavg.Confirmed_transactions, cavg.Deconfirmed_transactions, cavg.Generated_transactions, cavg.Incoming_message_queue, cavg.Mined_proposer_blocks, cavg.Mined_voter_blocks, cavg.Mined_transaction_blocks, cavg.Total_proposer_block_delay, cavg.Total_voter_block_delay, cavg.Total_transaction_block_delay, cavg.Received_proposer_blocks, cavg.Received_voter_blocks, cavg.Received_transaction_blocks, cavg.Confirmed_transaction_blocks, cavg.Deconfirmed_transaction_blocks, cavg.Total_transaction_block_confirmation_latency)
 					if err != nil {
 						// sometimes we get error if interval is set to 1 and the timer goes a bit faster
 						continue
 					}
-					err = accUpdater.Update(time.Now(), cavg.Confirmed_transactions, cavg.Deconfirmed_transactions, cavg.Generated_transactions, cavg.Mined_proposer_blocks, cavg.Mined_voter_blocks, cavg.Mined_transaction_blocks, cavg.Total_proposer_block_delay, cavg.Total_voter_block_delay, cavg.Total_transaction_block_delay, cavg.Received_proposer_blocks, cavg.Received_voter_blocks, cavg.Received_transaction_blocks, cavg.Confirmed_transaction_blocks, cavg.Deconfirmed_transaction_blocks)
+					err = accUpdater.Update(time.Now(), cavg.Confirmed_transactions, cavg.Deconfirmed_transactions, cavg.Generated_transactions, cavg.Mined_proposer_blocks, cavg.Mined_voter_blocks, cavg.Mined_transaction_blocks, cavg.Total_proposer_block_delay, cavg.Total_voter_block_delay, cavg.Total_transaction_block_delay, cavg.Received_proposer_blocks, cavg.Received_voter_blocks, cavg.Received_transaction_blocks, cavg.Confirmed_transaction_blocks, cavg.Deconfirmed_transaction_blocks, cavg.Total_transaction_block_confirmation_latency)
 					if err != nil {
 						// sometimes we get error if interval is set to 1 and the timer goes a bit faster
 						continue
@@ -304,7 +316,7 @@ func monitor(node string, url string, interval uint, datachan chan Report) {
 			if err != nil {
 				continue
 			}
-			err = updater.Update(time.Now(), snapshot.Confirmed_transactions, snapshot.Deconfirmed_transactions, snapshot.Generated_transactions, snapshot.Incoming_message_queue, snapshot.Mined_proposer_blocks, snapshot.Mined_voter_blocks, snapshot.Mined_transaction_blocks, snapshot.Total_proposer_block_delay, snapshot.Total_voter_block_delay, snapshot.Total_transaction_block_delay, snapshot.Received_proposer_blocks, snapshot.Received_voter_blocks, snapshot.Received_transaction_blocks, snapshot.Confirmed_transaction_blocks, snapshot.Deconfirmed_transaction_blocks)
+			err = updater.Update(time.Now(), snapshot.Confirmed_transactions, snapshot.Deconfirmed_transactions, snapshot.Generated_transactions, snapshot.Incoming_message_queue, snapshot.Mined_proposer_blocks, snapshot.Mined_voter_blocks, snapshot.Mined_transaction_blocks, snapshot.Total_proposer_block_delay, snapshot.Total_voter_block_delay, snapshot.Total_transaction_block_delay, snapshot.Received_proposer_blocks, snapshot.Received_voter_blocks, snapshot.Received_transaction_blocks, snapshot.Confirmed_transaction_blocks, snapshot.Deconfirmed_transaction_blocks, snapshot.Total_transaction_block_confirmation_latency)
 			if err != nil {
 				// sometimes we get error if interval is set to 1 and the timer goes a bit faster
 				continue

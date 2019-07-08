@@ -17,7 +17,7 @@ func main() {
 	plotCommand := flag.NewFlagSet("plot", flag.ExitOnError)
 	plotNodeListFlag := plotCommand.String("nodelist", "nodes.txt", "Sets the path to the node list file")
 	plotDataDirFlag := plotCommand.String("datadir", "data", "Sets the path to the directory holding RRD files")
-	plotContentFlag := plotCommand.String("content", "txrate", "Sets the content to plot, possible values are txrate, blockdelay, queue, mining")
+	plotContentFlag := plotCommand.String("content", "txrate", "Sets the content to plot, possible values are txrate, blockdelay, queue, mining, confirm")
 	plotNodeFlag := plotCommand.String("node", "node_0", "Sets the node to plot")
 	plotWindowFlag := plotCommand.Uint("window", 1, "Sets the sliding window of the plot")
 	plotOutputFlag := plotCommand.String("output", "output.png", "Sets the output path")

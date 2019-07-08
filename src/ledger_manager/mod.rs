@@ -201,7 +201,6 @@ fn update_transaction_sequence (
     chain: &BlockChain,
 ) -> (Vec<(Transaction, H256)>, Vec<(Transaction, H256)>) {
     let diff = chain.update_ledger().unwrap();
-    PERFORMANCE_COUNTER.record_confirm_transaction_blocks(diff.0.len());
     PERFORMANCE_COUNTER.record_deconfirm_transaction_blocks(diff.1.len());
 
     // gather the transaction diff
@@ -209,6 +208,7 @@ fn update_transaction_sequence (
     let mut remove: Vec<(Transaction, H256)> = vec![];
     for hash in diff.0 {
         let block = blockdb.get(&hash).unwrap().unwrap();
+        PERFORMANCE_COUNTER.record_confirm_transaction_block(&block);
         let content = match block.content {
             Content::Transaction(data) => data,
             _ => unreachable!(),
