@@ -89,8 +89,13 @@ func plot(nodesFile, dataDir, content, node, output string, window uint) {
 		g.SetVLabel("Latency (ms)")
 		g.SetTitle("Block Latency (" + node + ")")
 	case "confirm":
-		g.Def(node+"_txblk_cfm", nodes[node], "txblk_cfm_mean", "AVERAGE", fmt.Sprintf("step=%v", window))
-		g.Line(1.0, node+"_txblk_cfm", "0000FF", "Tx Block")
+		trend_cmd := fmt.Sprintf(",%v,TRENDNAN", window)
+		g.Def(node+"_txblk_cfm", nodes[node], "txblk_cfm_mean", "AVERAGE")
+		g.CDef(node+"_txblk_cfm_wa", node+"_txblk_cfm"+trend_cmd)
+		g.Line(1.0, node+"_txblk_cfm", "0000FF", "Tx Block (Instaneous)")
+		if window != 1 {
+			g.Line(1.0, node+"_txblk_cfm_wa", "00FF00", "TX Block (Windowed)")
+		}
 		g.SetVLabel("Latency (s)")
 		g.SetTitle("Confirmation Latency (" + node + ")")
 	case "queue":
