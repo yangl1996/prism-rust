@@ -91,7 +91,7 @@ func plot(nodesFile, dataDir, content, node, output string, window uint) {
 	case "confirm":
 		g.Def(node+"_txblk_cfm", nodes[node], "txblk_cfm_mean", "AVERAGE", fmt.Sprintf("step=%v", window))
 		g.Line(1.0, node+"_txblk_cfm", "0000FF", "Tx Block")
-		g.SetVLabel("Latency (ms)")
+		g.SetVLabel("Latency (s)")
 		g.SetTitle("Confirmation Latency (" + node + ")")
 	case "queue":
 		g.Def(node+"_queue", nodes[node], "queue_length", "AVERAGE", fmt.Sprintf("step=%v", window))
