@@ -358,6 +358,7 @@ impl Context {
                 }
                 if new_transaction_block {
                     self.content_merkle_tree.update(TRANSACTION_INDEX as usize, &self.contents[TRANSACTION_INDEX as usize]);
+                    self.content_merkle_tree.update(PROPOSER_INDEX as usize, &self.contents[PROPOSER_INDEX as usize]);
                 }
             }
 
