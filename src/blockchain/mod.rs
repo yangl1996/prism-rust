@@ -10,6 +10,8 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::mem;
 use std::sync::Mutex;
 use std::time;
+use statrs::distribution::{Poisson, Discrete};
+use std::cmp;
 
 // Column family names for node/chain metadata
 const PROPOSER_NODE_LEVEL_CF: &str = "PROPOSER_NODE_LEVEL"; // hash to node level (u64)
@@ -503,43 +505,64 @@ impl BlockChain {
                 wb.delete_cf($cf, serialize(&$key).unwrap())?;
             }};
         }
+
+        // the affected values are always continous [a,b]
+        //adding levels from ledger_tip+1 (c) to affected to make it [c,b]
+        if !affected.is_empty()  {
+            let mut affected_iter = affected.iter();
+            let first_affected_level = *affected_iter.next().unwrap();
+            drop(affected_iter);
+            let proposer_ledger_tip = self.proposer_ledger_tip.lock().unwrap();
+            let proposer_ledger_tip: u64 = *proposer_ledger_tip;
+
+            for l in (proposer_ledger_tip+1)..first_affected_level {
+                affected.insert(l);
+            }
+            info!("Proposer ledger tip {:?}. Affected {:?}", proposer_ledger_tip, affected);
+        }
+
+
         let mut change_begin: Option<u64> = None;
+
         for level in &affected {
             let proposer_blocks: Vec<H256> =
                 get_value!(proposer_tree_level_cf, *level as u64).unwrap();
             let existing_leader: Option<H256> =
                 get_value!(proposer_leader_sequence_cf, *level as u64);
             // compute the new leader of this level
+            // we use the confirmation policy from https://arxiv.org/abs/1810.08092
             let new_leader: Option<H256> = {
                 let mut new_leader: Option<H256> = None;
 
-                let mut all_votes: Vec<u16> = vec![];
-                let mut total_votes: u16 = 0;
-                let mut max_votes: u16 = 0;
+                // TODO: consider whether to use reference here
+                let mut votes_with_depth: HashMap<&H256, Vec<(u16, u64)>> = HashMap::new(); //chain number and vote depth casted on the proposer block
+                let mut total_vote_count: u16 = 0;
+                let mut total_vote_depth: u64 = 0;
 
+                //for each proposer block on 'level' get votes along with their depth
                 for p_block in &proposer_blocks {
                     let p_votes: Vec<(u16, u64)> = match get_value!(proposer_node_vote_cf, p_block)
                     {
                         None => vec![],
                         Some(d) => d,
                     };
-                    all_votes.push(p_votes.len() as u16);
-                    total_votes += p_votes.len() as u16;
-
-                    if max_votes < p_votes.len() as u16 {
-                        max_votes = p_votes.len() as u16;
-                        new_leader = Some(*p_block);
+                    let mut p_votes_with_depth: Vec<(u16, u64)> = vec![];
+                    for (chain_num, vote_level) in &p_votes {
+                        // TODO: cache the voter chain best levels
+                        let voter_best = self.voter_best[*chain_num as usize].lock().unwrap();
+                        let voter_chain_length = voter_best.1;
+                        drop(voter_best);
+                        let vote_depth = voter_chain_length - vote_level+1;
+                        total_vote_depth += vote_depth;
+                        p_votes_with_depth.push((*chain_num as u16, vote_depth));
                     }
-
-                    if max_votes == p_votes.len() as u16 && !new_leader.is_none() {
-                        //TODO: is_none is not required?
-                        if *p_block < new_leader.unwrap() {
-                            new_leader = Some(*p_block);
-                        }
-                    }
+                    total_vote_count += p_votes_with_depth.len() as u16;
+                    votes_with_depth.insert(p_block, p_votes_with_depth);
                 }
-                // debugging only
-                if NUM_VOTER_CHAINS < total_votes {
+
+                // For debugging purpose only. This is very important for security.
+                // TODO: remove this check in the future
+                if NUM_VOTER_CHAINS < total_vote_count {
                     for p_block in &proposer_blocks {
                         let votes: Vec<(u16, u64)> = match self
                             .db
@@ -552,33 +575,87 @@ impl BlockChain {
                         for vote in votes.iter() {
                             print!(" ({}, {}) ", vote.0, vote.1);
                         }
-                        println!("");
                     }
-                    panic!(
-                        "NUM_VOTER_CHAINS: {} total_votes:{}",
-                        NUM_VOTER_CHAINS, total_votes
-                    )
-                } else {
-                    let remaining_votes = NUM_VOTER_CHAINS - total_votes;
+                    panic!("NUM_VOTER_CHAINS: {} total_votes:{}", NUM_VOTER_CHAINS, total_vote_count)
+                }
 
-                    if max_votes >= remaining_votes && !new_leader.is_none() {
-                        //TODO: is_none is not required?
-                        for (i, p_block) in proposer_blocks.iter().enumerate() {
-                            if max_votes < all_votes[i] + remaining_votes
-                                && *p_block != new_leader.unwrap()
-                            {
+
+                if total_vote_count > NUM_VOTER_CHAINS / 2 { // no point in going further if half the votes are not cast
+                    //calculate average of depth of the votes
+                    let avg_vote_depth = total_vote_depth as f32 / total_vote_count as f32;
+                    let adversary_expected_vote_depth = avg_vote_depth*2.0*ADVERSARY_MINING_POWER; //expected voter depth of an adversary
+                    let poisson = Poisson::new(adversary_expected_vote_depth as f64).unwrap();
+
+                    //for each block calculate the lower bound on the number of votes.
+                    let mut votes_lcb: HashMap<&H256, f32> = HashMap::new();
+                    let mut total_votes_lcb: f32 = 0.0;
+                    let mut max_vote_lcb: f32 = 0.0;
+
+                    for p_block in &proposer_blocks {
+                        let p_votes = votes_with_depth.get(p_block).unwrap();
+
+                        let mut p_votes_mean: f32 = 0.0; //mean E[X]
+                        let mut p_votes_variance: f32 = 0.0; //Var[X]
+                        let mut p_votes_lcb: f32 = 0.0;
+                        for (_, depth) in p_votes {
+                            let mut p: f32 = 0.0; // probability that the adversary will remove this vote
+                            for k in 0..( (5.0*adversary_expected_vote_depth) as u64) {
+                                let p1 = poisson.pmf(k) as f32; // probability that the adversary has mined k blocks
+                                let p2 = if k <= *depth {
+                                    ((ADVERSARY_MINING_POWER)/(1.0-ADVERSARY_MINING_POWER)).powi((depth-k+1) as i32)// probability that the adversary will overtake 'depth-k' blocks
+                                }
+                                else{
+                                    1.0
+                                };
+//                                info!("Level {}. depth {}, k {}, p1 {}, p2 {}", level, depth, k, p1, p2);
+                                p += p1*p2;
+                            }
+//                            info!("Level {}. p = {}, adversary_expected_vote_depth {}, depth {} ", level, p, adversary_expected_vote_depth, depth);
+                            p_votes_mean += 1.0-p;
+                            p_votes_variance += p*(1.0-p);
+                        }
+                        let tmp = p_votes_mean-(2.0*p_votes_variance*LOG_EPSILON).sqrt();//using gaussian approximation
+                        if tmp > 0.0 {
+                            p_votes_lcb += tmp;
+                        }
+//                        info!("{} block as {} votes and the lcb is {}", p_block, p_votes.len(), p_votes_lcb);
+                        votes_lcb.insert(p_block, p_votes_lcb);
+                        total_votes_lcb += p_votes_lcb;
+
+                        if max_vote_lcb < p_votes_lcb {
+                            max_vote_lcb = p_votes_lcb;
+                            new_leader = Some(*p_block);
+                        }
+                        //In case of a tie, choose block with lower hash.
+                        if max_vote_lcb == p_votes_lcb && new_leader.is_some() { //TODO: is_some required?
+                            if *p_block < new_leader.unwrap() {
+                                new_leader = Some(*p_block);
+                            }
+                        }
+//                        info!("Level {}. Votes: {:?}. Expected vote depth {}", level, p_votes, adversary_expected_vote_depth);
+                        info!("Level {}. Stats of votes on {} block: len: {}, mean {}, var {}, lcb {}. Expected vote depth {}", level, p_block, p_votes.len(), p_votes_mean, p_votes_variance, p_votes_lcb,adversary_expected_vote_depth);
+                    }
+//                    info!("The votes are {:?}", votes_lcb);
+                    // check if the lcb_vote of new_leader is bigger then second best ucb votes
+                    let remaining_votes = NUM_VOTER_CHAINS as f32 - total_votes_lcb;
+
+                    // if max_vote_lcb is lesser than the remaining_votes, then a private block could
+                    // get the remaining votes and become the leader block
+                    if max_vote_lcb <= remaining_votes || new_leader.is_none() {
+                        new_leader = None;
+                    } else {
+                        for p_block in &proposer_blocks {
+                            // if the below condition is true, then final votes on p_block could overtake new_leader
+                            if max_vote_lcb < votes_lcb.get(p_block).unwrap() + remaining_votes && *p_block != new_leader.unwrap() {
                                 new_leader = None;
                                 break;
                             }
-                            if max_votes == all_votes[i] + remaining_votes
-                                && *p_block < new_leader.unwrap()
-                            {
+                            //In case of a tie, choose block with lower hash.
+                            if max_vote_lcb == votes_lcb.get(p_block).unwrap() + remaining_votes && *p_block < new_leader.unwrap() {
                                 new_leader = None;
                                 break;
                             }
                         }
-                    } else {
-                        new_leader = None;
                     }
                 }
 

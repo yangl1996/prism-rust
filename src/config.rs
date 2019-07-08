@@ -14,6 +14,9 @@ pub const AVG_TX_SIZE: u32 = 280; // average size of a transaction (in Bytes)
 pub const TX_MINING_RATE: f32 = TX_THROUGHPUT as f32 / TX_BLOCK_TRANSACTIONS as f32;
 pub const CHAIN_MINING_RATE: f32 = 0.2 / NETWORK_DELAY; // mining rate of the proposer chain and each voter chain in Blks/s
 
+pub const ADVERSARY_MINING_POWER: f32 = 0.3; // The adversary has 30% mining power of the total power
+pub const LOG_EPSILON: f32 = 10.0; // -ln(1-confirmation_guarantee);
+
 // Do not change from here
 
 // Mining rate of each type (Proposer : Voter (all chains) : Transaction, in Blks/s)
