@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-func plot(nodesFile, dataDir, content, node, output string, window uint) {
+func plot(nodesFile, dataDir, content, node, output string, window, duration uint) {
 	nodes := make(map[string]string)
 	file, err := os.Open(nodesFile)
 	if err != nil {
@@ -143,7 +143,7 @@ func plot(nodesFile, dataDir, content, node, output string, window uint) {
 		fmt.Println("Plot content options: txrate, blockdelay, queue, mining")
 		os.Exit(1)
 	}
-	_, e := g.SaveGraph(output, time.Now().Add(-time.Duration(600)*time.Second), time.Now())
+	_, e := g.SaveGraph(output, time.Now().Add(-time.Duration(duration)*time.Second), time.Now())
 	if e != nil {
 		fmt.Println("Error plotting data:", e)
 	}

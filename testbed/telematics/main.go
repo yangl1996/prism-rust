@@ -21,6 +21,7 @@ func main() {
 	plotNodeFlag := plotCommand.String("node", "node_0", "Sets the node to plot")
 	plotWindowFlag := plotCommand.Uint("window", 1, "Sets the sliding window of the plot")
 	plotOutputFlag := plotCommand.String("output", "output.png", "Sets the output path")
+	plotDurationFlag := plotCommand.Uint("duration", 600, "Sets the time span for the plot")
 
 	checkCommand := flag.NewFlagSet("check", flag.ExitOnError)
 	checkNodeListFlag := checkCommand.String("nodelist", "nodes.txt", "Sets the path to the node list file")
@@ -37,7 +38,7 @@ func main() {
 		log(*intervalFlag, *durationFlag, *nodeListFlag, *dataDirFlag, *grafanaFlag)
 	case "plot":
 		plotCommand.Parse(os.Args[2:])
-		plot(*plotNodeListFlag, *plotDataDirFlag, *plotContentFlag, *plotNodeFlag, *plotOutputFlag, *plotWindowFlag)
+		plot(*plotNodeListFlag, *plotDataDirFlag, *plotContentFlag, *plotNodeFlag, *plotOutputFlag, *plotWindowFlag, *plotDurationFlag)
 	case "check":
 		checkCommand.Parse(os.Args[2:])
 		check(*checkNodeListFlag, *checkVerboseFlag)
