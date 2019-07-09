@@ -39,27 +39,20 @@ let pingNode = nodeId => {
     drawNodes()
   }
   const globalNode = globalNodesData.find(n => n.nodeId===node.nodeId)
+  const isLargeNode = globalNode.nodeId===globalNodesData[globalNodesData.length-1].nodeId
   for(let i=1; i<=5; i++) {
     for(let d=0; d<300; d+=100) {
         realNodesGroup.append('circle')
             .attr('class', 'ripple')
-            .attr('cx', () => {
-              if(globalNode.nodeId===globalNodesData[globalNodesData.length-1].nodeId)
-                return globalNode.x-12
-              return globalNode.x-7
-            })
-            .attr('cy', () => {
-              if(globalNode.nodeId===globalNodesData[globalNodesData.length-1].nodeId)
-                return globalNode.y-25
-              return globalNode.y-20
-            })
-            .attr('r', 9)
+            .attr('cx', () => isLargeNode ? globalNode.x-12 : globalNode.x-7)
+            .attr('cy', () => isLargeNode ? globalNode.y-28 : globalNode.x-20)
+            .attr('r', () => isLargeNode ? 12 : 9)
             .transition()
             .delay(d)
             .style('stroke-opacity', 0.7)
             .duration(0.7*t)
             .style('stroke-opacity', 0)
-            .attr('r', 15)
+            .attr('r', () => isLargeNode ? 25 : 15)
             .remove()
       }
    }
