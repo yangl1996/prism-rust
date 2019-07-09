@@ -1,7 +1,6 @@
 let websocket = new WebSocket('ws://127.0.0.1:8080', 'visualization');
 websocket.onmessage = function (event) {
   const data = JSON.parse(event.data)
-  console.log(data)
   if('VoterBlock' in data){
     const chain = data['VoterBlock']['chain']
     const votingBlockId = data['VoterBlock']['id']
