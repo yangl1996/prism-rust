@@ -1,5 +1,6 @@
+let proposerBlocksGroup = proposerScreen.append('g').attr('id', 'proposerBlocks')
+
 const confirmBlock = proposerBlock => {
-  console.log(proposerBlock, proposerBlocks)
   voteGroup.selectAll('.voteLink')
            .filter(d => d.to===proposerBlock.blockId)
            .style('stroke-opacity', 1.0)
@@ -47,7 +48,7 @@ const confirmBlock = proposerBlock => {
 
 let drawProposerChain = () => {
     // Create data join
-    let proposerBlock = proposerScreen.selectAll('.proposerBlock').data(proposerBlocks, d => 'proposerBlock'+d.blockId)
+    let proposerBlock = proposerBlocksGroup.selectAll('.proposerBlock').data(proposerBlocks, d => 'proposerBlock'+d.blockId)
 
     // Add new blocks
     let proposerBlockEnter = proposerBlock.enter().append('rect')
@@ -114,7 +115,7 @@ const scrollProposerChain = () => {
   if(lastBlock.y-2*proposerBlockSize<height-0.4*height)
     return false
   // Move proposer blocks by -2*proposerBlockSize
-  proposerScreen.selectAll('rect')
+  proposerBlocksGroup.selectAll('rect')
           .transition()
           .duration(t)
           .attr('x', d => d.x-proposerBlockSize/2)
