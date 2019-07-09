@@ -1,30 +1,48 @@
 <!DOCTYPE html>
 <meta charset='utf-8'>
 <style>
-.block {
-  stroke: #fff;
-  stroke-width: 2;
-  fill: 'grey';
-}
-.referenceLink {
-  fill: none;
-  stroke: #ccc;
-  stroke-width: 1.0;
-}
-.voteLink {
-  fill: none;
+.proposerBlock {
+  stroke-width: 1;
+  stroke: black;
+  fill: #ff1a1a;
 }
 .votingBlock{
   stroke: black;
   stroke-width: black;
+  fill: #81A6C8;
 }
-.fakeVote {
-  stroke: red;
+.transactionBlock{
+  fill: grey;
+  stroke: black;
+  fill-opacity: 1.0;
+}
+.ledgerBlock{
+  fill: grey;
+  stroke: black;
+  opacity: 1.0;
+}
+.newLedgerBlock{
+  fill: grey;
+  stroke: black;
+  opacity: 1.0;
+}
+.disappearingBlock{
+  fill: grey;
+  stroke: black;
+  opacity: 1.0;
 }
 .chainLink {
   fill: none;
   stroke: black;
   stroke-width: 2px;
+}
+.voteLink {
+  fill: none;
+}
+.referenceLink {
+  fill: none;
+  stroke: #ccc;
+  stroke-width: 1.0;
 }
 .land {
   fill: grey;
@@ -33,18 +51,16 @@
   stroke-width: 2.0;
 }
 .nodes {
-  fill: #66ccff;
-  stroke: #cceeff;
+  opacity: 0.8;
+  fill: #f76077; 
 }
 .ripple {
   fill: none;
-  stroke: #66ccff; 
+  stroke: #f76077; 
   opacity: 0.1;
 }
-.proposerBlock {
-  stroke-width: 1;
-  stroke: black;
-  fill: 'grey';
+.fakeVote {
+  stroke: red;
 }
 .fakeProposerBlock {
   stroke-width: 1;

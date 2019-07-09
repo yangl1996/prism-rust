@@ -1,61 +1,62 @@
-let proposerBlocksGroup = proposerScreen.append('g').attr('id', 'proposerBlocks')
-let proposerBlock = proposerBlocksGroup.selectAll('g.proposerBlock').data(proposerBlocks)
-
-const renderLink = d3.linkVertical().x(d => d.x).y(d => d.y)
-
 const confirmBlock = proposerBlock => {
+  voteGroup.selectAll('.voteLink')
+           .filter(d => d.to===proposerBlock.blockId)
+           .style('stroke-opacity', 1.0)
+           .transition()
+           .duration(t)
+           .style('stroke-opacity', 0.0)
+           .remove()
+  voteData = voteData.filter(d => d.to!==proposerBlock.blockId)
   if(proposerBlock.finalized) return
+  proposerBlock.finalized = true
+  proposerBlock.finalizationLevel = 1
   const enlargement = 20
   proposerBlock.finalized = true
   d3.select('#proposerBlock'+proposerBlock.blockId)
     .transition()
+    .duration(t)
     .duration(t/2)
-    .style('fill-opacity', d => {
-      d.finalizationLevel = 1.0
-      return d.finalizationLevel
-    })
-    .style('opacity', d => {
-      d.finalizationLevel = 1.0
-      return d.finalizationLevel
-    })
+    .style('opacity', 1.0)
+    .style('fill-opacity', 1.0)
     .attr('x', d => d.x-(enlargement+proposerBlockSize)/2)
     .attr('y', d => d.y-(enlargement)/2)
     .attr('width', proposerBlockSize+enlargement)
     .attr('height', proposerBlockSize+enlargement)
-    .attr('fill', 'gold')
     .transition()
     .duration(t/2)
     .attr('x', d => d.x-proposerBlockSize/2)
     .attr('y', d => d.y)
-    .attr('width', proposerBlockSize)
+    .attr('width', proposerBlockSize*1.25)
     .attr('height', proposerBlockSize)
     .on('end', () => {
-      voteGroup.selectAll('.voteLink')
-               .style('stroke-opacity', 1.0)
-               .transition()
-               .duration(t)
-               .style('stroke-opacity', 0.0)
-               .remove()
-      voteData = voteData.filter(d => d.to!==proposerBlock.blockId)
-      drawVotes()
     })
+    .on('interrupt', () => {
+      d3.select('#proposerBlock'+proposerBlock.blockId)
+        .attr('x', d => d.x-proposerBlockSize/2)
+        .attr('y', d => d.y)
+        .attr('width', proposerBlockSize*1.25)
+        .attr('height', proposerBlockSize)
+    })
+    for(let i=0; i<proposerBlock.transactionBlockIds.length; i++){
+      let confirmedTxBlock = d3.select('#ledgerBlock'+proposerBlock.transactionBlockIds[i])
+                               .style('opacity', 1.0)
+                               .style('fill', '#ff1a1a')
+    }
 
 }
 
-let drawProposerChain = transactionBlockIds => {
+let drawProposerChain = () => {
     // Create data join
-    let proposerBlock = proposerBlocksGroup.selectAll('g.proposerBlock').data(proposerBlocks)
-    
-    // Add group tags for each proposerBlock
-    let proposerBlockEnter = proposerBlock.enter().append('g')
-                        .attr('class', 'proposerBlock')
-
+    let proposerBlock = proposerScreen.selectAll('.proposerBlock').data(proposerBlocks, d => 'proposerBlock'+d.blockId)
+    console.log(proposerBlocks)
 
     // Add new blocks
-    proposerBlockEnter.append('rect')
+    let proposerBlockEnter = proposerBlock.enter().append('rect')
            .attr('id', d => 'proposerBlock'+d.blockId)
+           .attr('class', 'proposerBlock')
            .attr('height', 0)
            .attr('width', 0)
+           .attr('rx', 3)
            // Cause the block to shoot from the source node's location
            .attr('x', d => { 
                 const node = nodes.find(node => node.nodeId==d.sourceNodeId)
@@ -69,7 +70,7 @@ let drawProposerChain = transactionBlockIds => {
                  else
                   d.x = proposerScreenWidth/2+2*proposerBlockSize
                }
-                return node ? projection([node.longitude, node.latitude])[0]-width/3 : d.x-proposerBlockSize/2 
+                return node ? projection([node.longitude, node.latitude])[0]-width/3 + worldMapShift: d.x-proposerBlockSize/2 
               }
            )
            .attr('y', d => { 
@@ -89,56 +90,90 @@ let drawProposerChain = transactionBlockIds => {
            // Tune the fill opacity based on finalizationLevel
            .style('fill-opacity', d => d.finalizationLevel)
            .attr('height', proposerBlockSize)
-           .attr('width', proposerBlockSize)
+           .attr('width', proposerBlockSize*1.25)
            .attr('x', d => { 
                return d.x-proposerBlockSize/2
            })
            .attr('y', d => {
              return d.y
            })
-    const didScroll = scrollProposerChain()
-    if(transactionBlockIds.length>0) 
-      captureTransactionBlocks(transactionBlockIds, proposerBlocks[proposerBlocks.length-1].blockId, didScroll) 
+          .on('end', d => {
+            const didScroll = scrollProposerChain()
+            if(proposerBlocks[proposerBlocks.length-1].transactionBlockIds.length>0 && !didScroll){ 
+              captureTransactionBlocks(proposerBlocks[proposerBlocks.length-1], false) 
+            }
+          })
 
     // Remove extra blocks
     proposerBlock.exit().remove()
 
-    // Create data join
 }
 
 const scrollProposerChain = () => {
-  // Check if last block is below
+  // Check if last block is below appropriate height
   const lastBlock = proposerBlocks[proposerBlocks.length-1]
-  if(lastBlock.y-2*proposerBlockSize<height-worldMapScreenHeight) return false
-  proposerBlocksGroup.selectAll('rect')
+  if(lastBlock.y-2*proposerBlockSize<height-0.4*height)
+    return false
+  // Move proposer blocks by -2*proposerBlockSize
+  proposerScreen.selectAll('rect')
           .transition()
-          .delay(t)
           .duration(t)
           .attr('x', d => d.x-proposerBlockSize/2)
           .attr('y', d => {
             d.y = d.y-2*proposerBlockSize
             return d.y
           })
-  for(let i=0; i<voteData.length; i++){
-    const sourceX = voteData[i].data[0][0]
-    const sourceY = voteData[i].data[0][1]
-    const targetX = voteData[i].data[2][0]
-    const targetY = voteData[i].data[2][1] - 2*proposerBlockSize
-    const newData = [[sourceX, sourceY], [sourceX-50,targetY+100], [targetX, targetY]]
-    voteData[i].data = newData
-  }
-  d3.timeout(() => drawVotes(), t)
+          .attr('width', proposerBlockSize*1.25)
+          .attr('height', proposerBlockSize)
+  
+  // Move ledger link sources by -2*proposerBlockSize
+  ledgerGroup.selectAll('.ledgerLink')
+    .transition()
+     .duration(t)
+     .attr('y1', d => {
+       d.source.y1 = d.source.y1-2*proposerBlockSize
+       return d.source.y1
+     })
+  
+  // Shift targetY of voting links by -2*proposerBlockSize
+  const regex = /M([^,]*),([^,]*) Q([^,]*),([^,]*) ([^,]*),([^,]*)/
+  voteGroup.selectAll('.voteLink')
+    .attr('d', d => {
+      const groups = d.curve.match(regex)
+      const sourceX = groups[1]
+      const sourceY = groups[2]
+      const targetX = groups[5]
+      const targetY = parseInt(groups[6])
+      d.curve = `M${sourceX},${sourceY} Q${sourceX-50},${sourceY-50} ${targetX},${targetY-2*proposerBlockSize}`
+      return `M${sourceX},${sourceY} Q${sourceX-50},${sourceY-50} ${targetX},${targetY}`
+     })
+    .transition()
+    .duration(t)
+    .attr('d', d => {
+      return d.curve
+    }) 
+    .on('interrupt', d => {
+        d3.select('#'+d.id).attr('d', d.curve)
+     })
+
+  d3.timeout(() => captureTransactionBlocks(proposerBlocks[proposerBlocks.length-1], true), t)
+  voteGroup.selectAll('.voteLink')
+           .filter(d => d.to===proposerBlocks[0].blockId)
+           .remove()
+  voteData = voteData.filter(d => d.to!==proposerBlocks[0].blockId)
+  proposerBlocks.shift()
   // Indicate that we did scroll
   return true
 }
 
 const addProposerBlock = (blockId, parent=null, sourceNodeId, transactionBlockIds) => {
-  pingNode(sourceNodeId)
-  const newNode = {parent, blockId, children: [], sourceNodeId, finalizationLevel: 0.3, finalized: false} 
+  const newNode = {parent, blockId, children: [], sourceNodeId, finalizationLevel: 0.3, finalized: false, transactionBlockIds} 
+  if(parent.children.length>1) return
   if(parent) parent.children.push(newNode)
   proposerBlocks.push(newNode)
-  drawProposerChain(transactionBlockIds)
+  drawProposerChain()
 }
-const genesisBlock = {parent: null, blockId: ''.padStart(64, '0'), children: [], sourceNodeId: null, finalizationLevel: 0.3}
+
+const genesisBlock = {parent: null, blockId: ''.padStart(64, '0'), children: [], sourceNodeId: null, finalizationLevel: 0.3, transactionBlockIds: []}
 proposerBlocks.push(genesisBlock)
 drawProposerChain([])

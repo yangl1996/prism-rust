@@ -1,11 +1,11 @@
 let chainsGroup = votingChainScreen.append('g').attr('class', 'chains').attr('id', 'chainsGroup')
 
+const renderLink = d3.linkVertical().x(d => d.x+(1.25-1)/2*votingBlockSize).y(d => d.y)
+
 const scrollVotingChain = idx => {
-  const lastBlock = chainsData[idx].blocks[chainsData[idx].blocks.length-1]
+  let lastBlock = chainsData[idx].blocks[chainsData[idx].blocks.length-1]
   // Check if last block is below the screen's height
-  while((idx==0 && lastBlock.y-2*votingBlockSize>height-worldMapScreenHeight) || 
-    (idx==1 && lastBlock.y-4*votingBlockSize>height-worldMapScreenHeight) ||
-    (lastBlock.y-8*votingBlockSize>height-worldMapScreenHeight)){
+  while(lastBlock.y-2*votingBlockSize>height-0.4*height){
     // Select all chains and links for that specific chain and scroll by 2*votingBlockSize
     let scrollingBlocks = chainsGroup.select('#chain'+idx).selectAll('rect')
     scrollingBlocks
@@ -25,23 +25,44 @@ const scrollVotingChain = idx => {
             return l
           })
           .attr('marker-end', 'url(#small-arrow)')
-    for(let i=0; i<voteData.length; i++){
-      if(voteData[i].fromChain!==idx) continue
-      const sourceX = voteData[i].data[0][0]
-      const sourceY = voteData[i].data[0][1] - 2*votingBlockSize
-      const targetX = voteData[i].data[2][0]
-      const targetY = voteData[i].data[2][1]
-      const newData = [[sourceX, sourceY], [sourceX-50,targetY+100], [targetX, targetY]]
-      voteData[i].data = newData
+    const regex = /M([^,]*),([^,]*) Q([^,]*),([^,]*) ([^,]*),([^,]*)/
+    voteGroup.selectAll('.voteLink')
+      .filter(d => d.fromChain==idx)
+      .attr('d', d => {
+        const groups = d.curve.match(regex)
+        const sourceX = groups[1]
+        const sourceY = parseInt(groups[2])
+        const targetX = groups[5]
+        const targetY = groups[6]
+        d.curve = `M${sourceX},${sourceY-2*votingBlockSize} Q${sourceX-50},${sourceY-50-2*votingBlockSize} ${targetX},${targetY}`
+        return `M${sourceX},${sourceY} Q${sourceX-50},${sourceY-50} ${targetX},${targetY}`
+       })
+      .transition()
+      .duration(t)
+      .attr('d', d => {
+        return d.curve
+      }) 
+      .on('interrupt', d => {
+          d3.select('#'+d.id).attr('d', d.curve)
+       })
+    if(chainsData[idx].shouldShift){
+      voteGroup.selectAll('.voteLink')
+               .filter(d => d.from===chainsData[idx].blocks[0].blockId)
+               .remove()
+      voteData = voteData.filter(d => d.from!==chainsData[idx].blocks[0].blockId)
+      chainsData[idx].blocks.shift()
+      chainsData[idx].links.shift()
     }
-    drawVotes()
+    else
+      chainsData[idx].shouldShift = true 
+    lastBlock = chainsData[idx].blocks[chainsData[idx].blocks.length-1]
   }
 }
 
 const drawVotingChain = idx => {
   // Create data join
   let chainGroup = chainsGroup.select('#chain'+idx)
-  let votingBlocks = chainGroup.selectAll('g.votingBlock').data(chainsData[idx].blocks)
+  let votingBlocks = chainGroup.selectAll('g.votingBlock').data(chainsData[idx].blocks, d => d.blockId)
 
   // Add group tags for each votingBlock
   let votingBlocksEnter = votingBlocks.enter().append('g')
@@ -52,11 +73,12 @@ const drawVotingChain = idx => {
          .attr('class', 'votingBlock')
          .attr('id', d => 'votingBlock'+d.blockId)
          .attr('height', votingBlockSize)
-         .attr('width', votingBlockSize)
+         .attr('width', votingBlockSize*1.25)
+         .attr('rx', 3)
          .attr('x', d => {
            // Voting block's x coordinate is equivalent to chain's x coordinate
            d.x = chainsData[idx].x
-           return d.sourceNodeLocation ? d.sourceNodeLocation[0]-2*width/3 : d.x - votingBlockSize/2
+           return d.sourceNodeLocation ? d.sourceNodeLocation[0]-2*width/3 + worldMapShift : d.x - votingBlockSize/2
           })
          .attr('y', d => {
            // Voting block's y coordinate is 2 below it's parent.
@@ -72,16 +94,12 @@ const drawVotingChain = idx => {
          .attr('y', d => {
            return d.y
          })
-  // Merge existing and updating elements to update colors
-  votingBlocksEnter.merge(votingBlocks)
-           .style('fill', 'grey')
-
   // Remove extra blocks
   votingBlocks.exit().remove()
 
   // Create data join from specific link chain
   let linkGroup = chainsGroup.select('#links'+idx)
-  let link = linkGroup.selectAll('.chainLink').data(chainsData[idx].links)
+  let link = linkGroup.selectAll('.chainLink').data(chainsData[idx].links, d => d.target.blockId)
 
   // Add new links
   link.enter().append('path', '.votingBlock')

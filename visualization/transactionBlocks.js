@@ -21,20 +21,16 @@ const restart = () => {
 
   transactionBlock = transactionBlock.enter().append('rect')
           .attr('id', d => 'transactionBlock' + d.blockId )
+          .attr('class', 'transactionBlock')
           .attr('x', d => d.x )
           .attr('y', d => d.y )
-          .attr('width', transactionBlockSize)
+          .attr('rx', 3)
+          .attr('width', transactionBlockSize*1.25)
           .attr('height', transactionBlockSize)
-          .attr('fill', d => 'grey')
-          .attr('stroke', d => 'black')
-          .attr('fill-opacity', 0.1)
-      .call(transactionBlock => transactionBlock.transition().attr('width', transactionBlockSize).attr('height', transactionBlockSize).attr('fill', d => 'grey' ).attr('fill-opacity', 1.0).attr('stroke', d => 'black') )
     .merge(transactionBlock)
    
   // Restart simulation
   simulation.nodes(transactionBlocks)
-
-  // If there are too many transaction blocks, turn off collision force
 
   simulation.alpha(0.1).restart()
 }
@@ -46,6 +42,7 @@ const addTransactionBlock = (blockId, sourceNodeId) => {
   pingNode(sourceNodeId)
   const sourceNode = nodes.find(node => node.nodeId==sourceNodeId)
   const sourceNodeLocation = projection([sourceNode.longitude, sourceNode.latitude])
-  transactionBlocks.push({x: sourceNodeLocation[0], y: sourceNodeLocation[1]+(height-worldMapScreenHeight), blockId})
+  const shardColor = d3.schemeCategory10[Math.floor(Math.random()*10)]
+  transactionBlocks.push({x: sourceNodeLocation[0]+worldMapShift, y: sourceNodeLocation[1]+(height-worldMapScreenHeight), shardColor, blockId})
   restart()
 }
