@@ -52,6 +52,7 @@ function start_instances
 	tput setaf 2
 	echo "Instance started, SSH config written"
 	tput sgr0
+	curl -s --form-string "token=$PUSHOVER_TOKEN" --form-string "user=$PUSHOVER_USER" --form-string "title=EC2 Instances Launched" --form-string "message=$1 EC2 instances were just launched." https://api.pushover.net/1/messages.json &> /dev/null
 }
 
 function fix_ssh_config
@@ -102,6 +103,7 @@ function stop_instances
 	tput setaf 2
 	echo "Instances terminated"
 	tput sgr0
+	curl -s --form-string "token=$PUSHOVER_TOKEN" --form-string "user=$PUSHOVER_USER" --form-string "title=EC2 Instances Stopped" --form-string "message=EC2 instances launched at $(date -r instances.txt) were just terminated." https://api.pushover.net/1/messages.json &> /dev/null
 }
 
 function build_prism
