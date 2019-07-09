@@ -13,6 +13,7 @@ use crate::network::server::Handle as ServerHandle;
 use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 use crate::validation::get_sortition_id;
 use crate::network::message::Message;
+use crate::visualization::demo;
 
 use log::info;
 
@@ -69,7 +70,7 @@ pub struct Context {
     operating_state: OperatingState,
     server: ServerHandle,
     extra_content: [u8; 32],
-    demo_sender: crossbeam::Sender<String>
+    demo_sender: crossbeam::Sender<demo::DemoMsg>
 }
 
 #[derive(Clone)]
@@ -85,7 +86,7 @@ pub fn new(
     ctx_update_source: Receiver<ContextUpdateSignal>,
     server: &ServerHandle,
     extra_content: [u8; 32],
-    demo_sender: crossbeam::Sender<String>
+    demo_sender: crossbeam::Sender<demo::DemoMsg>
 ) -> (Context, Handle) {
     let (signal_chan_sender, signal_chan_receiver) = channel();
     let ctx = Context {

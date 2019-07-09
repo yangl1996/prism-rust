@@ -15,13 +15,14 @@ use crate::visualization::demo;
 pub fn update_transaction_sequence (
     blockdb: &BlockDatabase,
     chain: &BlockChain,
-    demo_sender: &crossbeam::Sender<String>,
+    demo_sender: &crossbeam::Sender<demo::DemoMsg>,
 ) -> (Vec<(Transaction, H256)>, Vec<(Transaction, H256)>) {
     let diff = chain.update_ledger().unwrap();
 
     if !(diff.2.is_empty() && diff.3.is_empty()) {
         let msg = demo::update_ledger_msg(&diff.2, &diff.3);
-        demo_sender.send(msg).unwrap();
+        // demo_sender ignores the result
+        match demo_sender.send(msg) { _ => ()};
     }
 
     PERFORMANCE_COUNTER.record_confirm_transaction_blocks(diff.0.len());
