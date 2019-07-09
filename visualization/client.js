@@ -5,7 +5,6 @@ websocket.onmessage = function (event) {
   if('VoterBlock' in data){
     const chain = data['VoterBlock']['chain']
     const votingBlockId = data['VoterBlock']['id']
-    const randomChain = Math.floor(Math.random() * Math.floor(numChains))
     const sourceNodeId = data['VoterBlock']['miner']
     const parentId = chainsData[chain].blocks[chainsData[chain].blocks.length-1].blockId
     mineVotingBlock(chain, votingBlockId, sourceNodeId, parentId)
@@ -16,7 +15,9 @@ websocket.onmessage = function (event) {
     const parent = proposerBlocks.find(el => el.blockId==data['ProposerBlock']['parent'])
     const sourceNodeId = data['ProposerBlock']['miner']
     let transactionBlockIds = data['ProposerBlock']['transaction_refs']
-    addProposerBlock(proposerBlockId, parent, sourceNodeId, transactionBlockIds)
+    if(parent.children.length===0){
+      addProposerBlock(proposerBlockId, parent, sourceNodeId, transactionBlockIds)
+    }
   }
 
   if('TransactionBlock' in data){

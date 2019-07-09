@@ -46,6 +46,7 @@ const castVotes = (votingChain) => {
   // Calculate the vote's source coordinate
   const sourceX = lastBlock.x + width/3 + proposerScreenWidth
   const sourceY = lastBlock.y + proposerBlockSize/2
+  // Cast votes for all blocks until we reach the last voted block, iterating backwards
   let index = proposerBlocks.length-1
   while(index>=0 && chainsData[votingChain].lastVotedBlock!==proposerBlocks[index].blockId){
     // Get the proposerBlock to vote for
@@ -70,9 +71,9 @@ const castVotes = (votingChain) => {
       .style('fill-opacity', votedProposerBlock.finalizationLevel)
     //if(votedProposerBlock.finalizationLevel>finalizationThreshold) confirmBlock(votedProposerBlock)
     voteData.push(voteObj)
-    chainsData[votingChain].lastVotedBlock = proposerBlocks[proposerBlocks.length-1].blockId
     index-=1
   }
+  chainsData[votingChain].lastVotedBlock = proposerBlocks[proposerBlocks.length-1].blockId
   drawVotes()
 }
 
