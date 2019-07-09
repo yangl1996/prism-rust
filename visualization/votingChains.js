@@ -59,7 +59,7 @@ const scrollVotingChain = idx => {
   }
 }
 
-const drawVotingChain = idx => {
+const drawVotingChain = (idx, votes) => {
   // Create data join
   let chainGroup = chainsGroup.select('#chain'+idx)
   let votingBlocks = chainGroup.selectAll('g.votingBlock').data(chainsData[idx].blocks, d => d.blockId)
@@ -111,7 +111,7 @@ const drawVotingChain = idx => {
       .attr('d', d => d.source ? renderLink({source: d.target, target: {x: d.source.x, y: d.source.y+votingBlockSize}}) : null)
       .on('end', () => {
         scrollVotingChain(idx)
-        castVotes(idx)
+        castVotes(idx, votes)
       })
       .transition()
       .delay(1)
@@ -121,7 +121,7 @@ const drawVotingChain = idx => {
 
 }
 
-const addVotingBlock = (idx, blockId, sourceNodeId, parentId=null) => {
+const addVotingBlock = (idx, blockId, sourceNodeId, parentId, votes) => {
   if(!chainsData[idx].blocks) return
   const sourceNode = nodes.find(node => node.nodeId==sourceNodeId)
   const sourceNodeLocation = projection([sourceNode.longitude, sourceNode.latitude])
@@ -131,7 +131,7 @@ const addVotingBlock = (idx, blockId, sourceNodeId, parentId=null) => {
   chainsData[idx].links.push({source: parent, target: newNode})
   chainsData[idx].blocks.push(newNode)
   // 1) Add block to voting chain and draw
-  drawVotingChain(idx)
+  drawVotingChain(idx, votes)
 }
 
 // Initialize the chains spaced by votingChainScreenWidth/numChains
@@ -141,7 +141,7 @@ let votingBlockId = 1
 while(chain<numChainsToDisplay){
   let votingBlockIdStr = votingBlockId.toString(16)
   votingBlockIdStr = votingBlockIdStr.padStart(64, '0') 
-  chainsData.push({x, y: 0, blocks: [], links: [], lastVotedBlock: -1, fakeBlocks: [], fakeLinks: []})
+  chainsData.push({x, y: 0, blocks: [], links: [], fakeBlocks: [], fakeLinks: []})
   const genesisBlock = {parent: null, blockId: votingBlockIdStr, children: [], sourceNodeLocation: null}
   chainsData[chain].blocks.push(genesisBlock)
   votingBlockId++
@@ -159,7 +159,7 @@ while(chain<numChainsToDisplay){
 while(chain<numChains){
   let votingBlockIdStr = votingBlockId.toString(16)
   votingBlockIdStr = votingBlockIdStr.padStart(64, '0') 
-  chainsData.push({x, y: 0, blocks: [], links: [], lastVotedBlock: -1, fakeBlocks: [], fakeLinks: []})
+  chainsData.push({x, y: 0, blocks: [], links: [], fakeBlocks: [], fakeLinks: []})
   const genesisBlock = {parent: null, blockId: votingBlockIdStr, children: [], sourceNodeLocation: null}
   chainsData[chain].blocks.push(genesisBlock)
   votingBlockId+=1

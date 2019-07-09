@@ -7,7 +7,8 @@ websocket.onmessage = function (event) {
     const votingBlockId = data['VoterBlock']['id']
     const sourceNodeId = data['VoterBlock']['miner']
     const parentId = chainsData[chain].blocks[chainsData[chain].blocks.length-1].blockId
-    mineVotingBlock(chain, votingBlockId, sourceNodeId, parentId)
+    const votes = data['VoterBlock']['votes']
+    mineVotingBlock(chain, votingBlockId, sourceNodeId, parentId, votes)
   }
 
   if('ProposerBlock' in data){
