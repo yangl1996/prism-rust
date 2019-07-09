@@ -39,13 +39,13 @@ let pingNode = nodeId => {
     drawNodes()
   }
   const globalNode = globalNodesData.find(n => n.nodeId===node.nodeId)
-  const isLargeNode = globalNode.nodeId===globalNodesData[globalNodesData.length-1].nodeId
+  const isLargeNode = globalNode.nodeId===globalNodesData[0].nodeId
   for(let i=1; i<=5; i++) {
     for(let d=0; d<300; d+=100) {
         realNodesGroup.append('circle')
             .attr('class', 'ripple')
             .attr('cx', () => isLargeNode ? globalNode.x-12 : globalNode.x-7)
-            .attr('cy', () => isLargeNode ? globalNode.y-28 : globalNode.x-20)
+            .attr('cy', () => isLargeNode ? globalNode.y-28 : globalNode.y-20)
             .attr('r', () => isLargeNode ? 12 : 9)
             .transition()
             .delay(d)
@@ -73,6 +73,7 @@ const drawNodes = () => {
 
 
   newNodes.enter().append('circle')
+                  .attr('id', d=>'node'+d.nodeId)
                   .attr('class', 'node')
                    .attr('r', 0.1)
                     .attr('transform', d => {
@@ -110,27 +111,15 @@ const drawNodes = () => {
                 .attr('transform', d => `rotate(180)scale(0.001)`)
                 .transition()
                 .duration(t)
-                .attr('transform', (d, i) => {
-                  if(i==globalNodesData.length-1)
-                    return `rotate(180)scale(0.1)`
-                  return `rotate(180)scale(0.06)`
-                })
+                .attr('transform', (d, i) => i===0 ? `rotate(180)scale(0.1)` : `rotate(180)scale(0.06)`)
 
   realNodesEnter.append('circle')
                .attr('r', 0)
-               .attr('transform', (d, i) => {
-                 if(i==globalNodesData.length-1)
-                   return 'translate(-12, -20)'
-                 return 'translate(-7, -13)'
-               })
+               .attr('transform', (d, i) => i===0 ? 'translate(-12, -20)' : 'translate(-7, -13)')
                .style('fill', 'black')
                .transition()
                .duration(t)
-               .attr('r', (d, i) => {
-                 if(i==globalNodesData.length-1)
-                   return nodeRadius + 3
-                 return nodeRadius
-               })
+               .attr('r', (d, i) => i===0 ? nodeRadius+3 : nodeRadius)
 
 }
 

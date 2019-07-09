@@ -1,4 +1,5 @@
 const confirmBlock = proposerBlock => {
+  console.log(proposerBlock, proposerBlocks)
   voteGroup.selectAll('.voteLink')
            .filter(d => d.to===proposerBlock.blockId)
            .style('stroke-opacity', 1.0)
@@ -14,7 +15,6 @@ const confirmBlock = proposerBlock => {
   proposerBlock.finalized = true
   d3.select('#proposerBlock'+proposerBlock.blockId)
     .transition()
-    .duration(t)
     .duration(t/2)
     .style('opacity', 1.0)
     .style('fill-opacity', 1.0)
@@ -28,14 +28,14 @@ const confirmBlock = proposerBlock => {
     .attr('y', d => d.y)
     .attr('width', proposerBlockSize*1.25)
     .attr('height', proposerBlockSize)
-    .on('end', () => {
-    })
     .on('interrupt', () => {
       d3.select('#proposerBlock'+proposerBlock.blockId)
         .attr('x', d => d.x-proposerBlockSize/2)
         .attr('y', d => d.y)
         .attr('width', proposerBlockSize*1.25)
         .attr('height', proposerBlockSize)
+        .style('opacity', 1.0)
+        .style('fill-opacity', 1.0)
     })
     for(let i=0; i<proposerBlock.transactionBlockIds.length; i++){
       let confirmedTxBlock = d3.select('#ledgerBlock'+proposerBlock.transactionBlockIds[i])
@@ -48,7 +48,6 @@ const confirmBlock = proposerBlock => {
 let drawProposerChain = () => {
     // Create data join
     let proposerBlock = proposerScreen.selectAll('.proposerBlock').data(proposerBlocks, d => 'proposerBlock'+d.blockId)
-    console.log(proposerBlocks)
 
     // Add new blocks
     let proposerBlockEnter = proposerBlock.enter().append('rect')
@@ -167,11 +166,14 @@ const scrollProposerChain = () => {
 }
 
 const addProposerBlock = (blockId, parent=null, sourceNodeId, transactionBlockIds) => {
-  const newNode = {parent, blockId, children: [], sourceNodeId, finalizationLevel: 0.3, finalized: false, transactionBlockIds} 
-  if(parent.children.length>1) return
-  if(parent) parent.children.push(newNode)
-  proposerBlocks.push(newNode)
-  drawProposerChain()
+  const check = proposerBlocks.find(b => b.blockId===blockId) 
+  if(check==undefined){
+    const newNode = {parent, blockId, children: [], sourceNodeId, finalizationLevel: 0.3, finalized: false, transactionBlockIds} 
+    if(parent.children.length>1) return
+    if(parent) parent.children.push(newNode)
+    proposerBlocks.push(newNode)
+    drawProposerChain()
+  }
 }
 
 const genesisBlock = {parent: null, blockId: ''.padStart(64, '0'), children: [], sourceNodeId: null, finalizationLevel: 0.3, transactionBlockIds: []}
