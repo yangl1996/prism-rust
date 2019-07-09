@@ -22,7 +22,3 @@ wss.on('connection', ws => {
     })
   }
 })
-
-wss.on('close', ws => {
-  console.log(ws, 'closed')
-})

@@ -1,7 +1,6 @@
 let websocket = new WebSocket('ws://127.0.0.1:8080', 'visualization');
 websocket.onmessage = function (event) {
   const data = JSON.parse(event.data)
-  //console.log(data)
   if('VoterBlock' in data){
     const chain = data['VoterBlock']['chain']
     const votingBlockId = data['VoterBlock']['id']
@@ -27,7 +26,7 @@ websocket.onmessage = function (event) {
     addTransactionBlock(transactionBlockId, sourceNodeId)
   }
   if('UpdatedLedger' in data){
-    for(let i=0; i<data['UpdatedLedger']['added']; i++){
+    for(let i=0; i<data['UpdatedLedger']['added'].length; i++){
       const id = data['UpdatedLedger']['added'][i]
       const proposerBlock = proposerBlocks.find(el => el.blockId===id)
       confirmBlock(proposerBlock)

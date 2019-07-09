@@ -12,7 +12,7 @@ def signal_handler(sig, frame):
 
 URL = 'localhost'
 PORT = 5000
-NUM_NODES = 4
+NUM_NODES = 1
 
 p1 = subprocess.Popen(['node', 'index.js'])
 time.sleep(2)

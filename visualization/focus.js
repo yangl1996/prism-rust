@@ -1,15 +1,14 @@
 const unfocus = (unfocusWorldMap=true) => {
   for (const screen of Object.keys(focusedOpacities)) {
-    if(screen=='worldMap' && !unfocusWorldMap) continue
-    d3.select(`.${screen}`)
-      .style('opacity', focusedOpacities[screen])
+    if(!unfocusWorldMap && (screen=='worldMap' || screen=='nodesGroup')) continue
+    d3.select(`#${screen}`)
       .transition()
       .duration(2*t)
       .style('opacity', unfocusedOpacities[screen])
   }
 }
 
-const focus = (focusWorldMap=true) => {
+const focus = () => {
   svg.selectAll('use')
      .transition()
      .duration(2*t)
@@ -18,9 +17,7 @@ const focus = (focusWorldMap=true) => {
         svg.selectAll('use').remove()
      })
   for (const screen of Object.keys(focusedOpacities)) {
-    if(screen=='worldMap' && !focusWorldMap) continue
-    d3.select(`.${screen}`)
-      .style('opacity', unfocusedOpacities[screen])
+    d3.select(`#${screen}`)
       .transition()
       .duration(2*t)
       .style('opacity', focusedOpacities[screen])
@@ -34,7 +31,8 @@ const focusProposerChain = () => {
     unfocus()
     svg.append('use')
       .attr('xlink:href','#proposerBlocks')
-      .attr('transform', `translate(${proposerScreenWidth/2}, 0)scale(2)`)
+      .attr('transform', `translate(${width/6}, 0)scale(2)`)
+      .style('position', 'absolute')
       .style('opacity', 0.0)
       .transition()
       .duration(2*t)
@@ -50,7 +48,7 @@ const focusTransactionPool = () => {
     unfocus()
     svg.append('use')
       .attr('xlink:href','#transactionGroup')
-      .attr('transform', `translate(${width/3}, ${-height/2})scale(2)`)
+      .attr('transform', `translate(${width/3},0)scale(2)`)
       .style('opacity', 0.0)
       .transition()
       .duration(2*t)
@@ -74,19 +72,28 @@ const focusVotingChain = () => {
 }
 
 const focusWorldMap = () => {
-  if(worldMapScreen.style('opacity')==0.3){
-    unfocus(false)
-    worldMapScreen
-      .transition()
-      .duration(2*t)
-      .style('opacity', 1.0)
+  if(worldMapFocused){
+    focus()
+    let interval = d3.interval((elapsed) => {
+      if(elapsed>transTime) interval.stop()
+      M = `matrix3d(1, 0, 0, 0, 0, ${aScale(elapsed)}, 0, ${bScale(elapsed)}, 0, 0, 1, 0, 0, ${cScale(elapsed)}, 0, 1)`
+      svgTransform.style('transform', M)
+      worldMapScreen.attr('transform', `translate(${xTranslateScale(elapsed)}, ${yTranslateScale(elapsed)})scale(${scaleScale(elapsed)})`)
+      drawNodes()
+    }, tStep)
+    worldMapFocused = false
   }
   else{
-    focus(false)
-    worldMapScreen
-      .transition()
-      .duration(2*t)
-      .style('opacity', focusedOpacities['worldMap'])
+    unfocus(false)
+    console.log('focusing world map')
+    let interval = d3.interval((elapsed) => {
+      if(elapsed>transTime) interval.stop()
+      M = `matrix3d(1, 0, 0, 0, 0, ${aScale(transTime-elapsed)}, 0, ${bScale(transTime-elapsed)}, 0, 0, 1, 0, 0, ${cScale(transTime-elapsed)}, 0, 1)`
+      svgTransform.style('transform', M)
+      worldMapScreen.attr('transform', `translate(${xTranslateScale(transTime-elapsed)}, ${yTranslateScale(transTime-elapsed)})scale(${scaleScale(transTime-elapsed)})`)
+      drawNodes()
+    }, tStep)
+    worldMapFocused = true
   }
 }
 
