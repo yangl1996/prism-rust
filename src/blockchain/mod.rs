@@ -10,7 +10,8 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::mem;
 use std::sync::Mutex;
 use std::time;
-use statrs::distribution::{Poisson, Discrete};
+use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
+use statrs::distribution::{Poisson, Discrete, Univariate};
 use std::cmp;
 
 // Column family names for node/chain metadata
@@ -580,7 +581,7 @@ impl BlockChain {
                 }
 
 
-                if total_vote_count > NUM_VOTER_CHAINS / 2 { // no point in going further if half the votes are not cast
+                if total_vote_count > NUM_VOTER_CHAINS*3 / 5 { // no point in going further if half the votes are not cast
                     //calculate average of depth of the votes
                     let avg_vote_depth = total_vote_depth as f32 / total_vote_count as f32;
                     let adversary_expected_vote_depth = avg_vote_depth*2.0*ADVERSARY_MINING_POWER; //expected voter depth of an adversary
@@ -598,15 +599,10 @@ impl BlockChain {
                         let mut p_votes_variance: f32 = 0.0; //Var[X]
                         let mut p_votes_lcb: f32 = 0.0;
                         for (_, depth) in p_votes {
-                            let mut p: f32 = 0.0; // probability that the adversary will remove this vote
-                            for k in 0..( (5.0*adversary_expected_vote_depth) as u64) {
+                            let mut p: f32 = 1.0 - poisson.cdf( (*depth as f32 +1.0).into()) as f32; // probability that the adversary will remove this vote
+                            for k in 0..(*depth as u64) {
                                 let p1 = poisson.pmf(k) as f32; // probability that the adversary has mined k blocks
-                                let p2 = if k <= *depth {
-                                    ((ADVERSARY_MINING_POWER)/(1.0-ADVERSARY_MINING_POWER)).powi((depth-k+1) as i32)// probability that the adversary will overtake 'depth-k' blocks
-                                }
-                                else{
-                                    1.0
-                                };
+                                let p2 = ((ADVERSARY_MINING_POWER)/(1.0-ADVERSARY_MINING_POWER)).powi((depth-k+1) as i32);// probability that the adversary will overtake 'depth-k' blocks
 //                                info!("Level {}. depth {}, k {}, p1 {}, p2 {}", level, depth, k, p1, p2);
                                 p += p1*p2;
                             }
@@ -663,6 +659,7 @@ impl BlockChain {
             };
 
             if new_leader != existing_leader {
+                info!("Confirming block at level {}", level);
                 // mark it's the beginning of the change
                 if change_begin.is_none() {
                     change_begin = Some(*level);

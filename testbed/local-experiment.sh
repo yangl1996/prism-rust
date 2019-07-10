@@ -61,7 +61,7 @@ function kill_prism() {
 }
 
 
-binary_path=${PRISM_BINARY-../target/debug/prism}
+binary_path=${PRISM_BINARY-../target/release/prism}
 num_nodes=$1
 
 # generate keypairs and addresses
@@ -118,13 +118,13 @@ for (( i = 0; i < $num_nodes; i++ )); do
 		echo "Failed to set transaction rate for node $i"
 		exit 1
 	fi
-	url="localhost:${port}/transaction-generator/start?throttle=500000"
+	url="localhost:${port}/transaction-generator/start?throttle=50"
 	curl "$url" &> /dev/null
 	if [ "$?" -ne 0 ]; then
 		echo "Failed to start transaction generation for node $i"
 		exit 1
 	fi
-	url="localhost:${port}/miner/start?lambda=500&lazy=false"
+	url="localhost:${port}/miner/start?lambda=50000&lazy=false"
 	curl "$url" &> /dev/null
 	if [ "$?" -ne 0 ]; then
 		echo "Failed to start mining for node $i"
