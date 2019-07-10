@@ -545,7 +545,7 @@ case "$1" in
 		  show-demo             Start the demo workflow
 		  stop-tx               Stop generating transactions
 		  stop-mine             Stop mining
-		  shape-traffic l b     Limit the throughput to b Mbps and add latency of l ms
+		  shape-traffic l b     Limit the throughput to b Kbps and add latency of l ms
 		  reset-traffic         Remove the traffic shaping filters
 
 		Collect Data
