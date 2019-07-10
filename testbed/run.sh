@@ -147,6 +147,7 @@ function prepare_payload
 
 	echo "Download binaries"
 	scp prism:~/prism/target/release/prism-copy payload/common/binary/prism
+	scp prism:~/go/bin/comcast payload/common/binary/comcast
 	cp scripts/start-prism.sh payload/common/scripts/start-prism.sh
 	cp scripts/stop-prism.sh payload/common/scripts/stop-prism.sh
 
@@ -231,6 +232,26 @@ function start_prism_single
 function stop_prism_single
 {
 	ssh $1 -- 'bash /home/ubuntu/payload/scripts/stop-prism.sh &>/home/ubuntu/log/stop.log'
+}
+
+function join_by
+{
+	local IFS="$1"
+	shift
+	echo "$*"
+}
+
+function add_traffic_shaping_single
+{
+	# the $2: latency, $3: throughput
+	local ports=`cat nodes.txt | grep $1 | cut -f 5 -d ,`
+	local port_list=`join_by ',' $ports`
+	ssh $1 -- "sudo /home/ubuntu/payload/binary/comcast --device=ens5 --latency=$2 --target-bw=$3 --target-port=$port_list"
+}
+
+function remove_traffic_shaping_single
+{
+	ssh $1 -- "sudo /home/ubuntu/payload/binary/comcast --device=ens5 --stop"
 }
 
 function execute_on_all
@@ -524,6 +545,8 @@ case "$1" in
 		  show-demo             Start the demo workflow
 		  stop-tx               Stop generating transactions
 		  stop-mine             Stop mining
+		  shape-traffic l b     Limit the throughput to b Mbps and add latency of l ms
+		  reset-traffic         Remove the traffic shaping filters
 
 		Collect Data
 		  
@@ -575,6 +598,10 @@ case "$1" in
 		query_api stop_transactions 0 ;;
 	stop-mine)
 		query_api stop_mining 0 ;;
+	shape-traffic)
+		execute_on_all add_traffic_shaping $2 $3 ;;
+	reset-traffic)
+		execute_on_all remove_traffic_shaping ;;
 	get-perf)
 		show_performance $2 ;;
 	show-vis)
