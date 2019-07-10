@@ -4,7 +4,7 @@ use crate::block::Block;
 use crate::config::*;
 use crate::crypto::hash::{Hashable, H256};
 use bincode::{deserialize, serialize};
-use rocksdb::{self, Options, DB, ColumnFamilyDescriptor};
+use rocksdb::{self, Options, DB, ColumnFamilyDescriptor, SliceTransform};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::convert::TryInto;
 
@@ -23,9 +23,15 @@ pub struct BlockDatabase {
 impl BlockDatabase {
     /// Open the database at the given path, and create a new one if missing.
     fn open<P: AsRef<std::path::Path>>(path: P) -> Result<Self, rocksdb::Error> {
-        let block_cf = ColumnFamilyDescriptor::new(BLOCK_CF, Options::default());
+        let mut opts = Options::default();
+        opts.set_prefix_extractor( SliceTransform::create_fixed_prefix(32));
+        opts.optimize_for_point_lookup(512);
+        let block_cf = ColumnFamilyDescriptor::new(BLOCK_CF, opts);
         let block_arrival_order_cf = ColumnFamilyDescriptor::new(BLOCK_ARRIVAL_ORDER_CF, Options::default());
-        let block_sequence_number_cf = ColumnFamilyDescriptor::new(BLOCK_SEQUENCE_NUMBER_CF, Options::default());
+        let mut opts = Options::default();
+        opts.set_prefix_extractor( SliceTransform::create_fixed_prefix(32));
+        opts.optimize_for_point_lookup(512);
+        let block_sequence_number_cf = ColumnFamilyDescriptor::new(BLOCK_SEQUENCE_NUMBER_CF, opts);
         let cfs = vec![block_cf, block_arrival_order_cf, block_sequence_number_cf];
         let mut opts = Options::default();
         opts.create_if_missing(true);

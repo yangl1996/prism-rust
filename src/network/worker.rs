@@ -17,22 +17,23 @@ use crate::validation::{self, BlockResult};
 use crate::wallet::Wallet;
 use log::{debug, info, warn};
 use std::collections::HashSet;
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
+use crossbeam::channel;
 use crate::visualization::demo;
 
 
 #[derive(Clone)]
 pub struct Context {
-    msg_chan: Arc<Mutex<mpsc::Receiver<(Vec<u8>, peer::Handle)>>>,
+    msg_chan: channel::Receiver<(Vec<u8>, peer::Handle)>,
     num_worker: usize,
     chain: Arc<BlockChain>,
     blockdb: Arc<BlockDatabase>,
     utxodb: Arc<UtxoDatabase>,
     wallet: Arc<Wallet>,
     mempool: Arc<Mutex<MemoryPool>>,
-    context_update_chan: mpsc::Sender<ContextUpdateSignal>,
+    context_update_chan: channel::Sender<ContextUpdateSignal>,
     server: ServerHandle,
     buffer: Arc<Mutex<BlockBuffer>>,
     recent_blocks: Arc<Mutex<HashSet<H256>>>,
@@ -41,18 +42,18 @@ pub struct Context {
 
 pub fn new(
     num_worker: usize,
-    msg_src: mpsc::Receiver<(Vec<u8>, peer::Handle)>,
+    msg_src: channel::Receiver<(Vec<u8>, peer::Handle)>,
     blockchain: &Arc<BlockChain>,
     blockdb: &Arc<BlockDatabase>,
     utxodb: &Arc<UtxoDatabase>,
     wallet: &Arc<Wallet>,
     mempool: &Arc<Mutex<MemoryPool>>,
-    ctx_update_sink: mpsc::Sender<ContextUpdateSignal>,
+    ctx_update_sink: channel::Sender<ContextUpdateSignal>,
     server: &ServerHandle,
     demo_sender: crossbeam::Sender<demo::DemoMsg>
 ) -> Context {
     let ctx = Context {
-        msg_chan: Arc::new(Mutex::new(msg_src)),
+        msg_chan: msg_src,
         num_worker: num_worker,
         chain: Arc::clone(blockchain),
         blockdb: Arc::clone(blockdb),
@@ -82,9 +83,7 @@ impl Context {
 
     fn worker_loop(&self) {
         loop {
-            let chan = self.msg_chan.lock().unwrap();
-            let msg = chan.recv().unwrap();
-            drop(chan);
+            let msg = self.msg_chan.recv().unwrap();
             PERFORMANCE_COUNTER.record_process_message();
             let (msg, peer) = msg;
             let msg: Message = bincode::deserialize(&msg).unwrap();
@@ -190,6 +189,7 @@ impl Context {
                         if self.blockdb.contains(&hash).unwrap() {
                             let mut recent_blocks = self.recent_blocks.lock().unwrap();
                             recent_blocks.remove(&hash);
+                            drop(recent_blocks);
                             continue;
                         }
 

@@ -9,6 +9,7 @@ use std::collections::{BTreeSet, HashMap, HashSet, BTreeMap};
 use std::mem;
 use std::sync::Mutex;
 use std::time;
+use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 
 // Column family names for node/chain metadata
 const PROPOSER_NODE_LEVEL_CF: &str = "PROPOSER_NODE_LEVEL"; // hash to node level (u64)
@@ -323,41 +324,54 @@ impl BlockChain {
                 put_value!(proposer_node_level_cf, block_hash, self_level as u64);
                 merge_value!(proposer_tree_level_cf, self_level, block_hash);
 
-                let unconfirmed_proposers = self.unconfirmed_proposers.lock().unwrap();//Gerui: has to use a lock here. TODO: what lock should we use?
-                let exists = self.contains_proposer(&block_hash)?;
-                if !exists {
-                    self.db.write(wb)?;
-                }
+                // mark ourself as unreferred proposer
+                // This should happen before committing to the database, since we want this
+                // add operation to happen before later block deletes it. NOTE: we could do this
+                // after committing to the database. The solution is to add a "pre-delete" set in
+                // unreferred_proposers that collects the entries to delete before they are even
+                // inserted. If we have this, we don't need to add/remove entries in order.
+                let mut unreferred_proposers = self.unreferred_proposers.lock().unwrap();
+                unreferred_proposers.insert(block_hash);
+                drop(unreferred_proposers);
+
+                // mark outself as unconfirmed proposer
+                // This could happen before committing to database, since this block has to become
+                // the leader or be referred by a leader. However, both requires the block to be
+                // committed to the database. For the same reason, this should not happen after
+                // committing to the database (think about the case where this block immediately
+                // becomes the leader and is ready to be confirmed).
+                let mut unconfirmed_proposers = self.unconfirmed_proposers.lock().unwrap();
+                unconfirmed_proposers.insert(block_hash);
                 drop(unconfirmed_proposers);
 
-                if !exists {
-                    // mark this new proposer block as unconfirmed
-                    let mut unconfirmed_proposers = self.unconfirmed_proposers.lock().unwrap();
-                    unconfirmed_proposers.insert(block_hash);
-                    drop(unconfirmed_proposers);
-
-                    // remove ref'ed blocks from unreferred list, mark itself as unreferred
-                    let mut unreferred_proposers = self.unreferred_proposers.lock().unwrap();
-                    for ref_hash in &content.proposer_refs {
-                        unreferred_proposers.remove(&ref_hash);
-                    }
-                    unreferred_proposers.remove(&parent_hash);
-                    unreferred_proposers.insert(block_hash);
-                    drop(unreferred_proposers);
-
-                    let mut unreferred_transactions = self.unreferred_transactions.lock().unwrap();
-                    for ref_hash in &content.transaction_refs {
-                        unreferred_transactions.remove(&ref_hash);
-                    }
-                    drop(unreferred_transactions);
-
-                    // set best block info
-                    let mut proposer_best = self.proposer_best_level.lock().unwrap();
-                    if self_level > *proposer_best {
-                        *proposer_best = self_level;
-                    }
-                    drop(proposer_best);
+                // commit to the database and update proposer best in the same atomic operation
+                // These two happen together to ensure that if a voter/proposer/transaction block
+                // depend on this proposer block, the miner must have already known about this
+                // proposer block and is using it as the proposer parent.
+                let mut proposer_best = self.proposer_best_level.lock().unwrap();
+                self.db.write(wb)?;
+                if self_level > *proposer_best {
+                    *proposer_best = self_level;
+                    PERFORMANCE_COUNTER.record_update_proposer_main_chain(self_level as usize);
                 }
+                drop(proposer_best);
+
+                // remove referenced proposer and transaction blocks from the unreferred list
+                // This could happen after committing to the database. It's because that we are
+                // only removing transaction blocks here, and the entries we are trying to remove
+                // are guaranteed to be already there (since they are inserted before the
+                // corresponding transaction blocks are committed).
+                let mut unreferred_proposers = self.unreferred_proposers.lock().unwrap();
+                for ref_hash in &content.proposer_refs {
+                    unreferred_proposers.remove(&ref_hash);
+                }
+                unreferred_proposers.remove(&parent_hash);
+                drop(unreferred_proposers);
+                let mut unreferred_transactions = self.unreferred_transactions.lock().unwrap();
+                for ref_hash in &content.transaction_refs {
+                    unreferred_transactions.remove(&ref_hash);
+                }
+                drop(unreferred_transactions);
 
                 info!("Adding proposer block {} at timestamp {} at level {}", block_hash, block.header.timestamp, self_level);
             }
@@ -378,23 +392,33 @@ impl BlockChain {
                 // set the voted level to be until proposer parent
                 let proposer_parent_level: u64 = get_value!(proposer_node_level_cf, parent_hash);
                 put_value!(voter_node_voted_level_cf, block_hash, proposer_parent_level as u64);
+
                 self.db.write(wb)?;
 
+                // This should happen after writing to db, because other modules will follow
+                // voter_best to query its metadata. We need to get the metadata into database
+                // before we can "announce" this block to other modules. Also, this does not create
+                // race condition, since this update is "stateless" - we are not append/removing
+                // from a record.
                 let mut voter_best = self.voter_best[self_chain as usize].lock().unwrap();
                 // update best block
                 if self_level > voter_best.1 {
+                    PERFORMANCE_COUNTER.record_update_voter_main_chain(voter_best.1 as usize, self_level as usize);
                     voter_best.0 = block_hash;
                     voter_best.1 = self_level;
                 }
                 drop(voter_best);
             }
             Content::Transaction(content) => {
-                // TODO: this is actually useless
-                self.db.write(wb)?;
                 // mark itself as unreferred
+                // Note that this could happen before committing to db, because no module will try
+                // to access transaction content based on pointers in unreferred_transactions.
                 let mut unreferred_transactions = self.unreferred_transactions.lock().unwrap();
                 unreferred_transactions.insert(block_hash);
                 drop(unreferred_transactions);
+
+                // This db write is only to facilitate check_existence
+                self.db.write(wb)?;
             }
         }
         return Ok(());
@@ -436,7 +460,9 @@ impl BlockChain {
         for chain_num in 0..NUM_VOTER_CHAINS {
             // get the diff of votes on this voter chain
             let from = voter_ledger_tips[chain_num as usize];
-            let to = self.voter_best[chain_num as usize].lock().unwrap().0;
+            let voter_best = self.voter_best[chain_num as usize].lock().unwrap();
+            let to = voter_best.0;
+            drop(voter_best);
             voter_ledger_tips[chain_num as usize] = to;
 
             let (added, removed) = self.vote_diff(from, to)?;
@@ -877,6 +903,19 @@ impl BlockChain {
         return match self
             .db
             .get_cf(voter_node_level_cf, serialize(&hash).unwrap())?
+        {
+            Some(_) => Ok(true),
+            None => Ok(false),
+        };
+    }
+
+    /// Check whether the given transaction block exists in the database.
+    // TODO: we can't tell whether it's is a transaction block!
+    pub fn contains_transaction(&self, hash: &H256) -> Result<bool> {
+        let parent_neighbor_cf = self.db.cf_handle(PARENT_NEIGHBOR_CF).unwrap();
+        return match self
+            .db
+            .get_cf(parent_neighbor_cf, serialize(&hash).unwrap())?
         {
             Some(_) => Ok(true),
             None => Ok(false),
