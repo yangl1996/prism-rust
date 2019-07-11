@@ -5,3 +5,4 @@
 visualization/node_modules
 demo/node_modules
 *.log
+testbed/local-experiment.sh
