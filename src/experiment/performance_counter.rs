@@ -1,15 +1,13 @@
-use std::sync::atomic::{AtomicUsize, AtomicIsize, Ordering};
-use crate::transaction::Transaction;
 use crate::block::Block;
 use crate::block::Content as BlockContent;
-use crate::wallet::WalletError;
-use std::time::SystemTime;
 use crate::config::*;
+use crate::transaction::Transaction;
+use crate::wallet::WalletError;
+use std::sync::atomic::{AtomicIsize, AtomicUsize, Ordering};
+use std::time::SystemTime;
 
 lazy_static! {
-    pub static ref PERFORMANCE_COUNTER: Counter = {
-        Counter::new()
-    };
+    pub static ref PERFORMANCE_COUNTER: Counter = { Counter::new() };
 }
 
 pub trait PayloadSize {
@@ -131,7 +129,7 @@ impl Counter {
             total_transaction_block_squared_confirmation_latency: AtomicUsize::new(0),
             proposer_main_chain_length: AtomicUsize::new(0),
             voter_main_chain_length_sum: AtomicIsize::new(0),
-        }
+        };
     }
 
     pub fn record_process_message(&self) {
@@ -144,7 +142,10 @@ impl Counter {
 
     pub fn record_receive_block(&self, b: &Block) {
         let mined_time = b.header.timestamp;
-        let current_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis();
+        let current_time = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_millis();
         let delay = if current_time <= mined_time {
             0
         } else {
@@ -152,18 +153,26 @@ impl Counter {
         };
         match b.content {
             BlockContent::Transaction(_) => {
-                self.total_transaction_block_delay.fetch_add(delay as usize, Ordering::Relaxed);
-                self.total_transaction_block_squared_delay.fetch_add((delay * delay) as usize, Ordering::Relaxed);
-                self.received_transaction_blocks.fetch_add(1, Ordering::Relaxed);
+                self.total_transaction_block_delay
+                    .fetch_add(delay as usize, Ordering::Relaxed);
+                self.total_transaction_block_squared_delay
+                    .fetch_add((delay * delay) as usize, Ordering::Relaxed);
+                self.received_transaction_blocks
+                    .fetch_add(1, Ordering::Relaxed);
             }
             BlockContent::Proposer(_) => {
-                self.total_proposer_block_delay.fetch_add(delay as usize, Ordering::Relaxed);
-                self.total_proposer_block_squared_delay.fetch_add((delay * delay) as usize, Ordering::Relaxed);
-                self.received_proposer_blocks.fetch_add(1, Ordering::Relaxed);
+                self.total_proposer_block_delay
+                    .fetch_add(delay as usize, Ordering::Relaxed);
+                self.total_proposer_block_squared_delay
+                    .fetch_add((delay * delay) as usize, Ordering::Relaxed);
+                self.received_proposer_blocks
+                    .fetch_add(1, Ordering::Relaxed);
             }
             BlockContent::Voter(_) => {
-                self.total_voter_block_delay.fetch_add(delay as usize, Ordering::Relaxed);
-                self.total_voter_block_squared_delay.fetch_add((delay * delay) as usize, Ordering::Relaxed);
+                self.total_voter_block_delay
+                    .fetch_add(delay as usize, Ordering::Relaxed);
+                self.total_voter_block_squared_delay
+                    .fetch_add((delay * delay) as usize, Ordering::Relaxed);
                 self.received_voter_blocks.fetch_add(1, Ordering::Relaxed);
             }
         }
@@ -172,16 +181,21 @@ impl Counter {
     pub fn record_process_block(&self, b: &Block) {
         match b.content {
             BlockContent::Transaction(_) => {
-                self.processed_transaction_blocks.fetch_add(1, Ordering::Relaxed);
-                self.processed_transaction_block_bytes.fetch_add(b.size(), Ordering::Relaxed);
+                self.processed_transaction_blocks
+                    .fetch_add(1, Ordering::Relaxed);
+                self.processed_transaction_block_bytes
+                    .fetch_add(b.size(), Ordering::Relaxed);
             }
             BlockContent::Voter(_) => {
                 self.processed_voter_blocks.fetch_add(1, Ordering::Relaxed);
-                self.processed_voter_block_bytes.fetch_add(b.size(), Ordering::Relaxed);
+                self.processed_voter_block_bytes
+                    .fetch_add(b.size(), Ordering::Relaxed);
             }
             BlockContent::Proposer(_) => {
-                self.processed_proposer_blocks.fetch_add(1, Ordering::Relaxed);
-                self.processed_proposer_block_bytes.fetch_add(b.size(), Ordering::Relaxed);
+                self.processed_proposer_blocks
+                    .fetch_add(1, Ordering::Relaxed);
+                self.processed_proposer_block_bytes
+                    .fetch_add(b.size(), Ordering::Relaxed);
             }
         }
     }
@@ -189,70 +203,88 @@ impl Counter {
     pub fn record_mine_block(&self, b: &Block) {
         match b.content {
             BlockContent::Transaction(_) => {
-                self.mined_transaction_blocks.fetch_add(1, Ordering::Relaxed);
-                self.mined_transaction_block_bytes.fetch_add(b.size(), Ordering::Relaxed);
+                self.mined_transaction_blocks
+                    .fetch_add(1, Ordering::Relaxed);
+                self.mined_transaction_block_bytes
+                    .fetch_add(b.size(), Ordering::Relaxed);
             }
             BlockContent::Voter(_) => {
                 self.mined_voter_blocks.fetch_add(1, Ordering::Relaxed);
-                self.mined_voter_block_bytes.fetch_add(b.size(), Ordering::Relaxed);
+                self.mined_voter_block_bytes
+                    .fetch_add(b.size(), Ordering::Relaxed);
             }
             BlockContent::Proposer(_) => {
                 self.mined_proposer_blocks.fetch_add(1, Ordering::Relaxed);
-                self.mined_proposer_block_bytes.fetch_add(b.size(), Ordering::Relaxed);
+                self.mined_proposer_block_bytes
+                    .fetch_add(b.size(), Ordering::Relaxed);
             }
         }
     }
 
     pub fn record_update_proposer_main_chain(&self, new_height: usize) {
-        self.proposer_main_chain_length.store(new_height, Ordering::Relaxed);
+        self.proposer_main_chain_length
+            .store(new_height, Ordering::Relaxed);
     }
 
     pub fn record_update_voter_main_chain(&self, prev_height: usize, new_height: usize) {
         if prev_height <= new_height {
             let diff: isize = (new_height - prev_height) as isize;
-            self.voter_main_chain_length_sum.fetch_add(diff, Ordering::Relaxed);
-        }
-        else {
+            self.voter_main_chain_length_sum
+                .fetch_add(diff, Ordering::Relaxed);
+        } else {
             let diff: isize = (prev_height - new_height) as isize;
-            self.voter_main_chain_length_sum.fetch_sub(diff, Ordering::Relaxed);
+            self.voter_main_chain_length_sum
+                .fetch_sub(diff, Ordering::Relaxed);
         }
     }
 
     pub fn record_confirm_transaction_block(&self, b: &Block) {
         let mined_time = b.header.timestamp;
-        let current_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis();
+        let current_time = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_millis();
         let delay = if current_time <= mined_time {
             0
         } else {
             current_time - mined_time
         };
-        self.total_transaction_block_confirmation_latency.fetch_add(delay as usize, Ordering::Relaxed);
-        self.total_transaction_block_squared_confirmation_latency.fetch_add((delay * delay) as usize, Ordering::Relaxed);
-        self.confirmed_transaction_blocks.fetch_add(1, Ordering::Relaxed);
+        self.total_transaction_block_confirmation_latency
+            .fetch_add(delay as usize, Ordering::Relaxed);
+        self.total_transaction_block_squared_confirmation_latency
+            .fetch_add((delay * delay) as usize, Ordering::Relaxed);
+        self.confirmed_transaction_blocks
+            .fetch_add(1, Ordering::Relaxed);
     }
 
     pub fn record_deconfirm_transaction_blocks(&self, num_blocks: usize) {
-        self.deconfirmed_transaction_blocks.fetch_add(num_blocks, Ordering::Relaxed);
+        self.deconfirmed_transaction_blocks
+            .fetch_add(num_blocks, Ordering::Relaxed);
     }
 
     pub fn record_confirm_transaction(&self, t: &Transaction) {
         self.confirmed_transactions.fetch_add(1, Ordering::Relaxed);
-        self.confirmed_transaction_bytes.fetch_add(t.size(), Ordering::Relaxed);
+        self.confirmed_transaction_bytes
+            .fetch_add(t.size(), Ordering::Relaxed);
     }
 
     pub fn record_deconfirm_transaction(&self, t: &Transaction) {
-        self.deconfirmed_transactions.fetch_add(1, Ordering::Relaxed);
-        self.deconfirmed_transaction_bytes.fetch_add(t.size(), Ordering::Relaxed);
+        self.deconfirmed_transactions
+            .fetch_add(1, Ordering::Relaxed);
+        self.deconfirmed_transaction_bytes
+            .fetch_add(t.size(), Ordering::Relaxed);
     }
 
     pub fn record_generate_transaction(&self, t: &Result<Transaction, WalletError>) {
         match t {
             Ok(t) => {
                 self.generated_transactions.fetch_add(1, Ordering::Relaxed);
-                self.generated_transaction_bytes.fetch_add(t.size(), Ordering::Relaxed);
+                self.generated_transaction_bytes
+                    .fetch_add(t.size(), Ordering::Relaxed);
             }
             Err(_) => {
-                self.generate_transaction_failures.fetch_add(1, Ordering::Relaxed);
+                self.generate_transaction_failures
+                    .fetch_add(1, Ordering::Relaxed);
             }
         }
     }
@@ -274,37 +306,61 @@ impl Counter {
         return Snapshot {
             generated_transactions: self.generated_transactions.load(Ordering::Relaxed),
             generated_transaction_bytes: self.generated_transaction_bytes.load(Ordering::Relaxed),
-            generate_transaction_failures: self.generate_transaction_failures.load(Ordering::Relaxed),
+            generate_transaction_failures: self
+                .generate_transaction_failures
+                .load(Ordering::Relaxed),
             confirmed_transactions: self.confirmed_transactions.load(Ordering::Relaxed),
             confirmed_transaction_bytes: self.confirmed_transaction_bytes.load(Ordering::Relaxed),
             deconfirmed_transactions: self.deconfirmed_transactions.load(Ordering::Relaxed),
-            deconfirmed_transaction_bytes: self.deconfirmed_transaction_bytes.load(Ordering::Relaxed),
+            deconfirmed_transaction_bytes: self
+                .deconfirmed_transaction_bytes
+                .load(Ordering::Relaxed),
             confirmed_transaction_blocks: self.confirmed_transaction_blocks.load(Ordering::Relaxed),
-            deconfirmed_transaction_blocks: self.deconfirmed_transaction_blocks.load(Ordering::Relaxed),
+            deconfirmed_transaction_blocks: self
+                .deconfirmed_transaction_blocks
+                .load(Ordering::Relaxed),
             processed_proposer_blocks: self.processed_proposer_blocks.load(Ordering::Relaxed),
-            processed_proposer_block_bytes: self.processed_proposer_block_bytes.load(Ordering::Relaxed),
+            processed_proposer_block_bytes: self
+                .processed_proposer_block_bytes
+                .load(Ordering::Relaxed),
             processed_voter_blocks: self.processed_voter_blocks.load(Ordering::Relaxed),
             processed_voter_block_bytes: self.processed_voter_block_bytes.load(Ordering::Relaxed),
             processed_transaction_blocks: self.processed_transaction_blocks.load(Ordering::Relaxed),
-            processed_transaction_block_bytes: self.processed_transaction_block_bytes.load(Ordering::Relaxed),
+            processed_transaction_block_bytes: self
+                .processed_transaction_block_bytes
+                .load(Ordering::Relaxed),
             mined_proposer_blocks: self.mined_proposer_blocks.load(Ordering::Relaxed),
             mined_proposer_block_bytes: self.mined_proposer_block_bytes.load(Ordering::Relaxed),
             mined_voter_blocks: self.mined_voter_blocks.load(Ordering::Relaxed),
             mined_voter_block_bytes: self.mined_voter_block_bytes.load(Ordering::Relaxed),
             mined_transaction_blocks: self.mined_transaction_blocks.load(Ordering::Relaxed),
-            mined_transaction_block_bytes: self.mined_transaction_block_bytes.load(Ordering::Relaxed),
+            mined_transaction_block_bytes: self
+                .mined_transaction_block_bytes
+                .load(Ordering::Relaxed),
             total_proposer_block_delay: self.total_proposer_block_delay.load(Ordering::Relaxed),
             total_voter_block_delay: self.total_voter_block_delay.load(Ordering::Relaxed),
-            total_transaction_block_delay: self.total_transaction_block_delay.load(Ordering::Relaxed),
-            total_proposer_block_squared_delay: self.total_proposer_block_squared_delay.load(Ordering::Relaxed),
-            total_voter_block_squared_delay: self.total_voter_block_squared_delay.load(Ordering::Relaxed),
-            total_transaction_block_squared_delay: self.total_transaction_block_squared_delay.load(Ordering::Relaxed),
+            total_transaction_block_delay: self
+                .total_transaction_block_delay
+                .load(Ordering::Relaxed),
+            total_proposer_block_squared_delay: self
+                .total_proposer_block_squared_delay
+                .load(Ordering::Relaxed),
+            total_voter_block_squared_delay: self
+                .total_voter_block_squared_delay
+                .load(Ordering::Relaxed),
+            total_transaction_block_squared_delay: self
+                .total_transaction_block_squared_delay
+                .load(Ordering::Relaxed),
             received_proposer_blocks: self.received_proposer_blocks.load(Ordering::Relaxed),
             received_voter_blocks: self.received_voter_blocks.load(Ordering::Relaxed),
             received_transaction_blocks: self.received_transaction_blocks.load(Ordering::Relaxed),
             incoming_message_queue: incoming_message_queue,
-            total_transaction_block_confirmation_latency: self.total_transaction_block_confirmation_latency.load(Ordering::Relaxed),
-            total_transaction_block_squared_confirmation_latency: self.total_transaction_block_squared_confirmation_latency.load(Ordering::Relaxed),
+            total_transaction_block_confirmation_latency: self
+                .total_transaction_block_confirmation_latency
+                .load(Ordering::Relaxed),
+            total_transaction_block_squared_confirmation_latency: self
+                .total_transaction_block_squared_confirmation_latency
+                .load(Ordering::Relaxed),
             proposer_main_chain_length: self.proposer_main_chain_length.load(Ordering::Relaxed),
             voter_main_chain_length_sum: voter_main_chain_length_sum,
         };

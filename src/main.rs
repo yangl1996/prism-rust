@@ -1,32 +1,32 @@
 #[macro_use]
 extern crate clap;
 
+use crossbeam::channel;
+use ed25519_dalek::Keypair;
+use ed25519_dalek::Signature;
 use log::{error, info};
+use prism::api::Server as ApiServer;
 use prism::blockchain::BlockChain;
 use prism::blockdb::BlockDatabase;
+use prism::crypto::hash::{Hashable, H256};
+use prism::experiment::transaction_generator::TransactionGenerator;
+use prism::ledger_manager::LedgerManager;
+use prism::miner;
 use prism::miner::memory_pool::MemoryPool;
+use prism::network::server;
+use prism::network::worker;
+use prism::transaction::Address;
 use prism::utxodb::UtxoDatabase;
 use prism::visualization::Server as VisualizationServer;
 use prism::wallet::Wallet;
-use prism::api::Server as ApiServer;
-use prism::network::server;
-use prism::network::worker;
-use prism::experiment::transaction_generator::TransactionGenerator;
-use prism::miner;
-use prism::crypto::hash::{H256, Hashable};
+use rand::rngs::OsRng;
+use rand::Rng;
+use std::convert::TryInto;
 use std::net;
 use std::process;
 use std::sync::Arc;
-use std::convert::TryInto;
 use std::thread;
 use std::time;
-use rand::Rng;
-use rand::rngs::OsRng;
-use ed25519_dalek::Keypair;
-use ed25519_dalek::Signature;
-use prism::transaction::Address;
-use prism::ledger_manager::LedgerManager;
-use crossbeam::channel;
 
 fn main() {
     // parse command line arguments
@@ -62,7 +62,11 @@ fn main() {
             let base64_encoded = base64::encode(&keypair.to_bytes().to_vec());
             println!("{}", base64_encoded);
             if m.is_present("display_address") {
-                let addr: Address = ring::digest::digest(&ring::digest::SHA256, &keypair.public.as_bytes().as_ref()).into();
+                let addr: Address = ring::digest::digest(
+                    &ring::digest::SHA256,
+                    &keypair.public.as_bytes().as_ref(),
+                )
+                .into();
                 let base64_encoded = base64::encode(&addr);
                 eprintln!("{}", base64_encoded);
             }
@@ -76,10 +80,14 @@ fn main() {
     stderrlog::new().verbosity(verbosity).init().unwrap();
 
     // init mempool
-    let mempool_size = matches.value_of("mempool_size").unwrap().parse::<u64>().unwrap_or_else(|e| {
-        error!("Error parsing memory pool size limit: {}", e);
-        process::exit(1);
-    });
+    let mempool_size = matches
+        .value_of("mempool_size")
+        .unwrap()
+        .parse::<u64>()
+        .unwrap_or_else(|e| {
+            error!("Error parsing memory pool size limit: {}", e);
+            process::exit(1);
+        });
     let mempool = MemoryPool::new(mempool_size);
     let mempool = Arc::new(std::sync::Mutex::new(mempool));
 
@@ -132,16 +140,24 @@ fn main() {
     ledger_manager.start(3, 8);
 
     // parse p2p server address
-    let p2p_addr = matches.value_of("peer_addr").unwrap().parse::<net::SocketAddr>().unwrap_or_else(|e| {
+    let p2p_addr = matches
+        .value_of("peer_addr")
+        .unwrap()
+        .parse::<net::SocketAddr>()
+        .unwrap_or_else(|e| {
             error!("Error parsing P2P server address: {}", e);
             process::exit(1);
-    });
+        });
 
     // parse api server address
-    let api_addr = matches.value_of("api_addr").unwrap().parse::<net::SocketAddr>().unwrap_or_else(|e| {
+    let api_addr = matches
+        .value_of("api_addr")
+        .unwrap()
+        .parse::<net::SocketAddr>()
+        .unwrap_or_else(|e| {
             error!("Error parsing API server address: {}", e);
             process::exit(1);
-    });
+        });
 
     // create channels between server and worker, worker and miner, miner and worker
     let (msg_tx, msg_rx) = channel::unbounded();
@@ -153,11 +169,28 @@ fn main() {
     server_ctx.start().unwrap();
 
     // start the worker
-    let worker_ctx = worker::new(16, msg_rx, &blockchain, &blockdb, &utxodb, &wallet, &mempool, ctx_tx, &server);
+    let worker_ctx = worker::new(
+        16,
+        msg_rx,
+        &blockchain,
+        &blockdb,
+        &utxodb,
+        &wallet,
+        &mempool,
+        ctx_tx,
+        &server,
+    );
     worker_ctx.start();
 
     // start the miner
-    let (miner_ctx, miner) = miner::new(&mempool, &blockchain, &blockdb, ctx_rx, &ctx_tx_miner, &server);
+    let (miner_ctx, miner) = miner::new(
+        &mempool,
+        &blockchain,
+        &blockdb,
+        ctx_rx,
+        &ctx_tx_miner,
+        &server,
+    );
     miner_ctx.start();
 
     // connect to known peers
@@ -180,7 +213,10 @@ fn main() {
                             break;
                         }
                         Err(e) => {
-                            error!("Error connecting to peer {}, retrying in one second: {}", addr, e);
+                            error!(
+                                "Error connecting to peer {}, retrying in one second: {}",
+                                addr, e
+                            );
                             thread::sleep(time::Duration::from_millis(1000));
                             continue;
                         }
@@ -192,14 +228,22 @@ fn main() {
 
     // fund the given addresses
     if let Some(fund_addrs) = matches.values_of("init_fund_addr") {
-        let num_coins = matches.value_of("init_fund_coins").unwrap().parse::<usize>().unwrap_or_else(|e| {
-            error!("Error parsing number of initial fund coins: {}", e);
-            process::exit(1);
-        });
-        let coin_value = matches.value_of("init_fund_value").unwrap().parse::<u64>().unwrap_or_else(|e| {
-            error!("Error parsing value of initial fund coins: {}", e);
-            process::exit(1);
-        });
+        let num_coins = matches
+            .value_of("init_fund_coins")
+            .unwrap()
+            .parse::<usize>()
+            .unwrap_or_else(|e| {
+                error!("Error parsing number of initial fund coins: {}", e);
+                process::exit(1);
+            });
+        let coin_value = matches
+            .value_of("init_fund_value")
+            .unwrap()
+            .parse::<u64>()
+            .unwrap_or_else(|e| {
+                error!("Error parsing value of initial fund coins: {}", e);
+                process::exit(1);
+            });
         let mut addrs = vec![];
         for addr in fund_addrs {
             let decoded = match base64::decode(&addr.trim()) {
@@ -213,7 +257,12 @@ fn main() {
             let hash: H256 = addr_bytes.into();
             addrs.push(hash);
         }
-        info!("Funding {} addresses with {} initial coins of {}", addrs.len(), num_coins, coin_value);
+        info!(
+            "Funding {} addresses with {} initial coins of {}",
+            addrs.len(),
+            num_coins,
+            coin_value
+        );
         prism::experiment::ico(&addrs, &utxodb, &wallet, num_coins, coin_value).unwrap();
     }
 
@@ -227,7 +276,16 @@ fn main() {
     txgen_ctx.start();
 
     // start the API server
-    ApiServer::start(api_addr, &wallet, &blockchain, &utxodb, &server, &miner, &mempool, txgen_control_chan);
+    ApiServer::start(
+        api_addr,
+        &wallet,
+        &blockchain,
+        &utxodb,
+        &server,
+        &miner,
+        &mempool,
+        txgen_control_chan,
+    );
 
     // start the visualization server
     match matches.value_of("visualization") {

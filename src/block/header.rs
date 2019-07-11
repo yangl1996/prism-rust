@@ -58,7 +58,7 @@ pub mod tests {
 
     use crate::crypto::hash::{Hashable, H256};
     use crate::crypto::merkle::MerkleTree;
-    use crate::transaction::{CoinId, Input, Output, Authorization, Transaction};
+    use crate::transaction::{Authorization, CoinId, Input, Output, Transaction};
 
     ///The hash should match
     #[test]
@@ -133,18 +133,18 @@ pub mod tests {
 
     #[macro_export]
     macro_rules! gen_hashed_data {
-    () => {{
-        vec![
-            (&hex!("0a0b0c0d0e0f0e0d0a0b0c0d0e0f0e0d0a0b0c0d0e0f0e0d0a0b0c0d0e0f0e0d")).into(),
-            (&hex!("0102010201020102010201020102010201020102010201020102010201020102")).into(),
-            (&hex!("0a0a0a0a0b0b0b0b0a0a0a0a0b0b0b0b0a0a0a0a0b0b0b0b0a0a0a0a0b0b0b0b")).into(),
-            (&hex!("0403020108070605040302010807060504030201080706050403020108070605")).into(),
-            (&hex!("1a2a3a4a1a2a3a4a1a2a3a4a1a2a3a4a1a2a3a4a1a2a3a4a1a2a3a4a1a2a3a4a")).into(),
-            (&hex!("deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")).into(),
-            (&hex!("0000000100000001000000010000000100000001000000010000000100000001")).into(),
-        ]
-    }};
-}
+        () => {{
+            vec![
+                (&hex!("0a0b0c0d0e0f0e0d0a0b0c0d0e0f0e0d0a0b0c0d0e0f0e0d0a0b0c0d0e0f0e0d")).into(),
+                (&hex!("0102010201020102010201020102010201020102010201020102010201020102")).into(),
+                (&hex!("0a0a0a0a0b0b0b0b0a0a0a0a0b0b0b0b0a0a0a0a0b0b0b0b0a0a0a0a0b0b0b0b")).into(),
+                (&hex!("0403020108070605040302010807060504030201080706050403020108070605")).into(),
+                (&hex!("1a2a3a4a1a2a3a4a1a2a3a4a1a2a3a4a1a2a3a4a1a2a3a4a1a2a3a4a1a2a3a4a")).into(),
+                (&hex!("deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")).into(),
+                (&hex!("0000000100000001000000010000000100000001000000010000000100000001")).into(),
+            ]
+        }};
+    }
 
     // Header stuff
     pub fn sample_header() -> Header {
@@ -155,12 +155,12 @@ pub mod tests {
         let content_root: H256 =
             (&hex!("deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")).into();
         let extra_content: [u8; 32] = [
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0,
         ];
         let difficulty: [u8; 32] = [
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            20, 10,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 20, 10,
         ];
         let difficulty = (&difficulty).into();
         let header = Header::new(

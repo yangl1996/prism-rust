@@ -1,12 +1,11 @@
 use super::buffer::BlockBuffer;
 use super::message::{self, Message};
 use super::peer;
-use std::iter::FromIterator;
-use std::collections::VecDeque;
 use crate::block::{Block, Content};
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
 use crate::crypto::hash::{Hashable, H256};
+use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 use crate::handler::new_transaction;
 use crate::handler::new_validated_block;
 use crate::miner::memory_pool::MemoryPool;
@@ -15,12 +14,13 @@ use crate::network::server::Handle as ServerHandle;
 use crate::utxodb::UtxoDatabase;
 use crate::validation::{self, BlockResult};
 use crate::wallet::Wallet;
+use crossbeam::channel;
 use log::{debug, info, warn};
 use std::collections::HashSet;
+use std::collections::VecDeque;
+use std::iter::FromIterator;
 use std::sync::{Arc, Mutex};
 use std::thread;
-use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
-use crossbeam::channel;
 
 #[derive(Clone)]
 pub struct Context {
@@ -34,7 +34,7 @@ pub struct Context {
     context_update_chan: channel::Sender<ContextUpdateSignal>,
     server: ServerHandle,
     buffer: Arc<Mutex<BlockBuffer>>,
-    recent_blocks: Arc<Mutex<HashSet<H256>>>
+    recent_blocks: Arc<Mutex<HashSet<H256>>>,
 }
 
 pub fn new(
@@ -162,7 +162,7 @@ impl Context {
                         let pow_check = validation::check_pow_sortition_id(&block);
                         match pow_check {
                             BlockResult::Pass => {}
-                            _ => continue
+                            _ => continue,
                         }
 
                         // check whether the block is being processed. note that here we use lock
@@ -176,7 +176,7 @@ impl Context {
                         // register this block as being processed
                         recent_blocks.insert(hash);
                         drop(recent_blocks);
-                        
+
                         // TODO: consider the ordering here. I'd expect a lot of duplicate blocks
                         // to proceed to this step, which means a lot of useless database lookups
                         // and lock/unlocks
@@ -203,13 +203,14 @@ impl Context {
                     for block in &blocks {
                         PERFORMANCE_COUNTER.record_receive_block(&block);
                     }
-                    
+
                     // tell peers about the new blocks
                     // TODO: we will do this only in a reasonable network topology
                     if hashes.is_empty() {
-                        continue;   // end processing this message
+                        continue; // end processing this message
                     }
-                    self.server.broadcast(Message::NewBlockHashes(hashes.clone()));
+                    self.server
+                        .broadcast(Message::NewBlockHashes(hashes.clone()));
 
                     // process each block
                     let mut to_process: Vec<Block> = blocks;
@@ -220,7 +221,8 @@ impl Context {
                         // make sure checking data availability and buffering are one atomic
                         // operation. see the comments in buffer.rs
                         let mut buffer = self.buffer.lock().unwrap();
-                        let data_availability = validation::check_data_availability(&block, &self.chain, &self.blockdb);
+                        let data_availability =
+                            validation::check_data_availability(&block, &self.chain, &self.blockdb);
                         match data_availability {
                             BlockResult::Pass => drop(buffer),
                             BlockResult::MissingReferences(r) => {
@@ -234,7 +236,7 @@ impl Context {
                                 drop(buffer);
                                 continue;
                             }
-                            _ => unreachable!()
+                            _ => unreachable!(),
                         }
 
                         // check sortition proof and content semantics
@@ -250,14 +252,15 @@ impl Context {
                                 continue;
                             }
                         }
-                        let content_semantic = validation::check_content_semantic(&block, &self.chain, &self.blockdb);
+                        let content_semantic =
+                            validation::check_content_semantic(&block, &self.chain, &self.blockdb);
                         match content_semantic {
                             BlockResult::Pass => {}
                             _ => {
                                 warn!(
                                     "Ignoring invalid block {:.8}: {}",
                                     block.hash(),
-                                    content_semantic 
+                                    content_semantic
                                 );
                                 continue;
                             }
@@ -270,7 +273,7 @@ impl Context {
                             &self.blockdb,
                             &self.chain,
                             &self.server,
-                            );
+                        );
                         context_update_sig.push(match &block.content {
                             Content::Proposer(_) => ContextUpdateSignal::NewProposerBlock,
                             Content::Voter(c) => ContextUpdateSignal::NewVoterBlock(c.chain_number),
@@ -283,7 +286,7 @@ impl Context {
                             debug!(
                                 "Resolved dependency for {} buffered blocks",
                                 resolved_by_current.len()
-                                );
+                            );
                         }
                         for b in resolved_by_current.drain(..) {
                             to_process.push(b);
@@ -291,9 +294,7 @@ impl Context {
                     }
                     // tell the miner to update the context
                     for sig in context_update_sig {
-                        self.context_update_chan
-                            .send(sig)
-                            .unwrap();
+                        self.context_update_chan.send(sig).unwrap();
                     }
 
                     if !to_request.is_empty() {

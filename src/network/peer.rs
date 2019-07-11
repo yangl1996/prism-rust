@@ -151,7 +151,10 @@ impl WriteContext {
     }
 }
 
-pub fn new(stream: mio::net::TcpStream, direction: Direction) -> std::io::Result<(Context, Handle)> {
+pub fn new(
+    stream: mio::net::TcpStream,
+    direction: Direction,
+) -> std::io::Result<(Context, Handle)> {
     let reader_stream = stream.try_clone()?;
     let writer_stream = stream.try_clone()?;
     let addr = stream.peer_addr()?;
@@ -183,7 +186,7 @@ pub fn new(stream: mio::net::TcpStream, direction: Direction) -> std::io::Result
         reader: read_ctx,
         writer: write_ctx,
         handle: handle.clone(),
-        direction: direction
+        direction: direction,
     };
     return Ok((ctx, handle));
 }
