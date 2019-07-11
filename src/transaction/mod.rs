@@ -1,10 +1,10 @@
-use std::cell::RefCell;
-use std::hash::{Hash, Hasher};
 use crate::crypto::hash::{Hashable, H256};
-use bincode::serialize;
 use crate::experiment::performance_counter::PayloadSize;
+use bincode::serialize;
 use ed25519_dalek::PublicKey;
 use ed25519_dalek::Signature;
+use std::cell::RefCell;
+use std::hash::{Hash, Hasher};
 
 /// A unique identifier of a transaction output, a.k.a. a coin.
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -33,7 +33,6 @@ pub struct Input {
     pub owner: Address,
 }
 
-
 /// An output of a transaction.
 // TODO: coinbase output (transaction fee). Maybe we don't need that in this case.
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -43,7 +42,6 @@ pub struct Output {
     /// The address of the recipient of this output coin.
     pub recipient: Address,
 }
-
 
 /// A Prism transaction. It takes a set of existing coins (inputs) and transforms them into a set
 /// of coins (outputs).
@@ -63,11 +61,10 @@ impl PayloadSize for Transaction {
     /// Return the size in bytes
     fn size(&self) -> usize {
         return self.input.len() * std::mem::size_of::<Input>()
-             + self.output.len() * std::mem::size_of::<Output>()
-             + self.authorization.len() * std::mem::size_of::<Authorization>();
+            + self.output.len() * std::mem::size_of::<Output>()
+            + self.authorization.len() * std::mem::size_of::<Authorization>();
     }
 }
-
 
 impl Hashable for Transaction {
     fn hash(&self) -> H256 {
@@ -77,7 +74,8 @@ impl Hashable for Transaction {
         }
         drop(hash);
         let mut hash_mut = self.hash.borrow_mut();
-        let hash: H256 = ring::digest::digest(&ring::digest::SHA256, &serialize(self).unwrap()).into();
+        let hash: H256 =
+            ring::digest::digest(&ring::digest::SHA256, &serialize(self).unwrap()).into();
         *hash_mut = Some(hash);
         return hash;
     }
@@ -96,7 +94,7 @@ pub struct Authorization {
 pub mod tests {
     use super::*;
     use crate::crypto::hash::tests::generate_random_hash;
-    use rand::{RngCore, Rng};
+    use rand::{Rng, RngCore};
 
     pub fn generate_random_coinid() -> CoinId {
         let mut rng = rand::thread_rng();
@@ -110,7 +108,7 @@ pub mod tests {
         let mut rng = rand::thread_rng();
         Input {
             coin: generate_random_coinid(),
-            value: rng.gen_range(1,100),
+            value: rng.gen_range(1, 100),
             owner: generate_random_hash(),
         }
     }
@@ -118,7 +116,7 @@ pub mod tests {
     pub fn generate_random_output() -> Output {
         let mut rng = rand::thread_rng();
         Output {
-            value: rng.gen_range(1,100),
+            value: rng.gen_range(1, 100),
             recipient: generate_random_hash(),
         }
     }

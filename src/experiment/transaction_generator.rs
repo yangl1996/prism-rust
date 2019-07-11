@@ -1,15 +1,15 @@
+use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
+use crate::handler::new_transaction;
 use crate::miner::memory_pool::MemoryPool;
 use crate::network::server::Handle as ServerHandle;
-use crate::wallet::Wallet;
 use crate::transaction;
-use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
+use crate::wallet::Wallet;
+use crossbeam::channel;
+use log::{debug, error, info, trace};
+use rand::Rng;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time;
-use std::sync::{Arc, Mutex};
-use crossbeam::channel;
-use rand::Rng;
-use crate::handler::new_transaction;
-use log::{debug, error, info, trace};
 
 pub enum ControlSignal {
     Start(u64),
@@ -24,7 +24,7 @@ pub enum ArrivalDistribution {
 }
 
 pub struct UniformArrival {
-    pub interval: u64   // ms
+    pub interval: u64, // ms
 }
 
 pub enum ValueDistribution {
@@ -53,24 +53,19 @@ pub struct TransactionGenerator {
 }
 
 impl TransactionGenerator {
-    pub fn new(wallet: &Arc<Wallet>, server: &ServerHandle, mempool: &Arc<Mutex<MemoryPool>>) -> (Self, channel::Sender<ControlSignal>) {
+    pub fn new(
+        wallet: &Arc<Wallet>,
+        server: &ServerHandle,
+        mempool: &Arc<Mutex<MemoryPool>>,
+    ) -> (Self, channel::Sender<ControlSignal>) {
         let (tx, rx) = channel::unbounded();
         let instance = Self {
             wallet: Arc::clone(wallet),
             server: server.clone(),
             mempool: Arc::clone(mempool),
             control_chan: rx,
-            arrival_distribution: ArrivalDistribution::Uniform(
-                UniformArrival {
-                    interval: 100,
-                }
-            ),
-            value_distribution: ValueDistribution::Uniform(
-                UniformValue {
-                    min: 50,
-                    max: 100,
-                }
-            ),
+            arrival_distribution: ArrivalDistribution::Uniform(UniformArrival { interval: 100 }),
+            value_distribution: ValueDistribution::Uniform(UniformValue { min: 50, max: 100 }),
             state: State::Paused,
         };
         return (instance, tx);
@@ -88,7 +83,10 @@ impl TransactionGenerator {
             }
             ControlSignal::Step(num) => {
                 self.state = State::Step(num);
-                info!("Transaction generator started to generate {} transactions", num);
+                info!(
+                    "Transaction generator started to generate {} transactions",
+                    num
+                );
             }
             ControlSignal::SetArrivalDistribution(new) => {
                 self.arrival_distribution = new;
@@ -108,16 +106,16 @@ impl TransactionGenerator {
             loop {
                 // check the current state and try to receive control message
                 match self.state {
-                    State::Continuous(_) | State::Step(_) => {
-                        match self.control_chan.try_recv() {
-                            Ok(signal) => {
-                                self.handle_control_signal(signal);
-                                continue;
-                            }
-                            Err(channel::TryRecvError::Empty) => {}
-                            Err(channel::TryRecvError::Disconnected) => panic!("Transaction generator control channel detached"),
+                    State::Continuous(_) | State::Step(_) => match self.control_chan.try_recv() {
+                        Ok(signal) => {
+                            self.handle_control_signal(signal);
+                            continue;
                         }
-                    }
+                        Err(channel::TryRecvError::Empty) => {}
+                        Err(channel::TryRecvError::Disconnected) => {
+                            panic!("Transaction generator control channel detached")
+                        }
+                    },
                     State::Paused => {
                         // block until we get a signal
                         let signal = self.control_chan.recv().unwrap();
@@ -130,9 +128,7 @@ impl TransactionGenerator {
                     if self.mempool.lock().unwrap().len() as u64 >= throttle {
                         // if the mempool is full, just skip this transaction
                         let interval: u64 = match &self.arrival_distribution {
-                            ArrivalDistribution::Uniform(d) => {
-                                d.interval
-                            }
+                            ArrivalDistribution::Uniform(d) => d.interval,
                         };
                         let interval = time::Duration::from_micros(interval);
                         thread::sleep(interval);
@@ -169,9 +165,7 @@ impl TransactionGenerator {
                     }
                 };
                 let interval: u64 = match &self.arrival_distribution {
-                    ArrivalDistribution::Uniform(d) => {
-                        d.interval
-                    }
+                    ArrivalDistribution::Uniform(d) => d.interval,
                 };
                 let interval = time::Duration::from_micros(interval);
                 thread::sleep(interval);

@@ -1,18 +1,18 @@
-use std::cell::RefCell;
 use crate::crypto::hash::Hashable;
-use ed25519_dalek::{Keypair, Signature};
 use crate::transaction::{Address, Authorization, CoinId, Input, Output, Transaction};
 use bincode::{deserialize, serialize};
-use std::{error, fmt};
-use std::convert::TryInto;
-use std::sync::Mutex;
-use std::collections::HashMap;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use rand::Rng;
+use ed25519_dalek::{Keypair, Signature};
 use rand::rngs::OsRng;
+use rand::Rng;
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::convert::TryInto;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Mutex;
+use std::{error, fmt};
 
 pub const COIN_CF: &str = "COIN";
-pub const KEYPAIR_CF: &str = "KEYPAIR";     // &Address to &KeyPairPKCS8
+pub const KEYPAIR_CF: &str = "KEYPAIR"; // &Address to &KeyPairPKCS8
 
 pub type Result<T> = std::result::Result<T, WalletError>;
 
@@ -59,15 +59,18 @@ impl From<rocksdb::Error> for WalletError {
 
 impl Wallet {
     fn open<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
-        let coin_cf =
-            rocksdb::ColumnFamilyDescriptor::new(COIN_CF, rocksdb::Options::default());
+        let coin_cf = rocksdb::ColumnFamilyDescriptor::new(COIN_CF, rocksdb::Options::default());
         let keypair_cf =
             rocksdb::ColumnFamilyDescriptor::new(KEYPAIR_CF, rocksdb::Options::default());
         let mut db_opts = rocksdb::Options::default();
         db_opts.create_missing_column_families(true);
         db_opts.create_if_missing(true);
         let handle = rocksdb::DB::open_cf_descriptors(&db_opts, path, vec![coin_cf, keypair_cf])?;
-        return Ok(Self { db: handle, keypairs: Mutex::new(HashMap::new()), counter: AtomicUsize::new(0), });
+        return Ok(Self {
+            db: handle,
+            keypairs: Mutex::new(HashMap::new()),
+            counter: AtomicUsize::new(0),
+        });
     }
 
     pub fn new<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
@@ -89,7 +92,8 @@ impl Wallet {
 
     pub fn load_keypair(&self, keypair: Keypair) -> Result<Address> {
         let cf = self.db.cf_handle(KEYPAIR_CF).unwrap();
-        let addr: Address = ring::digest::digest(&ring::digest::SHA256, &keypair.public.as_bytes().as_ref()).into();
+        let addr: Address =
+            ring::digest::digest(&ring::digest::SHA256, &keypair.public.as_bytes().as_ref()).into();
         self.db.put_cf(cf, &addr, &keypair.to_bytes().to_vec())?;
         let mut keypairs = self.keypairs.lock().unwrap();
         keypairs.insert(addr, keypair);
@@ -149,16 +153,24 @@ impl Wallet {
     }
 
     /// Create a transaction using the wallet coins
-    pub fn create_transaction(&self, recipient: Address, value: u64, previous_used_coin: Option<Input> ) -> Result<Transaction> {
+    pub fn create_transaction(
+        &self,
+        recipient: Address,
+        value: u64,
+        previous_used_coin: Option<Input>,
+    ) -> Result<Transaction> {
         let mut coins_to_use: Vec<Input> = vec![];
         let mut value_sum = 0u64;
         let cf = self.db.cf_handle(COIN_CF).unwrap();
         let iter = match previous_used_coin {
             Some(c) => {
                 let prev_key = serialize(&c.coin).unwrap();
-                self.db.iterator_cf(cf, rocksdb::IteratorMode::From(&prev_key, rocksdb::Direction::Forward))?
-            },
-            None => self.db.iterator_cf(cf, rocksdb::IteratorMode::Start)?
+                self.db.iterator_cf(
+                    cf,
+                    rocksdb::IteratorMode::From(&prev_key, rocksdb::Direction::Forward),
+                )?
+            }
+            None => self.db.iterator_cf(cf, rocksdb::IteratorMode::Start)?,
         };
         // iterate through our wallet
         for (k, v) in iter {
@@ -194,7 +206,7 @@ impl Wallet {
             });
         }
 
-        let mut owners: Vec<Address> = coins_to_use.iter().map(|input|input.owner).collect();
+        let mut owners: Vec<Address> = coins_to_use.iter().map(|input| input.owner).collect();
         let unsigned = Transaction {
             input: coins_to_use,
             output: output,
@@ -214,13 +226,13 @@ impl Wallet {
                     pubkey: v.public.to_bytes().to_vec(),
                     signature: v.sign(&raw_unsigned).to_bytes().to_vec(),
                 });
-            }
-            else {
+            } else {
                 return Err(WalletError::MissingKeyPair);
             }
             drop(keypairs);
         }
-        self.counter.fetch_sub(unsigned.input.len(), Ordering::Relaxed);
+        self.counter
+            .fetch_sub(unsigned.input.len(), Ordering::Relaxed);
         Ok(Transaction {
             authorization,
             ..unsigned
@@ -231,9 +243,9 @@ impl Wallet {
 #[cfg(test)]
 pub mod tests {
     use super::Wallet;
-    use crate::transaction::{Input, CoinId};
-    use crate::transaction::tests::generate_random_coinid;
     use crate::crypto::hash::H256;
+    use crate::transaction::tests::generate_random_coinid;
+    use crate::transaction::{CoinId, Input};
 
     #[test]
     fn wallet() {
@@ -246,29 +258,28 @@ pub mod tests {
         // give the test address 10 x 10 coins
         let mut ico: Vec<Input> = vec![];
         for _ in 0..10 {
-            ico.push(
-                Input{
-                    value: 10,
-                    owner: addr,
-                    coin: generate_random_coinid(),
-                });
+            ico.push(Input {
+                value: 10,
+                owner: addr,
+                coin: generate_random_coinid(),
+            });
         }
-        w.apply_diff(&ico,&[]).unwrap();
+        w.apply_diff(&ico, &[]).unwrap();
         assert_eq!(w.balance().unwrap(), 100);
 
         // generate transactions
         let tx = w.create_transaction(H256::default(), 19, None).unwrap();
-        assert_eq!(tx.input.len(),2);
-        assert_eq!(tx.input[0].value,10);
-        assert_eq!(tx.input[1].value,10);
-        assert_eq!(tx.output.len(),2);
-        assert_eq!(tx.output[0].recipient,H256::default());
-        assert_eq!(tx.output[0].value,19);
-        assert_eq!(tx.output[1].recipient,addr);
-        assert_eq!(tx.output[1].value,1);
+        assert_eq!(tx.input.len(), 2);
+        assert_eq!(tx.input[0].value, 10);
+        assert_eq!(tx.input[1].value, 10);
+        assert_eq!(tx.output.len(), 2);
+        assert_eq!(tx.output[0].recipient, H256::default());
+        assert_eq!(tx.output[0].value, 19);
+        assert_eq!(tx.output[1].recipient, addr);
+        assert_eq!(tx.output[1].value, 1);
 
         // remove coins
-        w.apply_diff(&[],&ico).unwrap();
+        w.apply_diff(&[], &ico).unwrap();
         assert_eq!(w.balance().unwrap(), 0);
     }
 

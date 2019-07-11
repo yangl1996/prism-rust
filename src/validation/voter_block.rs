@@ -33,24 +33,29 @@ pub fn get_missing_references(
 }
 
 pub fn check_chain_number(content: &Content, blockchain: &BlockChain) -> bool {
-    let chain_num = blockchain.voter_chain_number(&content.voter_parent).unwrap();
+    let chain_num = blockchain
+        .voter_chain_number(&content.voter_parent)
+        .unwrap();
     chain_num == content.chain_number
 }
 
-pub fn check_levels_voted(
-    content: &Content,
-    blockchain: &BlockChain,
-    parent: &H256
-) -> bool {
-    let mut start = blockchain.deepest_voted_level(&content.voter_parent).unwrap();//need to be +1
+pub fn check_levels_voted(content: &Content, blockchain: &BlockChain, parent: &H256) -> bool {
+    let mut start = blockchain
+        .deepest_voted_level(&content.voter_parent)
+        .unwrap(); //need to be +1
     let end = blockchain.proposer_level(parent).unwrap();
 
-    if start > end { return false; }//end < start means incorrect parent level
-    if content.votes.len() != (end - start) as usize { return false; }//
+    if start > end {
+        return false;
+    } //end < start means incorrect parent level
+    if content.votes.len() != (end - start) as usize {
+        return false;
+    } //
     for vote in content.votes.iter() {
         start += 1;
-        if start != blockchain.proposer_level(vote).unwrap() { return false; }
+        if start != blockchain.proposer_level(vote).unwrap() {
+            return false;
+        }
     }
     true
 }
-

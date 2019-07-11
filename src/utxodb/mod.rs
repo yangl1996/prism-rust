@@ -1,9 +1,9 @@
 use crate::crypto::hash::Hashable;
 use crate::crypto::hash::H256;
+use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 use crate::transaction::{CoinId, Input, Output, Transaction};
 use bincode::serialize;
 use rocksdb::*;
-use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 
 pub struct UtxoDatabase {
     pub db: rocksdb::DB, // coin id to output
@@ -14,12 +14,12 @@ impl UtxoDatabase {
     fn open<P: AsRef<std::path::Path>>(path: P) -> Result<Self, rocksdb::Error> {
         let cfs = vec![];
         let mut opts = Options::default();
-        opts.set_prefix_extractor( SliceTransform::create_fixed_prefix(32));
+        opts.set_prefix_extractor(SliceTransform::create_fixed_prefix(32));
         opts.set_allow_concurrent_memtable_write(false);
         let mut memtable_opts = MemtableFactory::HashSkipList {
             bucket_count: 1 << 20,
             height: 8,
-            branching_factor: 4
+            branching_factor: 4,
         };
         opts.set_memtable_factory(memtable_opts);
         // https://github.com/facebook/rocksdb/blob/671d15cbdd3839acb54cb21a2aa82efca4917155/options/options.cc#L509
@@ -55,7 +55,9 @@ impl UtxoDatabase {
         let mut iter_opt = rocksdb::ReadOptions::default();
         iter_opt.set_prefix_same_as_start(false);
         iter_opt.set_total_order_seek(true);
-        let iter = self.db.iterator_opt(rocksdb::IteratorMode::Start, &iter_opt);
+        let iter = self
+            .db
+            .iterator_opt(rocksdb::IteratorMode::Start, &iter_opt);
         let mut inited = false;
         let mut checksum: Vec<u8> = vec![];
         for (k, _) in iter {
@@ -63,7 +65,11 @@ impl UtxoDatabase {
                 checksum = vec![0; k.as_ref().len()];
                 inited = true;
             }
-            checksum = checksum.iter().zip(k.as_ref()).map(|(&c, &k)| c ^ k).collect();
+            checksum = checksum
+                .iter()
+                .zip(k.as_ref())
+                .map(|(&c, &k)| c ^ k)
+                .collect();
         }
         return Ok(checksum);
     }
@@ -71,7 +77,8 @@ impl UtxoDatabase {
     pub fn add_transaction(
         &self,
         t: &Transaction,
-        hash: H256) -> Result<(Vec<Input>, Vec<Input>), rocksdb::Error> {
+        hash: H256,
+    ) -> Result<(Vec<Input>, Vec<Input>), rocksdb::Error> {
         let mut added_coins: Vec<Input> = vec![];
         let mut removed_coins: Vec<Input> = vec![];
 
@@ -97,8 +104,7 @@ impl UtxoDatabase {
                 hash: hash,
                 index: idx as u32,
             };
-            batch
-                .put(serialize(&id).unwrap(), serialize(&output).unwrap())?;
+            batch.put(serialize(&id).unwrap(), serialize(&output).unwrap())?;
             let coin = Input {
                 coin: id,
                 value: output.value,
@@ -122,7 +128,8 @@ impl UtxoDatabase {
     pub fn remove_transaction(
         &self,
         t: &Transaction,
-        hash: H256) -> Result<(Vec<Input>, Vec<Input>), rocksdb::Error> {
+        hash: H256,
+    ) -> Result<(Vec<Input>, Vec<Input>), rocksdb::Error> {
         let mut removed_coins: Vec<Input> = vec![];
         let mut added_coins: Vec<Input> = vec![];
 
@@ -158,8 +165,7 @@ impl UtxoDatabase {
                 value: input.value,
                 recipient: input.owner,
             };
-            batch
-                .put(serialize(&input.coin).unwrap(), serialize(&out).unwrap())?;
+            batch.put(serialize(&input.coin).unwrap(), serialize(&out).unwrap())?;
             added_coins.push(input.clone());
         }
         // write the transaction as a batch
