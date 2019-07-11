@@ -125,7 +125,7 @@ const addVotingBlock = (idx, blockId, sourceNodeId, parentId, votes) => {
   if(!chainsData[idx].blocks) return
   const sourceNode = nodes.find(node => node.nodeId==sourceNodeId)
   const sourceNodeLocation = projection([sourceNode.longitude, sourceNode.latitude])
-  const parent = parentId ? chainsData[idx].blocks.find(b => b.blockId===parentId) : null
+  const parent = parentId!==null ? chainsData[idx].blocks.find(b => b.blockId===parentId) : null
   const newNode = {parent, blockId, children: [], sourceNodeLocation} 
   if(parent) parent.children.push(newNode)
   chainsData[idx].links.push({source: parent, target: newNode})
@@ -139,7 +139,7 @@ if(mock){
   let chain = 0, x=0
   let scale = d3.scaleLinear().domain([0, numChainsToDisplay]).range([1.0, 0.0])
   while(chain<numChainsToDisplay){
-    chainsData.push({x, y: 0, blocks: [], links: [], lastVotedBlock: -1, fakeBlocks: [], fakeLinks: [], shouldShift: false})
+    chainsData.push({x, y: 0, blocks: [], links: [], lastVotedBlock: 0, fakeBlocks: [], fakeLinks: [], shouldShift: false})
     const genesisBlock = {parent: null, blockId: votingBlockId, children: [], sourceNodeLocation: null}
     chainsData[chain].blocks.push(genesisBlock)
     votingBlockId++
@@ -155,7 +155,7 @@ if(mock){
   }
 
   while(chain<numChains){
-    chainsData.push({blocks: [], lastVotedBlock: -1, fakeBlocks: [], fakeLinks: []})
+    chainsData.push({blocks: [], lastVotedBlock: 0, fakeBlocks: [], fakeLinks: []})
     const genesisBlock = {parent: null, blockId: votingBlockId, children: [], sourceNodeLocation: null}
     chainsData[chain].blocks.push(genesisBlock)
     votingBlockId+=1

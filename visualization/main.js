@@ -1,3 +1,4 @@
+const mock = true
 let width = 1080,
     height = 600
 
