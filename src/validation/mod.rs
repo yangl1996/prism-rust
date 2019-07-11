@@ -4,8 +4,8 @@ mod voter_block;
 use crate::block::{Block, Content};
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
-use crate::crypto::hash::{Hashable, H256};
 use crate::config::*;
+use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::merkle::verify;
 extern crate bigint;
 use bigint::uint::U256;
@@ -43,11 +43,15 @@ impl std::fmt::Display for BlockResult {
             BlockResult::WrongSortitionId => write!(f, "Sortition id is not same as content type"),
             BlockResult::WrongSortitionProof => write!(f, "Sortition Merkle proof is incorrect"),
             BlockResult::MissingReferences(_) => write!(f, "referred blocks not in system"),
-            BlockResult::WrongProposerRef => write!(f, "referred proposer blocks level larger than parent"),
+            BlockResult::WrongProposerRef => {
+                write!(f, "referred proposer blocks level larger than parent")
+            }
             BlockResult::WrongChainNumber => write!(f, "chain number out of range"),
             BlockResult::WrongVoteLevel => write!(f, "incorrent vote levels"),
             BlockResult::EmptyTransaction => write!(f, "empty transaction input or output"),
-            BlockResult::ZeroValue => write!(f, "transaction input or output value contains a zero"),
+            BlockResult::ZeroValue => {
+                write!(f, "transaction input or output value contains a zero")
+            }
             BlockResult::InsufficientInput => write!(f, "insufficient input"),
             BlockResult::WrongSignature => write!(f, "signature mismatch"),
         }
@@ -55,11 +59,7 @@ impl std::fmt::Display for BlockResult {
 }
 
 /// Validate a block.
-pub fn check_block(
-    block: &Block,
-    blockchain: &BlockChain,
-    blockdb: &BlockDatabase,
-) -> BlockResult {
+pub fn check_block(block: &Block, blockchain: &BlockChain, blockdb: &BlockDatabase) -> BlockResult {
     // TODO: Check difficulty. Where should we get the current difficulty ranges?
 
     match check_pow_sortition_id(block) {
@@ -83,10 +83,7 @@ pub fn check_block(
 }
 
 // check PoW and sortition id
-pub fn check_pow_sortition_id(
-    block: &Block,
-) -> BlockResult {
-
+pub fn check_pow_sortition_id(block: &Block) -> BlockResult {
     let sortition_id = get_sortition_id(&block.hash(), &block.header.difficulty);
     if let Some(sortition_id) = sortition_id {
         let correct_sortition_id = match &block.content {
@@ -104,13 +101,16 @@ pub fn check_pow_sortition_id(
 }
 
 /// check sortition proof
-pub fn check_sortition_proof(
-    block: &Block,
-) -> BlockResult {
-
+pub fn check_sortition_proof(block: &Block) -> BlockResult {
     let sortition_id = get_sortition_id(&block.hash(), &block.header.difficulty);
     if let Some(sortition_id) = sortition_id {
-        if !verify(&block.header.content_merkle_root, &block.content.hash(), &block.sortition_proof, sortition_id as usize, (NUM_VOTER_CHAINS + FIRST_VOTER_INDEX) as usize) {
+        if !verify(
+            &block.header.content_merkle_root,
+            &block.content.hash(),
+            &block.sortition_proof,
+            sortition_id as usize,
+            (NUM_VOTER_CHAINS + FIRST_VOTER_INDEX) as usize,
+        ) {
             return BlockResult::WrongSortitionProof;
         }
     } else {
@@ -158,8 +158,7 @@ pub fn check_data_availability(
 
     if !missing.is_empty() {
         return BlockResult::MissingReferences(missing);
-    }
-    else {
+    } else {
         return BlockResult::Pass;
     }
 }
@@ -216,10 +215,7 @@ pub fn check_content_semantic(
 }
 
 /// Check whether a proposer block exists in the block database and the blockchain.
-fn check_proposer_block_exists(
-    hash: H256,
-    blockchain: &BlockChain,
-) -> bool {
+fn check_proposer_block_exists(hash: H256, blockchain: &BlockChain) -> bool {
     let in_chain = match blockchain.contains_proposer(&hash) {
         Err(e) => panic!("Blockchain error {}", e),
         Ok(b) => b,
@@ -242,7 +238,7 @@ fn check_voter_block_exists(hash: H256, blockchain: &BlockChain) -> bool {
 fn check_transaction_block_exists(hash: H256, blockchain: &BlockChain) -> bool {
     let in_chain = match blockchain.contains_transaction(&hash) {
         Err(e) => panic!("Blockchain error {}", e),
-        Ok(b) => b
+        Ok(b) => b,
     };
 
     return in_chain;
@@ -277,17 +273,16 @@ pub fn get_sortition_id(hash: &H256, difficulty: &H256) -> Option<u16> {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
-    use super::get_sortition_id;
     use super::super::config::*;
+    use super::get_sortition_id;
     use crate::crypto::hash::H256;
 
     #[test]
     fn sortition_id() {
         let difficulty = *DEFAULT_DIFFICULTY;
-        let hash: H256 = [0;32].into();
+        let hash: H256 = [0; 32].into();
         assert_eq!(get_sortition_id(&hash, &difficulty), Some(PROPOSER_INDEX));
         // This hash should fail PoW test (so result is None)
         assert_eq!(get_sortition_id(&difficulty, &difficulty), None);

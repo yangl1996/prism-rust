@@ -8,23 +8,23 @@ use crate::blockdb::BlockDatabase;
 use crate::config::*;
 use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::merkle::MerkleTree;
-use crate::handler::new_validated_block;
-use crate::network::server::Handle as ServerHandle;
 use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
-use crate::validation::get_sortition_id;
+use crate::handler::new_validated_block;
 use crate::network::message::Message;
+use crate::network::server::Handle as ServerHandle;
+use crate::validation::get_sortition_id;
 
 use log::info;
 
-use memory_pool::MemoryPool;
 use crossbeam::channel::{unbounded, Receiver, Sender, TryRecvError};
-use std::time::SystemTime;
+use memory_pool::MemoryPool;
 use std::time;
+use std::time::SystemTime;
 
-use std::sync::{Arc, Mutex};
-use std::thread;
 use rand::distributions::Distribution;
 use std::collections::BTreeSet;
+use std::sync::{Arc, Mutex};
+use std::thread;
 
 use rand::Rng;
 
@@ -76,7 +76,7 @@ pub struct Handle {
 }
 
 pub fn new(
-    mempool : &Arc<Mutex<MemoryPool>>,
+    mempool: &Arc<Mutex<MemoryPool>>,
     blockchain: &Arc<BlockChain>,
     blockdb: &Arc<BlockDatabase>,
     ctx_update_source: Receiver<ContextUpdateSignal>,
@@ -92,7 +92,7 @@ pub fn new(
     };
     contents.push(Content::Proposer(proposer_content));
 
-    let transaction_content =  transaction::Content {
+    let transaction_content = transaction::Content {
         transactions: vec![],
     };
     contents.push(Content::Transaction(transaction_content));
@@ -142,7 +142,9 @@ impl Handle {
     }
 
     pub fn start(&self, lambda: u64, lazy: bool) {
-        self.control_chan.send(ControlSignal::Start(lambda, lazy)).unwrap();
+        self.control_chan
+            .send(ControlSignal::Start(lambda, lazy))
+            .unwrap();
     }
 
     pub fn step(&self) {
@@ -168,7 +170,10 @@ impl Context {
                 self.operating_state = OperatingState::ShutDown;
             }
             ControlSignal::Start(i, l) => {
-                info!("Miner starting in continuous mode with lambda {} and lazy mode {}", i, l);
+                info!(
+                    "Miner starting in continuous mode with lambda {} and lazy mode {}",
+                    i, l
+                );
                 self.operating_state = OperatingState::Run(i, l);
             }
             ControlSignal::Step => {
@@ -180,10 +185,13 @@ impl Context {
 
     fn miner_loop(&mut self) {
         // tell ourself to update all context
-        self.context_update_tx.send(ContextUpdateSignal::NewProposerBlock);
-        self.context_update_tx.send(ContextUpdateSignal::NewTransactionBlock);
+        self.context_update_tx
+            .send(ContextUpdateSignal::NewProposerBlock);
+        self.context_update_tx
+            .send(ContextUpdateSignal::NewTransactionBlock);
         for voter_chain in 0..NUM_VOTER_CHAINS {
-            self.context_update_tx.send(ContextUpdateSignal::NewVoterBlock(voter_chain as u16));
+            self.context_update_tx
+                .send(ContextUpdateSignal::NewVoterBlock(voter_chain as u16));
         }
 
         let mut rng = rand::thread_rng();
@@ -221,7 +229,7 @@ impl Context {
                     ContextUpdateSignal::NewProposerBlock => new_proposer_block = true,
                     ContextUpdateSignal::NewVoterBlock(chain) => {
                         new_voter_block.insert(chain);
-                    },
+                    }
                     ContextUpdateSignal::NewTransactionBlock => new_transaction_block = true,
                 }
             }
@@ -235,8 +243,7 @@ impl Context {
                 if let Content::Voter(c) = &mut self.contents[chain_id] {
                     c.voter_parent = voter_parent;
                     touched_content.insert(chain_id as u16);
-                }
-                else {
+                } else {
                     unreachable!();
                 }
             }
@@ -250,8 +257,7 @@ impl Context {
                 if let Content::Transaction(c) = &mut self.contents[TRANSACTION_INDEX as usize] {
                     c.transactions = transactions;
                     touched_content.insert(TRANSACTION_INDEX);
-                }
-                else {
+                } else {
                     unreachable!();
                 }
             }
@@ -269,12 +275,11 @@ impl Context {
                         c.transaction_refs = refs;
                         touched_content.insert(PROPOSER_INDEX);
                     }
-                } 
-                else { 
-                    unreachable!(); 
+                } else {
+                    unreachable!();
                 }
             }
-            
+
             // update the best proposer
             if new_proposer_block {
                 self.header.parent = self.blockchain.best_proposer().unwrap();
@@ -298,9 +303,8 @@ impl Context {
                         c.transaction_refs = refs;
                         c.proposer_refs = self.blockchain.unreferred_proposers();
                         touched_content.insert(PROPOSER_INDEX);
-                    } 
-                    else { 
-                        unreachable!(); 
+                    } else {
+                        unreachable!();
                     }
                 }
 
@@ -308,8 +312,7 @@ impl Context {
                 let best_proposer = self.blockchain.best_proposer().unwrap();
                 if self.header.parent == best_proposer {
                     break;
-                }
-                else {
+                } else {
                     new_proposer_block = true;
                     self.header.parent = best_proposer;
                     continue;
@@ -322,33 +325,34 @@ impl Context {
                     let chain_id: usize = (FIRST_VOTER_INDEX + voter_chain) as usize;
                     let voter_parent = if let Content::Voter(c) = &self.contents[chain_id] {
                         c.voter_parent
-                    }
-                    else {
+                    } else {
                         unreachable!();
                     };
                     if let Content::Voter(c) = &mut self.contents[chain_id] {
-                        c.votes = self.blockchain.unvoted_proposer(&voter_parent, &self.header.parent).unwrap();
+                        c.votes = self
+                            .blockchain
+                            .unvoted_proposer(&voter_parent, &self.header.parent)
+                            .unwrap();
                         touched_content.insert(chain_id as u16);
-                    }
-                    else {
+                    } else {
                         unreachable!();
                     }
                 }
-            }
-            else {
+            } else {
                 for voter_chain in new_voter_block.iter() {
                     let chain_id: usize = (FIRST_VOTER_INDEX + voter_chain) as usize;
                     let voter_parent = if let Content::Voter(c) = &self.contents[chain_id] {
                         c.voter_parent
-                    }
-                    else {
+                    } else {
                         unreachable!();
                     };
                     if let Content::Voter(c) = &mut self.contents[chain_id] {
-                        c.votes = self.blockchain.unvoted_proposer(&voter_parent, &self.header.parent).unwrap();
+                        c.votes = self
+                            .blockchain
+                            .unvoted_proposer(&voter_parent, &self.header.parent)
+                            .unwrap();
                         touched_content.insert(chain_id as u16);
-                    }
-                    else {
+                    } else {
                         unreachable!();
                     }
                 }
@@ -361,18 +365,24 @@ impl Context {
             if new_proposer_block {
                 // if there has been a new proposer block, simply rebuild the merkle tree
                 self.content_merkle_tree = MerkleTree::new(&self.contents);
-            }
-            else {
+            } else {
                 // if there has not been a new proposer block, update individual entries
                 // TODO: add batch updating to merkle tree
                 for voter_chain in new_voter_block.iter() {
                     let chain_id = (FIRST_VOTER_INDEX + voter_chain) as usize;
-                    self.content_merkle_tree.update(chain_id, &self.contents[chain_id]);
+                    self.content_merkle_tree
+                        .update(chain_id, &self.contents[chain_id]);
                 }
                 if new_transaction_block {
-                    self.content_merkle_tree.update(TRANSACTION_INDEX as usize, &self.contents[TRANSACTION_INDEX as usize]);
+                    self.content_merkle_tree.update(
+                        TRANSACTION_INDEX as usize,
+                        &self.contents[TRANSACTION_INDEX as usize],
+                    );
                     if touched_content.contains(&PROPOSER_INDEX) {
-                        self.content_merkle_tree.update(PROPOSER_INDEX as usize, &self.contents[PROPOSER_INDEX as usize]);
+                        self.content_merkle_tree.update(
+                            PROPOSER_INDEX as usize,
+                            &self.contents[PROPOSER_INDEX as usize],
+                        );
                     }
                 }
             }
@@ -412,7 +422,9 @@ impl Context {
                                         }
                                     }
                                     Content::Proposer(content) => {
-                                        if content.transaction_refs.is_empty() && content.proposer_refs.is_empty() {
+                                        if content.transaction_refs.is_empty()
+                                            && content.proposer_refs.is_empty()
+                                        {
                                             true
                                         } else {
                                             false
@@ -432,7 +444,8 @@ impl Context {
                 if !skip {
                     PERFORMANCE_COUNTER.record_mine_block(&mined_block);
                     self.blockdb.insert(&mined_block).unwrap();
-                    self.server.broadcast(Message::NewBlockHashes(vec![header_hash]));
+                    self.server
+                        .broadcast(Message::NewBlockHashes(vec![header_hash]));
                     new_validated_block(
                         &mined_block,
                         &self.mempool,
@@ -447,9 +460,18 @@ impl Context {
                 }
                 // after we mined this block, we update the context based on this block
                 match &mined_block.content {
-                    Content::Proposer(_) => self.context_update_tx.send(ContextUpdateSignal::NewProposerBlock).unwrap(),
-                    Content::Voter(content) => self.context_update_tx.send(ContextUpdateSignal::NewVoterBlock(content.chain_number)).unwrap(),
-                    Content::Transaction(_) => self.context_update_tx.send(ContextUpdateSignal::NewTransactionBlock).unwrap(),
+                    Content::Proposer(_) => self
+                        .context_update_tx
+                        .send(ContextUpdateSignal::NewProposerBlock)
+                        .unwrap(),
+                    Content::Voter(content) => self
+                        .context_update_tx
+                        .send(ContextUpdateSignal::NewVoterBlock(content.chain_number))
+                        .unwrap(),
+                    Content::Transaction(_) => self
+                        .context_update_tx
+                        .send(ContextUpdateSignal::NewTransactionBlock)
+                        .unwrap(),
                 }
             }
 
@@ -467,7 +489,8 @@ impl Context {
     /// Given a valid header, sortition its hash and create the block
     fn produce_block(&self, header_hash: H256) -> Block {
         // Get sortition ID
-        let sortition_id = get_sortition_id(&header_hash, &self.header.difficulty).expect("Block Hash should <= Difficulty");
+        let sortition_id = get_sortition_id(&header_hash, &self.header.difficulty)
+            .expect("Block Hash should <= Difficulty");
         // Create a block
         // get the merkle proof
         let sortition_proof: Vec<H256> = self.content_merkle_tree.proof(sortition_id as usize);
@@ -511,19 +534,19 @@ fn get_time() -> u128 {
 
 #[cfg(test)]
 mod tests {
-    use crate::blockdb::BlockDatabase;
-    use crate::blockchain::BlockChain;
-    use crate::block::{Content, proposer, transaction, voter};
-    use crate::block::tests::{proposer_block, voter_block, transaction_block};
-    use std::sync::{Arc, Mutex};
     use super::memory_pool::MemoryPool;
     use super::{Context, OperatingState};
+    use crate::block::tests::{proposer_block, transaction_block, voter_block};
+    use crate::block::{proposer, transaction, voter, Content};
+    use crate::blockchain::BlockChain;
+    use crate::blockdb::BlockDatabase;
     use crate::config;
-    use crate::crypto::hash::{H256, Hashable};
+    use crate::crypto::hash::{Hashable, H256};
     use crate::crypto::merkle::MerkleTree;
     use crate::network::server;
-    use crate::validation::{check_block, BlockResult};
     use crate::transaction::tests as tx_generator;
+    use crate::validation::{check_block, BlockResult};
+    use std::sync::{Arc, Mutex};
 
     /*
     #[test]
@@ -548,7 +571,7 @@ mod tests {
        the db and the blockchain. if we add those, the test becomes an integration test, and no
        longer fits here.
        TODO: Gerui: but only here can we call a private function
-    */ 
+    */
 
     /*
     // test assemble block and check the block passes validation

@@ -29,8 +29,9 @@ impl Content {
 
 impl PayloadSize for Content {
     fn size(&self) -> usize {
-        return std::mem::size_of::<u16>() + std::mem::size_of::<H256>() + 
-               self.votes.len() * std::mem::size_of::<H256>();
+        return std::mem::size_of::<u16>()
+            + std::mem::size_of::<H256>()
+            + self.votes.len() * std::mem::size_of::<H256>();
     }
 }
 
@@ -38,7 +39,7 @@ impl Hashable for Content {
     fn hash(&self) -> H256 {
         // TODO: we are hashing in a merkle tree. why do we need so?
         let merkle_tree = MerkleTree::new(&self.votes);
-        let mut bytes = [0u8;66];
+        let mut bytes = [0u8; 66];
         bytes[..2].copy_from_slice(&self.chain_number.to_be_bytes());
         bytes[2..34].copy_from_slice(self.voter_parent.as_ref());
         bytes[34..66].copy_from_slice(merkle_tree.root().as_ref());
@@ -68,15 +69,13 @@ pub fn genesis(chain_num: u16) -> Block {
     );
 }
 
-
 #[cfg(test)]
-pub mod test{
-    use super::super::voter::Content as voter_Content;// TODO: name change to VoterContent
+pub mod test {
     use super::super::proposer::tests::*;
     use super::super::transaction::tests::*;
+    use super::super::voter::Content as voter_Content; // TODO: name change to VoterContent
     use super::super::{Block, Content};
     use crate::crypto::hash::{Hashable, H256};
-
 
     #[test]
     fn test_hash() {

@@ -70,8 +70,8 @@ impl Hashable for Block {
 impl PayloadSize for Block {
     fn size(&self) -> usize {
         return std::mem::size_of::<header::Header>()
-             + self.content.size()
-             + self.sortition_proof.len() * std::mem::size_of::<H256>();
+            + self.content.size()
+            + self.sortition_proof.len() * std::mem::size_of::<H256>();
     }
 }
 
@@ -113,8 +113,8 @@ pub mod tests {
 
     use super::*;
     use crate::config;
-    use rand::Rng;
     use crate::transaction::Transaction;
+    use rand::Rng;
 
     macro_rules! random_nonce {
         () => {{
@@ -124,33 +124,70 @@ pub mod tests {
         }};
     }
 
-    pub fn proposer_block(parent: H256, timestamp: u128, proposer_refs: Vec<H256>, transaction_refs: Vec<H256>) -> Block {
+    pub fn proposer_block(
+        parent: H256,
+        timestamp: u128,
+        proposer_refs: Vec<H256>,
+        transaction_refs: Vec<H256>,
+    ) -> Block {
         let content = Content::Proposer(proposer::Content {
             transaction_refs,
             proposer_refs,
         });
         let content_hash = content.hash();
-        Block::new(parent, timestamp, random_nonce!(), content_hash, vec![content_hash],
-        content, [0u8;32], *config::DEFAULT_DIFFICULTY)
+        Block::new(
+            parent,
+            timestamp,
+            random_nonce!(),
+            content_hash,
+            vec![content_hash],
+            content,
+            [0u8; 32],
+            *config::DEFAULT_DIFFICULTY,
+        )
     }
 
-    pub fn voter_block(parent: H256, timestamp: u128, chain_number: u16, voter_parent: H256, votes: Vec<H256>) -> Block {
+    pub fn voter_block(
+        parent: H256,
+        timestamp: u128,
+        chain_number: u16,
+        voter_parent: H256,
+        votes: Vec<H256>,
+    ) -> Block {
         let content = Content::Voter(voter::Content {
             chain_number,
             voter_parent,
             votes,
         });
         let content_hash = content.hash();
-        Block::new(parent, timestamp, random_nonce!(), content_hash, vec![content_hash],
-        content, [0u8;32], *config::DEFAULT_DIFFICULTY)
+        Block::new(
+            parent,
+            timestamp,
+            random_nonce!(),
+            content_hash,
+            vec![content_hash],
+            content,
+            [0u8; 32],
+            *config::DEFAULT_DIFFICULTY,
+        )
     }
 
-    pub fn transaction_block(parent: H256, timestamp: u128, transactions: Vec<Transaction>) -> Block {
-        let content = Content::Transaction(transaction::Content {
-            transactions,
-        });
+    pub fn transaction_block(
+        parent: H256,
+        timestamp: u128,
+        transactions: Vec<Transaction>,
+    ) -> Block {
+        let content = Content::Transaction(transaction::Content { transactions });
         let content_hash = content.hash();
-        Block::new(parent, timestamp, random_nonce!(), content_hash, vec![content_hash],
-        content, [0u8;32], *config::DEFAULT_DIFFICULTY)
+        Block::new(
+            parent,
+            timestamp,
+            random_nonce!(),
+            content_hash,
+            vec![content_hash],
+            content,
+            [0u8; 32],
+            *config::DEFAULT_DIFFICULTY,
+        )
     }
 }

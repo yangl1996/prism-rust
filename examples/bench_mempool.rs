@@ -18,41 +18,41 @@
 //
 //#[cfg(feature = "test-utilities")]
 fn main() {
-//    use prism::transaction::tests::generate_random_transaction;
-//
-//
-//    // parse p2p server address
-//    let p2p_addr = "127.0.0.1:8000".parse::<net::SocketAddr>().unwrap_or_else(|e| {
-//        panic!("Error parsing P2P server address: {}", e);
-//        process::exit(1);
-//    });
-//
-//    // initialize mempool
-//    let mempool = MemoryPool::new();
-//    let mempool = Arc::new(std::sync::Mutex::new(mempool));
-//
-//
-//    let mut txs: Vec<(Transaction, H256)> = vec![];
-//    let start = Instant::now();
-//    for i in 0..TX_COUNT{
-//        let tx = generate_random_transaction();
-//        let hash = H256::default();
-//        txs.push((tx, hash));
-//    }
-//    let end = Instant::now();
-//    let time = end.duration_since(start).as_micros() as f64;
-//    println!("Tx generation rate {}", (TX_COUNT as f64)*TX_SIZE/time);
-//
-//    let start = Instant::now();
-////    for tx in txs.iter(){
-////        new_transaction(tx.clone(), &mempool)
-////    }
-////
-//    new_transaction_vec(txs, &mempool);
-//    let end = Instant::now();
-//    let time = end.duration_since(start).as_micros() as f64;
-//    println!("Mempool insertion rate {}", (TX_COUNT as f64)*TX_SIZE/time);
-//
+    //    use prism::transaction::tests::generate_random_transaction;
+    //
+    //
+    //    // parse p2p server address
+    //    let p2p_addr = "127.0.0.1:8000".parse::<net::SocketAddr>().unwrap_or_else(|e| {
+    //        panic!("Error parsing P2P server address: {}", e);
+    //        process::exit(1);
+    //    });
+    //
+    //    // initialize mempool
+    //    let mempool = MemoryPool::new();
+    //    let mempool = Arc::new(std::sync::Mutex::new(mempool));
+    //
+    //
+    //    let mut txs: Vec<(Transaction, H256)> = vec![];
+    //    let start = Instant::now();
+    //    for i in 0..TX_COUNT{
+    //        let tx = generate_random_transaction();
+    //        let hash = H256::default();
+    //        txs.push((tx, hash));
+    //    }
+    //    let end = Instant::now();
+    //    let time = end.duration_since(start).as_micros() as f64;
+    //    println!("Tx generation rate {}", (TX_COUNT as f64)*TX_SIZE/time);
+    //
+    //    let start = Instant::now();
+    ////    for tx in txs.iter(){
+    ////        new_transaction(tx.clone(), &mempool)
+    ////    }
+    ////
+    //    new_transaction_vec(txs, &mempool);
+    //    let end = Instant::now();
+    //    let time = end.duration_since(start).as_micros() as f64;
+    //    println!("Mempool insertion rate {}", (TX_COUNT as f64)*TX_SIZE/time);
+    //
 }
 //
 //
