@@ -15,9 +15,7 @@ websocket.onmessage = function (event) {
     const parent = proposerBlocks.find(el => el.blockId==data['ProposerBlock']['parent'])
     const sourceNodeId = data['ProposerBlock']['miner']
     let transactionBlockIds = data['ProposerBlock']['transaction_refs']
-    if(parent.children.length===0){
-      addProposerBlock(proposerBlockId, parent, sourceNodeId, transactionBlockIds)
-    }
+    addProposerBlock(proposerBlockId, parent, sourceNodeId, transactionBlockIds)
   }
 
   if('TransactionBlock' in data){

@@ -16,6 +16,7 @@ let transactionBlockId = 0
 let proposerBlockId = 0 
 let votingBlockId = 0
 if(mock){
+  const forkProbability = 0.05
 
   // Add 1 transaction block every 2 seconds
   d3.interval(() => {
@@ -31,10 +32,12 @@ if(mock){
     let parent = null
     if(proposerBlocks.length!==0) parent = proposerBlocks[proposerBlocks.length-1] 
     if(proposerBlocks.length>1){
-  //    if(Math.random()<0.05)
-  //      parent = proposerBlocks[proposerBlocks.length-2]
-  //    else
+      if(Math.random()<forkProbability){
+        parent = proposerBlocks[proposerBlocks.length-2]
+      }
+      else{
         parent = proposerBlocks[proposerBlocks.length-1]
+      }
     }
     const sourceNodeId = Math.floor(Math.random() * Math.floor(nodeIndex))
     let transactionBlockIds = transactionBlocks.map(block => block.blockId).filter(() => Math.random()<0.9)
