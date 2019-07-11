@@ -1,19 +1,19 @@
-use prism::blockchain::BlockChain;
-use prism::wallet::Wallet;
-use prism::blockdb::BlockDatabase;
-use prism::utxodb::UtxoDatabase;
-use prism::crypto::hash::{Hashable, H256};
-use prism::transaction::{Transaction, tests as tx_generator, CoinId, Input, Output};
-use prism::miner::memory_pool::MemoryPool;
-use prism::handler::{new_validated_block, update_ledger};
-use prism::network::server;
-use prism::config;
-use std::sync::{Mutex, mpsc};
-use std::net::{SocketAddr, IpAddr, Ipv4Addr};
-use prism::block::tests::{proposer_block, voter_block, transaction_block};
+use prism::block::tests::{proposer_block, transaction_block, voter_block};
 use prism::block::Content;
+use prism::blockchain::BlockChain;
+use prism::blockdb::BlockDatabase;
+use prism::config;
+use prism::crypto::hash::{Hashable, H256};
 use prism::experiment::ico;
+use prism::handler::{new_validated_block, update_ledger};
+use prism::miner::memory_pool::MemoryPool;
+use prism::network::server;
+use prism::transaction::{tests as tx_generator, CoinId, Input, Output, Transaction};
+use prism::utxodb::UtxoDatabase;
+use prism::wallet::Wallet;
 use std::cell::RefCell;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::sync::{mpsc, Mutex};
 
 #[test]
 fn integration() {
@@ -30,7 +30,11 @@ fn integration() {
     let mempool = Mutex::new(MemoryPool::new(10000000));
 
     let (msg_tx, _msg_rx) = mpsc::channel();
-    let (_ctx, server) = server::new(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 10999),msg_tx).expect("fail at creating server");
+    let (_ctx, server) = server::new(
+        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 10999),
+        msg_tx,
+    )
+    .expect("fail at creating server");
 
     // this section we define the timestamp and macros that increment timestamp automatically
     let mut timestamp: u128 = 0;
@@ -75,31 +79,42 @@ fn integration() {
     }
     macro_rules! check_transaction_output {
         ( $block:expr, $bool:expr ) => {{
-            for t in unwrap_transaction ! ($block) {
+            for t in unwrap_transaction!($block) {
                 let hash = t.hash();
                 for index in 0..t.output.len() {
-                    assert_eq ! (utxodb.contains( & CoinId{hash, index: index as u32}).unwrap(), $bool,
-                    "for tx {:?} output index {}, error in utxo, should be {}",hash,index,$bool);
+                    assert_eq!(
+                        utxodb
+                            .contains(&CoinId {
+                                hash,
+                                index: index as u32
+                            })
+                            .unwrap(),
+                        $bool,
+                        "for tx {:?} output index {}, error in utxo, should be {}",
+                        hash,
+                        index,
+                        $bool
+                    );
                 }
             }
         }};
     }
     macro_rules! random_transaction_block_0_input {
         () => {{
-            transaction_block!(
-                vec![Transaction{
-                    input:vec![],
-                    output:(0..3).map(|_|tx_generator::generate_random_output()).collect(),
-                    authorization:vec![],
-                    hash: RefCell::new(None),
-                }]
-            )
+            transaction_block!(vec![Transaction {
+                input: vec![],
+                output: (0..3)
+                    .map(|_| tx_generator::generate_random_output())
+                    .collect(),
+                authorization: vec![],
+                hash: RefCell::new(None),
+            }])
         }};
     }
 
     // start test
-    assert_eq!(blockchain.unreferred_transactions().len(),0);
-    assert_eq!(blockchain.unreferred_proposers().len(),1);
+    assert_eq!(blockchain.unreferred_transactions().len(), 0);
+    assert_eq!(blockchain.unreferred_proposers().len(), 1);
     assert_eq!(wallet.balance().unwrap(), 0);
 
     //test ico
@@ -110,16 +125,22 @@ fn integration() {
     let transaction_2 = random_transaction_block_0_input!();
     handle_block!(transaction_1);
     handle_block!(transaction_2);
-    assert_eq!(blockchain.unreferred_transactions().len(),2);
-    assert!(blockchain.unreferred_transactions().contains(&transaction_1.hash()));
-    assert!(blockchain.unreferred_transactions().contains(&transaction_2.hash()));
+    assert_eq!(blockchain.unreferred_transactions().len(), 2);
+    assert!(blockchain
+        .unreferred_transactions()
+        .contains(&transaction_1.hash()));
+    assert!(blockchain
+        .unreferred_transactions()
+        .contains(&transaction_2.hash()));
 
     //this proposer refers transaction blocks, and is to be referred by someone
-    let proposer_1 = proposer_block!(vec![],vec![transaction_1.hash()]);
+    let proposer_1 = proposer_block!(vec![], vec![transaction_1.hash()]);
     handle_block!(proposer_1);
-    assert_eq!(blockchain.unreferred_transactions().len(),1);
-    assert_eq!(blockchain.unreferred_proposers().len(),1);
-    assert!(blockchain.unreferred_proposers().contains(&proposer_1.hash()));
+    assert_eq!(blockchain.unreferred_transactions().len(), 1);
+    assert_eq!(blockchain.unreferred_proposers().len(), 1);
+    assert!(blockchain
+        .unreferred_proposers()
+        .contains(&proposer_1.hash()));
     assert_eq!(proposer_1.hash(), blockchain.best_proposer().unwrap());
     //create empty proposer (for proposer tree forking)
     let proposer_1_fork = proposer_block!();
@@ -130,11 +151,16 @@ fn integration() {
 
     parent_hash = proposer_1_fork.hash();
     //this proposer refers previous proposer and transaction blocks
-    let proposer_2 = proposer_block!(vec![proposer_1.hash(), proposer_1_fork_2.hash()], vec![transaction_2.hash()]);
+    let proposer_2 = proposer_block!(
+        vec![proposer_1.hash(), proposer_1_fork_2.hash()],
+        vec![transaction_2.hash()]
+    );
     handle_block!(proposer_2);
-    assert_eq!(blockchain.unreferred_transactions().len(),0);
-    assert_eq!(blockchain.unreferred_proposers().len(),1);
-    assert!(blockchain.unreferred_proposers().contains(&proposer_2.hash()));
+    assert_eq!(blockchain.unreferred_transactions().len(), 0);
+    assert_eq!(blockchain.unreferred_proposers().len(), 1);
+    assert!(blockchain
+        .unreferred_proposers()
+        .contains(&proposer_2.hash()));
     assert_eq!(proposer_2.hash(), blockchain.best_proposer().unwrap());
     //create empty proposer (for proposer tree forking)
     let proposer_2_fork = proposer_block!();
@@ -145,7 +171,11 @@ fn integration() {
     //voters vote for proposer_2, and it becomes new leader
     let mut voter_parent_to_fork = vec![];
     for chain_number in 0..config::NUM_VOTER_CHAINS {
-        let v = voter_block!(chain_number, blockchain.best_voter(chain_number as usize), vec![proposer_1.hash(), proposer_2.hash()]);
+        let v = voter_block!(
+            chain_number,
+            blockchain.best_voter(chain_number as usize),
+            vec![proposer_1.hash(), proposer_2.hash()]
+        );
         handle_block!(v);
         voter_parent_to_fork.push(v);
     }
@@ -176,15 +206,18 @@ fn integration() {
             let mut value = 0u64;
             for index in 0..t.output.len() {
                 value += t.output[index].value;
-                input.push(Input{
-                    coin: CoinId{hash, index: index as u32},
+                input.push(Input {
+                    coin: CoinId {
+                        hash,
+                        index: index as u32,
+                    },
                     value: t.output[index].value,
                     owner: t.output[index].recipient,
                 })
             }
-            txs.push(Transaction{
+            txs.push(Transaction {
                 input,
-                output: vec![Output{
+                output: vec![Output {
                     value,
                     recipient: wallet_address,
                 }],
@@ -198,7 +231,7 @@ fn integration() {
     handle_block!(transaction_4);
     let proposer_4 = proposer_block!(vec![], vec![transaction_4.hash()]);
     handle_block!(proposer_4);
-    let proposer_4_fork = proposer_block!(vec![proposer_3_fork.hash()], vec![transaction_4.hash()]);//refer tx 4 again
+    let proposer_4_fork = proposer_block!(vec![proposer_3_fork.hash()], vec![transaction_4.hash()]); //refer tx 4 again
     handle_block!(proposer_4_fork);
     parent_hash = proposer_3_fork.hash();
     let proposer_4_fork_2 = proposer_block!();
@@ -207,14 +240,18 @@ fn integration() {
 
     //voters vote for proposer_3 and 4
     for chain_number in 0..config::NUM_VOTER_CHAINS {
-        let v = voter_block!(chain_number, blockchain.best_voter(chain_number as usize), vec![proposer_4.hash(), proposer_3.hash()]);
+        let v = voter_block!(
+            chain_number,
+            blockchain.best_voter(chain_number as usize),
+            vec![proposer_4.hash(), proposer_3.hash()]
+        );
         handle_block!(v);
     }
     check_transaction_output!(transaction_3, true);
     check_transaction_output!(transaction_4, true);
     check_transaction_output!(transaction_2, false);
 
-    assert_eq!(wallet.balance().unwrap(), value_4+ico_number);
+    assert_eq!(wallet.balance().unwrap(), value_4 + ico_number);
 
     let transaction_5 = random_transaction_block_0_input!();
     let transaction_6 = random_transaction_block_0_input!();
@@ -222,20 +259,31 @@ fn integration() {
     handle_block!(transaction_6);
     let proposer_5 = proposer_block!(vec![], vec![transaction_5.hash()]);
     parent_hash = proposer_5.hash();
-    let proposer_6 = proposer_block!(vec![proposer_4_fork.hash(), proposer_4_fork_2.hash()], vec![transaction_6.hash()]);
+    let proposer_6 = proposer_block!(
+        vec![proposer_4_fork.hash(), proposer_4_fork_2.hash()],
+        vec![transaction_6.hash()]
+    );
     parent_hash = proposer_6.hash();
     handle_block!(proposer_5);
     handle_block!(proposer_6);
     //test proposer_6 is leader but proposer_5 is not, ledger should not grow
     //although this may fail validation
     for chain_number in 0..config::NUM_VOTER_CHAINS {
-        let v = voter_block!(chain_number, blockchain.best_voter(chain_number as usize), vec![proposer_6.hash()]);
+        let v = voter_block!(
+            chain_number,
+            blockchain.best_voter(chain_number as usize),
+            vec![proposer_6.hash()]
+        );
         handle_block!(v);
     }
     check_transaction_output!(transaction_5, false);
     check_transaction_output!(transaction_6, false);
     for chain_number in 0..config::NUM_VOTER_CHAINS {
-        let v = voter_block!(chain_number, blockchain.best_voter(chain_number as usize), vec![proposer_5.hash()]);
+        let v = voter_block!(
+            chain_number,
+            blockchain.best_voter(chain_number as usize),
+            vec![proposer_5.hash()]
+        );
         handle_block!(v);
     }
     check_transaction_output!(transaction_5, true);
@@ -248,57 +296,80 @@ fn integration() {
     parent_hash = proposer_7.hash();
 
     // the expression below depend on confirm algorithm
-    let not_enough_vote = 1;//config::NUM_VOTER_CHAINS/2-1;
+    let not_enough_vote = 1; //config::NUM_VOTER_CHAINS/2-1;
     for chain_number in 0..not_enough_vote {
-        let v = voter_block!(chain_number, blockchain.best_voter(chain_number as usize), vec![proposer_7.hash()]);
+        let v = voter_block!(
+            chain_number,
+            blockchain.best_voter(chain_number as usize),
+            vec![proposer_7.hash()]
+        );
         handle_block!(v);
     }
 
     check_transaction_output!(transaction_7, false);
 
     for chain_number in not_enough_vote..config::NUM_VOTER_CHAINS {
-        let v = voter_block!(chain_number, blockchain.best_voter(chain_number as usize), vec![proposer_7.hash()]);
+        let v = voter_block!(
+            chain_number,
+            blockchain.best_voter(chain_number as usize),
+            vec![proposer_7.hash()]
+        );
         handle_block!(v);
     }
     check_transaction_output!(transaction_7, true);
 
     //test wallet create_transaction
-    let receiver: H256 = [9u8;32].into();
-    let payment = wallet.create_transaction(receiver, value_4-1, None).unwrap();
+    let receiver: H256 = [9u8; 32].into();
+    let payment = wallet
+        .create_transaction(receiver, value_4 - 1, None)
+        .unwrap();
     let transaction_8 = transaction_block!(vec![payment.clone()]);
     handle_block!(transaction_8);
     let proposer_8 = proposer_block!(vec![], vec![transaction_8.hash()]);
     handle_block!(proposer_8);
     parent_hash = proposer_8.hash();
     for chain_number in 0..config::NUM_VOTER_CHAINS {
-        let v = voter_block!(chain_number, blockchain.best_voter(chain_number as usize), vec![proposer_8.hash()]);
+        let v = voter_block!(
+            chain_number,
+            blockchain.best_voter(chain_number as usize),
+            vec![proposer_8.hash()]
+        );
         handle_block!(v);
     }
     check_transaction_output!(transaction_8, true);
-    assert_eq!(wallet.balance().unwrap(), 1+ico_number);
+    assert_eq!(wallet.balance().unwrap(), 1 + ico_number);
 
     // check proposers in ledger
     let ledger = blockchain.proposer_transaction_in_ledger(100).unwrap();
-    let ledger_proposer: Vec<H256> = ledger.into_iter().map(|x|x.0).collect();
-    assert_eq!(ledger_proposer, vec![
-        *config::PROPOSER_GENESIS_HASH,
-        proposer_1.hash(),
-        proposer_1_fork.hash(), proposer_1_fork_2.hash(),
-        proposer_2.hash(),
-        proposer_2_fork.hash(),
-        proposer_3.hash(),
-        proposer_4.hash(),
-        proposer_5.hash(),
-        proposer_3_fork.hash(),
-        proposer_4_fork.hash(), proposer_4_fork_2.hash(),
-        proposer_6.hash(),
-        proposer_7.hash(),
-        proposer_8.hash(),
-    ]);
+    let ledger_proposer: Vec<H256> = ledger.into_iter().map(|x| x.0).collect();
+    assert_eq!(
+        ledger_proposer,
+        vec![
+            *config::PROPOSER_GENESIS_HASH,
+            proposer_1.hash(),
+            proposer_1_fork.hash(),
+            proposer_1_fork_2.hash(),
+            proposer_2.hash(),
+            proposer_2_fork.hash(),
+            proposer_3.hash(),
+            proposer_4.hash(),
+            proposer_5.hash(),
+            proposer_3_fork.hash(),
+            proposer_4_fork.hash(),
+            proposer_4_fork_2.hash(),
+            proposer_6.hash(),
+            proposer_7.hash(),
+            proposer_8.hash(),
+        ]
+    );
 
     //forking on voter chains, but fork length is equal to main chain length, so nothing happens
     for chain_number in 0..config::NUM_VOTER_CHAINS {
-        let v = voter_block!(chain_number, voter_parent_to_fork[chain_number as usize].hash(), vec![]);
+        let v = voter_block!(
+            chain_number,
+            voter_parent_to_fork[chain_number as usize].hash(),
+            vec![]
+        );
         handle_block!(v);
         let v = voter_block!(chain_number, v.hash(), vec![]);
         handle_block!(v);
@@ -312,7 +383,7 @@ fn integration() {
         assert_ne!(v.hash(), blockchain.best_voter(chain_number as usize));
     }
     check_transaction_output!(transaction_8, true);
-    assert_eq!(wallet.balance().unwrap(), 1+ico_number);
+    assert_eq!(wallet.balance().unwrap(), 1 + ico_number);
 
     //longer forking on voter chains, rollback should happen, and history should be changed
     parent_hash = proposer_2.hash();
@@ -321,14 +392,21 @@ fn integration() {
     //this transaction is to test invalid (wrt utxo) transaction
     let transaction_invalid = transaction_block!(vec![tx_generator::generate_random_transaction()]);
     handle_block!(transaction_invalid);
-    let proposer_9 = proposer_block!(vec![], vec![transaction_9.hash(),transaction_invalid.hash()]);
+    let proposer_9 = proposer_block!(
+        vec![],
+        vec![transaction_9.hash(), transaction_invalid.hash()]
+    );
     handle_block!(proposer_9);
     parent_hash = proposer_9.hash();
 
     let mut voter_parent_to_fork_2 = vec![];
 
     for chain_number in 0..config::NUM_VOTER_CHAINS {
-        let v = voter_block!(chain_number, voter_parent_to_fork[chain_number as usize].hash(), vec![]);
+        let v = voter_block!(
+            chain_number,
+            voter_parent_to_fork[chain_number as usize].hash(),
+            vec![]
+        );
         handle_block!(v);
         let v = voter_block!(chain_number, v.hash(), vec![]);
         handle_block!(v);
@@ -345,11 +423,15 @@ fn integration() {
         assert_eq!(v.hash(), blockchain.best_voter(chain_number as usize));
     }
     //check the result after rolling back
-    assert_eq!(blockchain.unreferred_proposers().len(),2);
+    assert_eq!(blockchain.unreferred_proposers().len(), 2);
     //we have fork in proposer tree, and in one fork proposer_8, in another fork proposer_9, these are 2 unreferred_proposers
-    assert!(blockchain.unreferred_proposers().contains(&proposer_9.hash()));
-    assert!(blockchain.unreferred_proposers().contains(&proposer_8.hash()));
-    assert_eq!(blockchain.unreferred_transactions().len(),0);
+    assert!(blockchain
+        .unreferred_proposers()
+        .contains(&proposer_9.hash()));
+    assert!(blockchain
+        .unreferred_proposers()
+        .contains(&proposer_8.hash()));
+    assert_eq!(blockchain.unreferred_transactions().len(), 0);
     //although proposer_9 is leader now, it is not best proposer
     assert_ne!(proposer_9.hash(), blockchain.best_proposer().unwrap());
     //only the proposer fork with proposer_9 is in ledger
@@ -388,19 +470,31 @@ fn integration() {
     let proposer_15 = proposer_block!(vec![proposer_8.hash()], vec![transaction_10.hash()]);
     handle_block!(proposer_15);
     parent_hash = proposer_15.hash();
-    assert_eq!(blockchain.unreferred_proposers().len(),1);
-    assert!(blockchain.unreferred_proposers().contains(&proposer_15.hash()));
-    assert_eq!(blockchain.unreferred_transactions().len(),0);
+    assert_eq!(blockchain.unreferred_proposers().len(), 1);
+    assert!(blockchain
+        .unreferred_proposers()
+        .contains(&proposer_15.hash()));
+    assert_eq!(blockchain.unreferred_transactions().len(), 0);
     for chain_number in 0..config::NUM_VOTER_CHAINS {
-        let v = voter_block!(chain_number, blockchain.best_voter(chain_number as usize), vec![
-        proposer_10.hash(),proposer_11.hash(),proposer_12.hash(),proposer_13.hash(),proposer_14.hash(),proposer_15.hash()]);
+        let v = voter_block!(
+            chain_number,
+            blockchain.best_voter(chain_number as usize),
+            vec![
+                proposer_10.hash(),
+                proposer_11.hash(),
+                proposer_12.hash(),
+                proposer_13.hash(),
+                proposer_14.hash(),
+                proposer_15.hash()
+            ]
+        );
         handle_block!(v);
         //the fork becomes the best
         assert_eq!(v.hash(), blockchain.best_voter(chain_number as usize));
     }
 
     check_transaction_output!(transaction_1, true);
-    check_transaction_output!(transaction_2, false);//tx 4 spends outputs of tx 2
+    check_transaction_output!(transaction_2, false); //tx 4 spends outputs of tx 2
     check_transaction_output!(transaction_3, true);
     //check_transaction_output!(transaction_4, true);//we don't check transaction 4 since we may spend it in transaction 8
     check_transaction_output!(transaction_5, true);
@@ -410,32 +504,37 @@ fn integration() {
     check_transaction_output!(transaction_9, true);
     check_transaction_output!(transaction_10, true);
     check_transaction_output!(transaction_invalid, false);
-    assert_eq!(wallet.balance().unwrap(), 1+ico_number);
+    assert_eq!(wallet.balance().unwrap(), 1 + ico_number);
 
     let ledger = blockchain.proposer_transaction_in_ledger(100).unwrap();
-    let ledger_proposer: Vec<H256> = ledger.into_iter().map(|x|x.0).collect();
-    assert_eq!(ledger_proposer, vec![
-        *config::PROPOSER_GENESIS_HASH,
-        proposer_1.hash(),
-        proposer_1_fork.hash(), proposer_1_fork_2.hash(),
-        proposer_2.hash(),
-        proposer_9.hash(),//since this is leader in the first place
-        proposer_10.hash(),//since this is leader in the first place
-        proposer_11.hash(),//since this is leader in the first place
-        proposer_12.hash(),//since this is leader in the first place
-        proposer_2_fork.hash(),//since 13 refer 4 first
-        proposer_3.hash(),
-        proposer_4.hash(),
-        proposer_5.hash(),//since 13 refer 6 second
-        proposer_3_fork.hash(),
-        proposer_4_fork.hash(), proposer_4_fork_2.hash(),
-        proposer_6.hash(),
-        proposer_13.hash(),
-        proposer_14.hash(),
-        proposer_7.hash(),
-        proposer_8.hash(),
-        proposer_15.hash(),
-    ]);
+    let ledger_proposer: Vec<H256> = ledger.into_iter().map(|x| x.0).collect();
+    assert_eq!(
+        ledger_proposer,
+        vec![
+            *config::PROPOSER_GENESIS_HASH,
+            proposer_1.hash(),
+            proposer_1_fork.hash(),
+            proposer_1_fork_2.hash(),
+            proposer_2.hash(),
+            proposer_9.hash(),      //since this is leader in the first place
+            proposer_10.hash(),     //since this is leader in the first place
+            proposer_11.hash(),     //since this is leader in the first place
+            proposer_12.hash(),     //since this is leader in the first place
+            proposer_2_fork.hash(), //since 13 refer 4 first
+            proposer_3.hash(),
+            proposer_4.hash(),
+            proposer_5.hash(), //since 13 refer 6 second
+            proposer_3_fork.hash(),
+            proposer_4_fork.hash(),
+            proposer_4_fork_2.hash(),
+            proposer_6.hash(),
+            proposer_13.hash(),
+            proposer_14.hash(),
+            proposer_7.hash(),
+            proposer_8.hash(),
+            proposer_15.hash(),
+        ]
+    );
 
     /*we don't have duplicate blocks anymore
     //insert previous proposer blocks multiple times to check robustness
@@ -449,32 +548,52 @@ fn integration() {
     handle_block!(proposer_3);
     */
     //half+2 voter chains vote for one fork, others remain unchanged
-    let half_vote = config::NUM_VOTER_CHAINS/2+2;
+    let half_vote = config::NUM_VOTER_CHAINS / 2 + 2;
     for chain_number in 0..half_vote {
-        let v = voter_block!(chain_number, voter_parent_to_fork_2[chain_number as usize], vec![]);
+        let v = voter_block!(
+            chain_number,
+            voter_parent_to_fork_2[chain_number as usize],
+            vec![]
+        );
         handle_block!(v);
         let v = voter_block!(chain_number, v.hash(), vec![]);
         handle_block!(v);
-        let v = voter_block!(chain_number, v.hash(), vec![proposer_3.hash(),proposer_4.hash(),proposer_5.hash(),proposer_6.hash(),proposer_7.hash(),proposer_8.hash()]);
+        let v = voter_block!(
+            chain_number,
+            v.hash(),
+            vec![
+                proposer_3.hash(),
+                proposer_4.hash(),
+                proposer_5.hash(),
+                proposer_6.hash(),
+                proposer_7.hash(),
+                proposer_8.hash()
+            ]
+        );
         handle_block!(v);
         //the fork becomes the best
         assert_eq!(v.hash(), blockchain.best_voter(chain_number as usize));
     }
     let ledger = blockchain.proposer_transaction_in_ledger(100).unwrap();
-    let ledger_proposer: Vec<H256> = ledger.into_iter().map(|x|x.0).collect();
-    assert_eq!(ledger_proposer, vec![
-        *config::PROPOSER_GENESIS_HASH,
-        proposer_1.hash(),
-        proposer_1_fork.hash(), proposer_1_fork_2.hash(),
-        proposer_2.hash(),
-        proposer_2_fork.hash(),
-        proposer_3.hash(),
-        proposer_4.hash(),
-        proposer_5.hash(),
-        proposer_3_fork.hash(),
-        proposer_4_fork.hash(), proposer_4_fork_2.hash(),
-        proposer_6.hash(),
-        proposer_7.hash(),
-        proposer_8.hash(),
-    ]);
+    let ledger_proposer: Vec<H256> = ledger.into_iter().map(|x| x.0).collect();
+    assert_eq!(
+        ledger_proposer,
+        vec![
+            *config::PROPOSER_GENESIS_HASH,
+            proposer_1.hash(),
+            proposer_1_fork.hash(),
+            proposer_1_fork_2.hash(),
+            proposer_2.hash(),
+            proposer_2_fork.hash(),
+            proposer_3.hash(),
+            proposer_4.hash(),
+            proposer_5.hash(),
+            proposer_3_fork.hash(),
+            proposer_4_fork.hash(),
+            proposer_4_fork_2.hash(),
+            proposer_6.hash(),
+            proposer_7.hash(),
+            proposer_8.hash(),
+        ]
+    );
 }

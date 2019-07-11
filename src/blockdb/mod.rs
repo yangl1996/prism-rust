@@ -4,9 +4,9 @@ use crate::block::Block;
 use crate::config::*;
 use crate::crypto::hash::{Hashable, H256};
 use bincode::{deserialize, serialize};
-use rocksdb::{self, Options, DB, ColumnFamilyDescriptor, SliceTransform};
-use std::sync::atomic::{AtomicU64, Ordering};
+use rocksdb::{self, ColumnFamilyDescriptor, Options, SliceTransform, DB};
 use std::convert::TryInto;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 const BLOCK_CF: &str = "BLOCK";
 const BLOCK_ARRIVAL_ORDER_CF: &str = "BLOCK_ARRIVAL_ORDER";
@@ -24,12 +24,13 @@ impl BlockDatabase {
     /// Open the database at the given path, and create a new one if missing.
     fn open<P: AsRef<std::path::Path>>(path: P) -> Result<Self, rocksdb::Error> {
         let mut opts = Options::default();
-        opts.set_prefix_extractor( SliceTransform::create_fixed_prefix(32));
+        opts.set_prefix_extractor(SliceTransform::create_fixed_prefix(32));
         opts.optimize_for_point_lookup(512);
         let block_cf = ColumnFamilyDescriptor::new(BLOCK_CF, opts);
-        let block_arrival_order_cf = ColumnFamilyDescriptor::new(BLOCK_ARRIVAL_ORDER_CF, Options::default());
+        let block_arrival_order_cf =
+            ColumnFamilyDescriptor::new(BLOCK_ARRIVAL_ORDER_CF, Options::default());
         let mut opts = Options::default();
-        opts.set_prefix_extractor( SliceTransform::create_fixed_prefix(32));
+        opts.set_prefix_extractor(SliceTransform::create_fixed_prefix(32));
         opts.optimize_for_point_lookup(512);
         let block_sequence_number_cf = ColumnFamilyDescriptor::new(BLOCK_SEQUENCE_NUMBER_CF, opts);
         let cfs = vec![block_cf, block_arrival_order_cf, block_sequence_number_cf];
@@ -62,7 +63,7 @@ impl BlockDatabase {
         db.db.put_cf(
             block_arrival_order_cf,
             &counter.to_ne_bytes(),
-            &(*PROPOSER_GENESIS_HASH)
+            &(*PROPOSER_GENESIS_HASH),
         )?;
         db.db.put_cf(
             block_sequence_number_cf,
@@ -82,17 +83,16 @@ impl BlockDatabase {
                 block_arrival_order_cf,
                 &counter.to_ne_bytes(),
                 &VOTER_GENESIS_HASHES[i as usize],
-                )?;
+            )?;
             db.db.put_cf(
                 block_sequence_number_cf,
                 &VOTER_GENESIS_HASHES[i as usize],
                 &counter.to_ne_bytes(),
-                )?;
+            )?;
             counter += 1;
         }
 
-        db.count
-            .store(counter, Ordering::Relaxed);
+        db.count.store(counter, Ordering::Relaxed);
         return Ok(db);
     }
 
@@ -111,8 +111,10 @@ impl BlockDatabase {
         let serialized = serialize(block).unwrap();
         let counter = self.count.fetch_add(1, Ordering::Relaxed);
         self.db.put_cf(block_cf, &hash, &serialized)?;
-        self.db.put_cf(block_arrival_order_cf, &counter.to_ne_bytes(), &hash)?;
-        self.db.put_cf(block_sequence_number_cf, &hash, &counter.to_ne_bytes())?;
+        self.db
+            .put_cf(block_arrival_order_cf, &counter.to_ne_bytes(), &hash)?;
+        self.db
+            .put_cf(block_sequence_number_cf, &hash, &counter.to_ne_bytes())?;
         return Ok(counter);
     }
 
@@ -122,8 +124,10 @@ impl BlockDatabase {
         let block_sequence_number_cf = self.db.cf_handle(BLOCK_SEQUENCE_NUMBER_CF).unwrap();
         let counter = self.count.fetch_add(1, Ordering::Relaxed);
         self.db.put_cf(block_cf, &hash, &raw_block)?;
-        self.db.put_cf(block_arrival_order_cf, &counter.to_ne_bytes(), &hash)?;
-        self.db.put_cf(block_sequence_number_cf, &hash, &counter.to_ne_bytes())?;
+        self.db
+            .put_cf(block_arrival_order_cf, &counter.to_ne_bytes(), &hash)?;
+        self.db
+            .put_cf(block_sequence_number_cf, &hash, &counter.to_ne_bytes())?;
         return Ok(counter);
     }
 
@@ -137,7 +141,10 @@ impl BlockDatabase {
         }
     }
 
-    pub fn get_encoded(&self, hash: &H256) -> Result<Option<rocksdb::DBPinnableSlice>, rocksdb::Error> {
+    pub fn get_encoded(
+        &self,
+        hash: &H256,
+    ) -> Result<Option<rocksdb::DBPinnableSlice>, rocksdb::Error> {
         let block_cf = self.db.cf_handle(BLOCK_CF).unwrap();
         let serialized = self.db.get_pinned_cf(block_cf, hash)?;
         return Ok(serialized);
@@ -154,11 +161,18 @@ impl BlockDatabase {
 
     pub fn blocks_after(&self, after: &H256, batch_size: u64) -> BlocksInArrivalOrder {
         let block_sequence_number_cf = self.db.cf_handle(BLOCK_SEQUENCE_NUMBER_CF).unwrap();
-        let start_seq = u64::from_ne_bytes(self.db.get_cf(block_sequence_number_cf, &after).unwrap().unwrap()[0..8].try_into().unwrap()) + 1;
+        let start_seq = u64::from_ne_bytes(
+            self.db
+                .get_cf(block_sequence_number_cf, &after)
+                .unwrap()
+                .unwrap()[0..8]
+                .try_into()
+                .unwrap(),
+        ) + 1;
         return BlocksInArrivalOrder {
             seq: start_seq,
             batch: batch_size,
-            db: &self
+            db: &self,
         };
     }
 
@@ -175,12 +189,14 @@ impl BlockDatabase {
         // TODO: this is a hack to deal with a potential race condition: counter is increased
         // before the hash for that value is committed into the database.
         loop {
-            let hash_serialized = self.db.get_cf(block_arrival_order_cf, &count.to_ne_bytes())?;
+            let hash_serialized = self
+                .db
+                .get_cf(block_arrival_order_cf, &count.to_ne_bytes())?;
             let hash: H256 = match hash_serialized {
                 Some(v) => {
                     let bytes: [u8; 32] = (&v[0..32]).try_into().unwrap();
                     return Ok(bytes.into());
-                },
+                }
                 None => {
                     count -= 1;
                     continue;
@@ -193,7 +209,7 @@ impl BlockDatabase {
 pub struct BlocksInArrivalOrder<'a> {
     seq: u64,
     batch: u64,
-    db: &'a BlockDatabase
+    db: &'a BlockDatabase,
 }
 
 impl<'a> std::iter::Iterator for BlocksInArrivalOrder<'a> {
@@ -206,8 +222,14 @@ impl<'a> std::iter::Iterator for BlocksInArrivalOrder<'a> {
         let mut this_batch: u64 = 0;
         let mut result: Vec<Block> = vec![];
         while self.seq < num_blocks && this_batch < self.batch {
-            let hash_bytes = self.db.db.get_cf(block_arrival_order_cf, &self.seq.to_ne_bytes()).unwrap().unwrap();
-            let block: Block = deserialize(&self.db.db.get_cf(block_cf, &hash_bytes).unwrap().unwrap()).unwrap();
+            let hash_bytes = self
+                .db
+                .db
+                .get_cf(block_arrival_order_cf, &self.seq.to_ne_bytes())
+                .unwrap()
+                .unwrap();
+            let block: Block =
+                deserialize(&self.db.db.get_cf(block_cf, &hash_bytes).unwrap().unwrap()).unwrap();
             result.push(block);
             self.seq += 1;
             this_batch += 1;
@@ -255,8 +277,7 @@ mod tests {
                 assert_eq!(batch[0].hash(), voter_genesis(next_voter).hash());
                 assert_eq!(batch[1].hash(), voter_genesis(next_voter + 1).hash());
                 next_voter += 2;
-            }
-            else {
+            } else {
                 assert_eq!(batch[0].hash(), voter_genesis(next_voter).hash());
                 next_voter += 1;
             }
@@ -270,6 +291,9 @@ mod tests {
             "/tmp/blockdb_tests_latest_block_hash.rocksdb",
         ))
         .unwrap();
-        assert_eq!(db.latest_block_hash().unwrap(), VOTER_GENESIS_HASHES[NUM_VOTER_CHAINS as usize - 1]);
+        assert_eq!(
+            db.latest_block_hash().unwrap(),
+            VOTER_GENESIS_HASHES[NUM_VOTER_CHAINS as usize - 1]
+        );
     }
 }

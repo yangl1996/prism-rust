@@ -97,7 +97,7 @@ for (( i = 0; i < $num_nodes; i++ )); do
     echo "curl 'http://127.0.0.1:$api/transaction-generator/stop' &> /dev/null" >> stop_nodes.sh
     echo "curl 'http://127.0.0.1:$api/miner/step' &> /dev/null" >> stop_nodes.sh
 
-	command="$binary_path --p2p 127.0.0.1:${p2p} --api 127.0.0.1:${api} --visual 127.0.0.1:${vis} --blockdb /tmp/prism-${i}-blockdb.rocksdb --blockchaindb /tmp/prism-${i}-blockchaindb.rocksdb --utxodb /tmp/prism-${i}-utxodb.rocksdb --walletdb /tmp/prism-${i}-wallet.rocksdb -vvv --load-key ${i}.pkcs8 --demo ws://127.0.0.1:${dem} --demo-tran-ratio 1000 --demo-vote-max 2"
+	command="$binary_path --p2p 127.0.0.1:${p2p} --api 127.0.0.1:${api} --visual 127.0.0.1:${vis} --blockdb /tmp/prism-${i}-blockdb.rocksdb --blockchaindb /tmp/prism-${i}-blockchaindb.rocksdb --utxodb /tmp/prism-${i}-utxodb.rocksdb --walletdb /tmp/prism-${i}-wallet.rocksdb -vvv --load-key ${i}.pkcs8 --demo ws://127.0.0.1:${dem} --demo-tran-ratio 100 --demo-vote-max 10"
 
 	for (( j = 0; j < $i; j++ )); do
 		peer_port=`expr $p2p_port + $j`

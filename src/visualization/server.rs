@@ -2,13 +2,13 @@ use super::dump::{dump_ledger, dump_voter_timestamp};
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
 use crate::utxodb::UtxoDatabase;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::thread;
 use tiny_http::Header;
 use tiny_http::Response;
 use tiny_http::Server as HTTPServer;
 use url::Url;
-use std::collections::HashMap;
 
 pub struct Server {
     blockchain: Arc<BlockChain>,
@@ -86,33 +86,37 @@ impl Server {
                     };
                     let params = url.query_pairs();
                     let params: HashMap<_, _> = params.into_owned().collect();
-                    let display_fork: bool = params.get("fork").map_or(false, |s|s.parse::<bool>().unwrap_or(false));
+                    let display_fork: bool = params
+                        .get("fork")
+                        .map_or(false, |s| s.parse::<bool>().unwrap_or(false));
                     let limit: u64 = {
                         const DEFAULT: u64 = 100;
-                        params.get("limit").map_or(DEFAULT, |s| s.parse::<u64>().unwrap_or(DEFAULT))
+                        params
+                            .get("limit")
+                            .map_or(DEFAULT, |s| s.parse::<u64>().unwrap_or(DEFAULT))
                     };
                     match url.path() {
                         "/blockchain.json" => serve_dynamic_file!(
-                        req,
-                        match blockchain.dump(limit, display_fork) {
-                            Ok(dump) => dump,
-                            Err(_) => "Blockchain Dump error".to_string(),
-                        },
-                        "application/json",
-                        addr
-                    ),
+                            req,
+                            match blockchain.dump(limit, display_fork) {
+                                Ok(dump) => dump,
+                                Err(_) => "Blockchain Dump error".to_string(),
+                            },
+                            "application/json",
+                            addr
+                        ),
                         "/ledger.json" => serve_dynamic_file!(
-                        req,
-                        dump_ledger(&blockchain, &blockdb, &utxodb, limit),
-                        "application/json",
-                        addr
-                    ),
+                            req,
+                            dump_ledger(&blockchain, &blockdb, &utxodb, limit),
+                            "application/json",
+                            addr
+                        ),
                         "/voter.json" => serve_dynamic_file!(
-                        req,
-                        dump_voter_timestamp(&blockchain, &blockdb),
-                        "application/json",
-                        addr
-                    ),
+                            req,
+                            dump_voter_timestamp(&blockchain, &blockdb),
+                            "application/json",
+                            addr
+                        ),
                         "/cytoscape.min.js" => {
                             serve_static_file!(req, "cytoscape.js", "application/javascript")
                         }
@@ -122,19 +126,21 @@ impl Server {
                         "/cytoscape-dagre.js" => {
                             serve_static_file!(req, "cytoscape-dagre.js", "application/javascript")
                         }
-                        "/bootstrap.min.css" => serve_static_file!(req, "bootstrap.min.css", "text/css"),
+                        "/bootstrap.min.css" => {
+                            serve_static_file!(req, "bootstrap.min.css", "text/css")
+                        }
                         "/blockchain_vis.js" => serve_dynamic_file!(
-                        req,
-                        include_str!("blockchain_vis.js"),
-                        "application/javascript",
-                        addr
-                    ),
+                            req,
+                            include_str!("blockchain_vis.js"),
+                            "application/javascript",
+                            addr
+                        ),
                         "/visualize-blockchain" => serve_dynamic_file!(
-                        req,
-                        include_str!("blockchain_vis.html"),
-                        "text/html",
-                        addr
-                    ),
+                            req,
+                            include_str!("blockchain_vis.html"),
+                            "text/html",
+                            addr
+                        ),
                         //                    "/ledger_vis.js" => serve_dynamic_file!(
                         //                        req,
                         //                        include_str!("ledger_vis.js"),
@@ -144,7 +150,9 @@ impl Server {
                         //                    "/visualize-ledger" => {
                         //                        serve_dynamic_file!(req, include_str!("ledger_vis.html"), "text/html", addr)
                         //                    }
-                        "/" => serve_dynamic_file!(req, include_str!("index.html"), "text/html", addr),
+                        "/" => {
+                            serve_dynamic_file!(req, include_str!("index.html"), "text/html", addr)
+                        }
                         _ => {
                             let content_type = "Content-Type: text/html".parse::<Header>().unwrap();
                             let resp = Response::from_string(include_str!("404.html"))

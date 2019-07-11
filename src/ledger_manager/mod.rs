@@ -2,35 +2,41 @@ use crate::block::{Block, Content};
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
 use crate::crypto::hash::{Hashable, H256};
+use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 use crate::miner::memory_pool::MemoryPool;
 use crate::network::message;
 use crate::network::server::Handle as ServerHandle;
-use crate::transaction::{Transaction, Input};
+use crate::transaction::{Input, Transaction};
 use crate::utxodb::UtxoDatabase;
-use crate::wallet::Wallet;
-use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
-use std::sync::Arc;
-use crossbeam::channel;
-use std::thread;
-use std::collections::{HashSet, HashMap};
 use crate::visualization::demo;
+use crate::wallet::Wallet;
+use crossbeam::channel;
+use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
+use std::thread;
 
 pub struct LedgerManager {
     blockdb: Arc<BlockDatabase>,
     chain: Arc<BlockChain>,
     utxodb: Arc<UtxoDatabase>,
     wallet: Arc<Wallet>,
-    demo_sender: channel::Sender<demo::DemoMsg>
+    demo_sender: channel::Sender<demo::DemoMsg>,
 }
 
 impl LedgerManager {
-    pub fn new(blockdb: &Arc<BlockDatabase>, chain: &Arc<BlockChain>, utxodb: &Arc<UtxoDatabase>, wallet: &Arc<Wallet>, demo_sender: channel::Sender<demo::DemoMsg>) -> Self {
+    pub fn new(
+        blockdb: &Arc<BlockDatabase>,
+        chain: &Arc<BlockChain>,
+        utxodb: &Arc<UtxoDatabase>,
+        wallet: &Arc<Wallet>,
+        demo_sender: channel::Sender<demo::DemoMsg>,
+    ) -> Self {
         return Self {
             blockdb: Arc::clone(&blockdb),
             chain: Arc::clone(&chain),
             utxodb: Arc::clone(&utxodb),
             wallet: Arc::clone(&wallet),
-            demo_sender
+            demo_sender,
         };
     }
 
@@ -40,11 +46,9 @@ impl LedgerManager {
         let chain = Arc::clone(&self.chain);
         let (tx_diff_tx, tx_diff_rx) = channel::bounded(buffer_size);
         let demo_sender = self.demo_sender.clone();
-        thread::spawn(move || {
-            loop {
-                let tx_diff = update_transaction_sequence(&blockdb, &chain, &demo_sender);
-                tx_diff_tx.send(tx_diff).unwrap();
-            }
+        thread::spawn(move || loop {
+            let tx_diff = update_transaction_sequence(&blockdb, &chain, &demo_sender);
+            tx_diff_tx.send(tx_diff).unwrap();
         });
 
         // start thread that dispatches jobs to utxo manager
@@ -82,9 +86,9 @@ impl LedgerManager {
 
                     // collect the tx hash of all coins this tx will touch
                     let mut touched_coin_transaction_hash: HashSet<H256> = HashSet::new();
-                    touched_coin_transaction_hash.insert(h);    // the transaction hash of all output coins
+                    touched_coin_transaction_hash.insert(h); // the transaction hash of all output coins
                     for input in &t.input {
-                        touched_coin_transaction_hash.insert(input.coin.hash);  // tx hash of input coin
+                        touched_coin_transaction_hash.insert(input.coin.hash); // tx hash of input coin
                     }
 
                     // wait until we are not touching hot coins
@@ -117,9 +121,9 @@ impl LedgerManager {
 
                     // collect the tx hash of all coins this tx will touch
                     let mut touched_coin_transaction_hash: HashSet<H256> = HashSet::new();
-                    touched_coin_transaction_hash.insert(h);    // the transaction hash of all output coins
+                    touched_coin_transaction_hash.insert(h); // the transaction hash of all output coins
                     for input in &t.input {
-                        touched_coin_transaction_hash.insert(input.coin.hash);  // tx hash of input coin
+                        touched_coin_transaction_hash.insert(input.coin.hash); // tx hash of input coin
                     }
 
                     // wait until we are not touching hot coins
@@ -154,11 +158,9 @@ impl LedgerManager {
 
         // start thread that writes to wallet
         let wallet = Arc::clone(&self.wallet);
-        thread::spawn(move || {
-            loop {
-                let coin_diff = coin_diff_rx.recv().unwrap();
-                wallet.apply_diff(&coin_diff.0, &coin_diff.1);
-            }
+        thread::spawn(move || loop {
+            let coin_diff = coin_diff_rx.recv().unwrap();
+            wallet.apply_diff(&coin_diff.0, &coin_diff.1);
         });
     }
 }
@@ -190,8 +192,7 @@ impl UtxoManager {
             if add {
                 let diff = self.utxodb.add_transaction(&transaction, hash).unwrap();
                 self.coin_chan.send(diff).unwrap();
-            }
-            else {
+            } else {
                 let diff = self.utxodb.remove_transaction(&transaction, hash).unwrap();
                 self.coin_chan.send(diff).unwrap();
             }
@@ -200,10 +201,10 @@ impl UtxoManager {
     }
 }
 
-fn update_transaction_sequence (
+fn update_transaction_sequence(
     blockdb: &BlockDatabase,
     chain: &BlockChain,
-    demo_sender: &channel::Sender<demo::DemoMsg>
+    demo_sender: &channel::Sender<demo::DemoMsg>,
 ) -> (Vec<(Transaction, H256)>, Vec<(Transaction, H256)>) {
     let diff = chain.update_ledger().unwrap();
 
@@ -225,8 +226,12 @@ fn update_transaction_sequence (
             Content::Transaction(data) => data,
             _ => unreachable!(),
         };
-        let mut transactions = content.transactions.iter().map(|t| (t.clone(), t.hash())).collect();
-        // TODO: precompute the hash here. Note that although lazy-eval for tx hash, and we could have 
+        let mut transactions = content
+            .transactions
+            .iter()
+            .map(|t| (t.clone(), t.hash()))
+            .collect();
+        // TODO: precompute the hash here. Note that although lazy-eval for tx hash, and we could have
         // just called hash() here without storing the results (the results will be cached in the struct),
         // such function call will be optimized away by LLVM. As a result, we have to manually pass the hash
         // here. The same for added transactions below. This is a very ugly hack.
@@ -238,7 +243,11 @@ fn update_transaction_sequence (
             Content::Transaction(data) => data,
             _ => unreachable!(),
         };
-        let mut transactions = content.transactions.iter().map(|t| (t.clone(), t.hash())).collect();
+        let mut transactions = content
+            .transactions
+            .iter()
+            .map(|t| (t.clone(), t.hash()))
+            .collect();
         remove.append(&mut transactions);
     }
     return (add, remove);

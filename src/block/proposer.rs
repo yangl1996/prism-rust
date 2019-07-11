@@ -28,7 +28,8 @@ impl Content {
 
 impl PayloadSize for Content {
     fn size(&self) -> usize {
-        return std::mem::size_of::<H256>() * (self.transaction_refs.len() + self.proposer_refs.len());
+        return std::mem::size_of::<H256>()
+            * (self.transaction_refs.len() + self.proposer_refs.len());
     }
 }
 
@@ -36,7 +37,7 @@ impl Hashable for Content {
     fn hash(&self) -> H256 {
         let tx_merkle_tree = MerkleTree::new(&self.transaction_refs);
         let prop_merkle_tree = MerkleTree::new(&self.proposer_refs);
-        let mut bytes = [0u8;64];
+        let mut bytes = [0u8; 64];
         bytes[..32].copy_from_slice(tx_merkle_tree.root().as_ref());
         bytes[32..64].copy_from_slice(prop_merkle_tree.root().as_ref());
         return ring::digest::digest(&ring::digest::SHA256, &bytes).into();
@@ -66,14 +67,14 @@ pub fn genesis() -> Block {
 #[cfg(test)]
 pub mod tests {
     use super::super::header::tests::*;
-    use super::super::transaction::tests::*;
     use super::super::proposer::Content as ProposerContent;
+    use super::super::transaction::tests::*;
 
+    use super::super::{Block, Content};
     use crate::crypto::hash::{Hashable, H256};
     use crate::crypto::merkle::MerkleTree;
-    use crate::transaction::{CoinId, Input, Output, Authorization, Transaction};
+    use crate::transaction::{Authorization, CoinId, Input, Output, Transaction};
     use std::cell::RefCell;
-    use super::super::{Block, Content};
 
     #[test]
     fn test_hash() {
@@ -101,7 +102,6 @@ pub mod tests {
             ]
         }};
     }
-
 
     // Proposer block stuffs
     /// Returns sample content of a proposer block containing only tx block hashes
@@ -163,6 +163,5 @@ pub mod tests {
             (&hex!("8298338734bbea798e1577c32fe536335fbdf2e9629a2044bbe4694339480bb2")).into();
         return transaction_content_hash;
     }
-
 
 }

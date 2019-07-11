@@ -1,13 +1,13 @@
 use super::message;
 use super::peer::{self, ReadResult, WriteResult};
+use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
+use crossbeam::channel as cbchannel;
 use log::{debug, error, info, warn};
 use mio::{self, net};
 use mio_extras::channel;
 use std::sync::mpsc;
-use crossbeam::channel as cbchannel;
 use std::thread;
 use std::time;
-use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 
 const MAX_INCOMING_CLIENT: usize = 256;
 const MAX_EVENT: usize = 1024;
@@ -53,7 +53,11 @@ impl Context {
     }
 
     /// Register a TCP stream in the event loop, and initialize peer context.
-    fn register(&mut self, stream: net::TcpStream, direction: peer::Direction) -> std::io::Result<peer::Handle> {
+    fn register(
+        &mut self,
+        stream: net::TcpStream,
+        direction: peer::Direction,
+    ) -> std::io::Result<peer::Handle> {
         // get a new slot in the connection set
         let vacant = self.peers.vacant_entry();
         let key: usize = vacant.key();
@@ -220,18 +224,24 @@ impl Context {
                                                 match peer_direction {
                                                     peer::Direction::Outgoing => {
                                                         let server = self.handle.clone();
-                                                        thread::spawn(move || {
-                                                            loop {
-                                                                thread::sleep(time::Duration::from_millis(1000));
-                                                                info!("trying to reconnect to peer {}", &peer_addr);
-                                                                match server.connect(peer_addr) {
-                                                                    Ok(_) => {
-                                                                        info!("reconnected to peer {}", &peer_addr);
-                                                                        break;
-                                                                    }
-                                                                    Err(e) => {
-                                                                        warn!("error connecting to peer {}, retrying in one second: {}", &peer_addr, e);
-                                                                    }
+                                                        thread::spawn(move || loop {
+                                                            thread::sleep(
+                                                                time::Duration::from_millis(1000),
+                                                            );
+                                                            info!(
+                                                                "trying to reconnect to peer {}",
+                                                                &peer_addr
+                                                            );
+                                                            match server.connect(peer_addr) {
+                                                                Ok(_) => {
+                                                                    info!(
+                                                                        "reconnected to peer {}",
+                                                                        &peer_addr
+                                                                    );
+                                                                    break;
+                                                                }
+                                                                Err(e) => {
+                                                                    warn!("error connecting to peer {}, retrying in one second: {}", &peer_addr, e);
                                                                 }
                                                             }
                                                         });
@@ -266,18 +276,20 @@ impl Context {
                                                     match peer_direction {
                                                         peer::Direction::Outgoing => {
                                                             let server = self.handle.clone();
-                                                            thread::spawn(move || {
-                                                                loop {
-                                                                    thread::sleep(time::Duration::from_millis(1000));
-                                                                    info!("trying to reconnect to peer {}", &peer_addr);
-                                                                    match server.connect(peer_addr) {
-                                                                        Ok(_) => {
-                                                                            info!("reconnected to peer {}", &peer_addr);
-                                                                            break;
-                                                                        }
-                                                                        Err(e) => {
-                                                                            warn!("error connecting to peer {}, retrying in one second: {}", &peer_addr, e);
-                                                                        }
+                                                            thread::spawn(move || loop {
+                                                                thread::sleep(
+                                                                    time::Duration::from_millis(
+                                                                        1000,
+                                                                    ),
+                                                                );
+                                                                info!("trying to reconnect to peer {}", &peer_addr);
+                                                                match server.connect(peer_addr) {
+                                                                    Ok(_) => {
+                                                                        info!("reconnected to peer {}", &peer_addr);
+                                                                        break;
+                                                                    }
+                                                                    Err(e) => {
+                                                                        warn!("error connecting to peer {}, retrying in one second: {}", &peer_addr, e);
                                                                     }
                                                                 }
                                                             });
@@ -325,18 +337,24 @@ impl Context {
                                             match peer_direction {
                                                 peer::Direction::Outgoing => {
                                                     let server = self.handle.clone();
-                                                    thread::spawn(move || {
-                                                        loop {
-                                                            thread::sleep(time::Duration::from_millis(1000));
-                                                            info!("trying to reconnect to peer {}", &peer_addr);
-                                                            match server.connect(peer_addr) {
-                                                                Ok(_) => {
-                                                                    info!("reconnected to peer {}", &peer_addr);
-                                                                    break;
-                                                                }
-                                                                Err(e) => {
-                                                                    warn!("error connecting to peer {}, retrying in one second: {}", &peer_addr, e);
-                                                                }
+                                                    thread::spawn(move || loop {
+                                                        thread::sleep(time::Duration::from_millis(
+                                                            1000,
+                                                        ));
+                                                        info!(
+                                                            "trying to reconnect to peer {}",
+                                                            &peer_addr
+                                                        );
+                                                        match server.connect(peer_addr) {
+                                                            Ok(_) => {
+                                                                info!(
+                                                                    "reconnected to peer {}",
+                                                                    &peer_addr
+                                                                );
+                                                                break;
+                                                            }
+                                                            Err(e) => {
+                                                                warn!("error connecting to peer {}, retrying in one second: {}", &peer_addr, e);
                                                             }
                                                         }
                                                     });
@@ -373,18 +391,24 @@ impl Context {
                                                 match peer_direction {
                                                     peer::Direction::Outgoing => {
                                                         let server = self.handle.clone();
-                                                        thread::spawn(move || {
-                                                            loop {
-                                                                thread::sleep(time::Duration::from_millis(1000));
-                                                                info!("trying to reconnect to peer {}", &peer_addr);
-                                                                match server.connect(peer_addr) {
-                                                                    Ok(_) => {
-                                                                        info!("reconnected to peer {}", &peer_addr);
-                                                                        break;
-                                                                    }
-                                                                    Err(e) => {
-                                                                        warn!("error connecting to peer {}, retrying in one second: {}", &peer_addr, e);
-                                                                    }
+                                                        thread::spawn(move || loop {
+                                                            thread::sleep(
+                                                                time::Duration::from_millis(1000),
+                                                            );
+                                                            info!(
+                                                                "trying to reconnect to peer {}",
+                                                                &peer_addr
+                                                            );
+                                                            match server.connect(peer_addr) {
+                                                                Ok(_) => {
+                                                                    info!(
+                                                                        "reconnected to peer {}",
+                                                                        &peer_addr
+                                                                    );
+                                                                    break;
+                                                                }
+                                                                Err(e) => {
+                                                                    warn!("error connecting to peer {}, retrying in one second: {}", &peer_addr, e);
                                                                 }
                                                             }
                                                         });

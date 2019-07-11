@@ -30,11 +30,7 @@ pub fn get_missing_references(
     return missing_blocks;
 }
 
-pub fn check_ref_proposer_level(
-    parent: &H256,
-    content: &Content,
-    blockchain: &BlockChain,
-) -> bool {
+pub fn check_ref_proposer_level(parent: &H256, content: &Content, blockchain: &BlockChain) -> bool {
     let parent_level = match blockchain.proposer_level(parent) {
         Ok(l) => l,
         _ => return false,
@@ -42,7 +38,9 @@ pub fn check_ref_proposer_level(
     for prop_block_hash in content.proposer_refs.iter() {
         match blockchain.proposer_level(prop_block_hash) {
             Ok(l) => {
-                if l > parent_level { return false; }
+                if l > parent_level {
+                    return false;
+                }
             }
             _ => return false,
         }

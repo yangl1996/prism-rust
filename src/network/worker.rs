@@ -1,12 +1,11 @@
 use super::buffer::BlockBuffer;
 use super::message::{self, Message};
 use super::peer;
-use std::iter::FromIterator;
-use std::collections::VecDeque;
 use crate::block::{Block, Content};
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
 use crate::crypto::hash::{Hashable, H256};
+use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 use crate::handler::new_transaction;
 use crate::handler::new_validated_block;
 use crate::miner::memory_pool::MemoryPool;
@@ -14,15 +13,15 @@ use crate::miner::ContextUpdateSignal;
 use crate::network::server::Handle as ServerHandle;
 use crate::utxodb::UtxoDatabase;
 use crate::validation::{self, BlockResult};
+use crate::visualization::demo;
 use crate::wallet::Wallet;
-use log::{trace, debug, info, warn};
+use crossbeam::channel;
+use log::{debug, info, trace, warn};
 use std::collections::HashSet;
+use std::collections::VecDeque;
+use std::iter::FromIterator;
 use std::sync::{Arc, Mutex};
 use std::thread;
-use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
-use crossbeam::channel;
-use crate::visualization::demo;
-
 
 #[derive(Clone)]
 pub struct Context {
@@ -37,7 +36,7 @@ pub struct Context {
     server: ServerHandle,
     buffer: Arc<Mutex<BlockBuffer>>,
     recent_blocks: Arc<Mutex<HashSet<H256>>>,
-    demo_sender: channel::Sender<demo::DemoMsg>
+    demo_sender: channel::Sender<demo::DemoMsg>,
 }
 
 pub fn new(
@@ -50,7 +49,7 @@ pub fn new(
     mempool: &Arc<Mutex<MemoryPool>>,
     ctx_update_sink: channel::Sender<ContextUpdateSignal>,
     server: &ServerHandle,
-    demo_sender: channel::Sender<demo::DemoMsg>
+    demo_sender: channel::Sender<demo::DemoMsg>,
 ) -> Context {
     let ctx = Context {
         msg_chan: msg_src,
@@ -64,7 +63,7 @@ pub fn new(
         server: server.clone(),
         buffer: Arc::new(Mutex::new(BlockBuffer::new())),
         recent_blocks: Arc::new(Mutex::new(HashSet::new())),
-        demo_sender
+        demo_sender,
     };
     return ctx;
 }
@@ -167,7 +166,7 @@ impl Context {
                         let pow_check = validation::check_pow_sortition_id(&block);
                         match pow_check {
                             BlockResult::Pass => {}
-                            _ => continue
+                            _ => continue,
                         }
 
                         // check whether the block is being processed. note that here we use lock
@@ -181,7 +180,7 @@ impl Context {
                         // register this block as being processed
                         recent_blocks.insert(hash);
                         drop(recent_blocks);
-                        
+
                         // TODO: consider the ordering here. I'd expect a lot of duplicate blocks
                         // to proceed to this step, which means a lot of useless database lookups
                         // and lock/unlocks
@@ -208,13 +207,14 @@ impl Context {
                     for block in &blocks {
                         PERFORMANCE_COUNTER.record_receive_block(&block);
                     }
-                    
+
                     // tell peers about the new blocks
                     // TODO: we will do this only in a reasonable network topology
                     if hashes.is_empty() {
-                        continue;   // end processing this message
+                        continue; // end processing this message
                     }
-                    self.server.broadcast(Message::NewBlockHashes(hashes.clone()));
+                    self.server
+                        .broadcast(Message::NewBlockHashes(hashes.clone()));
 
                     // process each block
                     let mut to_process: Vec<Block> = blocks;
@@ -225,7 +225,8 @@ impl Context {
                         // make sure checking data availability and buffering are one atomic
                         // operation. see the comments in buffer.rs
                         let mut buffer = self.buffer.lock().unwrap();
-                        let data_availability = validation::check_data_availability(&block, &self.chain, &self.blockdb);
+                        let data_availability =
+                            validation::check_data_availability(&block, &self.chain, &self.blockdb);
                         match data_availability {
                             BlockResult::Pass => drop(buffer),
                             BlockResult::MissingReferences(r) => {
@@ -239,7 +240,7 @@ impl Context {
                                 drop(buffer);
                                 continue;
                             }
-                            _ => unreachable!()
+                            _ => unreachable!(),
                         }
 
                         // check sortition proof and content semantics
@@ -255,14 +256,15 @@ impl Context {
                                 continue;
                             }
                         }
-                        let content_semantic = validation::check_content_semantic(&block, &self.chain, &self.blockdb);
+                        let content_semantic =
+                            validation::check_content_semantic(&block, &self.chain, &self.blockdb);
                         match content_semantic {
                             BlockResult::Pass => {}
                             _ => {
                                 warn!(
                                     "Ignoring invalid block {:.8}: {}",
                                     block.hash(),
-                                    content_semantic 
+                                    content_semantic
                                 );
                                 continue;
                             }
@@ -275,8 +277,8 @@ impl Context {
                             &self.blockdb,
                             &self.chain,
                             &self.server,
-                            &self.demo_sender
-                            );
+                            &self.demo_sender,
+                        );
                         context_update_sig.push(match &block.content {
                             Content::Proposer(_) => ContextUpdateSignal::NewProposerBlock,
                             Content::Voter(c) => ContextUpdateSignal::NewVoterBlock(c.chain_number),
@@ -289,7 +291,7 @@ impl Context {
                             debug!(
                                 "Resolved dependency for {} buffered blocks",
                                 resolved_by_current.len()
-                                );
+                            );
                         }
                         for b in resolved_by_current.drain(..) {
                             to_process.push(b);
@@ -297,9 +299,7 @@ impl Context {
                     }
                     // tell the miner to update the context
                     for sig in context_update_sig {
-                        self.context_update_chan
-                            .send(sig)
-                            .unwrap();
+                        self.context_update_chan.send(sig).unwrap();
                     }
 
                     if !to_request.is_empty() {
