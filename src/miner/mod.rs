@@ -302,6 +302,8 @@ impl Context {
                         refs.truncate(PROPOSER_BLOCK_TX_REFS as usize);
                         c.transaction_refs = refs;
                         c.proposer_refs = self.blockchain.unreferred_proposers();
+                        let parent = self.header.parent;                                                                   
+                        c.proposer_refs.retain(|&x|x != parent);
                         touched_content.insert(PROPOSER_INDEX);
                     } else {
                         unreachable!();
@@ -444,8 +446,6 @@ impl Context {
                 if !skip {
                     PERFORMANCE_COUNTER.record_mine_block(&mined_block);
                     self.blockdb.insert(&mined_block).unwrap();
-                    self.server
-                        .broadcast(Message::NewBlockHashes(vec![header_hash]));
                     new_validated_block(
                         &mined_block,
                         &self.mempool,
@@ -453,6 +453,10 @@ impl Context {
                         &self.blockchain,
                         &self.server,
                     );
+                    // after we process the block, we broadcast.
+                    // in case a peer has a reference to this block before we processing
+                    self.server
+                        .broadcast(Message::NewBlockHashes(vec![header_hash]));
                     // if we are stepping, pause the miner loop
                     if let OperatingState::Step = self.operating_state {
                         self.operating_state = OperatingState::Paused;
