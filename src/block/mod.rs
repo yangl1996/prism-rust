@@ -17,7 +17,7 @@ pub struct Block {
     pub content: Content,
     /// The sortition proof of the content. In addition to the content Merkle root in block header, we are
     /// able to verify that the block is mined on a set of content candidates.
-    pub sortition_proof: Vec<H256>,
+    pub proof: proof::Proof,
 }
 
 impl Block {
@@ -27,7 +27,7 @@ impl Block {
         timestamp: u128,
         nonce: u32,
         content_merkle_root: H256,
-        sortition_proof: Vec<H256>,
+        proof: proof::Proof,
         content: Content,
         extra_content: [u8; 32],
         difficulty: H256,
@@ -43,7 +43,7 @@ impl Block {
         Self {
             header,
             content,
-            sortition_proof,
+            proof,
         }
     }
 
@@ -52,12 +52,12 @@ impl Block {
     pub fn from_header(
         header: header::Header,
         content: Content,
-        sortition_proof: Vec<H256>,
+        proof: proof::Proof,
     ) -> Self {
         Self {
             header,
             content,
-            sortition_proof,
+            proof,
         }
     }
 }
@@ -73,7 +73,7 @@ impl PayloadSize for Block {
     fn size(&self) -> usize {
         return std::mem::size_of::<header::Header>()
             + self.content.size()
-            + self.sortition_proof.len() * std::mem::size_of::<H256>();
+            + self.proof.len() * std::mem::size_of::<H256>();
     }
 }
 
@@ -109,87 +109,87 @@ impl PayloadSize for Content {
         }
     }
 }
-
-#[cfg(any(test, feature = "test-utilities"))]
-pub mod tests {
-
-    use super::*;
-    use crate::config;
-    use crate::transaction::Transaction;
-    use rand::Rng;
-
-    macro_rules! random_nonce {
-        () => {{
-            let mut rng = rand::thread_rng();
-            let random_u32: u32 = rng.gen();
-            random_u32
-        }};
-    }
-
-    pub fn proposer_block(
-        parent: H256,
-        timestamp: u128,
-        proposer_refs: Vec<H256>,
-        transaction_refs: Vec<H256>,
-    ) -> Block {
-        let content = Content::Proposer(proposer::Content {
-            transaction_refs,
-            proposer_refs,
-        });
-        let content_hash = content.hash();
-        Block::new(
-            parent,
-            timestamp,
-            random_nonce!(),
-            content_hash,
-            vec![content_hash],
-            content,
-            [0u8; 32],
-            *config::DEFAULT_DIFFICULTY,
-        )
-    }
-
-    pub fn voter_block(
-        parent: H256,
-        timestamp: u128,
-        chain_number: u16,
-        voter_parent: H256,
-        votes: Vec<H256>,
-    ) -> Block {
-        let content = Content::Voter(voter::Content {
-            chain_number,
-            voter_parent,
-            votes,
-        });
-        let content_hash = content.hash();
-        Block::new(
-            parent,
-            timestamp,
-            random_nonce!(),
-            content_hash,
-            vec![content_hash],
-            content,
-            [0u8; 32],
-            *config::DEFAULT_DIFFICULTY,
-        )
-    }
-
-    pub fn transaction_block(
-        parent: H256,
-        timestamp: u128,
-        transactions: Vec<Transaction>,
-    ) -> Block {
-        let content = Content::Transaction(transaction::Content { transactions });
-        let content_hash = content.hash();
-        Block::new(
-            parent,
-            timestamp,
-            random_nonce!(),
-            content_hash,
-            vec![content_hash],
-            content,
-            [0u8; 32],
-            *config::DEFAULT_DIFFICULTY,
-        )
-    }
-}
+//
+//#[cfg(any(test, feature = "test-utilities"))]
+//pub mod tests {
+//
+//    use super::*;
+//    use crate::config;
+//    use crate::transaction::Transaction;
+//    use rand::Rng;
+//
+//    macro_rules! random_nonce {
+//        () => {{
+//            let mut rng = rand::thread_rng();
+//            let random_u32: u32 = rng.gen();
+//            random_u32
+//        }};
+//    }
+//
+//    pub fn proposer_block(
+//        parent: H256,
+//        timestamp: u128,
+//        proposer_refs: Vec<H256>,
+//        transaction_refs: Vec<H256>,
+//    ) -> Block {
+//        let content = Content::Proposer(proposer::Content {
+//            transaction_refs,
+//            proposer_refs,
+//        });
+//        let content_hash = content.hash();
+//        Block::new(
+//            parent,
+//            timestamp,
+//            random_nonce!(),
+//            content_hash,
+//            vec![content_hash],
+//            content,
+//            [0u8; 32],
+//            *config::DEFAULT_DIFFICULTY,
+//        )
+//    }
+//
+//    pub fn voter_block(
+//        parent: H256,
+//        timestamp: u128,
+//        chain_number: u16,
+//        voter_parent: H256,
+//        votes: Vec<H256>,
+//    ) -> Block {
+//        let content = Content::Voter(voter::Content {
+//            chain_number,
+//            voter_parent,
+//            votes,
+//        });
+//        let content_hash = content.hash();
+//        Block::new(
+//            parent,
+//            timestamp,
+//            random_nonce!(),
+//            content_hash,
+//            vec![content_hash],
+//            content,
+//            [0u8; 32],
+//            *config::DEFAULT_DIFFICULTY,
+//        )
+//    }
+//
+//    pub fn transaction_block(
+//        parent: H256,
+//        timestamp: u128,
+//        transactions: Vec<Transaction>,
+//    ) -> Block {
+//        let content = Content::Transaction(transaction::Content { transactions });
+//        let content_hash = content.hash();
+//        Block::new(
+//            parent,
+//            timestamp,
+//            random_nonce!(),
+//            content_hash,
+//            vec![content_hash],
+//            content,
+//            [0u8; 32],
+//            *config::DEFAULT_DIFFICULTY,
+//        )
+//    }
+//}

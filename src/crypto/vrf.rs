@@ -2,19 +2,19 @@ use super::hash::{Hashable, H256};
 use ed25519_dalek::{PublicKey,SecretKey};
 use serde::{Serialize, Deserialize};
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct VrfPublicKey([u8; 32]); //TODO: We are using a fake public key for now
 
 pub type VrfSecretKey = SecretKey;
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct VrfInput{
     random_source: [u8; 32],
     time: [u8; 16],
 } //Random source and time
 
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct VrfProof ([u8; 32]);
 
 impl VrfProof{

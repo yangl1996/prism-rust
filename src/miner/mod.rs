@@ -1,7 +1,7 @@
 pub mod memory_pool;
 
 use crate::block::header::Header;
-use crate::block::{proposer, transaction, voter};
+use crate::block::{proposer, transaction, voter, proof};
 use crate::block::{Block, Content};
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
@@ -497,7 +497,7 @@ impl Context {
         let mined_block = Block::from_header(
             self.header,
             self.contents[sortition_id as usize].clone(),
-            sortition_proof,
+            proof::Proof::default(),
         );
 
         return mined_block;

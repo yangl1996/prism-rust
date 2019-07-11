@@ -1,5 +1,6 @@
 use super::Block;
 use super::Content as BlockContent;
+use super::proof::Proof;
 use crate::config::*;
 use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::merkle::MerkleTree;
@@ -57,7 +58,7 @@ pub fn genesis() -> Block {
         0,
         0,
         all_zero.into(),
-        vec![],
+        Proof::default(),
         BlockContent::Proposer(content),
         all_zero,
         *DEFAULT_DIFFICULTY,

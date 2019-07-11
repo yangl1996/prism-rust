@@ -1,7 +1,7 @@
 mod proposer_block;
 mod transaction;
 mod voter_block;
-use crate::block::{Block, Content};
+use crate::block::{Block, Content, proof};
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
 use crate::config::*;
@@ -104,15 +104,15 @@ pub fn check_pow_sortition_id(block: &Block) -> BlockResult {
 pub fn check_sortition_proof(block: &Block) -> BlockResult {
     let sortition_id = get_sortition_id(&block.hash(), &block.header.difficulty);
     if let Some(sortition_id) = sortition_id {
-        if !verify(
-            &block.header.content_merkle_root,
-            &block.content.hash(),
-            &block.sortition_proof,
-            sortition_id as usize,
-            (NUM_VOTER_CHAINS + FIRST_VOTER_INDEX) as usize,
-        ) {
-            return BlockResult::WrongSortitionProof;
-        }
+//        if !verify(
+//            &block.header.content_merkle_root,
+//            &block.content.hash(),
+//            &block.proof,
+//            sortition_id as usize,
+//            (NUM_VOTER_CHAINS + FIRST_VOTER_INDEX) as usize,
+//        ) {
+//            return BlockResult::WrongSortitionProof;
+//        }
     } else {
         unreachable!();
     }
