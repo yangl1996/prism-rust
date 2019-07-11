@@ -1,7 +1,9 @@
 pub mod header;
+pub mod proof;
 pub mod proposer;
 pub mod transaction;
 pub mod voter;
+
 use crate::crypto::hash::{Hashable, H256};
 use crate::experiment::performance_counter::PayloadSize;
 
