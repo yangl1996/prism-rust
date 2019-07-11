@@ -256,6 +256,11 @@ function remove_traffic_shaping_single
 	ssh $1 -- "sudo /home/ubuntu/payload/binary/comcast --device=ens5 --stop"
 }
 
+function tune_tcp
+{
+	ssh $1 -- "sudo sysctl -w net.ipv4.tcp_congestion_control=bbr && sudo sysctl -w net.core.rmem_max=25165824 && sudo sysctl -w net.core.wmem_max=25165824 && sudo sysctl -w net.ipv4.tcp_wmem='10240 87380 25165824' && sudo sysctl -w net.ipv4.tcp_rmem='10240 87380 25165824'"
+}
+
 function execute_on_all
 {
 	# $1: execute function '$1_single'
@@ -535,6 +540,9 @@ case "$1" in
 		  unmount-ramdisk       Unmount RAM disk
 		  mount-nvme            Mount NVME 
 		  unmount-nvme          Unmount NVME
+		  shape-traffic l b     Limit the throughput to b Kbps and add latency of l ms
+		  reset-traffic         Remove the traffic shaping filters
+		  tune-tcp              Set TCP parameters
 
 		Run Experiment
 
@@ -547,8 +555,6 @@ case "$1" in
 		  show-demo             Start the demo workflow
 		  stop-tx               Stop generating transactions
 		  stop-mine             Stop mining
-		  shape-traffic l b     Limit the throughput to b Kbps and add latency of l ms
-		  reset-traffic         Remove the traffic shaping filters
 
 		Collect Data
 		  
@@ -604,6 +610,8 @@ case "$1" in
 		execute_on_all add_traffic_shaping $2 $3 ;;
 	reset-traffic)
 		execute_on_all remove_traffic_shaping ;;
+	tune-tcp)
+		execute_on_all tune_tcp ;;
 	get-perf)
 		show_performance $2 ;;
 	show-vis)
