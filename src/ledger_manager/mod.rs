@@ -13,21 +13,24 @@ use std::sync::Arc;
 use crossbeam::channel;
 use std::thread;
 use std::collections::{HashSet, HashMap};
+use crate::visualization::demo;
 
 pub struct LedgerManager {
     blockdb: Arc<BlockDatabase>,
     chain: Arc<BlockChain>,
     utxodb: Arc<UtxoDatabase>,
     wallet: Arc<Wallet>,
+    demo_sender: channel::Sender<demo::DemoMsg>
 }
 
 impl LedgerManager {
-    pub fn new(blockdb: &Arc<BlockDatabase>, chain: &Arc<BlockChain>, utxodb: &Arc<UtxoDatabase>, wallet: &Arc<Wallet>) -> Self {
+    pub fn new(blockdb: &Arc<BlockDatabase>, chain: &Arc<BlockChain>, utxodb: &Arc<UtxoDatabase>, wallet: &Arc<Wallet>, demo_sender: channel::Sender<demo::DemoMsg>) -> Self {
         return Self {
             blockdb: Arc::clone(&blockdb),
             chain: Arc::clone(&chain),
             utxodb: Arc::clone(&utxodb),
             wallet: Arc::clone(&wallet),
+            demo_sender
         };
     }
 
@@ -36,9 +39,10 @@ impl LedgerManager {
         let blockdb = Arc::clone(&self.blockdb);
         let chain = Arc::clone(&self.chain);
         let (tx_diff_tx, tx_diff_rx) = channel::bounded(buffer_size);
+        let demo_sender = self.demo_sender.clone();
         thread::spawn(move || {
             loop {
-                let tx_diff = update_transaction_sequence(&blockdb, &chain);
+                let tx_diff = update_transaction_sequence(&blockdb, &chain, &demo_sender);
                 tx_diff_tx.send(tx_diff).unwrap();
             }
         });
@@ -199,8 +203,16 @@ impl UtxoManager {
 fn update_transaction_sequence (
     blockdb: &BlockDatabase,
     chain: &BlockChain,
+    demo_sender: &channel::Sender<demo::DemoMsg>
 ) -> (Vec<(Transaction, H256)>, Vec<(Transaction, H256)>) {
     let diff = chain.update_ledger().unwrap();
+
+    if !diff.2.is_empty() || !diff.3.is_empty() {
+        let msg = demo::update_ledger_msg(&diff.2, &diff.3);
+        // demo_sender ignores the result
+        match demo_sender.send(msg) { _ => ()};
+    }
+
     PERFORMANCE_COUNTER.record_deconfirm_transaction_blocks(diff.1.len());
 
     // gather the transaction diff

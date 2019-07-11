@@ -3,7 +3,7 @@ use crate::crypto::hash::{Hashable, H256};
 
 use std::convert::From;
 use std::thread;
-use std::time::Duration;
+use std::collections::HashSet;
 use log::{debug, warn};
 
 use url::Url;
@@ -100,18 +100,23 @@ pub fn new(url: &str, transaction_ratio: u32, voter_max: u16) -> crossbeam::Send
         if let Ok(parsed) = Url::parse(url.as_str()) {
             if let Ok((mut socket, _response)) = connect(parsed) {
                 let mut transaction_cnt: u32 = 0;
-                for msg in receiver.iter() {
-                    match &msg {
-                        DemoMsg::TransactionBlock(_) => {
-                            transaction_cnt +=1 ;
-                            if transaction_cnt == transaction_ratio {
-                                transaction_cnt = 0;
-                            } else {
-                                continue;
-                            }
+                let mut transaction_set: HashSet<String> = HashSet::new();
+                for mut msg in receiver.iter() {
+                    match &mut msg {
+                        DemoMsg::ProposerBlock(block) => {
+                            block.transaction_refs.retain(|x|transaction_set.contains(x));
                         }
                         DemoMsg::VoterBlock(block) => {
                             if block.chain >= voter_max {
+                                continue;
+                            }
+                        }
+                        DemoMsg::TransactionBlock(block) => {
+                            transaction_cnt +=1 ;
+                            if transaction_cnt == transaction_ratio {
+                                transaction_cnt = 0;
+                                transaction_set.insert(block.id.clone());
+                            } else {
                                 continue;
                             }
                         }

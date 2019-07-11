@@ -15,7 +15,7 @@ use crate::network::server::Handle as ServerHandle;
 use crate::utxodb::UtxoDatabase;
 use crate::validation::{self, BlockResult};
 use crate::wallet::Wallet;
-use log::{debug, info, warn};
+use log::{trace, debug, info, warn};
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -37,7 +37,7 @@ pub struct Context {
     server: ServerHandle,
     buffer: Arc<Mutex<BlockBuffer>>,
     recent_blocks: Arc<Mutex<HashSet<H256>>>,
-    demo_sender: crossbeam::Sender<demo::DemoMsg>
+    demo_sender: channel::Sender<demo::DemoMsg>
 }
 
 pub fn new(
@@ -50,7 +50,7 @@ pub fn new(
     mempool: &Arc<Mutex<MemoryPool>>,
     ctx_update_sink: channel::Sender<ContextUpdateSignal>,
     server: &ServerHandle,
-    demo_sender: crossbeam::Sender<demo::DemoMsg>
+    demo_sender: channel::Sender<demo::DemoMsg>
 ) -> Context {
     let ctx = Context {
         msg_chan: msg_src,
@@ -96,7 +96,7 @@ impl Context {
                     debug!("Pong: {}", nonce);
                 }
                 Message::NewTransactionHashes(hashes) => {
-                    debug!("Got {} new transaction hashes", hashes.len());
+                    trace!("Got {} new transaction hashes", hashes.len());
                     let mut hashes_to_request = vec![];
                     for hash in hashes {
                         if !self.mempool.lock().unwrap().contains(&hash) {
@@ -108,7 +108,7 @@ impl Context {
                     }
                 }
                 Message::GetTransactions(hashes) => {
-                    debug!("Asked for {} transactions", hashes.len());
+                    trace!("Asked for {} transactions", hashes.len());
                     let mut transactions = vec![];
                     for hash in hashes {
                         match self.mempool.lock().unwrap().get(&hash) {
@@ -121,13 +121,13 @@ impl Context {
                     peer.write(Message::Transactions(transactions));
                 }
                 Message::Transactions(transactions) => {
-                    debug!("Got {} transactions", transactions.len());
+                    trace!("Got {} transactions", transactions.len());
                     for transaction in transactions {
                         new_transaction(transaction, &self.mempool, &self.server);
                     }
                 }
                 Message::NewBlockHashes(hashes) => {
-                    debug!("Got {} new block hashes", hashes.len());
+                    trace!("Got {} new block hashes", hashes.len());
                     let mut hashes_to_request = vec![];
                     for hash in hashes {
                         // we need to check blockchain as well
@@ -140,7 +140,7 @@ impl Context {
                     }
                 }
                 Message::GetBlocks(hashes) => {
-                    debug!("Asked for {} blocks", hashes.len());
+                    trace!("Asked for {} blocks", hashes.len());
                     let mut blocks = vec![];
                     for hash in hashes {
                         match self.blockdb.get_encoded(&hash).unwrap() {
@@ -153,7 +153,7 @@ impl Context {
                     peer.write(Message::Blocks(blocks));
                 }
                 Message::Blocks(encoded_blocks) => {
-                    debug!("Got {} blocks", encoded_blocks.len());
+                    trace!("Got {} blocks", encoded_blocks.len());
 
                     // decode the blocks
                     let mut blocks: Vec<Block> = vec![];
@@ -309,7 +309,7 @@ impl Context {
                     }
                 }
                 Message::Bootstrap(after) => {
-                    debug!("Asked for all blocks after {}", &after);
+                    trace!("Asked for all blocks after {}", &after);
                     /*
                      * TODO: recover this message
                     for batch in self.blockdb.blocks_after(&after, 500) {

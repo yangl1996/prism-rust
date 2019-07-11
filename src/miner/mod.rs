@@ -68,7 +68,6 @@ pub struct Context {
     header: Header,
     contents: Vec<Content>,
     content_merkle_tree: MerkleTree,
-    extra_content: [u8; 32],
     demo_sender: crossbeam::Sender<demo::DemoMsg>
 }
 
@@ -127,12 +126,11 @@ pub fn new(
             timestamp: get_time(),
             nonce: 0,
             content_merkle_root: H256::default(),
-            extra_content: [0; 32],
+            extra_content: extra_content,
             difficulty: *DEFAULT_DIFFICULTY,
         },
         contents: contents,
         content_merkle_tree: content_merkle_tree,
-        extra_content,
         demo_sender
     };
 
@@ -439,7 +437,6 @@ impl Context {
                 if !skip {
                     PERFORMANCE_COUNTER.record_mine_block(&mined_block);
                     self.blockdb.insert(&mined_block).unwrap();
-                    self.server.broadcast(Message::NewBlockHashes(vec![header_hash]));
                     new_validated_block(
                         &mined_block,
                         &self.mempool,
@@ -448,6 +445,7 @@ impl Context {
                         &self.server,
                         &self.demo_sender
                     );
+                    self.server.broadcast(Message::NewBlockHashes(vec![header_hash]));
                     // if we are stepping, pause the miner loop
                     if let OperatingState::Step = self.operating_state {
                         self.operating_state = OperatingState::Paused;

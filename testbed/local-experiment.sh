@@ -61,7 +61,7 @@ function kill_prism() {
 }
 
 
-binary_path=${PRISM_BINARY-../target/debug/prism}
+binary_path=${PRISM_BINARY-../target/release/prism}
 num_nodes=$1
 
 # generate keypairs and addresses
@@ -95,8 +95,9 @@ for (( i = 0; i < $num_nodes; i++ )); do
     dem=`expr $dem_port + $i`
     echo "nodes_$i,x,127.0.0.1,127.0.0.1,$p2p,$api,$vis" >> nodes.txt
     echo "curl 'http://127.0.0.1:$api/transaction-generator/stop' &> /dev/null" >> stop_nodes.sh
+    echo "curl 'http://127.0.0.1:$api/miner/step' &> /dev/null" >> stop_nodes.sh
 
-	command="$binary_path --p2p 127.0.0.1:${p2p} --api 127.0.0.1:${api} --visual 127.0.0.1:${vis} --blockdb /tmp/prism-${i}-blockdb.rocksdb --blockchaindb /tmp/prism-${i}-blockchaindb.rocksdb --utxodb /tmp/prism-${i}-utxodb.rocksdb --walletdb /tmp/prism-${i}-wallet.rocksdb -vv --load-key ${i}.pkcs8 --demo ws://127.0.0.1:${dem} --demo-tran-ratio 100 --demo-vote-max 2"
+	command="$binary_path --p2p 127.0.0.1:${p2p} --api 127.0.0.1:${api} --visual 127.0.0.1:${vis} --blockdb /tmp/prism-${i}-blockdb.rocksdb --blockchaindb /tmp/prism-${i}-blockchaindb.rocksdb --utxodb /tmp/prism-${i}-utxodb.rocksdb --walletdb /tmp/prism-${i}-wallet.rocksdb -vvv --load-key ${i}.pkcs8 --demo ws://127.0.0.1:${dem} --demo-tran-ratio 1000 --demo-vote-max 2"
 
 	for (( j = 0; j < $i; j++ )); do
 		peer_port=`expr $p2p_port + $j`
@@ -132,7 +133,7 @@ for (( i = 0; i < $num_nodes; i++ )); do
 		echo "Failed to start transaction generation for node $i"
 		exit 1
 	fi
-	url="localhost:${port}/miner/start?lambda=30000&lazy=false"
+	url="localhost:${port}/miner/start?lambda=10000&lazy=false"
 	curl "$url" &> /dev/null
 	if [ "$?" -ne 0 ]; then
 		echo "Failed to start mining for node $i"
