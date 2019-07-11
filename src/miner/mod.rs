@@ -302,7 +302,8 @@ impl Context {
                         refs.truncate(PROPOSER_BLOCK_TX_REFS as usize);
                         c.transaction_refs = refs;
                         c.proposer_refs = self.blockchain.unreferred_proposers();
-                        c.proposer_refs.retain(|&x|x != self.header.parent);
+                        let parent = self.header.parent;
+                        c.proposer_refs.retain(|&x|x != parent);
                         touched_content.insert(PROPOSER_INDEX);
                     } else {
                         unreachable!();
