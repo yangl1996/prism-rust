@@ -14,11 +14,9 @@ use prism::network::worker;
 use prism::experiment::transaction_generator::TransactionGenerator;
 use prism::miner;
 use prism::crypto::hash::{H256, Hashable};
-use prism::handler::update_ledger;
 use std::net;
 use std::process;
 use std::sync::Arc;
-use std::sync::mpsc;
 use std::convert::TryInto;
 use std::thread;
 use std::time;
@@ -27,6 +25,8 @@ use rand::rngs::OsRng;
 use ed25519_dalek::Keypair;
 use ed25519_dalek::Signature;
 use prism::transaction::Address;
+use prism::ledger_manager::LedgerManager;
+use crossbeam::channel;
 use prism::visualization::demo;
 
 fn main() {
@@ -49,6 +49,8 @@ fn main() {
      (@arg load_key_path: --("load-key") ... [PATH] "Loads a key pair into the wallet from the given address")
      (@arg mempool_size: --("mempool-size") ... [SIZE] default_value("500000") "Sets the size limit of the memory pool")
      (@arg demo_addr: --demo [ADDR] default_value("ws://127.0.0.1:9000") "Sets the IP address and the port of the demo websocket to connect to")
+     (@arg demo_transaction_ratio: --("demo-tran-ratio") [INT] default_value("1") "Sets the ratio of transaction blocks in demo")
+     (@arg demo_voter_max: --("demo-vote-max") [INT] default_value("1000") "Sets the max voter chain to show in demo")
      (@subcommand keygen =>
       (about: "Generates Prism wallet key pair")
       (@arg display_address: --addr "Prints the address of the key pair to STDERR")
@@ -130,35 +132,19 @@ fn main() {
     }
 
     // connect to demo websocket server
-    let demo_sender = demo::new(&matches.value_of("demo_addr").unwrap());
+    let demo_transaction_ratio = matches.value_of("demo_transaction_ratio").unwrap().parse::<u32>().unwrap_or_else(|e| {
+        error!("Error parsing number of demo_transaction_ratio: {}", e);
+        process::exit(1);
+    });
+    let demo_voter_max = matches.value_of("demo_voter_max").unwrap().parse::<u16>().unwrap_or_else(|e| {
+        error!("Error parsing number of demo_voter_max: {}", e);
+        process::exit(1);
+    });
+    let demo_sender = demo::new(&matches.value_of("demo_addr").unwrap(), demo_transaction_ratio, demo_voter_max);
 
     // start thread to update ledger
-    let blockdb_copy = Arc::clone(&blockdb);
-    let blockchain_copy = Arc::clone(&blockchain);
-    let utxodb_copy = Arc::clone(&utxodb);
-    let wallet_copy = Arc::clone(&wallet);
-    let demo_sender_copy = demo_sender.clone();
-    let (tx_diff_tx, tx_diff_rx) = mpsc::sync_channel(3);
-    let (coin_diff_tx, coin_diff_rx) = mpsc::sync_channel(3);
-    thread::spawn(move || {
-        loop {
-            let tx_diff = update_ledger::update_transaction_sequence(&blockdb_copy, &blockchain_copy, &demo_sender_copy);
-            tx_diff_tx.send(tx_diff).unwrap();
-        }
-    });
-    thread::spawn(move || {
-        loop {
-            let tx_diff = tx_diff_rx.recv().unwrap();
-            let coin_diff = update_ledger::update_utxo(&tx_diff.0, &tx_diff.1, &utxodb_copy);
-            coin_diff_tx.send(coin_diff).unwrap();
-        }
-    });
-    thread::spawn(move || {
-        loop {
-            let coin_diff = coin_diff_rx.recv().unwrap();
-            update_ledger::update_wallet(&coin_diff.0, &coin_diff.1, &wallet_copy);
-        }
-    });
+    let ledger_manager = LedgerManager::new(&blockdb, &blockchain, &utxodb, &wallet, demo_sender.clone());
+    ledger_manager.start(3, 8);
 
     // parse p2p server address
     let p2p_addr = matches.value_of("peer_addr").unwrap().parse::<net::SocketAddr>().unwrap_or_else(|e| {
@@ -173,13 +159,13 @@ fn main() {
     });
 
     // create channels between server and worker, worker and miner, miner and worker
-    let (msg_tx, msg_rx) = mpsc::channel();
-    let (ctx_tx, ctx_rx) = mpsc::channel();
+    let (msg_tx, msg_rx) = channel::unbounded();
+    let (ctx_tx, ctx_rx) = channel::unbounded();
+    let ctx_tx_miner = ctx_tx.clone();
 
     // start the p2p server
     let (server_ctx, server) = server::new(p2p_addr, msg_tx).unwrap();
     server_ctx.start().unwrap();
-
 
     // start the worker
     let worker_ctx = worker::new(16, msg_rx, &blockchain, &blockdb, &utxodb, &wallet, &mempool, ctx_tx, &server, demo_sender.clone() );
@@ -205,7 +191,7 @@ fn main() {
         bytes
     };
     // start the miner
-    let (miner_ctx, miner) = miner::new(&mempool, &blockchain, &blockdb, ctx_rx, &server, extra_content, demo_sender.clone());
+    let (miner_ctx, miner) = miner::new(&mempool, &blockchain, &blockdb, ctx_rx, &ctx_tx_miner, &server, extra_content, demo_sender.clone());
     miner_ctx.start();
 
     // connect to known peers

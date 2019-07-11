@@ -5,7 +5,8 @@ use crate::transaction;
 use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 use std::thread;
 use std::time;
-use std::sync::{Arc, Mutex, mpsc};
+use std::sync::{Arc, Mutex};
+use crossbeam::channel;
 use rand::Rng;
 use crate::handler::new_transaction;
 use log::{debug, error, info, trace};
@@ -45,15 +46,15 @@ pub struct TransactionGenerator {
     wallet: Arc<Wallet>,
     server: ServerHandle,
     mempool: Arc<Mutex<MemoryPool>>,
-    control_chan: mpsc::Receiver<ControlSignal>,
+    control_chan: channel::Receiver<ControlSignal>,
     arrival_distribution: ArrivalDistribution,
     value_distribution: ValueDistribution,
     state: State,
 }
 
 impl TransactionGenerator {
-    pub fn new(wallet: &Arc<Wallet>, server: &ServerHandle, mempool: &Arc<Mutex<MemoryPool>>) -> (Self, mpsc::Sender<ControlSignal>) {
-        let (tx, rx) = mpsc::channel();
+    pub fn new(wallet: &Arc<Wallet>, server: &ServerHandle, mempool: &Arc<Mutex<MemoryPool>>) -> (Self, channel::Sender<ControlSignal>) {
+        let (tx, rx) = channel::unbounded();
         let instance = Self {
             wallet: Arc::clone(wallet),
             server: server.clone(),
@@ -113,8 +114,8 @@ impl TransactionGenerator {
                                 self.handle_control_signal(signal);
                                 continue;
                             }
-                            Err(mpsc::TryRecvError::Empty) => {}
-                            Err(mpsc::TryRecvError::Disconnected) => panic!("Transaction generator control channel detached"),
+                            Err(channel::TryRecvError::Empty) => {}
+                            Err(channel::TryRecvError::Disconnected) => panic!("Transaction generator control channel detached"),
                         }
                     }
                     State::Paused => {

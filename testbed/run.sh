@@ -19,17 +19,27 @@ function start_instances
 		esac
 	done
 	echo "Launching $1 AWS EC2 instances"
-	aws ec2 run-instances --launch-template LaunchTemplateId=$LAUNCH_TEMPLATE --count $1 > log/aws_start.log
-	local instances=`jq -r '.Instances[].InstanceId ' log/aws_start.log`
-	echo "Waiting for network interfaces to attach"
-	sleep 3
+	local instances=`aws ec2 run-instances --launch-template LaunchTemplateId=$LAUNCH_TEMPLATE --count $1 --query 'Instances[*].InstanceId' | jq -r '. | join(" ")'`
 	rm -f instances.txt
 	rm -f ~/.ssh/config.d/prism
 	echo "Querying public IPs and writing to SSH config"
-	for instance in $instances ;
+	while [ 1 ]
 	do
-		local ip=`aws ec2 describe-instances --instance-ids $instance | jq -r '.Reservations[0].Instances[0].PublicIpAddress'`
-		local lan=`aws ec2 describe-instances --instance-ids $instance | jq -r '.Reservations[0].Instances[0].PrivateIpAddress'`
+		rawdetails=`aws ec2 describe-instances --instance-ids $instances --query 'Reservations[*].Instances[*].{publicip:PublicIpAddress,id:InstanceId,privateip:PrivateIpAddress}[]'`
+		if echo $rawdetails | jq '.[].publicip' | grep null &> /dev/null ; then
+			echo "Waiting for public IP addresses to be assigned"
+			sleep 3
+			continue
+		else
+			details=`echo "$rawdetails" | jq -c '.[]'`
+			break
+		fi
+	done
+	for instancedetail in $details;
+	do
+		local instance=`echo $instancedetail | jq -r '.id'`
+		local ip=`echo $instancedetail | jq -r '.publicip'`
+		local lan=`echo $instancedetail | jq -r '.privateip'`
 		echo "$instance,$ip,$lan" >> instances.txt
 		echo "Host $instance" >> ~/.ssh/config.d/prism
 		echo "    Hostname $ip" >> ~/.ssh/config.d/prism
@@ -42,6 +52,7 @@ function start_instances
 	tput setaf 2
 	echo "Instance started, SSH config written"
 	tput sgr0
+	curl -s --form-string "token=$PUSHOVER_TOKEN" --form-string "user=$PUSHOVER_USER" --form-string "title=EC2 Instances Launched" --form-string "message=$1 EC2 instances were just launched by user $(whoami)." https://api.pushover.net/1/messages.json &> /dev/null
 }
 
 function fix_ssh_config
@@ -92,6 +103,7 @@ function stop_instances
 	tput setaf 2
 	echo "Instances terminated"
 	tput sgr0
+	curl -s --form-string "token=$PUSHOVER_TOKEN" --form-string "user=$PUSHOVER_USER" --form-string "title=EC2 Instances Stopped" --form-string "message=EC2 instances launched at $(date -r instances.txt) were just terminated by user $(whoami)." https://api.pushover.net/1/messages.json &> /dev/null
 }
 
 function build_prism
@@ -101,16 +113,16 @@ function build_prism
 	rsync -ar ../src prism:~/prism/
 	rsync -ar ../.cargo prism:~/prism/
 	echo "Building Prism binary"
-	ssh prism -- 'cd ~/prism && /home/prism/.cargo/bin/cargo build --release' &> log/prism_build.log
+	ssh prism -- 'cd ~/prism && ~/.cargo/bin/cargo build --release' &> log/prism_build.log
 	if [ $# -ne 1 ]; then
 		echo "Stripping symbol"
-		ssh prism -- 'cp /home/prism/prism/target/release/prism /home/prism/prism/target/release/prism-copy && strip /home/prism/prism/target/release/prism-copy'
+		ssh prism -- 'cp ~/prism/target/release/prism ~/prism/target/release/prism-copy && strip ~/prism/target/release/prism-copy'
 	else
 		if [ "$1" = "nostrip" ]; then
-			ssh prism -- 'cp /home/prism/prism/target/release/prism /home/prism/prism/target/release/prism-copy'
+			ssh prism -- 'cp ~/prism/target/release/prism ~/prism/target/release/prism-copy'
 		else
 			echo "Stripping symbol"
-			ssh prism -- 'cp /home/prism/prism/target/release/prism /home/prism/prism/target/release/prism-copy && strip /home/prism/prism/target/release/prism-copy'
+			ssh prism -- 'cp ~/prism/target/release/prism ~/prism/target/release/prism-copy && strip ~/prism/target/release/prism-copy'
 		fi
 	fi
 	tput setaf 2
@@ -134,7 +146,7 @@ function prepare_payload
 	mkdir -p payload/common/scripts
 
 	echo "Download binaries"
-	scp prism:/home/prism/prism/target/release/prism-copy payload/common/binary/prism
+	scp prism:~/prism/target/release/prism-copy payload/common/binary/prism
 	cp scripts/start-prism.sh payload/common/scripts/start-prism.sh
 	cp scripts/stop-prism.sh payload/common/scripts/stop-prism.sh
 
@@ -261,7 +273,7 @@ function start_transactions_single
 
 function start_mining_single
 {
-	curl -s "http://$3:$4/miner/start?lambda=120000&lazy=false"
+	curl -s "http://$3:$4/miner/start?lambda=60000&lazy=false"
 }
 
 function stop_transactions_single
@@ -410,6 +422,13 @@ function generate_flamegraph
 	done
 }
 
+function open_dashboard
+{
+	# start grafana simple json data server
+	~/go/bin/grafana-rrd-server -r data/ -s 1
+	open 'http://localhost:3000/dashboard/script/prism.js?orgId=1&nodes=20'
+}
+
 function show_visualization
 {
 	local nodes=`cat nodes.txt`
@@ -457,6 +476,7 @@ function stop_prism
 
 function run_experiment
 {
+	rm data/*
 	echo "Starting Prism nodes"
 	start_prism
 	echo "All nodes started, starting transaction generation"
@@ -465,6 +485,15 @@ function run_experiment
 	rm -f experiment.txt
 	echo "START $start_time" >> experiment.txt
 	echo "Running experiment"
+}
+
+function show_demo
+{
+	run_experiment
+	echo "Demo Started"
+	pkill grafana-rrd-server
+	~/go/bin/grafana-rrd-server -r data/ -s 1 &
+	./telematics/telematics log -duration 7200 -grafana
 }
 
 mkdir -p log
@@ -492,6 +521,7 @@ case "$1" in
 		  start-prism           Start Prism nodes on each remote server
 		  stop-prism            Stop Prism nodes on each remote server
 		  run-exp               Run the experiment
+		  show-demo             Start the demo workflow
 		  stop-tx               Stop generating transactions
 		  stop-mine             Stop mining
 
@@ -501,6 +531,7 @@ case "$1" in
 		  show-vis              Open the visualization page for the given node
 		  profile node f d      Capture stack trace for node with frequency f and duration d
 		  flamegraph node       Generate and download flamegraph for node
+		  open-dashboard        Open the performance dashboard
 
 		Connect to Testbed
 
@@ -538,6 +569,8 @@ case "$1" in
 		stop_prism ;;
 	run-exp)
 		run_experiment ;;
+	show-demo)
+		show_demo ;;
 	stop-tx)
 		query_api stop_transactions 0 ;;
 	stop-mine)
@@ -550,6 +583,8 @@ case "$1" in
 		capture_stack_trace $2 $3 $4 ;;
 	flamegraph)
 		generate_flamegraph $2 ;;
+	open-dashboard)
+		open_dashboard ;;
 	run-all)
 		run_on_all "${@:2}" ;;
 	ssh)

@@ -128,7 +128,7 @@ pub fn check_data_availability(
 
     // check whether the parent exists
     let parent = block.header.parent;
-    let parent_availability = check_proposer_block_exists(parent, blockdb, blockchain);
+    let parent_availability = check_proposer_block_exists(parent, blockchain);
     if !parent_availability {
         missing.push(parent);
     }
@@ -218,7 +218,6 @@ pub fn check_content_semantic(
 /// Check whether a proposer block exists in the block database and the blockchain.
 fn check_proposer_block_exists(
     hash: H256,
-    blockdb: &BlockDatabase,
     blockchain: &BlockChain,
 ) -> bool {
     let in_chain = match blockchain.contains_proposer(&hash) {
@@ -230,7 +229,7 @@ fn check_proposer_block_exists(
 }
 
 /// Check whether a voter block exists in the block database and the blockchain.
-fn check_voter_block_exists(hash: H256, blockdb: &BlockDatabase, blockchain: &BlockChain) -> bool {
+fn check_voter_block_exists(hash: H256, blockchain: &BlockChain) -> bool {
     let in_chain = match blockchain.contains_voter(&hash) {
         Err(e) => panic!("Blockchain error {}", e),
         Ok(b) => b,
@@ -240,13 +239,13 @@ fn check_voter_block_exists(hash: H256, blockdb: &BlockDatabase, blockchain: &Bl
 }
 
 /// Check whether a transaction block exists in the block database.
-fn check_transaction_block_exists(hash: H256, blockdb: &BlockDatabase) -> bool {
-    let in_db = match blockdb.contains(&hash) {
-        Err(e) => panic!("Database error {}", e),
+fn check_transaction_block_exists(hash: H256, blockchain: &BlockChain) -> bool {
+    let in_chain = match blockchain.contains_transaction(&hash) {
+        Err(e) => panic!("Blockchain error {}", e),
         Ok(b) => b
     };
 
-    return in_db;
+    return in_chain;
 }
 
 /// Calculate which chain should we attach the new block to

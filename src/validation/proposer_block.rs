@@ -13,7 +13,7 @@ pub fn get_missing_references(
 
     // check whether the tx block referred are present
     for tx_block_hash in content.transaction_refs.iter() {
-        let tx_block = check_transaction_block_exists(*tx_block_hash, blockdb);
+        let tx_block = check_transaction_block_exists(*tx_block_hash, blockchain);
         if !tx_block {
             missing_blocks.push(*tx_block_hash);
         }
@@ -21,7 +21,7 @@ pub fn get_missing_references(
 
     // check whether the proposer blocks referred are present
     for prop_block_hash in content.proposer_refs.iter() {
-        let prop_block = check_proposer_block_exists(*prop_block_hash, blockdb, blockchain);
+        let prop_block = check_proposer_block_exists(*prop_block_hash, blockchain);
         if !prop_block {
             missing_blocks.push(*prop_block_hash);
         }

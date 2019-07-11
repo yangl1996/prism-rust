@@ -127,7 +127,7 @@ func check(nodesFile string, verbose bool) {
 				}
 			}
 		}
-		fmt.Printf("Proposer leaders are consistent until level %v\n", min_ledger_tip);
+		fmt.Printf("Proposer leaders are consistent until level %v\n", min_ledger_tip)
 	} else {
 		fmt.Println("Failed to query some of the nodes")
 		return
@@ -255,4 +255,3 @@ func check(nodesFile string, verbose bool) {
 		fmt.Println("Failed to query some of the nodes")
 	}
 }
-

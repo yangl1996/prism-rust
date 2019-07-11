@@ -437,6 +437,7 @@ fn integration() {
         proposer_15.hash(),
     ]);
 
+    /*we don't have duplicate blocks anymore
     //insert previous proposer blocks multiple times to check robustness
     handle_block!(proposer_4);
     handle_block!(proposer_3);
@@ -446,6 +447,7 @@ fn integration() {
     handle_block!(proposer_8);
     handle_block!(proposer_2);
     handle_block!(proposer_3);
+    */
     //half+2 voter chains vote for one fork, others remain unchanged
     let half_vote = config::NUM_VOTER_CHAINS/2+2;
     for chain_number in 0..half_vote {

@@ -18,10 +18,11 @@ pub fn new_validated_block(
     blockdb: &BlockDatabase,
     chain: &BlockChain,
     server: &ServerHandle,
-    demo_sender: &crossbeam::Sender<String>
+    demo_sender: &crossbeam::Sender<demo::DemoMsg>
 ) {
     let msg = demo::insert_block_msg(block);
-    demo_sender.send(msg).unwrap();
+    // demo_sender ignores the result
+    match demo_sender.send(msg) { _ => ()};
 
     PERFORMANCE_COUNTER.record_process_block(&block);
 

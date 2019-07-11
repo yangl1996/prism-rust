@@ -5,7 +5,8 @@ use crate::utxodb::UtxoDatabase;
 use crate::network::server::Handle as ServerHandle;
 use crate::miner::memory_pool::MemoryPool;
 use crate::miner::Handle as MinerHandle;
-use std::sync::{Arc, mpsc, Mutex};
+use std::sync::{Arc, Mutex};
+use crossbeam::channel;
 use std::thread;
 use tiny_http::Header;
 use tiny_http::Response;
@@ -16,7 +17,7 @@ use log::{info};
 use crate::blockchain::BlockChain;
 
 pub struct Server {
-    transaction_generator_handle: mpsc::Sender<transaction_generator::ControlSignal>,
+    transaction_generator_handle: crossbeam::Sender<transaction_generator::ControlSignal>,
     handle: HTTPServer,
     miner: MinerHandle,
     wallet: Arc<Wallet>,
@@ -68,7 +69,7 @@ macro_rules! respond_json {
 }
 
 impl Server {
-    pub fn start(addr: std::net::SocketAddr, wallet: &Arc<Wallet>, blockchain: &Arc<BlockChain>, utxodb: &Arc<UtxoDatabase>, server: &ServerHandle, miner: &MinerHandle, mempool: &Arc<Mutex<MemoryPool>>, txgen_control_chan: mpsc::Sender<transaction_generator::ControlSignal>) {
+    pub fn start(addr: std::net::SocketAddr, wallet: &Arc<Wallet>, blockchain: &Arc<BlockChain>, utxodb: &Arc<UtxoDatabase>, server: &ServerHandle, miner: &MinerHandle, mempool: &Arc<Mutex<MemoryPool>>, txgen_control_chan: crossbeam::Sender<transaction_generator::ControlSignal>) {
         let handle = HTTPServer::http(&addr).unwrap();
         let server = Self {
             handle: handle,

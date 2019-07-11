@@ -16,14 +16,14 @@ pub fn get_missing_references(
     let mut missing_blocks = vec![];
 
     // check the voter parent
-    let voter_parent = check_voter_block_exists(content.voter_parent, blockdb, blockchain);
+    let voter_parent = check_voter_block_exists(content.voter_parent, blockchain);
     if !voter_parent {
         missing_blocks.push(content.voter_parent);
     }
 
     // check the votes
     for prop_hash in content.votes.iter() {
-        let avail = check_proposer_block_exists(*prop_hash, blockdb, blockchain);
+        let avail = check_proposer_block_exists(*prop_hash, blockchain);
         if !avail {
             missing_blocks.push(*prop_hash);
         }
