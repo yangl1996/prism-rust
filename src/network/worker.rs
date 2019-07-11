@@ -16,7 +16,7 @@ use crate::validation::{self, BlockResult};
 use crate::visualization::demo;
 use crate::wallet::Wallet;
 use crossbeam::channel;
-use log::{debug, info, warn};
+use log::{debug, info, trace, warn};
 use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::iter::FromIterator;
@@ -277,6 +277,7 @@ impl Context {
                             &self.blockdb,
                             &self.chain,
                             &self.server,
+                            &self.demo_sender,
                         );
                         context_update_sig.push(match &block.content {
                             Content::Proposer(_) => ContextUpdateSignal::NewProposerBlock,

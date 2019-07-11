@@ -47,7 +47,7 @@ impl LedgerManager {
         let (tx_diff_tx, tx_diff_rx) = channel::bounded(buffer_size);
         let demo_sender = self.demo_sender.clone();
         thread::spawn(move || loop {
-            let tx_diff = update_transaction_sequence(&blockdb, &chain, , &demo_sender);
+            let tx_diff = update_transaction_sequence(&blockdb, &chain, &demo_sender);
             tx_diff_tx.send(tx_diff).unwrap();
         });
 

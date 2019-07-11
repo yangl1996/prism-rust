@@ -151,7 +151,7 @@ fn main() {
     let demo_sender = demo::new(&matches.value_of("demo_addr").unwrap(), demo_transaction_ratio, demo_voter_max);
 
     // start thread to update ledger
-    let ledger_manager = LedgerManager::new(&blockdb, &blockchain, &utxodb, &wallet);
+    let ledger_manager = LedgerManager::new(&blockdb, &blockchain, &utxodb, &wallet, demo_sender.clone());
     ledger_manager.start(3, 8);
 
     // parse p2p server address
@@ -225,6 +225,7 @@ fn main() {
         ctx_rx,
         &ctx_tx_miner,
         &server,
+        extra_content,
         demo_sender.clone(),
     );
     miner_ctx.start();
