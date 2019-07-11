@@ -135,12 +135,12 @@ let votingChainScreen = svg.append('g')
               .style('opacity', focusedOpacities['votingChains'])
               .attr('width', votingChainScreenWidth)
               .attr('height', votingChainScreenHeight)
-              .attr('transform', 'translate(' + 2*width/3 + ',0)')
+              .attr('transform', 'translate(' + 0.6*width + ',0)')
               .on('click', () => focusVotingChain())
 
 
 const numChains = 100
-const numChainsToDisplay = 8
+const numChainsToDisplay = 10
 const votingBlockSize = 20
 let chainsData = []
 

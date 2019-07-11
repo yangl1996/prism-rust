@@ -1,4 +1,3 @@
-let nodeIndex = 0
 let cities = [
   [-6.13,39.31],
   [35.68,139.76],
@@ -12,40 +11,45 @@ let cities = [
   [-27.11,-109.36],
   [47.61,-122.33]
 ]
+const mock = false
+let nodeIndex = 0
 
 /*
+let transactionBlockId = 0
+let proposerBlockId = 0 
+let votingBlockId = 0
+
 // Add 1 transaction block every 2 seconds
 d3.interval(() => {
   if(transactionBlocks.length>500) return
-  if(nodeId<1) return
-  const sourceNodeId = Math.floor(Math.random() * Math.floor(nodeId))
+  if(nodeIndex<1) return
+  const sourceNodeId = Math.floor(Math.random() * Math.floor(nodeIndex))
   addTransactionBlock(transactionBlockId, sourceNodeId)
   transactionBlockId++
-}, t/10)
+}, t/5)
 
 // Add 1 proposer block every 10 seconds
 d3.interval(() => {
   let parent = null
-  if(proposerBlock.length!==0) parent = proposerBlocks[proposerBlocks.length-1] 
+  if(proposerBlocks.length!==0) parent = proposerBlocks[proposerBlocks.length-1] 
   if(proposerBlocks.length>1){
-    if(Math.random()<0.05)
-      parent = proposerBlocks[proposerBlocks.length-2]
-    else
+//    if(Math.random()<0.05)
+//      parent = proposerBlocks[proposerBlocks.length-2]
+//    else
       parent = proposerBlocks[proposerBlocks.length-1]
   }
-  const sourceNodeId = Math.floor(Math.random() * Math.floor(nodeId))
+  const sourceNodeId = Math.floor(Math.random() * Math.floor(nodeIndex))
   let transactionBlockIds = transactionBlocks.map(block => block.blockId).filter(() => Math.random()<0.9)
   addProposerBlock(proposerBlockId, parent, sourceNodeId, transactionBlockIds)
   proposerBlockId++
-}, 10*t)
+}, 5*t)
 
-// Mine 1 voting block every second
 d3.interval(() => {
-  if(nodeId<1) return
+  if(nodeIndex<1) return
   const randomChain = Math.floor(Math.random() * Math.floor(numChains))
-  const sourceNodeId = Math.floor(Math.random() * Math.floor(nodeId))
+  const sourceNodeId = Math.floor(Math.random() * Math.floor(nodeIndex))
   const parentId = chainsData[randomChain].blocks[chainsData[randomChain].blocks.length-1].blockId
   mineVotingBlock(randomChain, votingBlockId, sourceNodeId, parentId)
   votingBlockId++
-}, t/numChains * numChainsToDisplay)
+}, 5*t/numChains)
 */

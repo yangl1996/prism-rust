@@ -46,7 +46,7 @@ const addTransactionBlock = (blockId, sourceNodeId) => {
     const sourceNode = nodes.find(node => node.nodeId==sourceNodeId)
     const sourceNodeLocation = projection([sourceNode.longitude, sourceNode.latitude])
     const shardColor = d3.schemeCategory10[Math.floor(Math.random()*10)]
-    transactionBlocks.push({x: sourceNodeLocation[0]+worldMapShift, y: sourceNodeLocation[1]+(height-worldMapScreenHeight), shardColor, blockId})
+    transactionBlocks.push({x: sourceNodeLocation[0]+worldMapShift, y: sourceNodeLocation[1]+(height-0.6*height), shardColor, blockId})
     restart()
  }
 }

@@ -81,7 +81,7 @@ let drawProposerChain = () => {
                // If the block has no parent, the block appears at top of screen
                else 
                  d.y = proposerBlockSize/2
-                return node ? projection([node.longitude, node.latitude])[1]+(height-worldMapScreenHeight) : d.y
+                return node ? projection([node.longitude, node.latitude])[1]+(height-0.6*height) : d.y
               }
            )
            .style('fill-opacity', 0.0) 
@@ -177,6 +177,14 @@ const addProposerBlock = (blockId, parent=null, sourceNodeId, transactionBlockId
   }
 }
 
-const genesisBlock = {parent: null, blockId: ''.padStart(64, '0'), children: [], sourceNodeId: null, finalizationLevel: 0.3, transactionBlockIds: []}
-proposerBlocks.push(genesisBlock)
-drawProposerChain([])
+if(mock){
+  const genesisBlock = {parent: null, blockId: proposerBlockId, children: [], sourceNodeId: null, finalizationLevel: 0.3, transactionBlockIds: []}
+  proposerBlockId++
+  proposerBlocks.push(genesisBlock)
+}
+else{
+  const genesisBlock = {parent: null, blockId: ''.padStart(64, '0'), children: [], sourceNodeId: null, finalizationLevel: 0.3, transactionBlockIds: []}
+  proposerBlocks.push(genesisBlock)
+}
+
+drawProposerChain()

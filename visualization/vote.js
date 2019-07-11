@@ -44,30 +44,75 @@ const castVotes = (votingChain, votes) => {
   // Get the last block on voting chain
   const lastBlock = chainsData[votingChain].blocks[chainsData[votingChain].blocks.length-1]
   // Calculate the vote's source coordinate
-  const sourceX = lastBlock.x + width/3 + proposerScreenWidth
-  const sourceY = lastBlock.y + proposerBlockSize/2
-  // Cast votes for all blocks until we reach the last voted block, iterating backwards
-  let index = proposerBlocks.length-1
-  for(let i=0; i<votes.length; i++){
-    // Get the proposerBlock to vote for
-    const votedProposerBlock = proposerBlocks.find(block => block.blockId==votes[i])
+  if(mock){
+    const sourceX = lastBlock.x + width*0.6
+    const sourceY = lastBlock.y + proposerBlockSize/2
+    let voteToCast = chainsData[votingChain].lastVotedBlock+1
+    while(voteToCast<proposerBlockId){
+      // Get the proposerBlock to vote for
+      const votedProposerBlock = proposerBlocks.find(block => block.blockId==voteToCast)
 
-    if(votedProposerBlock===undefined || votedProposerBlock.finalized || !votedProposerBlock.x || Number.isNaN(votedProposerBlock.y)) continue 
-    const targetX = votedProposerBlock.x + width/3 + proposerBlockSize*1.25/2
-    const targetY = votedProposerBlock.y + proposerBlockSize/2
+      // If there are 2 parallel chains, choose 1 block to cast vote for
+      if(voteToCast>1){
+        const prevProposerBlock = proposerBlocks.find(block => block.blockId==voteToCast-1)
+        if(prevProposerBlock===undefined || prevProposerBlock.y===votedProposerBlock.y){
+          voteToCast++
+          continue
+        }
+      }
 
-    const data = `M${sourceX},${sourceY} Q${sourceX-50},${sourceY-50} ${targetX},${targetY}`
-    const voteObj = {from: lastBlock.blockId, to: votedProposerBlock.blockId, fromChain: votingChain, id: 'vote'+lastBlock.blockId+'-'+votedProposerBlock.blockId, curve: `M${sourceX},${sourceY} Q${sourceX-50},${sourceY-50} ${targetX},${targetY}`}
-    let tempPath = voteGroup.append('path')
-                            .attr('id', 'tempPath')
-                            .attr('d', voteObj.curve)
-    voteObj.totalLength = tempPath.node().getTotalLength()
-    voteGroup.select('#tempPath').remove()
-    votedProposerBlock.finalizationLevel+=0.01
-    d3.select('#proposerBlock'+votes[i])
-      .style('fill-opacity', votedProposerBlock.finalizationLevel)
-    //if(votedProposerBlock.finalizationLevel>finalizationThreshold) confirmBlock(votedProposerBlock)
-    voteData.push(voteObj)
+      if(votedProposerBlock===undefined || votedProposerBlock.finalized || !votedProposerBlock.x || Number.isNaN(votedProposerBlock.y)) {
+        voteToCast++
+        continue
+      }
+      const targetX = votedProposerBlock.x + width/3 + proposerBlockSize*1.25/2
+      const targetY = votedProposerBlock.y + proposerBlockSize/2
+
+      const data = `M${sourceX},${sourceY} Q${sourceX-50},${sourceY-50} ${targetX},${targetY}`
+      const voteObj = {from: lastBlock.blockId, to: votedProposerBlock.blockId, fromChain: votingChain, id: 'vote'+lastBlock.blockId+'-'+votedProposerBlock.blockId, curve: `M${sourceX},${sourceY} Q${sourceX-50},${sourceY-50} ${targetX},${targetY}`}
+      let tempPath = voteGroup.append('path')
+                              .attr('id', 'tempPath')
+                              .attr('d', voteObj.curve)
+      voteObj.totalLength = tempPath.node().getTotalLength()
+      voteGroup.select('#tempPath').remove()
+      votedProposerBlock.finalizationLevel+=0.01
+      d3.select('#proposerBlock'+votedProposerBlock.blockId)
+        .style('fill-opacity', votedProposerBlock.finalizationLevel)
+      if(votedProposerBlock.finalizationLevel>finalizationThreshold) confirmBlock(votedProposerBlock)
+      voteData.push(voteObj)
+      chainsData[votingChain].lastVotedBlock = voteToCast
+      voteToCast++
+    }
+  }
+  else {
+    // Get the last block on voting chain
+    const lastBlock = chainsData[votingChain].blocks[chainsData[votingChain].blocks.length-1]
+    // Calculate the vote's source coordinate
+    const sourceX = lastBlock.x + 0.6*width
+    const sourceY = lastBlock.y + proposerBlockSize/2
+    // Cast votes for all blocks until we reach the last voted block, iterating backwards
+    let index = proposerBlocks.length-1
+    for(let i=0; i<votes.length; i++){
+      // Get the proposerBlock to vote for
+      const votedProposerBlock = proposerBlocks.find(block => block.blockId==votes[i])
+
+      if(votedProposerBlock===undefined || votedProposerBlock.finalized || !votedProposerBlock.x || Number.isNaN(votedProposerBlock.y)) continue 
+      const targetX = votedProposerBlock.x + width/3 + proposerBlockSize*1.25/2
+      const targetY = votedProposerBlock.y + proposerBlockSize/2
+
+      const data = `M${sourceX},${sourceY} Q${sourceX-50},${sourceY-50} ${targetX},${targetY}`
+      const voteObj = {from: lastBlock.blockId, to: votedProposerBlock.blockId, fromChain: votingChain, id: 'vote'+lastBlock.blockId+'-'+votedProposerBlock.blockId, curve: `M${sourceX},${sourceY} Q${sourceX-50},${sourceY-50} ${targetX},${targetY}`}
+      let tempPath = voteGroup.append('path')
+                              .attr('id', 'tempPath')
+                              .attr('d', voteObj.curve)
+      voteObj.totalLength = tempPath.node().getTotalLength()
+      voteGroup.select('#tempPath').remove()
+      votedProposerBlock.finalizationLevel+=0.01
+      d3.select('#proposerBlock'+votes[i])
+        .style('fill-opacity', votedProposerBlock.finalizationLevel)
+      //if(votedProposerBlock.finalizationLevel>finalizationThreshold) confirmBlock(votedProposerBlock)
+      voteData.push(voteObj)
+    }
   }
   drawVotes()
 }

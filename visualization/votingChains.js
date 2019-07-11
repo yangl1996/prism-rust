@@ -78,13 +78,13 @@ const drawVotingChain = (idx, votes) => {
          .attr('x', d => {
            // Voting block's x coordinate is equivalent to chain's x coordinate
            d.x = chainsData[idx].x
-           return d.sourceNodeLocation ? d.sourceNodeLocation[0]-2*width/3 + worldMapShift : d.x - votingBlockSize/2
+           return d.sourceNodeLocation ? d.sourceNodeLocation[0]-0.6*width + worldMapShift : d.x - votingBlockSize/2
           })
          .attr('y', d => {
            // Voting block's y coordinate is 2 below it's parent.
            // If parent does not exist, the block should appear at the top of the screen.
            d.y = d.parent ? d.parent.y+2*votingBlockSize : votingBlockSize/2
-           return d.sourceNodeLocation ? d.sourceNodeLocation[1]+(height-worldMapScreenHeight) : d.y
+           return d.sourceNodeLocation ? d.sourceNodeLocation[1]+(height-0.6*height) : d.y
          })
          .transition()
          .duration(t)
@@ -134,39 +134,69 @@ const addVotingBlock = (idx, blockId, sourceNodeId, parentId, votes) => {
   drawVotingChain(idx, votes)
 }
 
-// Initialize the chains spaced by votingChainScreenWidth/numChains
-let chain = 0, x=0
-let scale = d3.scaleLinear().domain([0, numChainsToDisplay]).range([1.0, 0.0])
-let votingBlockId = 1
-while(chain<numChainsToDisplay){
-  let votingBlockIdStr = votingBlockId.toString(16)
-  votingBlockIdStr = votingBlockIdStr.padStart(64, '0') 
-  chainsData.push({x, y: 0, blocks: [], links: [], fakeBlocks: [], fakeLinks: []})
-  const genesisBlock = {parent: null, blockId: votingBlockIdStr, children: [], sourceNodeLocation: null}
-  chainsData[chain].blocks.push(genesisBlock)
-  votingBlockId++
-  let chainGroup = chainsGroup.append('g')
-                              .attr('id', 'chain'+chain)
-                              .style('opacity', scale(chain))
-  let linkGroup = chainsGroup.append('g')
-                             .attr('id', 'links'+chain)
-                              .style('opacity', scale(chain))
-  drawVotingChain(chain)
-  chain++
-  x+=votingChainScreenWidth/(numChainsToDisplay+1)
-}
+if(mock){
+  // Initialize the chains spaced by votingChainScreenWidth/numChains
+  let chain = 0, x=0
+  let scale = d3.scaleLinear().domain([0, numChainsToDisplay]).range([1.0, 0.0])
+  while(chain<numChainsToDisplay){
+    chainsData.push({x, y: 0, blocks: [], links: [], lastVotedBlock: -1, fakeBlocks: [], fakeLinks: [], shouldShift: false})
+    const genesisBlock = {parent: null, blockId: votingBlockId, children: [], sourceNodeLocation: null}
+    chainsData[chain].blocks.push(genesisBlock)
+    votingBlockId++
+    let chainGroup = chainsGroup.append('g')
+                                .attr('id', 'chain'+chain)
+                                .style('opacity', scale(chain))
+    let linkGroup = chainsGroup.append('g')
+                               .attr('id', 'links'+chain)
+                                .style('opacity', scale(chain))
+    drawVotingChain(chain)
+    chain++
+    x+=votingChainScreenWidth/(numChainsToDisplay+1)
+  }
 
-while(chain<numChains){
-  let votingBlockIdStr = votingBlockId.toString(16)
-  votingBlockIdStr = votingBlockIdStr.padStart(64, '0') 
-  chainsData.push({x, y: 0, blocks: [], links: [], fakeBlocks: [], fakeLinks: []})
-  const genesisBlock = {parent: null, blockId: votingBlockIdStr, children: [], sourceNodeLocation: null}
-  chainsData[chain].blocks.push(genesisBlock)
-  votingBlockId+=1
-  let chainGroup = chainsGroup.append('g')
-                              .attr('id', 'chain'+chain)
-  let linkGroup = chainsGroup.append('g')
-                             .attr('id', 'links'+chain)
-  chain++
-  x+=votingChainScreenWidth/(numChainsToDisplay+1)
+  while(chain<numChains){
+    chainsData.push({blocks: [], lastVotedBlock: -1, fakeBlocks: [], fakeLinks: []})
+    const genesisBlock = {parent: null, blockId: votingBlockId, children: [], sourceNodeLocation: null}
+    chainsData[chain].blocks.push(genesisBlock)
+    votingBlockId+=1
+    chain++
+  }
+}
+else{
+  // Initialize the chains spaced by votingChainScreenWidth/numChains
+  let chain = 0, x=0
+  let scale = d3.scaleLinear().domain([0, numChainsToDisplay]).range([1.0, 0.0])
+  let votingBlockId = 1
+  while(chain<numChainsToDisplay){
+    let votingBlockIdStr = votingBlockId.toString(16)
+    votingBlockIdStr = votingBlockIdStr.padStart(64, '0') 
+    chainsData.push({x, y: 0, blocks: [], links: [], fakeBlocks: [], fakeLinks: []})
+    const genesisBlock = {parent: null, blockId: votingBlockIdStr, children: [], sourceNodeLocation: null}
+    chainsData[chain].blocks.push(genesisBlock)
+    votingBlockId++
+    let chainGroup = chainsGroup.append('g')
+                                .attr('id', 'chain'+chain)
+                                .style('opacity', scale(chain))
+    let linkGroup = chainsGroup.append('g')
+                               .attr('id', 'links'+chain)
+                                .style('opacity', scale(chain))
+    drawVotingChain(chain)
+    chain++
+    x+=votingChainScreenWidth/(numChainsToDisplay+1)
+  }
+
+  while(chain<numChains){
+    let votingBlockIdStr = votingBlockId.toString(16)
+    votingBlockIdStr = votingBlockIdStr.padStart(64, '0') 
+    chainsData.push({x, y: 0, blocks: [], links: [], fakeBlocks: [], fakeLinks: []})
+    const genesisBlock = {parent: null, blockId: votingBlockIdStr, children: [], sourceNodeLocation: null}
+    chainsData[chain].blocks.push(genesisBlock)
+    votingBlockId+=1
+    let chainGroup = chainsGroup.append('g')
+                                .attr('id', 'chain'+chain)
+    let linkGroup = chainsGroup.append('g')
+                               .attr('id', 'links'+chain)
+    chain++
+    x+=votingChainScreenWidth/(numChainsToDisplay+1)
+  }
 }
