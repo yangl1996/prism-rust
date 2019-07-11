@@ -302,8 +302,7 @@ impl Context {
                         refs.truncate(PROPOSER_BLOCK_TX_REFS as usize);
                         c.transaction_refs = refs;
                         c.proposer_refs = self.blockchain.unreferred_proposers();
-                        let parent = self.header.parent;                                                                   
-                        c.proposer_refs.retain(|&x|x != parent);
+                        c.proposer_refs.retain(|&x|x != self.header.parent);
                         touched_content.insert(PROPOSER_INDEX);
                     } else {
                         unreachable!();
@@ -453,8 +452,9 @@ impl Context {
                         &self.blockchain,
                         &self.server,
                     );
-                    // after we process the block, we broadcast.
-                    // in case a peer has a reference to this block before we processing
+                    // broadcast after adding the new block to the blockchain, in case a peer mines
+                    // a block immediately after we broadcast, leaving us non time to insert into
+                    // the blockchain
                     self.server
                         .broadcast(Message::NewBlockHashes(vec![header_hash]));
                     // if we are stepping, pause the miner loop
