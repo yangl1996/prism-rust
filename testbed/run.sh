@@ -297,10 +297,17 @@ function execute_on_all
 	done
 	for pid in $pids ;
 	do
-		wait $pid
 		tput rc
 		tput el
 		echo -n "Waiting for job $pid to finish"
+		if ! wait $pid; then
+			tput rc
+			tput el
+			tput setaf 1
+			echo "Task $pid failed"
+			tput sgr0
+			tput sc
+		fi
 	done
 	tput rc
 	tput el
