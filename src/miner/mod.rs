@@ -119,8 +119,6 @@ pub fn new(
         server: server.clone(),
         header: Header {
             parent: *PROPOSER_GENESIS_HASH,
-            parent_random_source: (*PROPOSER_GENESIS_HASH).into(),
-            timestamp: get_time(),
             pos_proof: proof::Proof::default(),
             random_source: [0; 32],
             content_root: H256::default(),
@@ -399,7 +397,7 @@ impl Context {
             // try a new nonce, and update the timestamp
             //TODO: Songze. The below line is commented when moving from PoW to PoS
 //            self.header.nonce = rng.gen();
-            self.header.timestamp = get_time();
+            self.header.pos_proof.timestamp = get_time();
 
             // Check if we successfully mined a block
             let header_hash = self.header.hash();

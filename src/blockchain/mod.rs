@@ -365,7 +365,7 @@ impl BlockChain {
 
                 info!(
                     "Adding proposer block {} at timestamp {} at level {}",
-                    block_hash, block.header.timestamp, self_level
+                    block_hash, block.header.pos_proof.timestamp, self_level
                 );
             }
             Content::Voter(content) => {

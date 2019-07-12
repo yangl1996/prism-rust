@@ -33,8 +33,6 @@ impl Block {
     ) -> Self {
         let header = header::Header::new(
             parent,
-            parent_random_source,
-            timestamp,
             pos_proof,
             random_source,
             content_root,

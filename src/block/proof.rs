@@ -1,5 +1,5 @@
 use crate::crypto::vrf::{VrfPublicKey, VrfSecretKey, VrfInput, VrfProof, VrfOutput};
-use super::RandomSource;
+use super::header::RandomSource;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Hash, Default)]
 pub struct Proof {
