@@ -28,8 +28,6 @@ impl Header {
     /// Create a new block header.
     pub fn new(
         parent: H256,
-        parent_random_source: RandomSource,
-        timestamp: u128,
         pos_proof: proof::Proof,
         random_source: RandomSource,
         content_root: H256,
@@ -39,8 +37,6 @@ impl Header {
     ) -> Self {
         Self {
             parent,
-            parent_random_source,
-            timestamp,
             pos_proof,
             random_source,
             content_root,
