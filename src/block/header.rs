@@ -10,11 +10,6 @@ pub type RandomSource = [u8; 32];
 pub struct Header {
     /// Hash of the parent proposer block.
     pub parent: H256,
-    /// The next two fields are used for PoS mining
-    /// The random source of the parent block
-    pub parent_random_source: RandomSource,
-    /// Block creation time in UNIX format.
-    pub timestamp: u128,
     /// Proof of leader election via pos mining
     pub pos_proof: proof::Proof,
     /// Random source for child block

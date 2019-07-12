@@ -1,9 +1,15 @@
 use crate::crypto::vrf::{VrfPublicKey, VrfSecretKey, VrfInput, VrfProof, VrfOutput};
+use super::RandomSource;
+
 #[derive(Serialize, Deserialize, Clone, Debug, Hash, Default)]
 pub struct Proof {
     pub vrf_proof: VrfProof,
     pub vrf_output: VrfOutput,
     pub coin: Coin,
+    /// The random source of the parent block
+    pub parent_random_source: RandomSource,
+    /// Block creation time in UNIX format.
+    pub timestamp: u128,
 }
 
 
