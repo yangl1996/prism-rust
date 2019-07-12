@@ -247,13 +247,13 @@ function add_traffic_shaping_single
 	# the $2: latency, $3: throughput
 	local ports=`cat nodes.txt | grep $1 | cut -f 5 -d ,`
 	# add the root qdisc to the network interface
-	command="sudo tc qdisc add dev ens5 handle 10: root htb default 1"
+	command="sudo tc qdisc add dev ens5 handle 10: root htb default 1 direct_qlen 30000"
 	# add the class for the default traffic (marked as 10:1 in the command above)
 	command="$command && sudo tc class add dev ens5 parent 10: classid 10:1 htb rate 1000000kbit"
 	# add the class for the prism traffic
 	command="$command && sudo tc class add dev ens5 parent 10: classid 10:10 htb rate ${3}kbit"
 	# add netem qdisc under class 10:10 (prism) to emulate delay
-	command="$command && sudo tc qdisc add dev ens5 parent 10:10 handle 100: netem delay ${2}ms rate ${3}kbit"
+	command="$command && sudo tc qdisc add dev ens5 parent 10:10 handle 100: netem delay ${2}ms rate ${3}kbit limit 30000"
 	for port in $ports; do
 		command="$command && sudo tc filter add dev ens5 protocol ip parent 10: prio 2 u32 match ip dport $port 0xffff flowid 10:10"
 	done
@@ -263,7 +263,7 @@ function add_traffic_shaping_single
 
 function remove_traffic_shaping_single
 {
-	ssh $1 -- "sudo /home/ubuntu/payload/binary/comcast --device=ens5 --stop"
+	ssh $1 -- "sudo tc qdisc del dev ens5 root && sudo tc qdisc add dev ens5 root pfifo"
 }
 
 function tune_tcp
