@@ -8,6 +8,8 @@ use crate::utxodb::UtxoDatabase;
 use crate::wallet::Wallet;
 use std::sync::{Arc, Mutex};
 use std::thread;
+use rocksdb::*;
+use bincode::serialize;
 
 pub fn ico(
     recipients: &[H256], // addresses of all the ico recipients
@@ -16,7 +18,7 @@ pub fn ico(
     num_coins: usize,
     value: u64,
 ) -> Result<(), rocksdb::Error> {
-    let recipients: Vec<H256> = recipients.to_vec();
+    let recipients: Vec<(usize, H256)> = recipients.iter().map(|x| x.clone()).enumerate().collect();
     let recipients = Arc::new(Mutex::new(recipients));
 
     // start a bunch of worker threads to commit those coins
@@ -30,20 +32,27 @@ pub fn ico(
                 Some(r) => r,
                 None => break,
             };
-            let tx = Transaction {
-                input: vec![],
-                output: (0..num_coins)
-                    .map(move |_| Output {
-                        value: value,
-                        recipient: recipient,
-                    })
-                    .collect(),
-                authorization: vec![],
-                hash: RefCell::new(None),
+            let transaction_id_start = (recipient.0 * num_coins) as u128;
+
+            let mut write_opt = WriteOptions::default();
+            write_opt.disable_wal(true);
+            let output = Output {
+                value: value,
+                recipient: recipient.1
             };
-            let hash = tx.hash();
-            let diff = utxodb.add_transaction(&tx, hash).unwrap();
-            wallet.apply_diff(&diff.0, &diff.1).unwrap();
+            let output_raw = serialize(&output).unwrap();
+            for i in 0..num_coins {
+                let tx_uid = transaction_id_start + i as u128;
+                let tx_uid = tx_uid.to_ne_bytes();
+                let mut tx_hash_raw: [u8; 32] = [0; 32];
+                tx_hash_raw[16..32].copy_from_slice(&tx_uid);
+                let coinid = CoinId {
+                    hash: tx_hash_raw.into(),
+                    index: 0
+                };
+                utxodb.db.put_opt(serialize(&coinid).unwrap(), output_raw.clone(), &write_opt).unwrap();
+                wallet.apply_diff(&[(coinid, output)], &[]).unwrap();
+            }
         });
         workers.push(handle);
     }

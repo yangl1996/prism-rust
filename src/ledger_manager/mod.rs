@@ -6,7 +6,7 @@ use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 use crate::miner::memory_pool::MemoryPool;
 use crate::network::message;
 use crate::network::server::Handle as ServerHandle;
-use crate::transaction::{Input, Transaction};
+use crate::transaction::{Input, Transaction, Output, CoinId};
 use crate::utxodb::UtxoDatabase;
 use crate::wallet::Wallet;
 use crossbeam::channel;
@@ -166,7 +166,7 @@ struct UtxoManager {
     /// Channel for dispatching jobs (add/delete, transaction, hash of transaction).
     transaction_chan: channel::Receiver<(bool, Transaction, H256)>,
     /// Channel for returning added and removed coins.
-    coin_chan: channel::Sender<(Vec<Input>, Vec<Input>)>,
+    coin_chan: channel::Sender<(Vec<(CoinId, Output)>, Vec<CoinId>)>,
     /// Channel for notifying the dispatcher about the completion of processing this transaction.
     notification_chan: channel::Sender<H256>,
 }

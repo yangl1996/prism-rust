@@ -115,24 +115,19 @@ impl Wallet {
         false
     }
 
-    pub fn apply_diff(&self, add: &[Input], remove: &[Input]) -> Result<()> {
+    pub fn apply_diff(&self, add: &[(CoinId, Output)], remove: &[CoinId]) -> Result<()> {
         let mut batch = rocksdb::WriteBatch::default();
         let cf = self.db.cf_handle(COIN_CF).unwrap();
         for coin in add {
-            // TODO: it's so funny that we have to do this for every added coin
-            if self.contains_keypair(&coin.owner) {
-                let output = Output {
-                    value: coin.value,
-                    recipient: coin.owner,
-                };
-                let key = serialize(&coin.coin).unwrap();
-                let val = serialize(&output).unwrap();
+            if self.contains_keypair(&coin.1.recipient) {
+                let key = serialize(&coin.0).unwrap();
+                let val = serialize(&coin.1).unwrap();
                 batch.put_cf(cf, &key, &val)?;
                 self.counter.fetch_add(1, Ordering::Relaxed);
             }
         }
         for coin in remove {
-            let key = serialize(&coin.coin).unwrap();
+            let key = serialize(&coin).unwrap();
             batch.delete_cf(cf, &key)?;
         }
         self.db.write(batch)?;
@@ -157,14 +152,15 @@ impl Wallet {
         &self,
         recipient: Address,
         value: u64,
-        previous_used_coin: Option<Input>,
+        previous_used_coin: Option<CoinId>,
     ) -> Result<Transaction> {
-        let mut coins_to_use: Vec<Input> = vec![];
+        let mut coins_to_use: Vec<CoinId> = vec![];
+        let mut inputs: Vec<Input> = vec![];
         let mut value_sum = 0u64;
         let cf = self.db.cf_handle(COIN_CF).unwrap();
         let iter = match previous_used_coin {
             Some(c) => {
-                let prev_key = serialize(&c.coin).unwrap();
+                let prev_key = serialize(&c).unwrap();
                 self.db.iterator_cf(
                     cf,
                     rocksdb::IteratorMode::From(&prev_key, rocksdb::Direction::Forward),
@@ -177,7 +173,8 @@ impl Wallet {
             let coin_id: CoinId = bincode::deserialize(k.as_ref()).unwrap();
             let coin_data: Output = bincode::deserialize(v.as_ref()).unwrap();
             value_sum += coin_data.value;
-            coins_to_use.push(Input {
+            coins_to_use.push(coin_id);
+            inputs.push(Input {
                 coin: coin_id,
                 value: coin_data.value,
                 owner: coin_data.recipient,
@@ -206,9 +203,9 @@ impl Wallet {
             });
         }
 
-        let mut owners: Vec<Address> = coins_to_use.iter().map(|input| input.owner).collect();
+        let mut owners: Vec<Address> = inputs.iter().map(|input| input.owner).collect();
         let unsigned = Transaction {
-            input: coins_to_use,
+            input: inputs,
             output: output,
             authorization: vec![],
             hash: RefCell::new(None),

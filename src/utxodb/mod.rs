@@ -78,9 +78,9 @@ impl UtxoDatabase {
         &self,
         t: &Transaction,
         hash: H256,
-    ) -> Result<(Vec<Input>, Vec<Input>), rocksdb::Error> {
-        let mut added_coins: Vec<Input> = vec![];
-        let mut removed_coins: Vec<Input> = vec![];
+    ) -> Result<(Vec<(CoinId, Output)>, Vec<CoinId>), rocksdb::Error> {
+        let mut added_coins: Vec<(CoinId, Output)> = vec![];
+        let mut removed_coins: Vec<CoinId> = vec![];
 
         // use batch for the transaction
         let mut batch = rocksdb::WriteBatch::default();
@@ -91,11 +91,9 @@ impl UtxoDatabase {
             if self.db.get_pinned(&id_ser)?.is_none() {
                 return Ok((vec![], vec![]));
             }
+            removed_coins.push(input.coin);
             batch.delete(&id_ser)?;
         }
-
-        // remove the input
-        removed_coins = t.input.clone();
 
         // now that we have confirmed that all inputs are unspent, we will add the outputs and
         // commit to database
@@ -105,12 +103,7 @@ impl UtxoDatabase {
                 index: idx as u32,
             };
             batch.put(serialize(&id).unwrap(), serialize(&output).unwrap())?;
-            let coin = Input {
-                coin: id,
-                value: output.value,
-                owner: output.recipient,
-            };
-            added_coins.push(coin);
+            added_coins.push((id, *output));
         }
         // write the transaction as a batch
         // TODO: we don't write to wal here, so should the program crash, the db will be in
@@ -129,9 +122,9 @@ impl UtxoDatabase {
         &self,
         t: &Transaction,
         hash: H256,
-    ) -> Result<(Vec<Input>, Vec<Input>), rocksdb::Error> {
-        let mut removed_coins: Vec<Input> = vec![];
-        let mut added_coins: Vec<Input> = vec![];
+    ) -> Result<(Vec<(CoinId, Output)>, Vec<CoinId>), rocksdb::Error> {
+        let mut added_coins: Vec<(CoinId, Output)> = vec![];
+        let mut removed_coins: Vec<CoinId> = vec![];
 
         // use batch when committing
         let mut batch = rocksdb::WriteBatch::default();
@@ -148,14 +141,7 @@ impl UtxoDatabase {
                 return Ok((vec![], vec![]));
             }
             batch.delete(&id_ser)?;
-
-            // reconstruct the output coin that is being deleted
-            let coin = Input {
-                coin: id,
-                value: out.value,
-                owner: out.recipient,
-            };
-            removed_coins.push(coin);
+            removed_coins.push(id);
         }
 
         // now that we have checked that this transaction was valid when originally added, we will
@@ -166,7 +152,7 @@ impl UtxoDatabase {
                 recipient: input.owner,
             };
             batch.put(serialize(&input.coin).unwrap(), serialize(&out).unwrap())?;
-            added_coins.push(input.clone());
+            added_coins.push((input.coin, out));
         }
         // write the transaction as a batch
         // TODO: we don't write to wal here, so should the program crash, the db will be in

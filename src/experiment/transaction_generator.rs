@@ -148,7 +148,7 @@ impl TransactionGenerator {
                 PERFORMANCE_COUNTER.record_generate_transaction(&transaction);
                 match transaction {
                     Ok(t) => {
-                        prev_coin = Some(t.input.last().unwrap().clone());
+                        prev_coin = Some(t.input.last().unwrap().clone().coin);
                         new_transaction(t, &self.mempool, &self.server);
                         // if we are in stepping mode, decrease the step count
                         if let State::Step(step_count) = self.state {
