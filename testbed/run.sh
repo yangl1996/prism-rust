@@ -149,7 +149,6 @@ function prepare_payload
 
 	echo "Download binaries"
 	scp prism:~/prism/target/release/prism-copy payload/common/binary/prism
-	scp prism:~/go/bin/comcast payload/common/binary/comcast
 	cp scripts/start-prism.sh payload/common/scripts/start-prism.sh
 	cp scripts/stop-prism.sh payload/common/scripts/stop-prism.sh
 
@@ -247,8 +246,19 @@ function add_traffic_shaping_single
 {
 	# the $2: latency, $3: throughput
 	local ports=`cat nodes.txt | grep $1 | cut -f 5 -d ,`
-	local port_list=`join_by ',' $ports`
-	ssh $1 -- "sudo /home/ubuntu/payload/binary/comcast --device=ens5 --latency=$2 --target-bw=$3 --target-port=$port_list"
+	# add the root qdisc to the network interface
+	command="sudo tc qdisc add dev ens5 handle 10: root htb default 1"
+	# add the class for the default traffic (marked as 10:1 in the command above)
+	command="$command && sudo tc class add dev ens5 parent 10: classid 10:1 htb rate 1000000kbit"
+	# add the class for the prism traffic
+	command="$command && sudo tc class add dev ens5 parent 10: classid 10:10 htb rate ${3}kbit"
+	# add netem qdisc under class 10:10 (prism) to emulate delay
+	command="$command && sudo tc qdisc add dev ens5 parent 10:10 handle 100: netem delay ${2}ms rate ${3}kbit"
+	for port in $ports; do
+		command="$command && sudo tc filter add dev ens5 protocol ip parent 10: prio 2 u32 match ip dport $port 0xffff flowid 10:10"
+	done
+	echo $command
+	ssh $1 -- "$command"
 }
 
 function remove_traffic_shaping_single
