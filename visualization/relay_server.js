@@ -16,7 +16,6 @@ wss.on('connection', ws => {
   }
   if(prismSocket!==null){
     prismSocket.on('message', message => {
-      console.log(message)
       if(visSocket!==null)
         visSocket.send(`${message}`)
     })

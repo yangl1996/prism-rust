@@ -1,4 +1,4 @@
-import subprocess, time, webbrowser, signal, os
+import subprocess, time, webbrowser, signal, os, json
 
 def signal_handler(sig, frame):
     print('Killing all processes')
@@ -10,14 +10,16 @@ def signal_handler(sig, frame):
             pid = line.split(' ')[0]
             os.kill(int(pid), signal.SIGKILL)
 
-URL = 'localhost'
-PORT = 5000
-NUM_NODES = 4
+with open('config.json', 'r') as f:
+    config = json.loads(f.read())
+    URL = config['host']
+    VIS_PORT = config['visualization port']
+    NUM_NODES = config['num_nodes']
 
-p1 = subprocess.Popen(['node', 'index.js'])
+p1 = subprocess.Popen(['node', 'relay_server.js'])
 time.sleep(2)
-p2 = subprocess.Popen(['python3', '-m', 'http.server', f'{PORT}'])
-webbrowser.open_new_tab(f'http://{URL}:{PORT}/')
+p2 = subprocess.Popen(['python3', '-m', 'http.server', f'{VIS_PORT}'])
+webbrowser.open_new_tab(f'http://{URL}:{VIS_PORT}/')
 time.sleep(2)
 os.chdir('../testbed')
 p3 = subprocess.Popen(['./local-experiment.sh', f'{NUM_NODES}'])

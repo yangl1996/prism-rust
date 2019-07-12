@@ -85,7 +85,6 @@ const focusWorldMap = () => {
   }
   else{
     unfocus(false)
-    console.log('focusing world map')
     let interval = d3.interval((elapsed) => {
       if(elapsed>transTime) interval.stop()
       M = `matrix3d(1, 0, 0, 0, 0, ${aScale(transTime-elapsed)}, 0, ${bScale(transTime-elapsed)}, 0, 0, 1, 0, 0, ${cScale(transTime-elapsed)}, 0, 1)`

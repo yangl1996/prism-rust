@@ -39,6 +39,7 @@ let castFakeVote = (chainIndex) => {
 
 let addFakeProposerBlock = (parentBlock) => {
   fakeBlocks.push({x: proposerScreenWidth/2+100, y: parentBlock.y+2*proposerBlockSize})
+  const fakeBlock = {parent, blockId, children: [], sourceNodeId, finalizationLevel: 0.3, finalized: false, transactionBlockIds} 
 
   let fakeBlocksEnter = proposerBlocksGroup.selectAll('g.fakeBlock').data(fakeBlocks)
 
@@ -46,15 +47,53 @@ let addFakeProposerBlock = (parentBlock) => {
                      .attr('class', 'fakeProposerBlock')
                      .attr('height', 0)
                      .attr('width', 0)
-                     .attr('x', 0)
-                     .attr('y', 0)
-                     .attr('fill', 'red')
+                     // Cause the block to shoot from the source node's location
+                     .attr('x', d => { 
+                          const node = nodes.find(node => node.nodeId==d.sourceNodeId)
+                         // If no parent or only has one sibling, the block appears at center
+                         if(!d.parent || d.parent.children.length==1)
+                           d.x = proposerScreenWidth/2
+                         // Otherwise if the block has a sibling, offset the block by 2 proposerBlocks
+                         else if(d.parent.children.length==2){
+                           if(d.blockId==d.parent.children[0].blockId)
+                            d.x = proposerScreenWidth/2-2*proposerBlockSize
+                           else
+                            d.x = proposerScreenWidth/2+2*proposerBlockSize
+                         }
+                          return node ? projection([node.longitude, node.latitude])[0]-width/3 + worldMapShift: d.x-proposerBlockSize/2 
+                        }
+                     )
+                     .attr('y', d => { 
+                          const node = nodes.find(node => node.nodeId==d.sourceNodeId)
+                         // The block is normal and should be offset by 2 proposerBlocks
+                         if(d.parent) 
+                           d.y = d.parent.y+2*proposerBlockSize
+                         // If the block has no parent, the block appears at top of screen
+                         else 
+                           d.y = proposerBlockSize/2
+                          return node ? projection([node.longitude, node.latitude])[1]+(height-0.6*height) : d.y
+                        }
+                     )
+                     .attr('rx', 3)
+                     .style('fill-opacity', 0.0) 
                      .transition()
                      .duration(t)
                      .attr('height', proposerBlockSize)
-                     .attr('width', proposerBlockSize)
+                     .attr('width', proposerBlockSize*1.25)
                      .attr('x', d => d.x-proposerBlockSize/2) 
                      .attr('y', d => d.y)
+                     .attr('x', d => { 
+                         return d.x-proposerBlockSize/2
+                     })
+                     .attr('y', d => {
+                       return d.y
+                     })
+                    .on('end', d => {
+                      const didScroll = scrollProposerChain()
+                      if(proposerBlocks[proposerBlocks.length-1].transactionBlockIds.length>0 && !didScroll){ 
+                        captureTransactionBlocks(fakeBlocks[fakeBlocks.length-1], false) 
+                      }
+                    })
 
 
                 
@@ -100,6 +139,7 @@ let growFakeChain = (ppb, chainIndex) => {
   votingBlockId+=1
 }
 
+/*
 const simulateAttack = (ppb, chain) => {
   addFakeProposerBlock(ppb)
   let interval = d3.interval(() => {
@@ -108,4 +148,15 @@ const simulateAttack = (ppb, chain) => {
     }
     growFakeChain(ppb, chain)
   }, t)
+}
+*/
+const addMaliciousBlock = (blockId, parent=null, sourceNodeId, transactionBlockIds) => {
+  const check = proposerBlocks.find(b => b.blockId===blockId) 
+  if(check==undefined){
+    const newNode = {parent, blockId, children: [], sourceNodeId, finalizationLevel: 0.3, finalized: false, transactionBlockIds} 
+    if(parent.children.length>1) return
+    if(parent) parent.children.push(newNode)
+    proposerBlocks.push(newNode)
+    drawProposerChain()
+  }
 }
