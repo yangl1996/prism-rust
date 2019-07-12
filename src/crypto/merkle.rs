@@ -1,5 +1,4 @@
 use super::hash::{Hashable, H256};
-use crate::block::{proof};
 
 /// A Merkle tree.
 #[derive(Debug, Default)]

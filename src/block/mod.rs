@@ -15,35 +15,36 @@ pub struct Block {
     /// The content of the block. It could contain transactions, references, or votes, depending on
     /// the block type.
     pub content: Content,
-    /// The sortition proof of the content. In addition to the content Merkle root in block header, we are
-    /// able to verify that the block is mined on a set of content candidates.
-    pub proof: proof::Proof,
 }
 
 impl Block {
     /// Create a new block.
     pub fn new(
         parent: H256,
+        parent_random_source: header::RandomSource,
         timestamp: u128,
-        nonce: u32,
-        content_merkle_root: H256,
-        proof: proof::Proof,
-        content: Content,
+        pos_proof: proof::Proof,
+        random_source: header::RandomSource,
+        content_root: H256,
         extra_content: [u8; 32],
         difficulty: H256,
+        header_signature: Vec<u8>,
+        content: Content,
     ) -> Self {
         let header = header::Header::new(
             parent,
+            parent_random_source,
             timestamp,
-            nonce,
-            content_merkle_root,
+            pos_proof,
+            random_source,
+            content_root,
             extra_content,
             difficulty,
+            header_signature,
         );
         Self {
             header,
             content,
-            proof,
         }
     }
 
@@ -52,12 +53,10 @@ impl Block {
     pub fn from_header(
         header: header::Header,
         content: Content,
-        proof: proof::Proof,
     ) -> Self {
         Self {
             header,
             content,
-            proof,
         }
     }
 }
@@ -73,7 +72,7 @@ impl PayloadSize for Block {
     fn size(&self) -> usize {
         return std::mem::size_of::<header::Header>()
             + self.content.size()
-            + self.proof.len() * std::mem::size_of::<H256>();
+
     }
 }
 

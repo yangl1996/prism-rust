@@ -1,34 +1,16 @@
-use crate::crypto::hash::{Hashable, H256};
-use crate::crypto::vrf::{VrfPublicKey, VrfSecretKey, VrfInput, VrfProof};
-use crate::crypto::vrf::VrfOutput;
-
-// TODO: Add the address of the miner
-
-/// The proof which certifies leader election and content integrity.
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+use crate::crypto::vrf::{VrfPublicKey, VrfSecretKey, VrfInput, VrfProof, VrfOutput};
+#[derive(Serialize, Deserialize, Clone, Debug, Hash, Default)]
 pub struct Proof {
-    ///The three fields are used to check for pos leader election
-    vrf_proof: VrfProof,
-    vrf_output: VrfOutput,
-    coin: Coin,
-    ///This is a signature on the content of the block
-    signature: Vec<u8>,
-    ///This is the random source for child block
-    random_source: [u8; 32]
-}
-
-impl Proof {
-    pub fn len(&self) -> usize {
-        return 1024; //TODO:: Calculate this properly
-    }
+    pub vrf_proof: VrfProof,
+    pub vrf_output: VrfOutput,
+    pub coin: Coin,
 }
 
 
-//TODO: Move this ds to a better place
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+//TODO: Move this ds to a better place (may be wallet)w
+#[derive(Serialize, Deserialize, Clone, Debug, Default, Hash)]
 pub struct Coin{
     pubkey: VrfPublicKey,
-    value: u64
+    value: u64,
+    //Todo: Phase 3: proof that the coin is utxo.
 }
-
-

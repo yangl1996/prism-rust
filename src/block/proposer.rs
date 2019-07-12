@@ -55,13 +55,15 @@ pub fn genesis() -> Block {
     // TODO: this will not pass validation.
     return Block::new(
         all_zero.into(),
+        all_zero,
         0,
-        0,
-        all_zero.into(),
         Proof::default(),
-        BlockContent::Proposer(content),
+        all_zero,
+        content.hash(),
         all_zero,
         *DEFAULT_DIFFICULTY,
+        vec![],
+        BlockContent::Proposer(content),
     );
 }
 

@@ -67,7 +67,7 @@ pub fn check_block(block: &Block, blockchain: &BlockChain, blockdb: &BlockDataba
         BlockResult::Pass => {}
         x => return x,
     };
-    match check_sortition_proof(block) {
+    match check_proof(block) {
         BlockResult::Pass => {}
         x => return x,
     };
@@ -101,9 +101,7 @@ pub fn check_pow_sortition_id(block: &Block) -> BlockResult {
 }
 
 /// check sortition proof
-pub fn check_sortition_proof(block: &Block) -> BlockResult {
-    let sortition_id = get_sortition_id(&block.hash(), &block.header.difficulty);
-    if let Some(sortition_id) = sortition_id {
+pub fn check_proof(block: &Block) -> BlockResult {
 //        if !verify(
 //            &block.header.content_merkle_root,
 //            &block.content.hash(),
@@ -113,9 +111,6 @@ pub fn check_sortition_proof(block: &Block) -> BlockResult {
 //        ) {
 //            return BlockResult::WrongSortitionProof;
 //        }
-    } else {
-        unreachable!();
-    }
     BlockResult::Pass
 }
 /// Validate a block that already passes pow and sortition test. See if parents/refs are missing.

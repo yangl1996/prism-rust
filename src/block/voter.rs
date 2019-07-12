@@ -60,13 +60,15 @@ pub fn genesis(chain_num: u16) -> Block {
     // blocks are added to the system at initialization. Seems like a moderate hack.
     return Block::new(
         all_zero.into(),
+        all_zero,
         0,
-        0,
-        all_zero.into(),
         Proof::default(),
-        BlockContent::Voter(content),
+        all_zero,
+        content.hash(),
         all_zero,
         *DEFAULT_DIFFICULTY,
+        vec![],
+        BlockContent::Voter(content),
     );
 }
 

@@ -119,11 +119,14 @@ pub fn new(
         server: server.clone(),
         header: Header {
             parent: *PROPOSER_GENESIS_HASH,
+            parent_random_source: (*PROPOSER_GENESIS_HASH).into(),
             timestamp: get_time(),
-            nonce: 0,
-            content_merkle_root: H256::default(),
+            pos_proof: proof::Proof::default(),
+            random_source: [0; 32],
+            content_root: H256::default(),
             extra_content: [0; 32],
             difficulty: *DEFAULT_DIFFICULTY,
+            header_signature: vec![],
         },
         contents: contents,
         content_merkle_tree: content_merkle_tree,
@@ -389,11 +392,13 @@ impl Context {
 
             // update merkle root if anything happened in the last stage
             if new_proposer_block || !new_voter_block.is_empty() || new_transaction_block {
-                self.header.content_merkle_root = self.content_merkle_tree.root();
+                //TODO: Songze. The below line is commented when moving from PoW to PoS
+//                self.header.content_merkle_root = self.content_merkle_tree.root();
             }
 
             // try a new nonce, and update the timestamp
-            self.header.nonce = rng.gen();
+            //TODO: Songze. The below line is commented when moving from PoW to PoS
+//            self.header.nonce = rng.gen();
             self.header.timestamp = get_time();
 
             // Check if we successfully mined a block
@@ -495,9 +500,8 @@ impl Context {
         // get the merkle proof
         let sortition_proof: Vec<H256> = self.content_merkle_tree.proof(sortition_id as usize);
         let mined_block = Block::from_header(
-            self.header,
+            self.header.clone(),
             self.contents[sortition_id as usize].clone(),
-            proof::Proof::default(),
         );
 
         return mined_block;
