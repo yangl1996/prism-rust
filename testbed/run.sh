@@ -281,21 +281,29 @@ function execute_on_all
 	# ${@:2}: extra params of the function
 	local instances=`cat instances.txt`
 	local pids=""
+	echo "Executing $1"
+	tput sc
 	for instance in $instances ;
 	do
 		local id
 		local ip
 		local lan
 		IFS=',' read -r id ip lan <<< "$instance"
-		echo "Executing $1 on $id"
+		tput rc
+		tput el
+		echo -n "Executing $1 on $id"
 		$1_single $id ${@:2} &>log/${id}_${1}.log &
 		pids="$pids $!"
 	done
-	echo "Waiting for all jobs to finish"
 	for pid in $pids ;
 	do
 		wait $pid
+		tput rc
+		tput el
+		echo -n "Waiting for job $pid to finish"
 	done
+	tput rc
+	tput el
 	tput setaf 2
 	echo "Finished"
 	tput sgr0
