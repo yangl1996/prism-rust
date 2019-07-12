@@ -246,14 +246,18 @@ function add_traffic_shaping_single
 {
 	# the $2: latency, $3: throughput
 	local ports=`cat nodes.txt | grep $1 | cut -f 5 -d ,`
+	# calculate the bdp to determine the queue size
+	qlen=`expr $3 \* $2 / 1500 / 8`
+	# give some headroom to the queue size
+	qlen=`expr $qlen \* 2`
 	# add the root qdisc to the network interface
-	command="sudo tc qdisc add dev ens5 handle 10: root htb default 1 direct_qlen 30000"
+	command="sudo tc qdisc add dev ens5 handle 10: root htb default 1 direct_qlen $qlen"
 	# add the class for the default traffic (marked as 10:1 in the command above)
 	command="$command && sudo tc class add dev ens5 parent 10: classid 10:1 htb rate 1000000kbit"
 	# add the class for the prism traffic
 	command="$command && sudo tc class add dev ens5 parent 10: classid 10:10 htb rate ${3}kbit"
 	# add netem qdisc under class 10:10 (prism) to emulate delay
-	command="$command && sudo tc qdisc add dev ens5 parent 10:10 handle 100: netem delay ${2}ms rate ${3}kbit limit 30000"
+	command="$command && sudo tc qdisc add dev ens5 parent 10:10 handle 100: netem delay ${2}ms rate ${3}kbit limit $qlen"
 	for port in $ports; do
 		command="$command && sudo tc filter add dev ens5 protocol ip parent 10: prio 2 u32 match ip dport $port 0xffff flowid 10:10"
 	done
@@ -263,12 +267,12 @@ function add_traffic_shaping_single
 
 function remove_traffic_shaping_single
 {
-	ssh $1 -- "sudo tc qdisc del dev ens5 root && sudo tc qdisc add dev ens5 root pfifo"
+	ssh $1 -- "sudo tc qdisc del dev ens5 root"
 }
 
-function tune_tcp
+function tune_tcp_single
 {
-	ssh $1 -- "sudo sysctl -w net.ipv4.tcp_congestion_control=bbr && sudo sysctl -w net.core.rmem_max=25165824 && sudo sysctl -w net.core.wmem_max=25165824 && sudo sysctl -w net.ipv4.tcp_wmem='10240 87380 25165824' && sudo sysctl -w net.ipv4.tcp_rmem='10240 87380 25165824'"
+	ssh $1 -- "sudo sysctl -w net.core.rmem_max=25165824 && sudo sysctl -w net.core.wmem_max=25165824 && sudo sysctl -w net.ipv4.tcp_wmem='10240 87380 25165824' && sudo sysctl -w net.ipv4.tcp_rmem='10240 87380 25165824'"
 }
 
 function execute_on_all
