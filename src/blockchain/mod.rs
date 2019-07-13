@@ -1,4 +1,5 @@
 use crate::block::{Block, Content};
+use crate::block::proof::TimeStamp;
 use crate::config::*;
 use crate::crypto::hash::{Hashable, H256};
 
@@ -10,6 +11,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::mem;
 use std::sync::Mutex;
 use std::time;
+use std::time::SystemTime;
 
 // Column family names for node/chain metadata
 const PROPOSER_NODE_LEVEL_CF: &str = "PROPOSER_NODE_LEVEL"; // hash to node level (u64)
@@ -22,6 +24,7 @@ const PROPOSER_LEADER_SEQUENCE_CF: &str = "PROPOSER_LEADER_SEQUENCE"; // level (
 const PROPOSER_LEDGER_ORDER_CF: &str = "PROPOSER_LEDGER_ORDER"; // level (u64) to the list of proposer blocks confirmed
                                                                 // by this level, including the leader itself. The list
                                                                 // is in the order that those blocks should live in the ledger.
+const PROPOSER_NODE_TIMESTAMP_CF: &str = "PROPOSER_NODE_TIMESTAMP"; //Timestamp of the proposer blocks
 
 // Column family names for graph neighbors
 const PARENT_NEIGHBOR_CF: &str = "GRAPH_PARENT_NEIGHBOR"; // the proposer parent of a block
@@ -63,6 +66,8 @@ impl BlockChain {
             ColumnFamilyDescriptor::new(PROPOSER_LEADER_SEQUENCE_CF, Options::default());
         let proposer_ledger_order_cf =
             ColumnFamilyDescriptor::new(PROPOSER_LEDGER_ORDER_CF, Options::default());
+        let proposer_node_timestamp_cf =
+            ColumnFamilyDescriptor::new(PROPOSER_NODE_TIMESTAMP_CF, Options::default());
 
         let mut proposer_tree_level_option = Options::default();
         proposer_tree_level_option.set_merge_operator(
@@ -123,6 +128,7 @@ impl BlockChain {
             voter_node_voted_level_cf,
             proposer_leader_sequence_cf,
             proposer_ledger_order_cf,
+            proposer_node_timestamp_cf,
             proposer_tree_level_cf,
             proposer_node_vote_cf,
             parent_neighbor_cf,
@@ -156,6 +162,8 @@ impl BlockChain {
 
     /// Destroy the existing database at the given path, create a new one, and initialize the content.
     pub fn new<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
+        let cur_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis();
+
         DB::destroy(&Options::default(), &path)?;
         let db = Self::open(&path)?;
         // get cf handles
@@ -171,6 +179,7 @@ impl BlockChain {
         let proposer_ledger_order_cf = db.db.cf_handle(PROPOSER_LEDGER_ORDER_CF).unwrap();
         let proposer_ref_neighbor_cf = db.db.cf_handle(PROPOSER_REF_NEIGHBOR_CF).unwrap();
         let transaction_ref_neighbor_cf = db.db.cf_handle(TRANSACTION_REF_NEIGHBOR_CF).unwrap();
+        let proposer_node_timestamp_cf = db.db.cf_handle(PROPOSER_NODE_TIMESTAMP_CF).unwrap();
 
         // insert genesis blocks
         let mut wb = WriteBatch::default();
@@ -185,6 +194,11 @@ impl BlockChain {
             proposer_tree_level_cf,
             serialize(&(0 as u64)).unwrap(),
             serialize(&(*PROPOSER_GENESIS_HASH)).unwrap(),
+        )?;
+        wb.put_cf(
+            proposer_node_timestamp_cf,
+            serialize(&(*PROPOSER_GENESIS_HASH)).unwrap(),
+            serialize(&(cur_time as TimeStamp)).unwrap(),
         )?;
         let mut unreferred_proposers = db.unreferred_proposers.lock().unwrap();
         unreferred_proposers.insert(*PROPOSER_GENESIS_HASH);
@@ -269,6 +283,7 @@ impl BlockChain {
         let voter_parent_neighbor_cf = self.db.cf_handle(VOTER_PARENT_NEIGHBOR_CF).unwrap();
         let transaction_ref_neighbor_cf = self.db.cf_handle(TRANSACTION_REF_NEIGHBOR_CF).unwrap();
         let proposer_ref_neighbor_cf = self.db.cf_handle(PROPOSER_REF_NEIGHBOR_CF).unwrap();
+        let proposer_node_timestamp_cf = self.db.cf_handle(PROPOSER_NODE_TIMESTAMP_CF).unwrap();
 
         let mut wb = WriteBatch::default();
 
@@ -302,6 +317,7 @@ impl BlockChain {
                 let mut refed_proposer: Vec<H256> = vec![parent_hash];
                 refed_proposer.extend(&content.proposer_refs);
                 put_value!(proposer_ref_neighbor_cf, block_hash, refed_proposer);
+                put_value!(proposer_node_timestamp_cf, block_hash, block.header.pos_proof.timestamp);
                 put_value!(
                     transaction_ref_neighbor_cf,
                     block_hash,
@@ -422,7 +438,7 @@ impl BlockChain {
         return Ok(());
     }
 
-    pub fn update_ledger(&self) -> Result<(Vec<H256>, Vec<H256>)> {
+    pub fn update_ledger(&self) -> Result<(Vec<(H256, TimeStamp)>, Vec<(H256, TimeStamp)>)> {
         let proposer_node_vote_cf = self.db.cf_handle(PROPOSER_NODE_VOTE_CF).unwrap();
         let proposer_node_level_cf = self.db.cf_handle(PROPOSER_NODE_LEVEL_CF).unwrap();
         let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
@@ -430,6 +446,7 @@ impl BlockChain {
         let proposer_ledger_order_cf = self.db.cf_handle(PROPOSER_LEDGER_ORDER_CF).unwrap();
         let proposer_ref_neighbor_cf = self.db.cf_handle(PROPOSER_REF_NEIGHBOR_CF).unwrap();
         let transaction_ref_neighbor_cf = self.db.cf_handle(TRANSACTION_REF_NEIGHBOR_CF).unwrap();
+        let proposer_node_timestamp_cf = self.db.cf_handle(PROPOSER_NODE_TIMESTAMP_CF).unwrap();
 
         macro_rules! get_value {
             ($cf:expr, $key:expr) => {{
@@ -603,8 +620,8 @@ impl BlockChain {
         if let Some(change_begin) = change_begin {
             let mut proposer_ledger_tip = self.proposer_ledger_tip.lock().unwrap();
             let mut unconfirmed_proposers = self.unconfirmed_proposers.lock().unwrap();
-            let mut removed: Vec<H256> = vec![];
-            let mut added: Vec<H256> = vec![];
+            let mut removed: Vec<(H256, TimeStamp)> = vec![];
+            let mut added: Vec<(H256, TimeStamp)> = vec![];
             let mut wb = WriteBatch::default();
             macro_rules! merge_value {
                 ($cf:expr, $key:expr, $value:expr) => {{
@@ -627,9 +644,11 @@ impl BlockChain {
                 let original_ledger: Vec<H256> =
                     get_value!(proposer_ledger_order_cf, level as u64).unwrap();
                 delete_value!(proposer_ledger_order_cf, level as u64);
+                let original_leader_block: H256 = get_value!(proposer_leader_sequence_cf, level as u64).unwrap()        ;
+                let timestamp_original_leader = get_value!(proposer_node_timestamp_cf, original_leader_block).unwrap();
                 for block in &original_ledger {
                     unconfirmed_proposers.insert(*block);
-                    removed.push(*block);
+                    removed.push((*block, timestamp_original_leader));
                 }
             }
 
@@ -645,8 +664,9 @@ impl BlockChain {
                         Some(leader) => leader,
                     };
                     // Get the sequence of blocks by doing a depth-first traverse
-                    let mut order: Vec<H256> = vec![];
+                    let mut order: Vec<(H256, TimeStamp)> = vec![];
                     let mut stack: Vec<H256> = vec![leader];
+                    let timestamp_leader = get_value!(proposer_node_timestamp_cf, leader).unwrap();
                     while let Some(top) = stack.pop() {
                         // if it's already
                         // confirmed before, ignore it
@@ -656,7 +676,7 @@ impl BlockChain {
                         let refs: Vec<H256> = get_value!(proposer_ref_neighbor_cf, top).unwrap();
 
                         // add the current block to the ordered ledger, could be duplicated
-                        order.push(top);
+                        order.push((top, timestamp_leader));
 
                         // search all referred blocks
                         for ref_hash in &refs {
@@ -669,7 +689,7 @@ impl BlockChain {
                     // deduplicate, keep the one copy that is former in this order
                     order = order
                         .into_iter()
-                        .filter(|h| unconfirmed_proposers.remove(h))
+                        .filter(|(h,_)| unconfirmed_proposers.remove(h))
                         .collect();
                     put_value!(proposer_ledger_order_cf, level as u64, order);
                     added.extend(&order);
@@ -678,15 +698,20 @@ impl BlockChain {
             // commit the new ledger into the database
             self.db.write(wb)?;
 
-            let mut removed_transaction_blocks: Vec<H256> = vec![];
-            let mut added_transaction_blocks: Vec<H256> = vec![];
-            for block in &removed {
-                let t: Vec<H256> = get_value!(transaction_ref_neighbor_cf, block).unwrap();
-                removed_transaction_blocks.extend(&t);
+            let mut removed_transaction_blocks: Vec<(H256, TimeStamp)> = vec![];
+            let mut added_transaction_blocks: Vec<(H256, TimeStamp)> = vec![];
+            for (block, timestamp) in &removed {
+                let t_blocks: Vec<H256> = get_value!(transaction_ref_neighbor_cf, block).unwrap();
+                for t in t_blocks.iter(){
+                    removed_transaction_blocks.push((*t, *timestamp));
+                }
             }
-            for block in &added {
-                let t: Vec<H256> = get_value!(transaction_ref_neighbor_cf, block).unwrap();
-                added_transaction_blocks.extend(&t);
+            for (block, timestamp) in &added {
+                let t_blocks: Vec<H256> = get_value!(transaction_ref_neighbor_cf, block).unwrap();
+                //TODO: Do dedup while preserving the order
+                for t in t_blocks.iter(){
+                    added_transaction_blocks.push((*t, *timestamp));
+                }
             }
             return Ok((added_transaction_blocks, removed_transaction_blocks));
         } else {

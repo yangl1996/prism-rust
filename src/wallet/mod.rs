@@ -10,6 +10,7 @@ use std::convert::TryInto;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 use std::{error, fmt};
+use crate::utxodb::{UtxoDatabase, Utxo, OutputWithTime};
 
 pub const COIN_CF: &str = "COIN";
 pub const KEYPAIR_CF: &str = "KEYPAIR"; // &Address to &KeyPairPKCS8
@@ -115,18 +116,22 @@ impl Wallet {
         false
     }
 
-    pub fn apply_diff(&self, add: &[Input], remove: &[Input]) -> Result<()> {
+    pub fn apply_diff(&self, add: &[Utxo], remove: &[Input]) -> Result<()> {
         let mut batch = rocksdb::WriteBatch::default();
         let cf = self.db.cf_handle(COIN_CF).unwrap();
-        for coin in add {
-            // TODO: it's so funny that we have to do this for every added coin
-            if self.contains_keypair(&coin.owner) {
+        for utxo in add {
+            // TODO: it's so funny that we have to do this for every added utxo
+            if self.contains_keypair(&utxo.owner) {
                 let output = Output {
-                    value: coin.value,
-                    recipient: coin.owner,
+                    value: utxo.value,
+                    recipient: utxo.owner,
                 };
-                let key = serialize(&coin.coin).unwrap();
-                let val = serialize(&output).unwrap();
+                let output_with_time = OutputWithTime{
+                    output: output,
+                    confirm_time: utxo.confirm_time
+                };
+                let key = serialize(&utxo.coin).unwrap();
+                let val = serialize(&output_with_time).unwrap();
                 batch.put_cf(cf, &key, &val)?;
                 self.counter.fetch_add(1, Ordering::Relaxed);
             }
@@ -145,8 +150,8 @@ impl Wallet {
         let iter = self.db.iterator_cf(cf, rocksdb::IteratorMode::Start)?;
         let balance = iter
             .map(|(_, v)| {
-                let coin_data: Output = bincode::deserialize(v.as_ref()).unwrap();
-                coin_data.value
+                let coin_data: OutputWithTime = bincode::deserialize(v.as_ref()).unwrap();
+                coin_data.output.value
             })
             .sum::<u64>();
         Ok(balance)
@@ -175,12 +180,12 @@ impl Wallet {
         // iterate through our wallet
         for (k, v) in iter {
             let coin_id: CoinId = bincode::deserialize(k.as_ref()).unwrap();
-            let coin_data: Output = bincode::deserialize(v.as_ref()).unwrap();
-            value_sum += coin_data.value;
+            let utxo_output: OutputWithTime = bincode::deserialize(v.as_ref()).unwrap();
+            value_sum += utxo_output.output.value;
             coins_to_use.push(Input {
                 coin: coin_id,
-                value: coin_data.value,
-                owner: coin_data.recipient,
+                value: utxo_output.output.value,
+                owner: utxo_output.output.recipient,
             }); // coins that will be used for this transaction
             if value_sum >= value {
                 // if we already have enough money, break

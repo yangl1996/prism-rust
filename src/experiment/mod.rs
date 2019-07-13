@@ -8,6 +8,7 @@ use crate::utxodb::UtxoDatabase;
 use crate::wallet::Wallet;
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::time::SystemTime;
 
 pub fn ico(
     recipients: &[H256], // addresses of all the ico recipients
@@ -18,7 +19,7 @@ pub fn ico(
 ) -> Result<(), rocksdb::Error> {
     let recipients: Vec<H256> = recipients.to_vec();
     let recipients = Arc::new(Mutex::new(recipients));
-
+    let cur_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis();
     // start a bunch of worker threads to commit those coins
     let mut workers = vec![];
     for _ in 0..16 {
@@ -42,7 +43,7 @@ pub fn ico(
                 hash: RefCell::new(None),
             };
             let hash = tx.hash();
-            let diff = utxodb.add_transaction(&tx, hash).unwrap();
+            let diff = utxodb.add_transaction(&tx, hash, cur_time).unwrap();
             wallet.apply_diff(&diff.0, &diff.1).unwrap();
         });
         workers.push(handle);
