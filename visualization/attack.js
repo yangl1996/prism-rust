@@ -1,5 +1,6 @@
 let fakeBlocks = []
 
+/*
 let attack = () => {
   for(let i=0; i<numChains; i++){
     let chainBlocks = chainsData[i].blocks
@@ -138,22 +139,12 @@ let growFakeChain = (ppb, chainIndex) => {
   castFakeVote(chainIndex)
   votingBlockId+=1
 }
-
-/*
-const simulateAttack = (ppb, chain) => {
-  addFakeProposerBlock(ppb)
-  let interval = d3.interval(() => {
-    if(chainsData[chain].fakeBlocks.length>10){
-       interval.stop()
-    }
-    growFakeChain(ppb, chain)
-  }, t)
-}
 */
 const addMaliciousBlock = (blockId, parent=null, sourceNodeId, transactionBlockIds) => {
   const check = proposerBlocks.find(b => b.blockId===blockId) 
   if(check==undefined){
-    const newNode = {parent, blockId, children: [], sourceNodeId, finalizationLevel: 0.3, finalized: false, transactionBlockIds} 
+    pingNode(sourceNodeId, true)
+    const newNode = {parent, blockId, children: [], sourceNodeId, finalizationLevel: 0.3, finalized: false, transactionBlockIds, malicious: true} 
     if(parent.children.length>1) return
     if(parent) parent.children.push(newNode)
     proposerBlocks.push(newNode)

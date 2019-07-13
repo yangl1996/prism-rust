@@ -53,7 +53,7 @@ let drawProposerChain = () => {
     // Add new blocks
     let proposerBlockEnter = proposerBlock.enter().append('rect')
            .attr('id', d => 'proposerBlock'+d.blockId)
-           .attr('class', 'proposerBlock')
+           .attr('class', d => d.malicious ? 'malicious proposerBlock' : 'proposerBlock')
            .attr('height', 0)
            .attr('width', 0)
            .attr('rx', 3)
@@ -169,6 +169,7 @@ const scrollProposerChain = () => {
 const addProposerBlock = (blockId, parent=null, sourceNodeId, transactionBlockIds) => {
   const check = proposerBlocks.find(b => b.blockId===blockId) 
   if(check==undefined){
+    pingNode(sourceNodeId)
     const newNode = {parent, blockId, children: [], sourceNodeId, finalizationLevel: 0.3, finalized: false, transactionBlockIds} 
     if(parent.children.length>1) return
     if(parent) parent.children.push(newNode)
@@ -178,12 +179,12 @@ const addProposerBlock = (blockId, parent=null, sourceNodeId, transactionBlockId
 }
 
 if(mock){
-  const genesisBlock = {parent: null, blockId: proposerBlockId, children: [], sourceNodeId: null, finalizationLevel: 0.3, transactionBlockIds: []}
+  const genesisBlock = {parent: null, blockId: proposerBlockId, children: [], sourceNodeId: null, finalizationLevel: 0.3, transactionBlockIds: [], malicious: false}
   proposerBlockId++
   proposerBlocks.push(genesisBlock)
 }
 else{
-  const genesisBlock = {parent: null, blockId: ''.padStart(64, '0'), children: [], sourceNodeId: null, finalizationLevel: 0.3, transactionBlockIds: []}
+  const genesisBlock = {parent: null, blockId: ''.padStart(64, '0'), children: [], sourceNodeId: null, finalizationLevel: 0.3, transactionBlockIds: [], malicious: false}
   proposerBlocks.push(genesisBlock)
 }
 

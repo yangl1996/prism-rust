@@ -54,3 +54,12 @@ if(mock){
     votingBlockId++
   }, 5*t/numChains)
 }
+
+let simulateAttack = () => {
+    const parent = proposerBlocks[proposerBlocks.length-2]
+    const sourceNodeId = Math.floor(Math.random() * Math.floor(nodeIndex))
+    let transactionBlockIds = transactionBlocks.map(block => block.blockId).filter(() => Math.random()<0.9)
+    addMaliciousBlock(proposerBlockId, parent, sourceNodeId, transactionBlockIds)
+    proposerBlockId++
+}
+
