@@ -7,7 +7,7 @@ use std::cell::RefCell;
 use std::hash::{Hash, Hasher};
 
 /// A unique identifier of a transaction output, a.k.a. a coin.
-#[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq, Hash, Default)]
 pub struct CoinId {
     /// The hash of the transaction that produces this coin.
     pub hash: H256,

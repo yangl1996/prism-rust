@@ -1,9 +1,11 @@
 use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::vrf;
 use crate::crypto::vrf::{VrfPublicKey, VrfSecretKey, VrfInput, VrfProof, VrfOutput};
-use super::proof;
+use super::pos_metadata;
 
 // TODO: Add the address of the miner
+
+
 pub type RandomSource = [u8; 32];
 /// The header of a block.
 #[derive(Serialize, Deserialize, Clone, Debug, Hash)]
@@ -11,9 +13,7 @@ pub struct Header {
     /// Hash of the parent proposer block.
     pub parent: H256,
     /// Proof of leader election via pos mining
-    pub pos_proof: proof::Proof,
-    /// Random source for child block
-    pub random_source: RandomSource,
+    pub pos_metadata: pos_metadata::Metadata,
     /// Merkle root of the block content.
     pub content_root: H256,
     /// Extra content for debugging purposes.
@@ -28,8 +28,7 @@ impl Header {
     /// Create a new block header.
     pub fn new(
         parent: H256,
-        pos_proof: proof::Proof,
-        random_source: RandomSource,
+        pos_metadata: pos_metadata::Metadata,
         content_root: H256,
         extra_content: [u8; 32],
         difficulty: H256,
@@ -37,8 +36,7 @@ impl Header {
     ) -> Self {
         Self {
             parent,
-            pos_proof,
-            random_source,
+            pos_metadata,
             content_root,
             extra_content,
             difficulty,
@@ -47,7 +45,7 @@ impl Header {
     }
 
     pub fn pos_hash(&self) -> VrfOutput {
-        return self.pos_proof.vrf_output;
+        return self.pos_metadata.vrf_output;
     }
 }
 

@@ -4,7 +4,7 @@ use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 use crate::transaction::{CoinId, Input, Output, Transaction, Address};
 use bincode::serialize;
 use rocksdb::*;
-use crate::block::proof::TimeStamp;
+use crate::block::pos_metadata::TimeStamp;
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
 pub struct OutputWithTime {
@@ -12,6 +12,7 @@ pub struct OutputWithTime {
     pub confirm_time: TimeStamp
 }
 
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Hash, Default, Debug)]
 pub struct Utxo {
     pub coin: CoinId,
     pub value: u64,
@@ -19,8 +20,9 @@ pub struct Utxo {
     pub confirm_time: TimeStamp
 }
 
+
 pub struct UtxoDatabase {
-    pub db: rocksdb::DB, // coin id to output
+    pub db: rocksdb::DB, // coin id to outputwithtime
 }
 
 impl UtxoDatabase {

@@ -1,7 +1,7 @@
 pub mod memory_pool;
 
 use crate::block::header::Header;
-use crate::block::{proposer, transaction, voter, proof};
+use crate::block::{proposer, transaction, voter, pos_metadata};
 use crate::block::{Block, Content};
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
@@ -119,8 +119,7 @@ pub fn new(
         server: server.clone(),
         header: Header {
             parent: *PROPOSER_GENESIS_HASH,
-            pos_proof: proof::Proof::default(),
-            random_source: [0; 32],
+            pos_metadata: pos_metadata::Metadata::default(),
             content_root: H256::default(),
             extra_content: [0; 32],
             difficulty: *DEFAULT_DIFFICULTY,
@@ -397,7 +396,7 @@ impl Context {
             // try a new nonce, and update the timestamp
             //TODO: Songze. The below line is commented when moving from PoW to PoS
 //            self.header.nonce = rng.gen();
-            self.header.pos_proof.timestamp = get_time();
+            self.header.pos_metadata.timestamp = get_time();
 
             // Check if we successfully mined a block
             let header_hash = self.header.hash();

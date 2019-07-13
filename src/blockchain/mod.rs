@@ -1,5 +1,5 @@
 use crate::block::{Block, Content};
-use crate::block::proof::TimeStamp;
+use crate::block::pos_metadata::TimeStamp;
 use crate::config::*;
 use crate::crypto::hash::{Hashable, H256};
 
@@ -317,7 +317,7 @@ impl BlockChain {
                 let mut refed_proposer: Vec<H256> = vec![parent_hash];
                 refed_proposer.extend(&content.proposer_refs);
                 put_value!(proposer_ref_neighbor_cf, block_hash, refed_proposer);
-                put_value!(proposer_node_timestamp_cf, block_hash, block.header.pos_proof.timestamp);
+                put_value!(proposer_node_timestamp_cf, block_hash, block.header.pos_metadata.timestamp);
                 put_value!(
                     transaction_ref_neighbor_cf,
                     block_hash,
@@ -381,7 +381,7 @@ impl BlockChain {
 
                 info!(
                     "Adding proposer block {} at timestamp {} at level {}",
-                    block_hash, block.header.pos_proof.timestamp, self_level
+                    block_hash, block.header.pos_metadata.timestamp, self_level
                 );
             }
             Content::Voter(content) => {

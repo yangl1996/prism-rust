@@ -1,6 +1,6 @@
 use super::Block;
 use super::Content as BlockContent;
-use super::proof::Proof;
+use super::pos_metadata::Metadata;
 use crate::config::*;
 use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::merkle::MerkleTree;
@@ -60,11 +60,8 @@ pub fn genesis(chain_num: u16) -> Block {
     // blocks are added to the system at initialization. Seems like a moderate hack.
     return Block::new(
         all_zero.into(),
-        all_zero,
-        0,
-        Proof::default(),
-        all_zero,
-        content.hash(),
+        Metadata::default(),
+        H256::default(),
         all_zero,
         *DEFAULT_DIFFICULTY,
         vec![],

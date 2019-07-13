@@ -1,5 +1,5 @@
 use crate::block::{Block, Content};
-use crate::block::proof::TimeStamp;
+use crate::block::pos_metadata::TimeStamp;
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
 use crate::crypto::hash::{Hashable, H256};

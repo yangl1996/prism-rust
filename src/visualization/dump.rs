@@ -137,11 +137,11 @@ pub fn dump_voter_timestamp(blockchain: &BlockChain, blockdb: &BlockDatabase) ->
     let voter_bottom_tip = blockchain.voter_bottom_tip().unwrap_or(vec![]);
     let mut dump = vec![];
     let bottom_timestamp = match blockdb.get(&proposer_bottom_tip.0).unwrap_or(None) {
-        Some(block) => block.header.pos_proof.timestamp,
+        Some(block) => block.header.pos_metadata.timestamp,
         _ => 0,
     };
     let tip_timestamp = match blockdb.get(&proposer_bottom_tip.1).unwrap_or(None) {
-        Some(block) => block.header.pos_proof.timestamp,
+        Some(block) => block.header.pos_metadata.timestamp,
         _ => 0,
     };
     if proposer_bottom_tip.2 > 1 && tip_timestamp != bottom_timestamp {
@@ -158,11 +158,11 @@ pub fn dump_voter_timestamp(blockchain: &BlockChain, blockdb: &BlockDatabase) ->
     }
     for (chain, (bottom, tip, level)) in voter_bottom_tip.iter().enumerate() {
         let bottom_timestamp = match blockdb.get(bottom).unwrap_or(None) {
-            Some(block) => block.header.pos_proof.timestamp,
+            Some(block) => block.header.pos_metadata.timestamp,
             _ => 0,
         };
         let tip_timestamp = match blockdb.get(tip).unwrap_or(None) {
-            Some(block) => block.header.pos_proof.timestamp,
+            Some(block) => block.header.pos_metadata.timestamp,
             _ => 0,
         };
         if *level > 1 && tip_timestamp != bottom_timestamp {
