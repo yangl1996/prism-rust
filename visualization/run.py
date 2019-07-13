@@ -5,10 +5,8 @@ def signal_handler(sig, frame):
     p1.kill()
     p2.kill()
     p3.kill()
-    for line in os.popen('ps'):
-        if 'prism' in line:
-            pid = line.split(' ')[0]
-            os.kill(int(pid), signal.SIGKILL)
+    for pid in os.popen('pgrep prism'):
+        os.kill(int(pid), signal.SIGKILL)
 
 with open('config.json', 'r') as f:
     config = json.loads(f.read())
@@ -23,6 +21,5 @@ webbrowser.open_new_tab(f'http://{URL}:{VIS_PORT}/')
 time.sleep(2)
 os.chdir('../testbed')
 p3 = subprocess.Popen(['./local-experiment.sh', f'{NUM_NODES}'])
-
 signal.signal(signal.SIGINT, signal_handler)
 signal.pause()
