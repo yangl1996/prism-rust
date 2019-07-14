@@ -1,9 +1,10 @@
 use crate::crypto::hash::Hashable;
 use crate::crypto::hash::H256;
 use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
-use crate::transaction::{CoinId, Input, Output, Transaction};
-use bincode::serialize;
+use crate::transaction::{CoinId, Input, Output, Transaction, Address};
+use bincode::{serialize, deserialize};
 use rocksdb::*;
+use std::collections::HashSet;
 
 pub struct UtxoDatabase {
     pub db: rocksdb::DB, // coin id to output
@@ -85,14 +86,27 @@ impl UtxoDatabase {
         // use batch for the transaction
         let mut batch = rocksdb::WriteBatch::default();
 
-        // check whether the inputs used in this transaction are all unspent
+        // check whether the inputs used in this transaction are all unspent, and whether the value
+        // field in inputs are correct, and whether all owners have signed the transaction
+        let mut owners: HashSet<Address> = HashSet::new();
         for input in &t.input {
             let id_ser = serialize(&input.coin).unwrap();
-            if self.db.get_pinned(&id_ser)?.is_none() {
-                return Ok((vec![], vec![]));
+            match self.db.get_pinned(&id_ser)? {
+                Some(d) => {
+                    let coin_data: Output = deserialize(&d).unwrap();
+                    owners.insert(coin_data.recipient);
+                    if coin_data.value != input.value {
+                        return Ok((vec![], vec![]));
+                    }
+                }
+                None => return Ok((vec![], vec![]))
             }
             removed_coins.push(input.coin);
             batch.delete(&id_ser)?;
+        }
+        let signed_users: HashSet<Address> = t.authorization.iter().map(|x| ring::digest::digest(&ring::digest::SHA256, &x.pubkey).into()).collect();
+        if signed_users != owners {
+            return Ok((vec![], vec![]));
         }
 
         // now that we have confirmed that all inputs are unspent, we will add the outputs and
