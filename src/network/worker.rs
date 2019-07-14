@@ -34,7 +34,8 @@ pub struct Context {
     context_update_chan: channel::Sender<ContextUpdateSignal>,
     server: ServerHandle,
     buffer: Arc<Mutex<BlockBuffer>>,
-    recent_blocks: Arc<Mutex<HashSet<H256>>>,
+    recent_blocks: Arc<Mutex<HashSet<H256>>>,   // blocks that we have received but not yet inserted
+    requested_blocks: Arc<Mutex<HashSet<H256>>>,    // blocks that we have requested but not yet received
 }
 
 pub fn new(
@@ -60,6 +61,7 @@ pub fn new(
         server: server.clone(),
         buffer: Arc::new(Mutex::new(BlockBuffer::new())),
         recent_blocks: Arc::new(Mutex::new(HashSet::new())),
+        requested_blocks: Arc::new(Mutex::new(HashSet::new())),
     };
     return ctx;
 }
@@ -125,11 +127,19 @@ impl Context {
                     debug!("Got {} new block hashes", hashes.len());
                     let mut hashes_to_request = vec![];
                     for hash in hashes {
-                        // we need to check blockchain as well
-                        if !self.blockdb.contains(&hash).unwrap() {
+                        let in_blockdb = self.blockdb.contains(&hash).unwrap();
+                        let requested_blocks = self.requested_blocks.lock().unwrap();
+                        let requested = requested_blocks.contains(&hash);
+                        drop(requested_blocks);
+                        if !(in_blockdb || requested) {
                             hashes_to_request.push(hash);
                         }
                     }
+                    let mut requested_blocks = self.requested_blocks.lock().unwrap();
+                    for hash in &hashes_to_request {
+                        requested_blocks.insert(*hash);
+                    }
+                    drop(requested_blocks);
                     if hashes_to_request.len() != 0 {
                         peer.write(Message::GetBlocks(hashes_to_request));
                     }
@@ -156,6 +166,15 @@ impl Context {
                     for encoded_block in &encoded_blocks {
                         let block: Block = bincode::deserialize(&encoded_block).unwrap();
                         let hash = block.hash();
+
+                        // now that the block that we request has arrived, remove it from the set
+                        // of requested blocks. removing it at this stage causes a race condition,
+                        // where the block could have been removed from requested_blocks but not
+                        // yet inserted into the database. but this does not cause correctness
+                        // problem and hardly incurs a performance issue (I hope)
+                        let mut requested_blocks = self.requested_blocks.lock().unwrap();
+                        requested_blocks.remove(&hash);
+                        drop(requested_blocks);
 
                         // check POW here. If POW does not pass, discard the block at this
                         // stage
