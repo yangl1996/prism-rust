@@ -251,7 +251,6 @@ function add_traffic_shaping_single
 	qlen=`expr $3 \* $2 / 1500 / 8`
 	# give some headroom to the queue size
 	qlen=`expr $qlen \* 2`
-	qbytes=`expr $3 \* $2 \* 2`
 
 	# deal with egress
 	# add the root qdisc to the egress network interface and default traffic to class 10
@@ -310,7 +309,7 @@ function remove_traffic_shaping_single
 
 function tune_tcp_single
 {
-	ssh $1 -- "sudo sysctl -w net.core.rmem_max=25165824 && sudo sysctl -w net.core.wmem_max=25165824 && sudo sysctl -w net.ipv4.tcp_wmem='10240 87380 25165824' && sudo sysctl -w net.ipv4.tcp_rmem='10240 87380 25165824'"
+	ssh $1 -- "sudo sysctl -w net.core.rmem_max=50331648 && sudo sysctl -w net.core.wmem_max=50331648 && sudo sysctl -w net.ipv4.tcp_wmem='10240 87380 50331648' && sudo sysctl -w net.ipv4.tcp_rmem='10240 87380 50331648'"
 }
 
 function execute_on_all
