@@ -108,6 +108,12 @@ function stop_instances
 	curl -s --form-string "token=$PUSHOVER_TOKEN" --form-string "user=$PUSHOVER_USER" --form-string "title=EC2 Instances Stopped" --form-string "message=EC2 instances launched at $(date -r instances.txt) were just terminated by user $(whoami)." https://api.pushover.net/1/messages.json &> /dev/null
 }
 
+function count_instances
+{
+	result=`aws ec2 describe-instances --query 'Reservations[*].Instances[*].[InstanceId][][]' --filters Name=instance-state-name,Values=running Name=tag-key,Values=prism --output text`
+	echo "$(echo $result | wc -w | tr -d ' ')"
+}
+
 function build_prism
 {
 	echo "Copying local repository to build machine"
@@ -600,6 +606,7 @@ case "$1" in
 
 		  start-instances n     Start n EC2 instances
 		  stop-instances        Terminate EC2 instances
+		  count-instances       Count the running instances
 		  install-tools         Install tools
 		  fix-config            Fix SSH config
 		  mount-ramdisk         Mount RAM disk
@@ -642,6 +649,8 @@ case "$1" in
 		start_instances $2 ;;
 	stop-instances)
 		stop_instances ;;
+	count-instances)
+		count_instances ;;
 	fix-config)
 		fix_ssh_config ;;
 	mount-ramdisk)
