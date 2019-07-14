@@ -244,30 +244,68 @@ function join_by
 
 function add_traffic_shaping_single
 {
-	# the $2: latency, $3: throughput
-	local ports=`cat nodes.txt | grep $1 | cut -f 5 -d ,`
+	# the $2: latency in ms, $3: throughput in kbps
+	local common_ports='22 53 80 443'
+	local ports=`cat nodes.txt | grep $1 | cut -f 6-7 -d , | tr , ' '`
 	# calculate the bdp to determine the queue size
 	qlen=`expr $3 \* $2 / 1500 / 8`
 	# give some headroom to the queue size
 	qlen=`expr $qlen \* 2`
-	# add the root qdisc to the network interface
-	command="sudo tc qdisc add dev ens5 handle 10: root htb default 1 direct_qlen $qlen"
-	# add the class for the default traffic (marked as 10:1 in the command above)
+	qbytes=`expr $3 \* $2 \* 2`
+
+	# deal with egress
+	# add the root qdisc to the egress network interface and default traffic to class 10
+	command="sudo tc qdisc add dev ens5 handle 10: root htb default 10 direct_qlen $qlen"
+	# add the class for traffic with immunity (will be filtered to this class below) 
 	command="$command && sudo tc class add dev ens5 parent 10: classid 10:1 htb rate 1000000kbit"
-	# add the class for the prism traffic
+	# add the class for the rest of the traffic (assigned to this class by default)
 	command="$command && sudo tc class add dev ens5 parent 10: classid 10:10 htb rate ${3}kbit"
-	# add netem qdisc under class 10:10 (prism) to emulate delay
+	# add netem qdisc under class 10:10 to emulate delay
 	command="$command && sudo tc qdisc add dev ens5 parent 10:10 handle 100: netem delay ${2}ms rate ${3}kbit limit $qlen"
+	# filter out traffic that we don't want to be impacted and put it under 10:1
 	for port in $ports; do
-		command="$command && sudo tc filter add dev ens5 protocol ip parent 10: prio 2 u32 match ip dport $port 0xffff flowid 10:10"
+		# packets from all API/visualization servers
+		command="$command && sudo tc filter add dev ens5 parent 10: protocol ip prio 1 u32 match ip sport $port 0xffff flowid 10:1"
 	done
-	echo $command
+	for port in $common_ports; do
+		# normal, innocent traffic: incoming/outgoing SSH, DNS, HTTP(S)
+		command="$command && sudo tc filter add dev ens5 parent 10: protocol ip prio 1 u32 match ip sport $port 0xffff flowid 10:1"
+		command="$command && sudo tc filter add dev ens5 parent 10: protocol ip prio 1 u32 match ip dport $port 0xffff flowid 10:1"
+	done
+
+	# deal with ingress
+	# create an ifb device to which later we will install qdisc
+	command="$command && sudo modprobe ifb"
+	command="$command && sudo ifconfig ifb0 up"
+	# add the qdisc to the ingress interface and forward all traffic to ifb
+	command="$command && sudo tc qdisc add dev ens5 handle ffff: ingress"
+	command="$command && sudo tc filter add dev ens5 parent ffff: protocol all u32 match u32 0 0 action mirred egress redirect dev ifb0"
+	# install qdisc on the ifb device - now we can do w/ever we want on egress of ifb and it will apply to ingress
+	# add the root device, and default all traffic to class 10 (the class we will punish)
+	command="$command && sudo tc qdisc add dev ifb0 handle 10: root htb default 10 direct_qlen $qlen"
+	# add the class for traffic with immunity
+	command="$command && sudo tc class add dev ifb0 parent 10: classid 10:1 htb rate 1000000kbit"
+	# add the class that we will punish, all traffic has been sent by default to this class
+	command="$command && sudo tc class add dev ifb0 parent 10: classid 10:10 htb rate ${3}kbit"
+	# add netem qdisc under 10:10 to install rate limiter
+	command="$command && sudo tc qdisc add dev ifb0 parent 10:10 handle 100: netem rate ${3}kbit limit $qlen"
+	# filter out traffic that we don't want to be impacted
+	for port in $ports; do
+		# packets going to all API/visualization servers
+		command="$command && sudo tc filter add dev ifb0 parent 10: protocol ip prio 1 u32 match ip dport $port 0xffff flowid 10:1"
+	done
+	for port in $common_ports; do
+		# normal, innocent traffic: incoming/outgoing SSH, DNS, HTTP(S)
+		command="$command && sudo tc filter add dev ifb0 parent 10: protocol ip prio 1 u32 match ip sport $port 0xffff flowid 10:1"
+		command="$command && sudo tc filter add dev ifb0 parent 10: protocol ip prio 1 u32 match ip dport $port 0xffff flowid 10:1"
+	done
+	
 	ssh $1 -- "$command"
 }
 
 function remove_traffic_shaping_single
 {
-	ssh $1 -- "sudo tc qdisc del dev ens5 root"
+	ssh $1 -- "sudo tc qdisc del dev ens5 root && sudo tc qdisc del dev ens5 ingress && sudo tc qdisc del dev ifb0 root"
 }
 
 function tune_tcp_single
