@@ -1,4 +1,8 @@
 use crate::crypto::hash::H256;
+use crate::block::pos_metadata::TimeStamp;
+
+// Time delta for pos, in millisecond
+pub const DELTA: TimeStamp = 1000;
 
 // Network parameters
 pub const NETWORK_DELAY: f32 = 2.0; // the expected block propagation delay (in seconds)

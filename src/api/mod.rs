@@ -131,20 +131,20 @@ impl Server {
                         "/miner/start" => {
                             let params = url.query_pairs();
                             let params: HashMap<_, _> = params.into_owned().collect();
-                            let lambda = match params.get("lambda") {
+                            let delta = match params.get("delta") {
                                 Some(v) => v,
                                 None => {
-                                    respond_result!(req, false, "missing lambda");
+                                    respond_result!(req, false, "missing delta");
                                     return;
                                 }
                             };
-                            let lambda = match lambda.parse::<u64>() {
+                            let delta = match delta.parse::<u64>() {
                                 Ok(v) => v,
                                 Err(e) => {
                                     respond_result!(
                                         req,
                                         false,
-                                        format!("error parsing lambda: {}", e)
+                                        format!("error parsing delta: {}", e)
                                     );
                                     return;
                                 }
@@ -167,7 +167,7 @@ impl Server {
                                     return;
                                 }
                             };
-                            miner.start(lambda, lazy);
+                            miner.start(delta, lazy);
                             respond_result!(req, true, "ok");
                         }
                         "/miner/step" => {

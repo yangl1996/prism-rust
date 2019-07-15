@@ -1,9 +1,9 @@
 pub mod memory_pool;
 
-use crate::block::header::{Header, RandomSource};
-use crate::block::{proposer, transaction, voter, pos_metadata};
+use crate::block::header::Header;
+use crate::block::{proposer, transaction, voter};
 use crate::block::{Block, Content};
-use crate::block::proof::{Coin,Proof};
+use crate::block::pos_metadata::{Metadata, RandomSource, TimeStamp};
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
 use crate::config::*;
@@ -15,7 +15,7 @@ use crate::network::message::Message;
 use crate::network::server::Handle as ServerHandle;
 use crate::validation::get_sortition_id;
 use crate::crypto::vrf::{VrfSecretKey, VrfPublicKey, VrfInput, vrf_evaluate, VrfOutput};
-
+use crate::utxodb::Utxo;
 use log::{trace, debug, info};
 
 use crossbeam::channel::{unbounded, Receiver, Sender, TryRecvError};
@@ -28,9 +28,8 @@ use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
-pub const DELTA: u128 = 1000;
 enum ControlSignal {
-    Start(u64, bool), // the number controls the lambda of interval between block generation
+    Start(u64, bool), // the number controls the delta of interval between block generation
     Step,
     Exit,
 }
@@ -66,7 +65,7 @@ pub struct Context {
     operating_state: OperatingState,
     server: ServerHandle,
     /// Last timestamp this miner tried
-    timestamp: u128,
+    timestamp: TimeStamp,
     extra_content: [u8;32],
     parents: Vec<H256>,
     difficulties: Vec<H256>,
@@ -127,9 +126,9 @@ impl Handle {
         self.control_chan.send(ControlSignal::Exit).unwrap();
     }
 
-    pub fn start(&self, lambda: u64, lazy: bool) {
+    pub fn start(&self, delta: u64, lazy: bool) {
         self.control_chan
-            .send(ControlSignal::Start(lambda, lazy))
+            .send(ControlSignal::Start(delta, lazy))
             .unwrap();
     }
 
@@ -157,7 +156,7 @@ impl Context {
             }
             ControlSignal::Start(i, l) => {
                 info!(
-                    "Miner starting in continuous mode with lambda {} and lazy mode {}",
+                    "Miner starting in continuous mode with delta {} and lazy mode {}",
                     i, l
                 );
                 self.operating_state = OperatingState::Run(i, l);
@@ -222,7 +221,7 @@ impl Context {
                 let block = self.blockdb.get(&self.parents[chain_id]).unwrap();
                 if let Some(block) = block {
                     self.difficulties[chain_id] = block.header.difficulty;
-                    self.random_sources[chain_id] = block.header.random_source;
+                    self.random_sources[chain_id] = block.header.pos_metadata.random_source;
                 } else {
                     unreachable!();
                 }
@@ -235,26 +234,36 @@ impl Context {
                 let block = self.blockdb.get(&self.parents[chain_id]).unwrap();
                 if let Some(block) = block {
                     self.difficulties[chain_id] = block.header.difficulty;
-                    self.random_sources[chain_id] = block.header.random_source;
+                    self.random_sources[chain_id] = block.header.pos_metadata.random_source;
                 } else {
                     unreachable!();
                 }
             }
 
-            let timestamp = ( get_time() / DELTA + 1 ) * DELTA ;
+            let delta = if let OperatingState::Run(delta, _) = self.operating_state {
+                let delta = delta as TimeStamp;
+                if delta!=0 && delta % DELTA == 0 {
+                    delta
+                } else {
+                    DELTA
+                }
+            } else {
+                DELTA
+            };
+            let timestamp = ( get_time() / delta + 1 ) * delta ;
             self.timestamp = if timestamp > self.timestamp {
                 timestamp
             } else {
-                self.timestamp + DELTA
+                self.timestamp + delta
             };
 
             {
-                //two toy keys and a toy coin
+                //two toy keys and a toy utxo
                 let pk = VrfPublicKey::default();
                 let sk = VrfSecretKey::default();
-                let mut coin = Coin::default();
-                coin.value = 100;
-                debug!("Mine at time {} with coin {:?}", self.timestamp, coin);
+                let mut utxo = Utxo::default();
+                utxo.value = 100;
+                debug!("Mine at time {} with utxo {:?}", self.timestamp, utxo);
                 for chain_id in 0..(FIRST_VOTER_INDEX + NUM_VOTER_CHAINS) as usize {
                     let input = VrfInput {
                         random_source: self.random_sources[chain_id],
@@ -262,22 +271,23 @@ impl Context {
                     };
                     let (vrf_value, vrf_proof) = vrf_evaluate(&pk, &sk, &input);
                     // Check if we successfully mined a block
-                    if let Some(sortition_id) = get_sortition_id(&vrf_value , &self.difficulties[chain_id], coin.value) {//TODO difficulty * stake
-                        // Create proof
-                        let proof = Proof {
+                    if let Some(sortition_id) = get_sortition_id(&vrf_value , &self.difficulties[chain_id], utxo.value) {//TODO difficulty * stake
+                        let random_source = self.random_sources[chain_id];//the next random source TODO update it by check "c"
+                        // Create metadata
+                        let metadata = Metadata {
                             vrf_proof,
                             vrf_output: vrf_value,
-                            coin: coin.clone(),
+                            vrf_pubkey: pk.clone(),
+                            utxo: utxo.clone(),
                             parent_random_source: self.random_sources[chain_id],
                             timestamp: self.timestamp,
+                            random_source,
                         };
-                        let random_source = self.random_sources[chain_id];//TODO update it
                         let difficulty = self.difficulties[chain_id];
                         // Create header
                         let header = Header {
                             parent: self.parents[chain_id],
-                            pos_proof: proof,
-                            random_source,
+                            pos_metadata: metadata,
                             content_root: H256::default(),
                             extra_content: self.extra_content.clone(),
                             difficulty,
@@ -326,7 +336,7 @@ impl Context {
                         };
 
                         if !skip {
-                            trace!("Mine a block {:?} at time {} with coin {:?} on chain_id {}", mined_block, self.timestamp, coin, chain_id);
+                            trace!("Mine a block {:?} at time {} with utxo {:?} on chain_id {}", mined_block, self.timestamp, utxo, chain_id);
                             PERFORMANCE_COUNTER.record_mine_block(&mined_block);
                             self.blockdb.insert(&mined_block).unwrap();
                             new_validated_block(
@@ -559,7 +569,7 @@ impl Context {
 }
 
 /// Get the current UNIX timestamp
-fn get_time() -> u128 {
+fn get_time() -> TimeStamp {
     let cur_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH);
     match cur_time {
         Ok(v) => {
