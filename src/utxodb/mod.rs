@@ -1,12 +1,28 @@
 use crate::crypto::hash::Hashable;
 use crate::crypto::hash::H256;
 use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
-use crate::transaction::{CoinId, Input, Output, Transaction};
+use crate::transaction::{CoinId, Input, Output, Transaction, Address};
 use bincode::serialize;
 use rocksdb::*;
+use crate::block::pos_metadata::TimeStamp;
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
+pub struct OutputWithTime {
+    pub output: Output,
+    pub confirm_time: TimeStamp
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Hash, Default, Debug)]
+pub struct Utxo {
+    pub coin: CoinId,
+    pub value: u64,
+    pub owner: Address,
+    pub confirm_time: TimeStamp
+}
+
 
 pub struct UtxoDatabase {
-    pub db: rocksdb::DB, // coin id to output
+    pub db: rocksdb::DB, // coin id to outputwithtime
 }
 
 impl UtxoDatabase {
@@ -78,9 +94,10 @@ impl UtxoDatabase {
         &self,
         t: &Transaction,
         hash: H256,
-    ) -> Result<(Vec<Input>, Vec<Input>), rocksdb::Error> {
-        let mut added_coins: Vec<Input> = vec![];
-        let mut removed_coins: Vec<Input> = vec![];
+        tx_confirm_time: TimeStamp
+    ) -> Result<(Vec<Utxo>, Vec<Input>), rocksdb::Error> {
+        let mut added_utxos: Vec<Utxo> = vec![];
+        let mut removed_inputs: Vec<Input> = vec![];
 
         // use batch for the transaction
         let mut batch = rocksdb::WriteBatch::default();
@@ -95,7 +112,7 @@ impl UtxoDatabase {
         }
 
         // remove the input
-        removed_coins = t.input.clone();
+        removed_inputs = t.input.clone();
 
         // now that we have confirmed that all inputs are unspent, we will add the outputs and
         // commit to database
@@ -104,13 +121,18 @@ impl UtxoDatabase {
                 hash: hash,
                 index: idx as u32,
             };
-            batch.put(serialize(&id).unwrap(), serialize(&output).unwrap())?;
-            let coin = Input {
+            let output_with_time = OutputWithTime {
+                output: *output,
+                confirm_time: tx_confirm_time,
+            };
+            batch.put(serialize(&id).unwrap(), serialize(&output_with_time).unwrap())?;
+            let utxo = Utxo {
                 coin: id,
                 value: output.value,
                 owner: output.recipient,
+                confirm_time: tx_confirm_time
             };
-            added_coins.push(coin);
+            added_utxos.push(utxo);
         }
         // write the transaction as a batch
         // TODO: we don't write to wal here, so should the program crash, the db will be in
@@ -122,16 +144,17 @@ impl UtxoDatabase {
             PERFORMANCE_COUNTER.record_confirm_transaction(&t);
         }
 
-        return Ok((added_coins, removed_coins));
+        return Ok((added_utxos, removed_inputs));
     }
 
     pub fn remove_transaction(
         &self,
         t: &Transaction,
         hash: H256,
-    ) -> Result<(Vec<Input>, Vec<Input>), rocksdb::Error> {
+        timestamp: TimeStamp
+    ) -> Result<(Vec<Utxo>, Vec<Input>), rocksdb::Error> {
         let mut removed_coins: Vec<Input> = vec![];
-        let mut added_coins: Vec<Input> = vec![];
+        let mut added_utxos: Vec<Utxo> = vec![];
 
         // use batch when committing
         let mut batch = rocksdb::WriteBatch::default();
@@ -166,7 +189,15 @@ impl UtxoDatabase {
                 recipient: input.owner,
             };
             batch.put(serialize(&input.coin).unwrap(), serialize(&out).unwrap())?;
-            added_coins.push(input.clone());
+            // TODO: The timestamp of the original coin is unknown at this point.
+            let utxo = Utxo{
+                coin: input.coin,
+                value: input.value,
+                owner: input.owner,
+                confirm_time: 0
+            };
+            panic!("UTXO remove_transactions() should be be called because the timestamp issue is not yet fixed");
+            added_utxos.push(utxo);
         }
         // write the transaction as a batch
         // TODO: we don't write to wal here, so should the program crash, the db will be in
@@ -179,7 +210,7 @@ impl UtxoDatabase {
             PERFORMANCE_COUNTER.record_deconfirm_transaction(&t);
         }
 
-        return Ok((added_coins, removed_coins));
+        return Ok((added_utxos, removed_coins));
     }
 
     pub fn flush(&self) -> Result<(), rocksdb::Error> {

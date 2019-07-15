@@ -1,4 +1,5 @@
 use crate::block::{Block, Content};
+use crate::block::pos_metadata::TimeStamp;
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
 use crate::crypto::hash::{Hashable, H256};
@@ -7,7 +8,7 @@ use crate::miner::memory_pool::MemoryPool;
 use crate::network::message;
 use crate::network::server::Handle as ServerHandle;
 use crate::transaction::{Input, Transaction};
-use crate::utxodb::UtxoDatabase;
+use crate::utxodb::{UtxoDatabase,  Utxo};
 use crate::wallet::Wallet;
 use crossbeam::channel;
 use std::collections::{HashMap, HashSet};
@@ -69,7 +70,7 @@ impl LedgerManager {
                 let (mut added_tx, mut removed_tx) = tx_diff_rx.recv().unwrap();
 
                 // dispatch transactions
-                for (t, h) in removed_tx.drain(..).rev() {
+                for (tx, h, ts) in removed_tx.drain(..).rev() {
                     // drain the notification channel so that we mark all finished transaction as
                     // finished
                     for processed in notification_rx.try_iter() {
@@ -82,7 +83,7 @@ impl LedgerManager {
                     // collect the tx hash of all coins this tx will touch
                     let mut touched_coin_transaction_hash: HashSet<H256> = HashSet::new();
                     touched_coin_transaction_hash.insert(h); // the transaction hash of all output coins
-                    for input in &t.input {
+                    for input in &tx.input {
                         touched_coin_transaction_hash.insert(input.coin.hash); // tx hash of input coin
                     }
 
@@ -102,9 +103,9 @@ impl LedgerManager {
                         scoreboard.insert(hash);
                     }
                     transaction_coins.insert(h, touched);
-                    transaction_tx.send((false, t, h)).unwrap();
+                    transaction_tx.send((false, tx, h, ts)).unwrap();
                 }
-                for (t, h) in added_tx.drain(..) {
+                for (tx, h, ts) in added_tx.drain(..) {
                     // drain the notification channel so that we mark all finished transaction as
                     // finished
                     for processed in notification_rx.try_iter() {
@@ -117,7 +118,7 @@ impl LedgerManager {
                     // collect the tx hash of all coins this tx will touch
                     let mut touched_coin_transaction_hash: HashSet<H256> = HashSet::new();
                     touched_coin_transaction_hash.insert(h); // the transaction hash of all output coins
-                    for input in &t.input {
+                    for input in &tx.input {
                         touched_coin_transaction_hash.insert(input.coin.hash); // tx hash of input coin
                     }
 
@@ -137,7 +138,7 @@ impl LedgerManager {
                         scoreboard.insert(hash);
                     }
                     transaction_coins.insert(h, touched);
-                    transaction_tx.send((true, t, h)).unwrap();
+                    transaction_tx.send((true, tx, h, ts)).unwrap();
                 }
             }
         });
@@ -164,9 +165,9 @@ impl LedgerManager {
 struct UtxoManager {
     utxodb: Arc<UtxoDatabase>,
     /// Channel for dispatching jobs (add/delete, transaction, hash of transaction).
-    transaction_chan: channel::Receiver<(bool, Transaction, H256)>,
+    transaction_chan: channel::Receiver<(bool, Transaction, H256, TimeStamp)>,
     /// Channel for returning added and removed coins.
-    coin_chan: channel::Sender<(Vec<Input>, Vec<Input>)>,
+    coin_chan: channel::Sender<(Vec<Utxo>, Vec<Input>)>,
     /// Channel for notifying the dispatcher about the completion of processing this transaction.
     notification_chan: channel::Sender<H256>,
 }
@@ -183,12 +184,12 @@ impl UtxoManager {
 
     fn worker_loop(&self) {
         loop {
-            let (add, transaction, hash) = self.transaction_chan.recv().unwrap();
+            let (add, transaction, hash, timestamp) = self.transaction_chan.recv().unwrap();
             if add {
-                let diff = self.utxodb.add_transaction(&transaction, hash).unwrap();
+                let diff = self.utxodb.add_transaction(&transaction, hash, timestamp).unwrap();
                 self.coin_chan.send(diff).unwrap();
             } else {
-                let diff = self.utxodb.remove_transaction(&transaction, hash).unwrap();
+                let diff = self.utxodb.remove_transaction(&transaction, hash, timestamp).unwrap();
                 self.coin_chan.send(diff).unwrap();
             }
             self.notification_chan.send(hash).unwrap();
@@ -199,43 +200,43 @@ impl UtxoManager {
 fn update_transaction_sequence(
     blockdb: &BlockDatabase,
     chain: &BlockChain,
-) -> (Vec<(Transaction, H256)>, Vec<(Transaction, H256)>) {
+) -> (Vec<(Transaction, H256, TimeStamp)>, Vec<(Transaction, H256, TimeStamp)>) {
     let diff = chain.update_ledger().unwrap();
     PERFORMANCE_COUNTER.record_deconfirm_transaction_blocks(diff.1.len());
 
     // gather the transaction diff
-    let mut add: Vec<(Transaction, H256)> = vec![];
-    let mut remove: Vec<(Transaction, H256)> = vec![];
-    for hash in diff.0 {
+    let mut add: Vec<(Transaction, H256, TimeStamp)> = vec![];
+    let mut remove: Vec<(Transaction, H256, TimeStamp)> = vec![];
+    for (hash, timestamp) in diff.0 {
         let block = blockdb.get(&hash).unwrap().unwrap();
         PERFORMANCE_COUNTER.record_confirm_transaction_block(&block);
         let content = match block.content {
             Content::Transaction(data) => data,
             _ => unreachable!(),
         };
-        let mut transactions = content
+        let mut transactions_with_timestamps = content
             .transactions
             .iter()
-            .map(|t| (t.clone(), t.hash()))
+            .map(|t| (t.clone(), t.hash(), timestamp))
             .collect();
         // TODO: precompute the hash here. Note that although lazy-eval for tx hash, and we could have
         // just called hash() here without storing the results (the results will be cached in the struct),
         // such function call will be optimized away by LLVM. As a result, we have to manually pass the hash
-        // here. The same for added transactions below. This is a very ugly hack.
-        add.append(&mut transactions);
+        // here. The same for added transactions_with_timestamps below. This is a very ugly hack.
+        add.append(&mut transactions_with_timestamps);
     }
-    for hash in diff.1 {
+    for (hash, timestamp) in diff.1 {
         let block = blockdb.get(&hash).unwrap().unwrap();
         let content = match block.content {
             Content::Transaction(data) => data,
             _ => unreachable!(),
         };
-        let mut transactions = content
+        let mut transactions_with_timestamps = content
             .transactions
             .iter()
-            .map(|t| (t.clone(), t.hash()))
+            .map(|t| (t.clone(), t.hash(), timestamp))
             .collect();
-        remove.append(&mut transactions);
+        remove.append(&mut transactions_with_timestamps);
     }
     return (add, remove);
 }

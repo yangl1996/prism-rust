@@ -1,5 +1,5 @@
 pub mod header;
-pub mod proof;
+pub mod pos_metadata;
 pub mod proposer;
 pub mod transaction;
 pub mod voter;
@@ -21,10 +21,7 @@ impl Block {
     /// Create a new block.
     pub fn new(
         parent: H256,
-        parent_random_source: header::RandomSource,
-        timestamp: u128,
-        pos_proof: proof::Proof,
-        random_source: header::RandomSource,
+        pos_metadata: pos_metadata::Metadata,
         content_root: H256,
         extra_content: [u8; 32],
         difficulty: H256,
@@ -33,8 +30,7 @@ impl Block {
     ) -> Self {
         let header = header::Header::new(
             parent,
-            pos_proof,
-            random_source,
+            pos_metadata,
             content_root,
             extra_content,
             difficulty,

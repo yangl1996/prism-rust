@@ -1,7 +1,7 @@
 mod proposer_block;
 mod transaction;
 mod voter_block;
-use crate::block::{Block, Content, proof};
+use crate::block::{Block, Content, pos_metadata};
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
 use crate::config::*;

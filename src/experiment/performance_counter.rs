@@ -141,7 +141,7 @@ impl Counter {
     }
 
     pub fn record_receive_block(&self, b: &Block) {
-        let mined_time = b.header.pos_proof.timestamp;
+        let mined_time = b.header.pos_metadata.timestamp;
         let current_time = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap()
@@ -239,7 +239,7 @@ impl Counter {
     }
 
     pub fn record_confirm_transaction_block(&self, b: &Block) {
-        let mined_time = b.header.pos_proof.timestamp;
+        let mined_time = b.header.pos_metadata.timestamp;
         let current_time = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap()

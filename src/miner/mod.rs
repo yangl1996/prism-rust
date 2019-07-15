@@ -1,7 +1,7 @@
 pub mod memory_pool;
 
 use crate::block::header::{Header, RandomSource};
-use crate::block::{proposer, transaction, voter};
+use crate::block::{proposer, transaction, voter, pos_metadata};
 use crate::block::{Block, Content};
 use crate::block::proof::{Coin,Proof};
 use crate::blockchain::BlockChain;
@@ -271,7 +271,7 @@ impl Context {
                             parent_random_source: self.random_sources[chain_id],
                             timestamp: self.timestamp,
                         };
-                        let random_source = self.random_sources[chain_id];//TODO update it 
+                        let random_source = self.random_sources[chain_id];//TODO update it
                         let difficulty = self.difficulties[chain_id];
                         // Create header
                         let header = Header {
