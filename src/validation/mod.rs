@@ -7,6 +7,7 @@ use crate::blockdb::BlockDatabase;
 use crate::config::*;
 use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::merkle::verify;
+use crate::crypto::vrf::VrfOutput;
 extern crate bigint;
 use bigint::uint::U256;
 
@@ -84,6 +85,7 @@ pub fn check_block(block: &Block, blockchain: &BlockChain, blockdb: &BlockDataba
 
 // check PoW and sortition id
 pub fn check_pow_sortition_id(block: &Block) -> BlockResult {
+    /*
     let sortition_id = get_sortition_id(&block.hash(), &block.header.difficulty);
     if let Some(sortition_id) = sortition_id {
         let correct_sortition_id = match &block.content {
@@ -97,6 +99,7 @@ pub fn check_pow_sortition_id(block: &Block) -> BlockResult {
     } else {
         return BlockResult::WrongPoW;
     }
+    */
     BlockResult::Pass
 }
 
@@ -240,30 +243,24 @@ fn check_transaction_block_exists(hash: H256, blockchain: &BlockChain) -> bool {
 }
 
 /// Calculate which chain should we attach the new block to
-pub fn get_sortition_id(hash: &H256, difficulty: &H256) -> Option<u16> {
+pub fn get_sortition_id(hash: &VrfOutput, difficulty: &H256, stake: u64) -> Option<u16> {
     let hash: [u8; 32] = hash.into();
     let big_hash = U256::from_big_endian(&hash);
     let difficulty: [u8; 32] = difficulty.into();
     let big_difficulty = U256::from_big_endian(&difficulty);
-    let total_mining_range: U256 = TOTAL_MINING_RANGE.into();
+    let big_difficulty = big_difficulty / stake.into() * stake.into();//TODO: the first stake.into should be total stake
     let big_proposer_range: U256 = PROPOSER_MINING_RANGE.into();
     let big_transaction_range: U256 = TRANSACTION_MINING_RANGE.into();
+    let total_mining_range: U256 = big_proposer_range + big_transaction_range;
 
     if big_hash < big_difficulty / total_mining_range * big_proposer_range {
         // proposer block
         Some(PROPOSER_INDEX)
-    } else if big_hash
-        < big_difficulty / total_mining_range * (big_transaction_range + big_proposer_range)
-    {
+    } else if big_hash < big_difficulty {
         // transaction block
         Some(TRANSACTION_INDEX)
-    } else if big_hash < big_difficulty {
-        // voter index, figure out which voter tree we are in
-        let voter_id =
-            (big_hash - big_transaction_range - big_proposer_range) % NUM_VOTER_CHAINS.into();
-        Some(voter_id.as_u32() as u16 + FIRST_VOTER_INDEX)
     } else {
-        // Didn't pass PoW
+        // Didn't pass PoS
         None
     }
 }

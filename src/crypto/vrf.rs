@@ -9,8 +9,8 @@ pub type VrfSecretKey = SecretKey;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, Hash)]
 pub struct VrfInput{
-    random_source: [u8; 32],
-    time: [u8; 16],
+    pub random_source: [u8; 32],
+    pub time: [u8; 16],
 } //Random source and time
 
 

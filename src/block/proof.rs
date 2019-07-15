@@ -16,7 +16,7 @@ pub struct Proof {
 //TODO: Move this ds to a better place (may be wallet)w
 #[derive(Serialize, Deserialize, Clone, Debug, Default, Hash)]
 pub struct Coin{
-    pubkey: VrfPublicKey,
-    value: u64,
+    pub pubkey: VrfPublicKey,
+    pub value: u64,
     //Todo: Phase 3: proof that the coin is utxo.
 }
