@@ -5,19 +5,22 @@ blocks = [{'id': blockId, 'children': [], 'parentId': None, 'depth': 0}]
 blockId+=1
 
 numBlocks = 100
-forkProbability = 0.9
+forkProbability = 0.5
 
 while blockId<numBlocks:
     newBlock = {'id': blockId, 'children': []}
-    if random.random()<forkProbability:
-        parentBlock = random.choice(blocks)
-    else:
-        maxDepth = -1
-        parentBlock = None
+    fork = True if random.random()<forkProbability else False
+    maxDepth = -1
+    parentBlock = None
+    for b in blocks:
+        if b['depth']>maxDepth: 
+            parentBlock = b
+            maxDepth = b['depth']
+    if fork:
         for b in blocks:
-            if b['depth']>maxDepth: 
+            if b['depth']==maxDepth-1:
                 parentBlock = b
-                maxDepth = b['depth']
+                break
     newBlock['parentId'] = parentBlock['id']
     newBlock['depth'] = parentBlock['depth']+1
     parentBlock['children'].append(newBlock['id'])
