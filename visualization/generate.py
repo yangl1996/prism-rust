@@ -5,7 +5,7 @@ blocks = [{'id': blockId, 'children': [], 'parentId': None, 'depth': 0}]
 blockId+=1
 
 numBlocks = 100
-forkProbability = 0.6
+forkProbability = 0.5
 
 while blockId<numBlocks:
     newBlock = {'id': blockId, 'children': []}
@@ -16,7 +16,7 @@ while blockId<numBlocks:
         if b['depth']>maxDepth: 
             parentBlock = b
             maxDepth = b['depth']
-    if fork and maxDepth!=-1:
+    if fork and maxDepth>1:
         depths = list(range(1, maxDepth))
         selectedDepth = random.choices(depths, weights=depths, k=1)[0]
         for b in blocks:
