@@ -1,5 +1,5 @@
 use crate::crypto::hash::H256;
-use crate::block::pos_metadata::TimeStamp;
+use crate::block::pos_metadata::{RandomSource, TimeStamp};
 
 // Time delta for pos, in millisecond
 pub const DELTA: TimeStamp = 100;
@@ -66,6 +66,24 @@ lazy_static! {
             voter_hash_raw[30] = b1;
             voter_hash_raw[31] = b2;
             v.push(voter_hash_raw.into());
+        }
+        v
+    };
+    // Genesis RandomSource
+    pub static ref PROPOSER_GENESIS_RAND: RandomSource= {
+        let raw: [u8; 32] = [0; 32];
+        raw
+    };
+    pub static ref VOTER_GENESIS_RANDS: Vec<RandomSource> = {
+        let mut v: Vec<RandomSource> = vec![];
+        for chain_num in 0..NUM_VOTER_CHAINS {
+            let chain_num = chain_num as u16;
+            let b1 = ((chain_num + 1) >> 8) as u8;
+            let b2 = (chain_num + 1) as u8;
+            let mut voter_hash_raw: [u8; 32] = [0; 32];
+            voter_hash_raw[30] = b1;
+            voter_hash_raw[31] = b2;
+            v.push(voter_hash_raw);
         }
         v
     };

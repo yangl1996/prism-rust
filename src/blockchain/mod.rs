@@ -1,4 +1,4 @@
-use crate::block::{Block, Content};
+use crate::block::{Block, Content, proposer, voter};
 use crate::block::pos_metadata::TimeStamp;
 use crate::config::*;
 use crate::crypto::hash::{Hashable, H256};
@@ -24,7 +24,7 @@ const PROPOSER_LEADER_SEQUENCE_CF: &str = "PROPOSER_LEADER_SEQUENCE"; // level (
 const PROPOSER_LEDGER_ORDER_CF: &str = "PROPOSER_LEDGER_ORDER"; // level (u64) to the list of proposer blocks confirmed
                                                                 // by this level, including the leader itself. The list
                                                                 // is in the order that those blocks should live in the ledger.
-const PROPOSER_NODE_TIMESTAMP_CF: &str = "PROPOSER_NODE_TIMESTAMP"; //Timestamp of the proposer blocks
+const NODE_TIMESTAMP_CF: &str = "NODE_TIMESTAMP"; //Timestamp of the proposer blocks
 
 // Column family names for graph neighbors
 const PROPOSER_PARENT_NEIGHBOR_CF: &str = "GRAPH_PROPOSER_PARENT_NEIGHBOR"; // the proposer parent of a block
@@ -66,8 +66,8 @@ impl BlockChain {
             ColumnFamilyDescriptor::new(PROPOSER_LEADER_SEQUENCE_CF, Options::default());
         let proposer_ledger_order_cf =
             ColumnFamilyDescriptor::new(PROPOSER_LEDGER_ORDER_CF, Options::default());
-        let proposer_node_timestamp_cf =
-            ColumnFamilyDescriptor::new(PROPOSER_NODE_TIMESTAMP_CF, Options::default());
+        let node_timestamp_cf =
+            ColumnFamilyDescriptor::new(NODE_TIMESTAMP_CF, Options::default());
 
         let mut proposer_tree_level_option = Options::default();
         proposer_tree_level_option.set_merge_operator(
@@ -128,7 +128,7 @@ impl BlockChain {
             voter_node_voted_level_cf,
             proposer_leader_sequence_cf,
             proposer_ledger_order_cf,
-            proposer_node_timestamp_cf,
+            node_timestamp_cf,
             proposer_tree_level_cf,
             proposer_node_vote_cf,
             proposer_parent_neighbor_cf,
@@ -162,7 +162,6 @@ impl BlockChain {
 
     /// Destroy the existing database at the given path, create a new one, and initialize the content.
     pub fn new<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
-        let cur_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis();
 
         DB::destroy(&Options::default(), &path)?;
         let db = Self::open(&path)?;
@@ -179,7 +178,7 @@ impl BlockChain {
         let proposer_ledger_order_cf = db.db.cf_handle(PROPOSER_LEDGER_ORDER_CF).unwrap();
         let proposer_ref_neighbor_cf = db.db.cf_handle(PROPOSER_REF_NEIGHBOR_CF).unwrap();
         let transaction_ref_neighbor_cf = db.db.cf_handle(TRANSACTION_REF_NEIGHBOR_CF).unwrap();
-        let proposer_node_timestamp_cf = db.db.cf_handle(PROPOSER_NODE_TIMESTAMP_CF).unwrap();
+        let node_timestamp_cf = db.db.cf_handle(NODE_TIMESTAMP_CF).unwrap();
 
         // insert genesis blocks
         let mut wb = WriteBatch::default();
@@ -195,10 +194,11 @@ impl BlockChain {
             serialize(&(0 as u64)).unwrap(),
             serialize(&(*PROPOSER_GENESIS_HASH)).unwrap(),
         )?;
+        let genesis_timestamp = proposer::genesis().header.pos_metadata.timestamp;
         wb.put_cf(
-            proposer_node_timestamp_cf,
+            node_timestamp_cf,
             serialize(&(*PROPOSER_GENESIS_HASH)).unwrap(),
-            serialize(&(cur_time as TimeStamp)).unwrap(),
+            serialize(&genesis_timestamp).unwrap(),
         )?;
         let mut unreferred_proposers = db.unreferred_proposers.lock().unwrap();
         unreferred_proposers.insert(*PROPOSER_GENESIS_HASH);
@@ -228,13 +228,6 @@ impl BlockChain {
         // voter genesis blocks
         let mut voter_ledger_tips = db.voter_ledger_tips.lock().unwrap();
         for chain_num in 0..NUM_VOTER_CHAINS {
-            /* Gerui: I think this can be deleted
-            wb.put_cf(
-                proposer_parent_neighbor_cf,
-                serialize(&VOTER_GENESIS_HASHES[chain_num as usize]).unwrap(),
-                serialize(&(*PROPOSER_GENESIS_HASH)).unwrap(),
-            )?;
-            */
             wb.merge_cf(
                 vote_neighbor_cf,
                 serialize(&VOTER_GENESIS_HASHES[chain_num as usize]).unwrap(),
@@ -260,6 +253,12 @@ impl BlockChain {
                 serialize(&VOTER_GENESIS_HASHES[chain_num as usize]).unwrap(),
                 serialize(&(chain_num as u16)).unwrap(),
             )?;
+            let genesis_timestamp = voter::genesis(chain_num).header.pos_metadata.timestamp;
+            wb.put_cf(
+                node_timestamp_cf,
+                serialize(&VOTER_GENESIS_HASHES[chain_num as usize]).unwrap(),
+                serialize(&genesis_timestamp).unwrap(),
+                )?;
             let mut voter_best = db.voter_best[chain_num as usize].lock().unwrap();
             voter_best.0 = VOTER_GENESIS_HASHES[chain_num as usize];
             drop(voter_best);
@@ -285,7 +284,7 @@ impl BlockChain {
         let voter_parent_neighbor_cf = self.db.cf_handle(VOTER_PARENT_NEIGHBOR_CF).unwrap();
         let transaction_ref_neighbor_cf = self.db.cf_handle(TRANSACTION_REF_NEIGHBOR_CF).unwrap();
         let proposer_ref_neighbor_cf = self.db.cf_handle(PROPOSER_REF_NEIGHBOR_CF).unwrap();
-        let proposer_node_timestamp_cf = self.db.cf_handle(PROPOSER_NODE_TIMESTAMP_CF).unwrap();
+        let node_timestamp_cf = self.db.cf_handle(NODE_TIMESTAMP_CF).unwrap();
 
         let mut wb = WriteBatch::default();
 
@@ -310,6 +309,8 @@ impl BlockChain {
         // insert parent link
         let block_hash = block.hash();
         let parent_hash = block.header.parent;
+        // TODO do we need timestamp for transaction block?
+        put_value!(node_timestamp_cf, block_hash, block.header.pos_metadata.timestamp);
 
         match &block.content {
             Content::Proposer(content) => {
@@ -320,7 +321,6 @@ impl BlockChain {
                 let mut refed_proposer: Vec<H256> = vec![parent_hash];
                 refed_proposer.extend(&content.proposer_refs);
                 put_value!(proposer_ref_neighbor_cf, block_hash, refed_proposer);
-                put_value!(proposer_node_timestamp_cf, block_hash, block.header.pos_metadata.timestamp);
                 put_value!(
                     transaction_ref_neighbor_cf,
                     block_hash,
@@ -454,7 +454,7 @@ impl BlockChain {
         let proposer_ledger_order_cf = self.db.cf_handle(PROPOSER_LEDGER_ORDER_CF).unwrap();
         let proposer_ref_neighbor_cf = self.db.cf_handle(PROPOSER_REF_NEIGHBOR_CF).unwrap();
         let transaction_ref_neighbor_cf = self.db.cf_handle(TRANSACTION_REF_NEIGHBOR_CF).unwrap();
-        let proposer_node_timestamp_cf = self.db.cf_handle(PROPOSER_NODE_TIMESTAMP_CF).unwrap();
+        let node_timestamp_cf = self.db.cf_handle(NODE_TIMESTAMP_CF).unwrap();
 
         macro_rules! get_value {
             ($cf:expr, $key:expr) => {{
@@ -653,7 +653,7 @@ impl BlockChain {
                     get_value!(proposer_ledger_order_cf, level as u64).unwrap();
                 delete_value!(proposer_ledger_order_cf, level as u64);
                 let original_leader_block: H256 = get_value!(proposer_leader_sequence_cf, level as u64).unwrap()        ;
-                let timestamp_original_leader = get_value!(proposer_node_timestamp_cf, original_leader_block).unwrap();
+                let timestamp_original_leader = get_value!(node_timestamp_cf, original_leader_block).unwrap();
                 for block in &original_ledger {
                     unconfirmed_proposers.insert(*block);
                     removed.push((*block, timestamp_original_leader));
@@ -674,7 +674,7 @@ impl BlockChain {
                     // Get the sequence of blocks by doing a depth-first traverse
                     let mut order: Vec<(H256, TimeStamp)> = vec![];
                     let mut stack: Vec<H256> = vec![leader];
-                    let timestamp_leader = get_value!(proposer_node_timestamp_cf, leader).unwrap();
+                    let timestamp_leader = get_value!(node_timestamp_cf, leader).unwrap();
                     while let Some(top) = stack.pop() {
                         // if it's already
                         // confirmed before, ignore it
@@ -787,6 +787,51 @@ impl BlockChain {
         return Ok((added_votes, removed_votes));
     }
 
+    /// Given two voter blocks on the same chain, calculate which is longer based on s-truncated
+    /// rule. Return true if `to` is longer.
+    fn s_truncated_rule(&self, from: H256, to: H256) -> Result<bool> {
+        // get cf handles
+        let voter_node_level_cf = self.db.cf_handle(VOTER_NODE_LEVEL_CF).unwrap();
+        let vote_neighbor_cf = self.db.cf_handle(VOTE_NEIGHBOR_CF).unwrap();
+        let voter_parent_neighbor_cf = self.db.cf_handle(VOTER_PARENT_NEIGHBOR_CF).unwrap();
+
+        macro_rules! get_value {
+            ($cf:expr, $key:expr) => {{
+                deserialize(&self.db.get_cf($cf, serialize(&$key).unwrap())?.unwrap()).unwrap()
+            }};
+        }
+
+        let mut to_chain = vec![to];
+        let mut from_chain = vec![from];
+
+        let mut to: H256 = to;
+        let mut from: H256 = from;
+
+        let mut to_level: u64 = get_value!(voter_node_level_cf, to);
+        let mut from_level: u64 = get_value!(voter_node_level_cf, from);
+
+        // trace back to forking point
+        while to_level != from_level {
+            if to_level > from_level {
+                to = get_value!(voter_parent_neighbor_cf, to);
+                to_level -= 1;
+                to_chain.push(to);
+            } else if to_level < from_level {
+                from = get_value!(voter_parent_neighbor_cf, from);
+                from_level -= 1;
+                from_chain.push(from);
+            }
+        }
+        while to != from {
+            to = get_value!(voter_parent_neighbor_cf, to);
+            to_level -= 1;
+            to_chain.push(to);
+            from = get_value!(voter_parent_neighbor_cf, from);
+            from_level -= 1;
+            from_chain.push(from);
+        }
+        return Ok(false);
+    }
     pub fn best_proposer(&self) -> Result<H256> {
         let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
 
@@ -833,7 +878,7 @@ impl BlockChain {
         let voter_node_voted_level_cf = self.db.cf_handle(VOTER_NODE_VOTED_LEVEL_CF).unwrap();
         let proposer_node_level_cf = self.db.cf_handle(PROPOSER_NODE_LEVEL_CF).unwrap();
         let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
-        let proposer_node_timestamp_cf = self.db.cf_handle(PROPOSER_NODE_TIMESTAMP_CF).unwrap();
+        let node_timestamp_cf = self.db.cf_handle(NODE_TIMESTAMP_CF).unwrap();
         // get the deepest voted level
         let first_vote_level: u64 = deserialize(
             &self
@@ -864,7 +909,7 @@ impl BlockChain {
             let proposer_timestamp: TimeStamp = deserialize(
                 &self
                 .db
-                .get_cf(proposer_node_timestamp_cf, serialize(&blocks[0]).unwrap())?
+                .get_cf(node_timestamp_cf, serialize(&blocks[0]).unwrap())?
                 .unwrap(),
                 )
                 .unwrap();

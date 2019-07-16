@@ -180,7 +180,7 @@ impl Context {
             .send(ContextUpdateSignal::NewProposerBlock).unwrap();
         for voter_chain in 0..NUM_VOTER_CHAINS {
             self.context_update_tx
-                .send(ContextUpdateSignal::NewVoterBlock(voter_chain as u16)).unwrap();
+                .send(ContextUpdateSignal::NewVoterBlock(voter_chain)).unwrap();
         }
 
         // main mining loop

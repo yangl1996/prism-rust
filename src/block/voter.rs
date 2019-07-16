@@ -49,7 +49,7 @@ impl Hashable for Content {
 pub fn genesis(chain_num: u16) -> Block {
     let all_zero: [u8; 32] = [0; 32];
     let mut metadata = Metadata::default();
-    metadata.random_source = (&VOTER_GENESIS_HASHES[chain_num as usize]).into();
+    metadata.random_source = VOTER_GENESIS_RANDS[chain_num as usize].clone();
     let content = Content {
         chain_number: chain_num,
         votes: vec![],

@@ -52,7 +52,8 @@ pub fn genesis() -> Block {
         proposer_refs: vec![],
     };
     let mut metadata = Metadata::default();
-    metadata.random_source = (&*PROPOSER_GENESIS_HASH).into();
+    // TODO metadata.timestamp
+    metadata.random_source = PROPOSER_GENESIS_RAND.clone();
     let all_zero: [u8; 32] = [0; 32];
     // TODO: this will not pass validation.
     return Block::new(
