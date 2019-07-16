@@ -81,14 +81,21 @@ if(mock){
       const sourceNodeId = Math.floor(Math.random() * Math.floor(nodeIndex))
 
       newBlock.sourceNodeId = sourceNodeId
+      const prevRootY = root.y
       layoutTree(root)
+      root.y = prevRootY ? prevRootY : root.y
       longestChainBlocks.push(newBlock)
+      for(let i=0; i<longestChainBlocks.length; i++){
+          if(longestChainBlocks[i].id!=='0')
+            longestChainBlocks[i].y = longestChainBlocks[i].parent.y+2*longestChainBlockSize
+      }
       links.push({source: newBlock,
                   target: newBlock.parent, id: `${newBlock.id}-${newBlock.parent.id}`})
       pingNode(sourceNodeId)
       drawLongestChain()
       index++
-    }, 3*t)
+      if(index>blocks.length) interval.stop()
+    }, 4*t)
   }
 }
 
@@ -99,4 +106,3 @@ let simulateAttack = () => {
     addMaliciousBlock(proposerBlockId, parent, sourceNodeId, transactionBlockIds)
     proposerBlockId++
 }
-

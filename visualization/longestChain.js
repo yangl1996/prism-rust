@@ -67,20 +67,28 @@ let longestChainScreen = svg.append('g')
 let longestChainBlocksGroup = longestChainScreen.append('g').attr('id', 'longestChainBlocks')
 let longestChainLinksGroup = longestChainScreen.append('g').attr('id', 'longestChainLinks')
 
+let computeLongestChain = () => {
+  let block = longestChainBlocks.reduce( (prev, current) => {
+    return (prev.depth > current.depth) ? prev : current
+  })
+  let depth = 0
+  while(block!==null){
+    if(depth>6) block.finalized = true
+    block = block.parent
+    depth++
+  }  
+}
 
 let drawLongestChain = () => {
-    const lowestBlock = longestChainBlocks.reduce( (prev, current) => {
-      return (prev.depth > current.depth) ? prev : current
-    })
-    const finalizationDepth = lowestBlock.depth-6
-    scrollLongestChain()
+    computeLongestChain()
+
     // Create data join
     let longestChainBlock = longestChainBlocksGroup.selectAll('.longestChainBlock').data(longestChainBlocks, d => 'longestChainBlock'+d.id)
 
     longestChainBlock
            .transition()
            .duration(t)
-           .style('fill-opacity', d => d.depth<=finalizationDepth ? 1.0 : 0.4)
+           .style('fill-opacity', d => d.finalized ? 1.0 : 0.4)
            .attr('x', d => { 
                return d.x-longestChainBlockSize/2
            })
@@ -141,19 +149,21 @@ let drawLongestChain = () => {
         .transition()
         .delay(1)
         .attr('marker-end', 'url(#small-arrow)')
+        .on('end', () => scrollLongestChain())
+        .on('interrupt', () => scrollLongestChain())
     // Remove extra links
     link.exit().remove()
+
 }
+
 let scrollLongestChain = () => {
   // Check if last block is below appropriate height
-/*
   let lowestBlock = longestChainBlocks[0]
   for(let i=0; i<longestChainBlocks.length; i++)
     if(lowestBlock.y<longestChainBlocks[i].y){
       lowestBlock = longestChainBlocks[i]
     }
-  console.log(lowestBlock)
-  if(lowestBlock.y-2*longestChainBlockSize<height-0.4*height)
+  if(lowestBlock.y-2*longestChainBlockSize<height-0.5*height)
     return false
   // Move proposer blocks by -2*longestChainBlockSize
   longestChainBlocksGroup.selectAll('rect')
@@ -163,16 +173,13 @@ let scrollLongestChain = () => {
             d.y = d.y-2*longestChainBlockSize
             return d.y
           })
-
   longestChainLinksGroup.selectAll('.chainLink')
     .transition()
     .duration(t)
     .attr('d', d => {
-      d.source.y-=2*longestChainBlockSize
-      d.target.y-=2*longestChainBlockSize
       return renderLink({source: d.source, target: {x: d.target.x, y: d.target.y+longestChainBlockSize}})
     })
-*/
 }
+
 let longestChainBlocks = []
 let links = []
