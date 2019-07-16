@@ -86,7 +86,7 @@ pub fn check_block(block: &Block, blockchain: &BlockChain, blockdb: &BlockDataba
 // check PoW and sortition id
 pub fn check_pow_sortition_id(block: &Block) -> BlockResult {
     /*
-    let sortition_id = get_sortition_id(&block.hash(), &block.header.difficulty);
+    let sortition_id = check_difficulty(&block.hash(), &block.header.difficulty);
     if let Some(sortition_id) = sortition_id {
         let correct_sortition_id = match &block.content {
             Content::Proposer(_) => PROPOSER_INDEX,
@@ -253,7 +253,9 @@ fn check_transaction_block_exists(hash: H256, blockchain: &BlockChain) -> bool {
 }
 
 /// Calculate which chain should we attach the new block to
-pub fn get_sortition_id(hash: &VrfOutput, difficulty: &H256, stake: u64) -> Option<u16> {
+/// Returns Some(chain_id) where chain_id=0 for proposer or voter, chain_id=1 for transaction block
+/// Returns None for not passing difficulty validation
+pub fn check_difficulty(hash: &VrfOutput, difficulty: &H256, stake: u64) -> Option<u16> {
     let hash: [u8; 32] = hash.into();
     let big_hash = U256::from_big_endian(&hash);
     let difficulty: [u8; 32] = difficulty.into();
@@ -278,15 +280,15 @@ pub fn get_sortition_id(hash: &VrfOutput, difficulty: &H256, stake: u64) -> Opti
 #[cfg(test)]
 mod tests {
     use super::super::config::*;
-    use super::get_sortition_id;
+    use super::check_difficulty;
     use crate::crypto::hash::H256;
 
     #[test]
     fn sortition_id() {
         let difficulty = *DEFAULT_DIFFICULTY;
         let hash: H256 = [0; 32].into();
-        assert_eq!(get_sortition_id(&hash, &difficulty), Some(PROPOSER_INDEX));
+        assert_eq!(check_difficulty(&hash, &difficulty), Some(PROPOSER_INDEX));
         // This hash should fail PoW test (so result is None)
-        assert_eq!(get_sortition_id(&difficulty, &difficulty), None);
+        assert_eq!(check_difficulty(&difficulty, &difficulty), None);
     }
 }

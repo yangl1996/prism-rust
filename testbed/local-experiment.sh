@@ -83,11 +83,17 @@ vis_port=8000
 
 pids=""
 
+rm nodes.txt
+rm stop_nodes.sh
+
 echo "Starting ${num_nodes} Prism nodes"
 for (( i = 0; i < $num_nodes; i++ )); do
 	p2p=`expr $p2p_port + $i`
 	api=`expr $api_port + $i`
 	vis=`expr $vis_port + $i`
+    echo "nodes_$i,x,127.0.0.1,127.0.0.1,$p2p,$api,$vis" >> nodes.txt
+    echo "curl 'http://127.0.0.1:$api/transaction-generator/stop' &> /dev/null" >> stop_nodes.sh
+
 	command="$binary_path --p2p 127.0.0.1:${p2p} --api 127.0.0.1:${api} --visual 127.0.0.1:${vis} --blockdb /tmp/prism-${i}-blockdb.rocksdb --blockchaindb /tmp/prism-${i}-blockchaindb.rocksdb --utxodb /tmp/prism-${i}-utxodb.rocksdb --walletdb /tmp/prism-${i}-wallet.rocksdb -vvv --load-key ${i}.pkcs8 --fund-coins 1"
 
 	for (( j = 0; j < $i; j++ )); do
@@ -112,7 +118,7 @@ done
 echo "Starting transaction generation and mining on each node"
 for (( i = 0; i < $num_nodes; i++ )); do
 	port=`expr $api_port + $i`
-#	url="localhost:${port}/transaction-generator/set-arrival-distribution?interval=1000&distribution=uniform"
+#	url="localhost:${port}/transaction-generator/set-arrival-distribution?interval=10000&distribution=uniform"
 #	curl "$url" &> /dev/null
 #	if [ "$?" -ne 0 ]; then
 #		echo "Failed to set transaction rate for node $i"

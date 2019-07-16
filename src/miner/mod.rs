@@ -13,7 +13,7 @@ use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 use crate::handler::new_validated_block;
 use crate::network::message::Message;
 use crate::network::server::Handle as ServerHandle;
-use crate::validation::get_sortition_id;
+use crate::validation::check_difficulty;
 use crate::crypto::vrf::{VrfSecretKey, VrfPublicKey, VrfInput, vrf_evaluate, VrfOutput};
 use crate::utxodb::Utxo;
 use crate::wallet::Wallet;
@@ -25,7 +25,6 @@ use memory_pool::MemoryPool;
 use std::time;
 use std::time::SystemTime;
 
-use rand::distributions::Distribution;
 use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -70,9 +69,9 @@ pub struct Context {
     /// Last timestamp this miner tried
     timestamp: TimeStamp,
     extra_content: [u8;32],
-    parents: Vec<H256>,
-    difficulties: Vec<H256>,
-    random_sources: Vec<RandomSource>,
+    parents: [H256; (FIRST_VOTER_INDEX + NUM_VOTER_CHAINS) as usize],
+    difficulties: [H256; (FIRST_VOTER_INDEX + NUM_VOTER_CHAINS) as usize],
+    random_sources: [RandomSource; (FIRST_VOTER_INDEX + NUM_VOTER_CHAINS) as usize],
 }
 
 #[derive(Clone)]
@@ -92,15 +91,9 @@ pub fn new(
 ) -> (Context, Handle) {
     let (signal_chan_sender, signal_chan_receiver) = unbounded();
 
-    let mut parents: Vec<H256> = vec![];
-    let mut difficulties: Vec<H256> = vec![];
-    let mut random_sources: Vec<RandomSource> = vec![];
-
-    for _ in 0..(FIRST_VOTER_INDEX + NUM_VOTER_CHAINS) {
-        parents.push([0; 32].into());
-        difficulties.push(*DEFAULT_DIFFICULTY);
-        random_sources.push([0; 32]);
-    }
+    let parents = [H256::default(); (FIRST_VOTER_INDEX + NUM_VOTER_CHAINS) as usize];
+    let difficulties = [H256::default(); (FIRST_VOTER_INDEX + NUM_VOTER_CHAINS) as usize];
+    let random_sources = [RandomSource::default(); (FIRST_VOTER_INDEX + NUM_VOTER_CHAINS) as usize];
 
     let ctx = Context {
         blockdb: Arc::clone(blockdb),
@@ -174,8 +167,8 @@ impl Context {
     }
 
     fn miner_loop(&mut self) {
-
         // tell ourself to update all context
+        // equivalent to initialization of contexts
         self.context_update_tx
             .send(ContextUpdateSignal::NewProposerBlock).unwrap();
         for voter_chain in 0..NUM_VOTER_CHAINS {
@@ -207,6 +200,7 @@ impl Context {
                 return;
             }
 
+            // check and react to update signals
             let mut new_proposer_block: bool = false;
             let mut new_voter_block: BTreeSet<u16> = BTreeSet::new();
             for sig in self.context_update_chan.try_iter() {
@@ -245,6 +239,9 @@ impl Context {
                 }
             }
 
+            // customizable mining time step
+            // delta must be a multiple of DELTA
+            // e.g. DELTA=0.1, we can set delta=0.1,0.2,0.3,...
             let delta = if let OperatingState::Run(delta, _) = self.operating_state {
                 let delta = delta as TimeStamp;
                 if delta!=0 && delta % DELTA == 0 {
@@ -256,11 +253,12 @@ impl Context {
                 DELTA
             };
             let timestamp = ( get_time() / delta + 1 ) * delta ;
-            self.timestamp = if timestamp > self.timestamp {
-                timestamp
+            if timestamp > self.timestamp {
+                self.timestamp = timestamp;
             } else {
-                self.timestamp + delta
-            };
+                // the timestamp didn't proceed, we go over the loop again
+                continue;
+            }
 
             let mut mined_blocks = vec![];
             let mut mined_chains = BTreeSet::new();
@@ -269,7 +267,7 @@ impl Context {
             for (utxo, keypair) in coins {
                 let keypair = Keypair::from_bytes(&keypair).unwrap();
                 let vrf_pubkey: VrfPublicKey = (&keypair.public).into();
-                debug!("Mine at time {} with utxo {:?}", self.timestamp, utxo);
+                trace!("Start mining at time {} with utxo {:?}", self.timestamp, utxo);
                 for chain_id in 0..(FIRST_VOTER_INDEX + NUM_VOTER_CHAINS) as usize {
                     if mined_chains.contains(&chain_id) {
                         continue;
@@ -330,10 +328,27 @@ impl Context {
                 }
             }
             // sleep until the timestamp
+            {
+                let timestamp = self.timestamp;
+                let (s, r) = unbounded();
+                thread::spawn(move || {
+                    loop {
+                        if get_time()>=timestamp {
+                            break;
+                        }
+                    }
+                    thread::sleep(time::Duration::from_millis(1));
+                    s.send(()).unwrap();
+                }
+                );
+                r.recv().unwrap();
+            }
+            /*
             let current_time = get_time();
             if current_time < self.timestamp {
                 thread::sleep(time::Duration::from_millis((self.timestamp - current_time) as u64));
             }
+            */
             for mined_block in mined_blocks {
                 PERFORMANCE_COUNTER.record_mine_block(&mined_block);
                 self.blockdb.insert(&mined_block).unwrap();
@@ -376,7 +391,7 @@ impl Context {
         };
         let (vrf_value, vrf_proof) = vrf_evaluate(&vrf_pubkey, &keypair.secret, &input);
         // Check if we successfully mined a block
-        if let Some(sortition_id) = get_sortition_id(&vrf_value , &self.difficulties[chain_id], utxo.value) {//TODO difficulty * stake
+        if let Some(sortition_id) = check_difficulty(&vrf_value , &self.difficulties[chain_id], utxo.value) {//TODO difficulty * stake
             if chain_id as u16 != PROPOSER_INDEX && sortition_id != PROPOSER_INDEX {
                 // on voter chain, the sortition result should be PROPOSER_INDEX to match the
                 // proposer mining rate
@@ -393,65 +408,55 @@ impl Context {
                 timestamp: self.timestamp,
                 random_source,
             };
-            let difficulty = self.difficulties[chain_id];
+            // Create content
+            let content = if chain_id as u16 == PROPOSER_INDEX {
+                if sortition_id == PROPOSER_INDEX {
+                    let transaction_refs = self.blockchain.unreferred_transactions();
+                    let proposer_refs = self.blockchain.unreferred_proposers();
+                    // TODO remove parent from refs
+                    Content::Proposer(proposer::Content {
+                        transaction_refs,
+                        proposer_refs,
+                    })
+                } else {
+                    // sortition result is a transaction block
+                    let mempool = self.mempool.lock().unwrap();
+                    let transactions = mempool.get_transactions(TX_BLOCK_TRANSACTIONS);
+                    drop(mempool);
+                    Content::Transaction(transaction::Content {
+                        transactions,
+                    })
+                }
+            } else {
+                let votes = self.blockchain.unvoted_proposer(&self.parents[chain_id], &self.blockchain.best_proposer().unwrap(), self.timestamp).unwrap();
+                Content::Voter(voter::Content {
+                    chain_number: chain_id as u16 - FIRST_VOTER_INDEX,
+                    votes,
+                })
+            };
+            let difficulty = self.difficulties[chain_id];// FUTURE: Adpative difficulty here
             // Create header
-            let header = Header {
+            let mut header = Header {
                 parent: self.parents[chain_id],
                 pos_metadata: metadata,
-                content_root: H256::default(),
+                content_root: content.hash(),
                 extra_content: self.extra_content.clone(),
                 difficulty,
                 header_signature: vec![],
             };
+            // Update signature of header
+            let raw_unsigned = bincode::serialize(&header).unwrap();
+            header.header_signature = keypair.sign(&raw_unsigned).to_bytes().to_vec();
             // Create a block
-            let mined_block: Block = self.produce_block(chain_id as u16, sortition_id, header, &keypair);
+            let mined_block = Block::from_header(
+                header,
+                content,
+                );
             Some(mined_block)
         } else {
             None
         }
     }
-
-    /// Given a valid vrf value, and chain id, sortition it and create the block
-    fn produce_block(&self, chain_id: u16, sortition_id: u16, mut header: Header, keypair: &Keypair) -> Block {
-        let content = if chain_id == PROPOSER_INDEX {
-            if sortition_id == PROPOSER_INDEX {
-                let transaction_refs = self.blockchain.unreferred_transactions();
-                let proposer_refs = self.blockchain.unreferred_proposers();
-                // TODO remove parent from refs
-                Content::Proposer(proposer::Content {
-                    transaction_refs,
-                    proposer_refs,
-                })
-            } else {
-                // sortition result is a transaction block
-                let mempool = self.mempool.lock().unwrap();
-                let transactions = mempool.get_transactions(TX_BLOCK_TRANSACTIONS);
-                drop(mempool);
-                Content::Transaction(transaction::Content {
-                    transactions,
-                })
-            }
-        } else {
-            let votes = self.blockchain.unvoted_proposer(&header.parent, &self.blockchain.best_proposer().unwrap(), self.timestamp).unwrap();
-            Content::Voter(voter::Content {
-                chain_number: (chain_id - FIRST_VOTER_INDEX) as u16,
-                votes,
-            })
-        };
-        // Update content hash of header
-        header.content_root = content.hash();
-        // Update signature of header
-        let raw_unsigned = bincode::serialize(&header).unwrap();
-        header.header_signature = keypair.sign(&raw_unsigned).to_bytes().to_vec();
-        // Create a block
-        let mined_block = Block::from_header(
-            header,
-            content,
-            );
-
-        return mined_block;
-    }
-
 }
 
 /// Get the current UNIX timestamp

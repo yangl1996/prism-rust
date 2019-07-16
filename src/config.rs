@@ -1,10 +1,12 @@
 use crate::crypto::hash::H256;
 use crate::block::pos_metadata::{RandomSource, TimeStamp};
 
-// Time delta for pos, in millisecond
+// Time step for pos, in millisecond
 pub const DELTA: TimeStamp = 100;
+// Time tau for pos, only coin older than t-tau will be used
 pub const TAU: TimeStamp = 1000;
-pub const OMEGA: TimeStamp = 10000;
+// Time u for pos, only proposer after t-u can be voted
+pub const OMEGA: TimeStamp = 20000;
 
 // Network parameters
 pub const NETWORK_DELAY: f32 = 2.0; // the expected block propagation delay (in seconds)
@@ -47,7 +49,7 @@ pub const FIRST_VOTER_INDEX: u16 = 1;
 lazy_static! {
     pub static ref DEFAULT_DIFFICULTY: H256 = {
         let mut raw: [u8; 32] = [255; 32];
-        raw[0]=0x0f;
+        raw[0]=0x0a;
         raw.into()
     };
 
