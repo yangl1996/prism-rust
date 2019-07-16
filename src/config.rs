@@ -2,7 +2,9 @@ use crate::crypto::hash::H256;
 use crate::block::pos_metadata::TimeStamp;
 
 // Time delta for pos, in millisecond
-pub const DELTA: TimeStamp = 1000;
+pub const DELTA: TimeStamp = 100;
+pub const TAU: TimeStamp = 1000;
+pub const OMEGA: TimeStamp = 10000;
 
 // Network parameters
 pub const NETWORK_DELAY: f32 = 2.0; // the expected block propagation delay (in seconds)
@@ -44,7 +46,8 @@ pub const FIRST_VOTER_INDEX: u16 = 1;
 
 lazy_static! {
     pub static ref DEFAULT_DIFFICULTY: H256 = {
-        let raw: [u8; 32] = [255; 32];
+        let mut raw: [u8; 32] = [255; 32];
+        raw[0]=0x0f;
         raw.into()
     };
 

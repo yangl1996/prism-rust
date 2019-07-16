@@ -829,10 +829,11 @@ impl BlockChain {
 
     /// Get the list of unvoted proposer blocks that a voter chain should vote for, given the tip
     /// of the particular voter chain.
-    pub fn unvoted_proposer(&self, tip: &H256, proposer_parent: &H256) -> Result<Vec<H256>> {
+    pub fn unvoted_proposer(&self, tip: &H256, proposer_parent: &H256, timestamp: TimeStamp) -> Result<Vec<H256>> {
         let voter_node_voted_level_cf = self.db.cf_handle(VOTER_NODE_VOTED_LEVEL_CF).unwrap();
         let proposer_node_level_cf = self.db.cf_handle(PROPOSER_NODE_LEVEL_CF).unwrap();
         let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
+        let proposer_node_timestamp_cf = self.db.cf_handle(PROPOSER_NODE_TIMESTAMP_CF).unwrap();
         // get the deepest voted level
         let first_vote_level: u64 = deserialize(
             &self
@@ -860,7 +861,17 @@ impl BlockChain {
                     .unwrap(),
             )
             .unwrap();
-            list.push(blocks[0]); //Note: the last vote in list could be other proposer that at the same level of proposer_parent
+            let proposer_timestamp: TimeStamp = deserialize(
+                &self
+                .db
+                .get_cf(proposer_node_timestamp_cf, serialize(&blocks[0]).unwrap())?
+                .unwrap(),
+                )
+                .unwrap();
+            if proposer_timestamp >= timestamp - OMEGA {
+                // voting rule of T - omega
+                list.push(blocks[0]); //Note: the last vote in list could be other proposer that at the same level of proposer_parent
+            }
         }
         return Ok(list);
     }

@@ -5,6 +5,12 @@ use serde::{Serialize, Deserialize};
 #[derive(Serialize, Deserialize, Clone, Debug, Default, Hash)]
 pub struct VrfPublicKey([u8; 32]); //TODO: We are using a fake public key for now
 
+impl std::convert::From<&PublicKey> for VrfPublicKey {
+    fn from(other: &PublicKey) -> Self {
+        VrfPublicKey(other.to_bytes())
+    }
+}
+
 pub type VrfSecretKey = SecretKey;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, Hash)]

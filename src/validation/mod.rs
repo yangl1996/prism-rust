@@ -124,16 +124,16 @@ pub fn check_data_availability(
 ) -> BlockResult {
     let mut missing = vec![];
 
-    // check whether the parent exists
     let parent = block.header.parent;
-    let parent_availability = check_proposer_block_exists(parent, blockchain);
-    if !parent_availability {
-        missing.push(parent);
-    }
 
     // match the block type and check content
     match &block.content {
         Content::Proposer(content) => {
+            // check whether the parent exists
+            let parent_availability = check_proposer_block_exists(parent, blockchain);
+            if !parent_availability {
+                missing.push(parent);
+            }
             // check for missing references
             let missing_refs =
                 proposer_block::get_missing_references(&content, blockchain, blockdb);
@@ -142,6 +142,11 @@ pub fn check_data_availability(
             }
         }
         Content::Voter(content) => {
+            // check whether the parent exists
+            let parent_availability = check_voter_block_exists(parent, blockchain);
+            if !parent_availability {
+                missing.push(parent);
+            }
             // check for missing references
             let missing_refs = voter_block::get_missing_references(&content, blockchain, blockdb);
             if !missing_refs.is_empty() {
@@ -149,6 +154,11 @@ pub fn check_data_availability(
             }
         }
         Content::Transaction(_) => {
+            // check whether the parent exists
+            let parent_availability = check_proposer_block_exists(parent, blockchain);
+            if !parent_availability {
+                missing.push(parent);
+            }
             // TODO: note that we don't care about blockdb here, since all blocks at this stage
             // should have been inserted into the blockdb
         }
@@ -178,7 +188,7 @@ pub fn check_content_semantic(
         }
         Content::Voter(content) => {
             // check chain number
-            if !voter_block::check_chain_number(&content, blockchain) {
+            if !voter_block::check_chain_number(&parent, &content, blockchain) {
                 return BlockResult::WrongChainNumber;
             }
             // check whether all proposer levels deeper than the one our parent voted are voted

@@ -51,11 +51,13 @@ pub fn genesis() -> Block {
         transaction_refs: vec![],
         proposer_refs: vec![],
     };
+    let mut metadata = Metadata::default();
+    metadata.random_source = (&*PROPOSER_GENESIS_HASH).into();
     let all_zero: [u8; 32] = [0; 32];
     // TODO: this will not pass validation.
     return Block::new(
         all_zero.into(),
-        Metadata::default(),
+        metadata,
         H256::default(),
         all_zero,
         *DEFAULT_DIFFICULTY,

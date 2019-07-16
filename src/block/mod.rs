@@ -146,12 +146,10 @@ impl PayloadSize for Content {
 //        parent: H256,
 //        timestamp: u128,
 //        chain_number: u16,
-//        voter_parent: H256,
 //        votes: Vec<H256>,
 //    ) -> Block {
 //        let content = Content::Voter(voter::Content {
 //            chain_number,
-//            voter_parent,
 //            votes,
 //        });
 //        let content_hash = content.hash();

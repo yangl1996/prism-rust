@@ -1,16 +1,17 @@
 use crate::crypto::hash::Hashable;
 use crate::transaction::{Address, Authorization, CoinId, Input, Output, Transaction};
 use bincode::{deserialize, serialize};
-use ed25519_dalek::{Keypair, Signature};
+use ed25519_dalek::{Keypair, Signature, KEYPAIR_LENGTH};
 use rand::rngs::OsRng;
 use rand::Rng;
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 use std::{error, fmt};
 use crate::utxodb::{UtxoDatabase, Utxo, OutputWithTime};
+use crate::block::pos_metadata::TimeStamp;
 
 pub const COIN_CF: &str = "COIN";
 pub const KEYPAIR_CF: &str = "KEYPAIR"; // &Address to &KeyPairPKCS8
@@ -155,6 +156,40 @@ impl Wallet {
             })
             .sum::<u64>();
         Ok(balance)
+    }
+
+    /// Returns all the coins before a timestamp
+    pub fn coins_before(&self, timestamp: TimeStamp) -> Result<Vec<(Utxo, [u8;KEYPAIR_LENGTH])>> {
+        let cf = self.db.cf_handle(COIN_CF).unwrap();
+        let iter = self.db.iterator_cf(cf, rocksdb::IteratorMode::Start)?;
+        let mut utxo_keypairs = vec![];
+        // one keypair should only appear once
+        let mut unique_keypairs = HashSet::new();
+        for (k,v) in iter {
+            let coin_id: CoinId = bincode::deserialize(k.as_ref()).unwrap();
+            let coin_data: OutputWithTime = bincode::deserialize(v.as_ref()).unwrap();
+            if coin_data.confirm_time > timestamp {
+                continue;
+            }
+            let keypairs = self.keypairs.lock().unwrap();
+            if let Some(v) = keypairs.get(&coin_data.output.recipient) {
+                if unique_keypairs.contains(&v.public.to_bytes()) {
+                    continue;
+                }
+                let utxo = Utxo {
+                    coin: coin_id,
+                    value: coin_data.output.value,
+                    owner: coin_data.output.recipient,
+                    confirm_time: coin_data.confirm_time,
+                };
+                utxo_keypairs.push((utxo, v.to_bytes()));
+                unique_keypairs.insert(v.public.to_bytes());
+            } else {
+                return Err(WalletError::MissingKeyPair);
+            }
+            drop(keypairs);
+        }
+        Ok(utxo_keypairs)
     }
 
     /// Create a transaction using the wallet coins
