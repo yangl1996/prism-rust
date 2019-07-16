@@ -84,10 +84,14 @@ if(mock){
       const prevRootY = root.y
       layoutTree(root)
       root.y = prevRootY ? prevRootY : root.y
+      newBlock.xShift = d3.randomUniform(-20, 20)()
+      newBlock.yShift = d3.randomUniform(-10, 0)()
       longestChainBlocks.push(newBlock)
       for(let i=0; i<longestChainBlocks.length; i++){
-          if(longestChainBlocks[i].id!=='0')
-            longestChainBlocks[i].y = longestChainBlocks[i].parent.y+2*longestChainBlockSize
+          if(longestChainBlocks[i].id!=='0'){
+            longestChainBlocks[i].y = longestChainBlocks[i].parent.y+2*longestChainBlockSize+longestChainBlocks[i].yShift
+            longestChainBlocks[i].x += longestChainBlocks[i].xShift
+          }
       }
       links.push({source: newBlock,
                   target: newBlock.parent, id: `${newBlock.id}-${newBlock.parent.id}`})
