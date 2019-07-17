@@ -18,7 +18,7 @@ use crate::crypto::vrf::{VrfSecretKey, VrfPublicKey, VrfInput, vrf_evaluate, Vrf
 use crate::utxodb::Utxo;
 use crate::wallet::Wallet;
 use ed25519_dalek::Keypair;
-use log::{trace, debug, info};
+use log::{trace, debug, info, warn};
 
 use crossbeam::channel::{unbounded, Receiver, Sender, TryRecvError};
 use memory_pool::MemoryPool;
@@ -264,7 +264,12 @@ impl Context {
             let mut mined_blocks = vec![];
             let mut mined_chains = BTreeSet::new();
             // Get all the coins that satisfy time−tau
-            let coins = self.wallet.coins_before(self.timestamp - TAU).unwrap();
+            let time_minus_tau = if self.timestamp > TAU {
+                self.timestamp - TAU
+            } else {
+                0
+            };
+            let coins = self.wallet.coins_before(time_minus_tau).unwrap();
             for (utxo, keypair) in coins {
                 let keypair = Keypair::from_bytes(&keypair).unwrap();
                 let vrf_pubkey: VrfPublicKey = (&keypair.public).into();
@@ -333,12 +338,14 @@ impl Context {
                 let timestamp = self.timestamp;
                 let (s, r) = unbounded();
                 thread::spawn(move || {
+                    let start = get_time();
+                    warn!("Plan to sleep {} ms", timestamp as i128 - start as i128);
                     loop {
                         if get_time()>=timestamp {
                             break;
                         }
+                        thread::sleep(time::Duration::from_millis(1));
                     }
-                    thread::sleep(time::Duration::from_millis(1));
                     s.send(()).unwrap();
                 }
                 );

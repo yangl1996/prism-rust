@@ -61,7 +61,7 @@ function kill_prism() {
 }
 
 
-binary_path=${PRISM_BINARY-../target/debug/prism}
+binary_path=${PRISM_BINARY-../target/release/prism}
 num_nodes=$1
 
 # generate keypairs and addresses
@@ -94,7 +94,7 @@ for (( i = 0; i < $num_nodes; i++ )); do
     echo "nodes_$i,x,127.0.0.1,127.0.0.1,$p2p,$api,$vis" >> nodes.txt
     echo "curl 'http://127.0.0.1:$api/transaction-generator/stop' &> /dev/null" >> stop_nodes.sh
 
-	command="$binary_path --p2p 127.0.0.1:${p2p} --api 127.0.0.1:${api} --visual 127.0.0.1:${vis} --blockdb /tmp/prism-${i}-blockdb.rocksdb --blockchaindb /tmp/prism-${i}-blockchaindb.rocksdb --utxodb /tmp/prism-${i}-utxodb.rocksdb --walletdb /tmp/prism-${i}-wallet.rocksdb -vvv --load-key ${i}.pkcs8 --fund-coins 1"
+	command="$binary_path --p2p 127.0.0.1:${p2p} --api 127.0.0.1:${api} --visual 127.0.0.1:${vis} --blockdb /tmp/prism-${i}-blockdb.rocksdb --blockchaindb /tmp/prism-${i}-blockchaindb.rocksdb --utxodb /tmp/prism-${i}-utxodb.rocksdb --walletdb /tmp/prism-${i}-wallet.rocksdb -vv --load-key ${i}.pkcs8 --fund-coins 100"
 
 	for (( j = 0; j < $i; j++ )); do
 		peer_port=`expr $p2p_port + $j`

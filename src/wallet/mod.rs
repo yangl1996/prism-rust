@@ -24,6 +24,8 @@ pub struct Wallet {
     db: rocksdb::DB,
     /// Keep key pair (in pkcs8 bytes) in memory for performance, it's duplicated in database as well.
     keypairs: Mutex<HashMap<Address, Keypair>>,
+    /// Keep coin ids in memory for performance, it's duplicated in database as well.
+    coin_ids: Mutex<HashSet<Vec<u8>>>,
     counter: AtomicUsize,
 }
 
@@ -71,6 +73,7 @@ impl Wallet {
         return Ok(Self {
             db: handle,
             keypairs: Mutex::new(HashMap::new()),
+            coin_ids: Mutex::new(HashSet::new()),
             counter: AtomicUsize::new(0),
         });
     }
@@ -134,12 +137,18 @@ impl Wallet {
                 let key = serialize(&utxo.coin).unwrap();
                 let val = serialize(&output_with_time).unwrap();
                 batch.put_cf(cf, &key, &val)?;
+                let mut coin_ids = self.coin_ids.lock().unwrap();
+                coin_ids.insert(key);
+                drop(coin_ids);
                 self.counter.fetch_add(1, Ordering::Relaxed);
             }
         }
         for coin in remove {
             let key = serialize(&coin.coin).unwrap();
             batch.delete_cf(cf, &key)?;
+            let mut coin_ids = self.coin_ids.lock().unwrap();
+            coin_ids.insert(key);
+            drop(coin_ids);
         }
         self.db.write(batch)?;
         Ok(())
@@ -163,8 +172,6 @@ impl Wallet {
         let cf = self.db.cf_handle(COIN_CF).unwrap();
         let iter = self.db.iterator_cf(cf, rocksdb::IteratorMode::Start)?;
         let mut utxo_keypairs = vec![];
-        // one keypair should only appear once
-        let mut unique_keypairs = HashSet::new();
         for (k,v) in iter {
             let coin_id: CoinId = bincode::deserialize(k.as_ref()).unwrap();
             let coin_data: OutputWithTime = bincode::deserialize(v.as_ref()).unwrap();
@@ -173,9 +180,6 @@ impl Wallet {
             }
             let keypairs = self.keypairs.lock().unwrap();
             if let Some(v) = keypairs.get(&coin_data.output.recipient) {
-                if unique_keypairs.contains(&v.public.to_bytes()) {
-                    continue;
-                }
                 let utxo = Utxo {
                     coin: coin_id,
                     value: coin_data.output.value,
@@ -183,7 +187,6 @@ impl Wallet {
                     confirm_time: coin_data.confirm_time,
                 };
                 utxo_keypairs.push((utxo, v.to_bytes()));
-                unique_keypairs.insert(v.public.to_bytes());
             } else {
                 return Err(WalletError::MissingKeyPair);
             }

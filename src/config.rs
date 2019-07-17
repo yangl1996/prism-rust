@@ -16,7 +16,7 @@ pub const GAMMA: u64 = 5;
 pub const NETWORK_DELAY: f32 = 2.0; // the expected block propagation delay (in seconds)
 
 // Design parameters
-pub const NUM_VOTER_CHAINS: u16 = 10 as u16; // more chains means better latency
+pub const NUM_VOTER_CHAINS: u16 = 100 as u16; // more chains means better latency
 pub const TX_BLOCK_SIZE: u32 = 64000; // the maximum size of a transaction block (in Bytes)
 pub const TX_THROUGHPUT: u32 = 70; // the transaction throughput we want to support (in Tx/s)
 pub const TX_BLOCK_TRANSACTIONS: u32 = TX_BLOCK_SIZE / AVG_TX_SIZE;
@@ -53,7 +53,8 @@ pub const FIRST_VOTER_INDEX: u16 = 1;
 lazy_static! {
     pub static ref DEFAULT_DIFFICULTY: H256 = {
         let mut raw: [u8; 32] = [255; 32];
-        raw[0]=0x0a;
+        raw[0]=0x00;
+        raw[1]=0x03;
         raw.into()
     };
 

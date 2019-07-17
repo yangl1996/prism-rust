@@ -260,7 +260,7 @@ pub fn check_difficulty(hash: &VrfOutput, difficulty: &H256, stake: u64) -> Opti
     let big_hash = U256::from_big_endian(&hash);
     let difficulty: [u8; 32] = difficulty.into();
     let big_difficulty = U256::from_big_endian(&difficulty);
-    let big_difficulty = big_difficulty / stake.into() * stake.into();//TODO: the first stake.into should be total stake
+    let big_difficulty = big_difficulty * stake.into();//TODO: relative stake
     let big_proposer_range: U256 = PROPOSER_MINING_RANGE.into();
     let big_transaction_range: U256 = TRANSACTION_MINING_RANGE.into();
     let total_mining_range: U256 = big_proposer_range + big_transaction_range;
