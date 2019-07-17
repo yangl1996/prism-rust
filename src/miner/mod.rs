@@ -69,7 +69,8 @@ pub struct Context {
     /// Last timestamp this miner tried
     timestamp: TimeStamp,
     extra_content: [u8;32],
-    parents: [H256; (FIRST_VOTER_INDEX + NUM_VOTER_CHAINS) as usize],
+    /// Parent and level for proposer and voter chains
+    parents: [(H256, u64); (FIRST_VOTER_INDEX + NUM_VOTER_CHAINS) as usize],
     difficulties: [H256; (FIRST_VOTER_INDEX + NUM_VOTER_CHAINS) as usize],
     random_sources: [RandomSource; (FIRST_VOTER_INDEX + NUM_VOTER_CHAINS) as usize],
 }
@@ -91,7 +92,7 @@ pub fn new(
 ) -> (Context, Handle) {
     let (signal_chan_sender, signal_chan_receiver) = unbounded();
 
-    let parents = [H256::default(); (FIRST_VOTER_INDEX + NUM_VOTER_CHAINS) as usize];
+    let parents = [(H256::default(), 0); (FIRST_VOTER_INDEX + NUM_VOTER_CHAINS) as usize];
     let difficulties = [H256::default(); (FIRST_VOTER_INDEX + NUM_VOTER_CHAINS) as usize];
     let random_sources = [RandomSource::default(); (FIRST_VOTER_INDEX + NUM_VOTER_CHAINS) as usize];
 
@@ -217,7 +218,7 @@ impl Context {
             if new_proposer_block {
                 let chain_id: usize = PROPOSER_INDEX as usize;
                 self.parents[chain_id] = self.blockchain.best_proposer().unwrap();
-                let block = self.blockdb.get(&self.parents[chain_id]).unwrap();
+                let block = self.blockdb.get(&self.parents[chain_id].0).unwrap();
                 if let Some(block) = block {
                     self.difficulties[chain_id] = block.header.difficulty;
                     self.random_sources[chain_id] = block.header.pos_metadata.random_source;
@@ -230,7 +231,7 @@ impl Context {
             for voter_chain in new_voter_block {
                 let chain_id: usize = (FIRST_VOTER_INDEX + voter_chain) as usize;
                 self.parents[chain_id] = self.blockchain.best_voter(voter_chain as usize);
-                let block = self.blockdb.get(&self.parents[chain_id]).unwrap();
+                let block = self.blockdb.get(&self.parents[chain_id].0).unwrap();
                 if let Some(block) = block {
                     self.difficulties[chain_id] = block.header.difficulty;
                     self.random_sources[chain_id] = block.header.pos_metadata.random_source;
@@ -314,7 +315,7 @@ impl Context {
                         };
 
                         if !skip {
-                            trace!("Mine a block {:?} at time {} with utxo {:?} on chain_id {}", mined_block, self.timestamp, utxo, chain_id);
+                            debug!("Mine a block {:?} at time {} with utxo {:?} on chain_id {}", mined_block, self.timestamp, utxo, chain_id);
                             if chain_id as u16 == PROPOSER_INDEX {
                                 if let Content::Proposer(_) = &mined_block.content {
                                     mined_chains.insert(chain_id);
@@ -384,6 +385,7 @@ impl Context {
 
         }
     }
+
     fn pos_mining(&self, utxo: &Utxo, chain_id: usize, vrf_pubkey: &VrfPublicKey, keypair: &Keypair) -> Option<Block> {
         let input = VrfInput {
             random_source: self.random_sources[chain_id],
@@ -397,7 +399,12 @@ impl Context {
                 // proposer mining rate
                 return None;
             }
-            let random_source = (&vrf_value).into();//the next random source TODO update it by check "c"
+            // Update random source every GAMMA
+            let random_source = if (self.parents[chain_id].1 + 1) % GAMMA == 0 {
+                (&vrf_value).into()
+            } else {
+                self.random_sources[chain_id]
+            };
             // Create metadata
             let metadata = Metadata {
                 vrf_proof,
@@ -428,7 +435,7 @@ impl Context {
                     })
                 }
             } else {
-                let votes = self.blockchain.unvoted_proposer(&self.parents[chain_id], &self.blockchain.best_proposer().unwrap(), self.timestamp).unwrap();
+                let votes = self.blockchain.unvoted_proposer(&self.parents[chain_id].0, &self.blockchain.best_proposer().unwrap().0, self.timestamp).unwrap();
                 Content::Voter(voter::Content {
                     chain_number: chain_id as u16 - FIRST_VOTER_INDEX,
                     votes,
@@ -437,7 +444,7 @@ impl Context {
             let difficulty = self.difficulties[chain_id];// FUTURE: Adpative difficulty here
             // Create header
             let mut header = Header {
-                parent: self.parents[chain_id],
+                parent: self.parents[chain_id].0,
                 pos_metadata: metadata,
                 content_root: content.hash(),
                 extra_content: self.extra_content.clone(),
@@ -528,12 +535,12 @@ mod tests {
         let (ctx_update_sink, ctx_update_source) = channel();
         let (msg_tx, msg_rx) = channel();
 
-        let parent = blockchain.best_proposer().unwrap();
+        let parent = blockchain.best_proposer().unwrap().0;
         let mut content = vec![];
         content.push(Content::Proposer(proposer::Content::new( vec![], vec![] )));
         content.push(Content::Transaction(transaction::Content::new(vec![])));
         let voter_parent_hash: Vec<H256> = (0..config::NUM_VOTER_CHAINS)
-            .map(|i| blockchain.best_voter(i as usize))
+            .map(|i| blockchain.best_voter(i as usize).0)
             .collect();
         let proposer_block_votes: Vec<Vec<H256>> = (0..config::NUM_VOTER_CHAINS)
             .map(|i| {
@@ -582,7 +589,7 @@ mod tests {
             }
         }
         for chain in 0..config::NUM_VOTER_CHAINS {
-            let voter = voter_block(parent, 3,chain, blockchain.best_voter(chain as usize), vec![]);
+            let voter = voter_block(parent, 3,chain, blockchain.best_voter(chain as usize).0, vec![]);
             blockdb.insert(&voter);
             blockchain.insert_block(&voter);
             miner.update_voter_content(chain);

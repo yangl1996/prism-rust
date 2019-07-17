@@ -85,7 +85,7 @@ fn validate_block() {
             parent,
             timestamp,
             chain,
-            blockchain.best_voter(chain as usize),
+            blockchain.best_voter(chain as usize).0,
             vec![],
         );
         assert_result!(
@@ -96,7 +96,7 @@ fn validate_block() {
             parent,
             timestamp,
             chain,
-            blockchain.best_voter(chain as usize),
+            blockchain.best_voter(chain as usize).0,
             vec![proposer_1.hash()],
         );
         assert_result!(
@@ -107,7 +107,7 @@ fn validate_block() {
             parent,
             timestamp,
             chain,
-            blockchain.best_voter(chain as usize),
+            blockchain.best_voter(chain as usize).0,
             vec![proposer_1.hash(), proposer_2.hash()],
         );
         assert_result!(
@@ -118,7 +118,7 @@ fn validate_block() {
             parent,
             timestamp,
             chain,
-            blockchain.best_voter(chain as usize),
+            blockchain.best_voter(chain as usize).0,
             vec![proposer_2.hash()],
         );
         assert_result!(
@@ -130,7 +130,7 @@ fn validate_block() {
             parent,
             timestamp,
             chain,
-            blockchain.best_voter(chain as usize),
+            blockchain.best_voter(chain as usize).0,
             vec![proposer_2.hash(), proposer_1.hash()],
         );
         assert_result!(
@@ -142,7 +142,7 @@ fn validate_block() {
                 parent,
                 timestamp,
                 chain - 1,
-                blockchain.best_voter(chain as usize),
+                blockchain.best_voter(chain as usize).0,
                 vec![proposer_2.hash(), proposer_1.hash()],
             );
             assert_result!(

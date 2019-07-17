@@ -7,6 +7,10 @@ pub const DELTA: TimeStamp = 100;
 pub const TAU: TimeStamp = 1000;
 // Time u for pos, only proposer after t-u can be voted
 pub const OMEGA: TimeStamp = 20000;
+// Time s for pos, compare voter chain length using s-truncated rule
+pub const SIGMA: TimeStamp = 20000;
+// Level c for pos. change random source using c-correlated rule
+pub const GAMMA: u64 = 5;
 
 // Network parameters
 pub const NETWORK_DELAY: f32 = 2.0; // the expected block propagation delay (in seconds)

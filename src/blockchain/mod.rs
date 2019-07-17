@@ -420,8 +420,8 @@ impl BlockChain {
                 // race condition, since this update is "stateless" - we are not append/removing
                 // from a record.
                 let mut voter_best = self.voter_best[self_chain as usize].lock().unwrap();
-                // update best block
-                if self_level > voter_best.1 {
+                // update best block based on s-truncated rule
+                if self.s_truncated_rule(voter_best.0, block_hash)? {
                     PERFORMANCE_COUNTER
                         .record_update_voter_main_chain(voter_best.1 as usize, self_level as usize);
                     voter_best.0 = block_hash;
@@ -787,13 +787,13 @@ impl BlockChain {
         return Ok((added_votes, removed_votes));
     }
 
-    /// Given two voter blocks on the same chain, calculate which is longer based on s-truncated
-    /// rule. Return true if `to` is longer.
+    /// Given two voter blocks on the same chain, calculate which is better based on s-truncated
+    /// rule. Return true if `to` is better.
     fn s_truncated_rule(&self, from: H256, to: H256) -> Result<bool> {
         // get cf handles
         let voter_node_level_cf = self.db.cf_handle(VOTER_NODE_LEVEL_CF).unwrap();
-        let vote_neighbor_cf = self.db.cf_handle(VOTE_NEIGHBOR_CF).unwrap();
         let voter_parent_neighbor_cf = self.db.cf_handle(VOTER_PARENT_NEIGHBOR_CF).unwrap();
+        let node_timestamp_cf = self.db.cf_handle(NODE_TIMESTAMP_CF).unwrap();
 
         macro_rules! get_value {
             ($cf:expr, $key:expr) => {{
@@ -801,8 +801,8 @@ impl BlockChain {
             }};
         }
 
-        let mut to_chain = vec![to];
-        let mut from_chain = vec![from];
+        let mut to_chain = vec![];
+        let mut from_chain = vec![];
 
         let mut to: H256 = to;
         let mut from: H256 = from;
@@ -813,26 +813,50 @@ impl BlockChain {
         // trace back to forking point
         while to_level != from_level {
             if to_level > from_level {
+                to_chain.push(to);
                 to = get_value!(voter_parent_neighbor_cf, to);
                 to_level -= 1;
-                to_chain.push(to);
             } else if to_level < from_level {
+                from_chain.push(from);
                 from = get_value!(voter_parent_neighbor_cf, from);
                 from_level -= 1;
-                from_chain.push(from);
             }
         }
         while to != from {
+            to_chain.push(to);
             to = get_value!(voter_parent_neighbor_cf, to);
             to_level -= 1;
-            to_chain.push(to);
+            from_chain.push(from);
             from = get_value!(voter_parent_neighbor_cf, from);
             from_level -= 1;
-            from_chain.push(from);
+        }
+        // it is extension rather than forking
+        if from_chain.is_empty() {
+            return Ok(true);
+        }
+        let fork_begin_time: TimeStamp = get_value!(node_timestamp_cf, from);
+        let mut both_empty = true;//TODO: if both empty, we need to increase s?
+        while let Some(to) = to_chain.pop() {
+            if let Some(from) = from_chain.pop() {
+                let to_time: TimeStamp = get_value!(node_timestamp_cf, to);
+                let from_time: TimeStamp = get_value!(node_timestamp_cf, from);
+                if to_time <= fork_begin_time + SIGMA || from_time <= fork_begin_time + SIGMA {
+                    both_empty = false;
+                }
+                if to_time > fork_begin_time + SIGMA {
+                    return Ok(false);
+                }
+                if from_time > fork_begin_time + SIGMA {
+                    return Ok(true);
+                }
+            } else {
+                return Ok(true);
+            }
         }
         return Ok(false);
     }
-    pub fn best_proposer(&self) -> Result<H256> {
+
+    pub fn best_proposer(&self) -> Result<(H256, u64)> {
         let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
 
         let proposer_best = self.proposer_best_level.lock().unwrap();
@@ -845,14 +869,14 @@ impl BlockChain {
                 .unwrap(),
         )
         .unwrap();
-        return Ok(blocks[0]);
+        return Ok((blocks[0], level));
     }
 
-    pub fn best_voter(&self, chain_num: usize) -> H256 {
+    pub fn best_voter(&self, chain_num: usize) -> (H256, u64) {
         let voter_best = self.voter_best[chain_num].lock().unwrap();
-        let hash = voter_best.0;
+        let result = *voter_best;
         drop(voter_best);
-        return hash;
+        return result;
     }
 
     pub fn unreferred_proposers(&self) -> Vec<H256> {
@@ -2188,8 +2212,8 @@ mod tests {
     fn best_proposer_and_voter() {
         let db =
             BlockChain::new("/tmp/prism_test_blockchain_best_proposer_and_voter.rocksdb").unwrap();
-        assert_eq!(db.best_proposer().unwrap(), *PROPOSER_GENESIS_HASH);
-        assert_eq!(db.best_voter(0), VOTER_GENESIS_HASHES[0]);
+        assert_eq!(db.best_proposer().unwrap().0, *PROPOSER_GENESIS_HASH);
+        assert_eq!(db.best_voter(0).0, VOTER_GENESIS_HASHES[0]);
 
         let new_proposer_content = Content::Proposer(proposer::Content::new(vec![], vec![]));
         let new_proposer_block = Block::new(
@@ -2219,8 +2243,8 @@ mod tests {
             H256::default(),
         );
         db.insert_block(&new_voter_block).unwrap();
-        assert_eq!(db.best_proposer().unwrap(), new_proposer_block.hash());
-        assert_eq!(db.best_voter(0), new_voter_block.hash());
+        assert_eq!(db.best_proposer().unwrap().0, new_proposer_block.hash());
+        assert_eq!(db.best_voter(0).0, new_voter_block.hash());
     }
 
     #[test]
@@ -2288,7 +2312,7 @@ mod tests {
     fn unvoted_proposer() {
         let db = BlockChain::new("/tmp/prism_test_blockchain_unvoted_proposer.rocksdb").unwrap();
         assert_eq!(
-            db.unvoted_proposer(&VOTER_GENESIS_HASHES[0], &db.best_proposer().unwrap())
+            db.unvoted_proposer(&VOTER_GENESIS_HASHES[0], &db.best_proposer().unwrap().0)
                 .unwrap(),
             vec![]
         );
@@ -2319,7 +2343,7 @@ mod tests {
         );
         db.insert_block(&new_proposer_block_2).unwrap();
         assert_eq!(
-            db.unvoted_proposer(&VOTER_GENESIS_HASHES[0], &db.best_proposer().unwrap())
+            db.unvoted_proposer(&VOTER_GENESIS_HASHES[0], &db.best_proposer().unwrap().0)
                 .unwrap(),
             vec![new_proposer_block_1.hash()]
         );
@@ -2342,12 +2366,12 @@ mod tests {
         db.insert_block(&new_voter_block).unwrap();
 
         assert_eq!(
-            db.unvoted_proposer(&VOTER_GENESIS_HASHES[0], &db.best_proposer().unwrap())
+            db.unvoted_proposer(&VOTER_GENESIS_HASHES[0], &db.best_proposer().unwrap().0)
                 .unwrap(),
             vec![new_proposer_block_1.hash()]
         );
         assert_eq!(
-            db.unvoted_proposer(&new_voter_block.hash(), &db.best_proposer().unwrap())
+            db.unvoted_proposer(&new_voter_block.hash(), &db.best_proposer().unwrap().0)
                 .unwrap(),
             vec![]
         );

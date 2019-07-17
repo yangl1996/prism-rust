@@ -38,7 +38,7 @@ fn integration() {
 
     // this section we define the timestamp and macros that increment timestamp automatically
     let mut timestamp: u128 = 0;
-    let mut parent_hash = blockchain.best_proposer().unwrap();
+    let mut parent_hash = blockchain.best_proposer().unwrap().0;
     macro_rules! proposer_block {
         ( $proposer_refs:expr, $transaction_refs:expr ) => {{
             timestamp += 1;
@@ -141,11 +141,11 @@ fn integration() {
     assert!(blockchain
         .unreferred_proposers()
         .contains(&proposer_1.hash()));
-    assert_eq!(proposer_1.hash(), blockchain.best_proposer().unwrap());
+    assert_eq!(proposer_1.hash(), blockchain.best_proposer().unwrap().0);
     //create empty proposer (for proposer tree forking)
     let proposer_1_fork = proposer_block!();
     handle_block!(proposer_1_fork);
-    assert_ne!(proposer_1_fork.hash(), blockchain.best_proposer().unwrap());
+    assert_ne!(proposer_1_fork.hash(), blockchain.best_proposer().unwrap().0);
     let proposer_1_fork_2 = proposer_block!();
     handle_block!(proposer_1_fork_2);
 
@@ -161,7 +161,7 @@ fn integration() {
     assert!(blockchain
         .unreferred_proposers()
         .contains(&proposer_2.hash()));
-    assert_eq!(proposer_2.hash(), blockchain.best_proposer().unwrap());
+    assert_eq!(proposer_2.hash(), blockchain.best_proposer().unwrap().0);
     //create empty proposer (for proposer tree forking)
     let proposer_2_fork = proposer_block!();
     handle_block!(proposer_2_fork);
@@ -173,7 +173,7 @@ fn integration() {
     for chain_number in 0..config::NUM_VOTER_CHAINS {
         let v = voter_block!(
             chain_number,
-            blockchain.best_voter(chain_number as usize),
+            blockchain.best_voter(chain_number as usize).0,
             vec![proposer_1.hash(), proposer_2.hash()]
         );
         handle_block!(v);
@@ -188,7 +188,7 @@ fn integration() {
     handle_block!(transaction_3);
     let proposer_3 = proposer_block!(vec![proposer_2_fork.hash()], vec![transaction_3.hash()]);
     handle_block!(proposer_3);
-    assert_eq!(proposer_3.hash(), blockchain.best_proposer().unwrap());
+    assert_eq!(proposer_3.hash(), blockchain.best_proposer().unwrap().0);
     //create empty proposer (for proposer tree forking)
     //it's parent is proposer_1_fork_2
     parent_hash = proposer_2_fork.hash();
@@ -242,7 +242,7 @@ fn integration() {
     for chain_number in 0..config::NUM_VOTER_CHAINS {
         let v = voter_block!(
             chain_number,
-            blockchain.best_voter(chain_number as usize),
+            blockchain.best_voter(chain_number as usize).0,
             vec![proposer_4.hash(), proposer_3.hash()]
         );
         handle_block!(v);
@@ -271,7 +271,7 @@ fn integration() {
     for chain_number in 0..config::NUM_VOTER_CHAINS {
         let v = voter_block!(
             chain_number,
-            blockchain.best_voter(chain_number as usize),
+            blockchain.best_voter(chain_number as usize).0,
             vec![proposer_6.hash()]
         );
         handle_block!(v);
@@ -281,7 +281,7 @@ fn integration() {
     for chain_number in 0..config::NUM_VOTER_CHAINS {
         let v = voter_block!(
             chain_number,
-            blockchain.best_voter(chain_number as usize),
+            blockchain.best_voter(chain_number as usize).0,
             vec![proposer_5.hash()]
         );
         handle_block!(v);
@@ -300,7 +300,7 @@ fn integration() {
     for chain_number in 0..not_enough_vote {
         let v = voter_block!(
             chain_number,
-            blockchain.best_voter(chain_number as usize),
+            blockchain.best_voter(chain_number as usize).0,
             vec![proposer_7.hash()]
         );
         handle_block!(v);
@@ -311,7 +311,7 @@ fn integration() {
     for chain_number in not_enough_vote..config::NUM_VOTER_CHAINS {
         let v = voter_block!(
             chain_number,
-            blockchain.best_voter(chain_number as usize),
+            blockchain.best_voter(chain_number as usize).0,
             vec![proposer_7.hash()]
         );
         handle_block!(v);
@@ -331,7 +331,7 @@ fn integration() {
     for chain_number in 0..config::NUM_VOTER_CHAINS {
         let v = voter_block!(
             chain_number,
-            blockchain.best_voter(chain_number as usize),
+            blockchain.best_voter(chain_number as usize).0,
             vec![proposer_8.hash()]
         );
         handle_block!(v);
@@ -380,7 +380,7 @@ fn integration() {
         let v = voter_block!(chain_number, v.hash(), vec![]);
         handle_block!(v);
         //the fork is not the best
-        assert_ne!(v.hash(), blockchain.best_voter(chain_number as usize));
+        assert_ne!(v.hash(), blockchain.best_voter(chain_number as usize).0);
     }
     check_transaction_output!(transaction_8, true);
     assert_eq!(wallet.balance().unwrap(), 1 + ico_number);
@@ -420,7 +420,7 @@ fn integration() {
         let v = voter_block!(chain_number, v.hash(), vec![proposer_9.hash()]);
         handle_block!(v);
         //the fork becomes the best
-        assert_eq!(v.hash(), blockchain.best_voter(chain_number as usize));
+        assert_eq!(v.hash(), blockchain.best_voter(chain_number as usize).0);
     }
     //check the result after rolling back
     assert_eq!(blockchain.unreferred_proposers().len(), 2);
@@ -433,7 +433,7 @@ fn integration() {
         .contains(&proposer_8.hash()));
     assert_eq!(blockchain.unreferred_transactions().len(), 0);
     //although proposer_9 is leader now, it is not best proposer
-    assert_ne!(proposer_9.hash(), blockchain.best_proposer().unwrap());
+    assert_ne!(proposer_9.hash(), blockchain.best_proposer().unwrap().0);
     //only the proposer fork with proposer_9 is in ledger
     check_transaction_output!(transaction_1, true);
     check_transaction_output!(transaction_2, true);
@@ -478,7 +478,7 @@ fn integration() {
     for chain_number in 0..config::NUM_VOTER_CHAINS {
         let v = voter_block!(
             chain_number,
-            blockchain.best_voter(chain_number as usize),
+            blockchain.best_voter(chain_number as usize).0,
             vec![
                 proposer_10.hash(),
                 proposer_11.hash(),
@@ -490,7 +490,7 @@ fn integration() {
         );
         handle_block!(v);
         //the fork becomes the best
-        assert_eq!(v.hash(), blockchain.best_voter(chain_number as usize));
+        assert_eq!(v.hash(), blockchain.best_voter(chain_number as usize).0);
     }
 
     check_transaction_output!(transaction_1, true);
@@ -572,7 +572,7 @@ fn integration() {
         );
         handle_block!(v);
         //the fork becomes the best
-        assert_eq!(v.hash(), blockchain.best_voter(chain_number as usize));
+        assert_eq!(v.hash(), blockchain.best_voter(chain_number as usize).0);
     }
     let ledger = blockchain.proposer_transaction_in_ledger(100).unwrap();
     let ledger_proposer: Vec<H256> = ledger.into_iter().map(|x| x.0).collect();

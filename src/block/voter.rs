@@ -66,35 +66,3 @@ pub fn genesis(chain_num: u16) -> Block {
         BlockContent::Voter(content),
     );
 }
-
-#[cfg(test)]
-pub mod test {
-    use super::super::proposer::tests::*;
-    use super::super::transaction::tests::*;
-    use super::super::voter::Content as voter_Content; // TODO: name change to VoterContent
-    use super::super::{Block, Content};
-    use crate::crypto::hash::{Hashable, H256};
-
-    #[test]
-    fn test_hash() {
-        let block = sample_voter_content();
-        let block_hash_should_be = sample_voter_content1_hash_should_be();
-        assert_eq!(block.hash(), block_hash_should_be);
-    }
-
-    // Voter block stuff
-    pub fn sample_voter_content() -> voter_Content {
-        let chain_number = 0;
-        let voter_parent_hash =
-            (&hex!("0000000100000001000000010000000100000001000000010000000100000001")).into();
-        let proposer_block1 = sample_proposer_block1();
-        let proposer_block2 = sample_proposer_block2();
-        let proposer_block_votes = vec![proposer_block1.hash(), proposer_block2.hash()];
-        return voter_Content::new(chain_number, voter_parent_hash, proposer_block_votes);
-    }
-    pub fn sample_voter_content1_hash_should_be() -> H256 {
-        let transaction_content_hash: H256 =
-            (&hex!("72f9ab129de520ea674ef0b3b7ded5144ef76cb11d133a2bfa21b15057ed84d3")).into();
-        return transaction_content_hash;
-    }
-}
