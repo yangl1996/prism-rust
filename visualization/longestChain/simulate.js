@@ -18,6 +18,7 @@ const root = new Node
 root.id = '0'
 root.parent = null
 root.depth = 0
+root.sourceNodeId = null
 layoutTree(root)
 longestChainBlocks.push(root)
 drawLongestChain()

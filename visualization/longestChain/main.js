@@ -83,6 +83,7 @@ let computeLongestChain = () => {
 
 let drawLongestChain = () => {
     computeLongestChain()
+  console.log(longestChainBlocks)
 
     // Create data join
     let longestChainBlock = longestChainBlocksGroup.selectAll('.longestChainBlock').data(longestChainBlocks, d => 'longestChainBlock'+d.id)
@@ -109,12 +110,12 @@ let drawLongestChain = () => {
            .attr('rx', 3)
            // Cause the block to shoot from the source node's location
            .attr('x', d => { 
-               const node = d.sourceNodeId ? nodes.find(node => node.nodeId===d.sourceNodeId) : undefined
+               const node = d.sourceNodeId!==null ? nodes.find(node => node.nodeId===d.sourceNodeId) : undefined
                return node ? projection([node.longitude, node.latitude])[0] - width/3 + worldMapShift: d.x-longestChainBlockSize/2 
               }
            )
            .attr('y', d => { 
-                const node = d.sourceNodeId ? nodes.find(node => node.nodeId===d.sourceNodeId) : undefined
+                const node = d.sourceNodeId!==null ? nodes.find(node => node.nodeId===d.sourceNodeId) : undefined
                 return node ? projection([node.longitude, node.latitude])[1]+(height-0.6*height) : d.y
               }
            )
@@ -145,7 +146,6 @@ let drawLongestChain = () => {
         .attr('class', 'chainLink')
         .attr('d', d => d.source ? renderLink({source: d.source, target: d.source}) : null)
         .transition()
-        .delay(t)
         .duration(t)
         .attr('d', d => d.source ? renderLink({source: d.source, target: {x: d.target.x, y: d.target.y+longestChainBlockSize}}) : null)
         .transition()

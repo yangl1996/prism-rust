@@ -26,34 +26,22 @@ d3.json('world-continents.json', function(error) {
 })
 
 
-let pingNode = (nodeId, malicious=false) => {
-  let node = nodes.find(n => n.nodeId===nodeId)
-  if(node===undefined || malicious){
-    for(let i=0; i<nodes.length; i++){
-      if(!('nodeId' in nodes[i])){
-        nodes[i].nodeId = nodeId
-        node = nodes[i]
-        break
-      }
-    }
-    node.malicious = malicious
-    drawNodes()
-  }
-  const globalNode = globalNodesData.find(n => n.nodeId===node.nodeId)
+let pingNode = (nodeId) => {
+  const globalNode = globalNodesData.find(n => n.nodeId===nodeId)
   const isLargeNode = globalNode.nodeId===globalNodesData[0].nodeId
   for(let i=1; i<=5; i++) {
     for(let d=0; d<300; d+=100) {
         realNodesGroup.append('circle')
-            .attr('class', () => globalNode.malicious ? 'maliciousRipple' : 'ripple')
-            .attr('cx', () => isLargeNode || globalNode.malicious ? globalNode.x-12 : globalNode.x-7)
-            .attr('cy', () => isLargeNode || globalNode.malicious ? globalNode.y-28 : globalNode.y-20)
-            .attr('r', () => isLargeNode || globalNode.malicious ? 12 : 9)
+            .attr('class', 'ripple')
+            .attr('cx', () => isLargeNode ? globalNode.x-12 : globalNode.x-7)
+            .attr('cy', () => isLargeNode ? globalNode.y-28 : globalNode.y-20)
+            .attr('r', () => isLargeNode ? 12 : 9)
             .transition()
             .delay(d)
             .style('stroke-opacity', 0.7)
             .duration(0.7*t)
             .style('stroke-opacity', 0)
-            .attr('r', () => isLargeNode || globalNode.malicious ? 25 : 15)
+            .attr('r', () => isLargeNode ? 25 : 15)
             .remove()
       }
    }
@@ -124,15 +112,9 @@ const drawNodes = () => {
 
 }
 
-let addNode = (latitude, longitude) => {
-  nodes.push({latitude, longitude, nodeIndex})
-  drawNodes()
+for(let i=0; i<cities.length; i++){
+  const latitude = cities[i][0]
+  const longitude = cities[i][1]
+  nodes.push({latitude, longitude, nodeId: i})
 }
-
-while(true) {
-  if(nodes.length===cities.length) break
-  const latitude = cities[nodeIndex][0]
-  const longitude = cities[nodeIndex][1]
-  addNode(latitude, longitude)
-  nodeIndex++
-}
+drawNodes()
