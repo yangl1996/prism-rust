@@ -4,11 +4,11 @@ use crate::block::pos_metadata::{RandomSource, TimeStamp};
 // Time step for pos, in millisecond
 pub const DELTA: TimeStamp = 100;
 // Time tau for pos, only coin older than t-tau will be used
-pub const TAU: TimeStamp = 1000;
+pub const TAU: TimeStamp = 20000;
 // Time u for pos, only proposer after t-u can be voted
-pub const OMEGA: TimeStamp = 20000;
+pub const OMEGA: TimeStamp = 400000;
 // Time s for pos, compare voter chain length using s-truncated rule
-pub const SIGMA: TimeStamp = 20000;
+pub const SIGMA: TimeStamp = 400000;
 // Level c for pos. change random source using c-correlated rule
 pub const GAMMA: u64 = 5;
 

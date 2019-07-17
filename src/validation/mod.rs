@@ -287,8 +287,8 @@ mod tests {
     fn sortition_id() {
         let difficulty = *DEFAULT_DIFFICULTY;
         let hash: H256 = [0; 32].into();
-        assert_eq!(check_difficulty(&hash, &difficulty), Some(PROPOSER_INDEX));
+        assert_eq!(check_difficulty(&hash, &difficulty, 100), Some(PROPOSER_INDEX));
         // This hash should fail PoW test (so result is None)
-        assert_eq!(check_difficulty(&difficulty, &difficulty), None);
+        assert_eq!(check_difficulty(&difficulty, &difficulty, 100), None);
     }
 }

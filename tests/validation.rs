@@ -24,7 +24,7 @@ fn validate_block() {
 
     let blockchain = BlockChain::new("/tmp/prism_test_validation_blockchain.rocksdb").unwrap();
 
-    let mut parent = blockchain.best_proposer().unwrap();
+    let mut parent = blockchain.best_proposer().unwrap().0;
     let mut timestamp = 1u128;
 
     let proposer_1 = proposer_block(parent, timestamp, vec![], vec![]);
@@ -43,7 +43,7 @@ fn validate_block() {
     let proposer_ = proposer_block(generate_random_hash(), timestamp, vec![], vec![]);
     assert_result!(
         check_data_availability(&proposer_, &blockchain, &blockdb),
-        BlockResult::MissingParent(_)
+        BlockResult::MissingReferences(_)
     );
     let proposer_ = proposer_block(parent, timestamp, vec![generate_random_hash()], vec![]);
     assert_result!(
@@ -56,7 +56,7 @@ fn validate_block() {
         BlockResult::MissingReferences(_)
     );
 
-    parent = blockchain.best_proposer().unwrap();
+    parent = blockchain.best_proposer().unwrap().0;
     timestamp += 1;
 
     let proposer_2 = proposer_block(parent, timestamp, vec![], vec![]);
@@ -77,15 +77,14 @@ fn validate_block() {
         BlockResult::WrongProposerRef
     );
 
-    parent = blockchain.best_proposer().unwrap();
+    parent = blockchain.best_proposer().unwrap().0;
     timestamp += 1;
 
     for chain in 0..config::NUM_VOTER_CHAINS {
         let voter = voter_block(
-            parent,
+            blockchain.best_voter(chain as usize).0,
             timestamp,
             chain,
-            blockchain.best_voter(chain as usize).0,
             vec![],
         );
         assert_result!(
@@ -93,10 +92,9 @@ fn validate_block() {
             BlockResult::WrongVoteLevel
         );
         let voter = voter_block(
-            parent,
+            blockchain.best_voter(chain as usize).0,
             timestamp,
             chain,
-            blockchain.best_voter(chain as usize).0,
             vec![proposer_1.hash()],
         );
         assert_result!(
@@ -104,10 +102,9 @@ fn validate_block() {
             BlockResult::WrongVoteLevel
         );
         let voter = voter_block(
-            parent,
+            blockchain.best_voter(chain as usize).0,
             timestamp,
             chain,
-            blockchain.best_voter(chain as usize).0,
             vec![proposer_1.hash(), proposer_2.hash()],
         );
         assert_result!(
@@ -115,10 +112,9 @@ fn validate_block() {
             BlockResult::Pass
         );
         let voter = voter_block(
-            parent,
+            blockchain.best_voter(chain as usize).0,
             timestamp,
             chain,
-            blockchain.best_voter(chain as usize).0,
             vec![proposer_2.hash()],
         );
         assert_result!(
@@ -127,10 +123,9 @@ fn validate_block() {
         );
         // vote's order matters
         let voter = voter_block(
-            parent,
+            blockchain.best_voter(chain as usize).0,
             timestamp,
             chain,
-            blockchain.best_voter(chain as usize).0,
             vec![proposer_2.hash(), proposer_1.hash()],
         );
         assert_result!(
@@ -139,10 +134,9 @@ fn validate_block() {
         );
         if chain > 0 {
             let voter = voter_block(
-                parent,
+                blockchain.best_voter(chain as usize).0,
                 timestamp,
                 chain - 1,
-                blockchain.best_voter(chain as usize).0,
                 vec![proposer_2.hash(), proposer_1.hash()],
             );
             assert_result!(

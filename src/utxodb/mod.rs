@@ -260,8 +260,8 @@ mod test {
             authorization: vec![],
             hash: RefCell::new(None),
         };
-        db.apply_diff(&vec![transaction_1.clone(), transaction_2.clone()], &vec![])
-            .unwrap();
+        db.add_transaction(&transaction_1, transaction_1.hash(), 0).unwrap();
+        db.add_transaction(&transaction_2, transaction_2.hash(), 0).unwrap();
         let out: Output = deserialize(
             &db.db
                 .get(
@@ -298,8 +298,7 @@ mod test {
             authorization: vec![],
             hash: RefCell::new(None),
         };
-        db.apply_diff(&vec![transaction_3.clone()], &vec![])
-            .unwrap();
+        db.add_transaction(&transaction_3, transaction_3.hash(), 0).unwrap();
         let out = db
             .db
             .get(
@@ -311,8 +310,9 @@ mod test {
             )
             .unwrap();
         assert_eq!(out.is_none(), true);
-        db.apply_diff(&vec![], &vec![transaction_2.clone(), transaction_3.clone()])
-            .unwrap();
+        /*
+        db.remove_transaction(&transaction_2, transaction_2.hash(), 0).unwrap();
+        db.remove_transaction(&transaction_3, transaction_3.hash(), 0).unwrap();
         let out: Output = deserialize(
             &db.db
                 .get(
@@ -344,5 +344,6 @@ mod test {
             )
             .unwrap();
         assert_eq!(out.is_none(), true);
+        */
     }
 }

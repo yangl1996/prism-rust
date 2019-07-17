@@ -389,7 +389,8 @@ impl Context {
     fn pos_mining(&self, utxo: &Utxo, chain_id: usize, vrf_pubkey: &VrfPublicKey, keypair: &Keypair) -> Option<Block> {
         let input = VrfInput {
             random_source: self.random_sources[chain_id],
-            time: self.timestamp.to_be_bytes(),//why here time type is [u8;16]?
+            time: self.timestamp,//why here time type is [u8;16]?
+            coin: utxo.coin.clone(),
         };
         let (vrf_value, vrf_proof) = vrf_evaluate(&vrf_pubkey, &keypair.secret, &input);
         // Check if we successfully mined a block
