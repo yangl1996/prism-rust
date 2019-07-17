@@ -1,4 +1,4 @@
-const mock = false
+const mock = true
 const protocol = 'prism'
 let width = 1080,
     height = 600
