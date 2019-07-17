@@ -7,21 +7,6 @@ blockId+=1
 numBlocks = 100
 forkProbability = 0.6
 
-if forkProbability>0:
-    xString = 'newBlock.xShift = d3.randomUniform(-20, 20)()'
-    yString = 'newBlock.yShift = d3.randomUniform(-10, 0)()'
-else:
-    xString = 'newBlock.xShift = d3.randomUniform(0, 0)()'
-    yString = 'newBlock.yShift = d3.randomUniform(0, 0)()'
-
-with open('simulate.js', 'r') as f:
-    contents = f.read()
-    fixed_contents = re.sub(r"newBlock.xShift = d3.randomUniform\([-]?\d*, [-]?\d*\)\(\)", xString, contents)
-    fixed_contents = re.sub(r"newBlock.yShift = d3.randomUniform\([-]?\d*, [-]?\d*\)\(\)", yString, fixed_contents)
-with open('simulate.js', 'w+') as f:
-    f.write(fixed_contents)
-
-
 while blockId<numBlocks:
     newBlock = {'id': blockId, 'children': []}
     fork = True if random.random()<forkProbability else False
@@ -44,11 +29,20 @@ while blockId<numBlocks:
     blocks.append(newBlock)
     blockId+=1
     
+if forkProbability>0:
+    with open('blocksUgly.csv', 'w+') as f:
+        f.write('id,parentId\n')
+        for b in blocks:
+            if b['parentId']==None:
+                f.write(f'{b["id"]},\n')
+            else:
+                f.write(f'{b["id"]},{b["parentId"]}\n')
+else:
+    with open('blocksClean.csv', 'w+') as f:
+        f.write('id,parentId\n')
+        for b in blocks:
+            if b['parentId']==None:
+                f.write(f'{b["id"]},\n')
+            else:
+                f.write(f'{b["id"]},{b["parentId"]}\n')
 
-with open('blocks.csv', 'w+') as f:
-    f.write('id,parentId\n')
-    for b in blocks:
-        if b['parentId']==None:
-            f.write(f'{b["id"]},\n')
-        else:
-            f.write(f'{b["id"]},{b["parentId"]}\n')
