@@ -30,7 +30,7 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 
 enum ControlSignal {
-    Start(u64, bool), // the number controls the delta of interval between block generation
+    Start(u64), // the number controls the delta of interval between block generation
     Step,
     Exit,
 }
@@ -49,7 +49,7 @@ pub enum ContextUpdateSignal {
 
 enum OperatingState {
     Paused,
-    Run(u64, bool),
+    Run(u64),
     Step,
     ShutDown,
 }
@@ -125,9 +125,9 @@ impl Handle {
         self.control_chan.send(ControlSignal::Exit).unwrap();
     }
 
-    pub fn start(&self, delta: u64, lazy: bool) {
+    pub fn start(&self, delta: u64) {
         self.control_chan
-            .send(ControlSignal::Start(delta, lazy))
+            .send(ControlSignal::Start(delta))
             .unwrap();
     }
 
@@ -153,12 +153,12 @@ impl Context {
                 info!("Miner shutting down");
                 self.operating_state = OperatingState::ShutDown;
             }
-            ControlSignal::Start(i, l) => {
+            ControlSignal::Start(i) => {
                 info!(
-                    "Miner starting in continuous mode with delta {} and lazy mode {}",
-                    i, l
+                    "Miner starting in continuous mode with delta {}",
+                    i
                 );
-                self.operating_state = OperatingState::Run(i, l);
+                self.operating_state = OperatingState::Run(i);
             }
             ControlSignal::Step => {
                 info!("Miner starting in stepping mode");
@@ -243,7 +243,7 @@ impl Context {
             // customizable mining time step
             // delta must be a multiple of DELTA
             // e.g. DELTA=0.1, we can set delta=0.1,0.2,0.3,...
-            let delta = if let OperatingState::Run(delta, _) = self.operating_state {
+            let delta = if let OperatingState::Run(delta) = self.operating_state {
                 let delta = delta as TimeStamp;
                 if delta!=0 && delta % DELTA == 0 {
                     delta
@@ -333,87 +333,6 @@ impl Context {
                 }
             }
 
-        }
-    }
-
-    fn pos_mining(&self, utxo: &Utxo, chain_id: usize, keypair: &Keypair) -> Option<Block> {
-        let vrf_pubkey: VrfPublicKey = (&keypair.public).into();
-        let input = VrfInput {
-            random_source: self.random_sources[chain_id],
-            time: self.timestamp,
-            coin: utxo.coin.clone(),
-        };
-        let (vrf_value, vrf_proof) = vrf_evaluate(&vrf_pubkey, &keypair.secret, &input);
-        // Check if we successfully mined a block
-        if let Some(sortition_id) = check_difficulty(&vrf_value , &self.difficulties[chain_id], utxo.value) {//TODO difficulty * stake
-            if chain_id as u16 != PROPOSER_INDEX && sortition_id != PROPOSER_INDEX {
-                // on voter chain, the sortition result should be PROPOSER_INDEX to match the
-                // proposer mining rate
-                return None;
-            }
-            // Update random source every GAMMA
-            let random_source = if (self.parents[chain_id].1 + 1) % GAMMA == 0 {
-                (&vrf_value).into()
-            } else {
-                self.random_sources[chain_id]
-            };
-            // Create metadata
-            let metadata = Metadata {
-                vrf_proof,
-                vrf_output: vrf_value,
-                vrf_pubkey,
-                utxo: utxo.clone(),
-                parent_random_source: self.random_sources[chain_id],
-                timestamp: self.timestamp,
-                random_source,
-            };
-            // Create content
-            let content = if chain_id as u16 == PROPOSER_INDEX {
-                if sortition_id == PROPOSER_INDEX {
-                    let transaction_refs = self.blockchain.unreferred_transactions();
-                    let proposer_refs = self.blockchain.unreferred_proposers();
-                    // TODO remove parent from refs
-                    Content::Proposer(proposer::Content {
-                        transaction_refs,
-                        proposer_refs,
-                    })
-                } else {
-                    // sortition result is a transaction block
-                    let mempool = self.mempool.lock().unwrap();
-                    let transactions = mempool.get_transactions(TX_BLOCK_TRANSACTIONS);
-                    drop(mempool);
-                    Content::Transaction(transaction::Content {
-                        transactions,
-                    })
-                }
-            } else {
-                let votes = self.blockchain.unvoted_proposer(&self.parents[chain_id].0, &self.blockchain.best_proposer().unwrap().0, self.timestamp).unwrap();
-                Content::Voter(voter::Content {
-                    chain_number: chain_id as u16 - FIRST_VOTER_INDEX,
-                    votes,
-                })
-            };
-            let difficulty = self.difficulties[chain_id];// FUTURE: Adpative difficulty here
-            // Create header
-            let mut header = Header {
-                parent: self.parents[chain_id].0,
-                pos_metadata: metadata,
-                content_root: content.hash(),
-                extra_content: self.extra_content.clone(),
-                difficulty,
-                header_signature: vec![],
-            };
-            // Update signature of header
-            let raw_unsigned = bincode::serialize(&header).unwrap();
-            header.header_signature = keypair.sign(&raw_unsigned).to_bytes().to_vec();
-            // Create a block
-            let mined_block = Block::from_header(
-                header,
-                content,
-                );
-            Some(mined_block)
-        } else {
-            None
         }
     }
 }
