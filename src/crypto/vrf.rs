@@ -20,17 +20,11 @@ pub struct VrfInput{
     pub random_source: RandomSource,
     pub time: TimeStamp,
     pub coin: CoinId,
-} //Random source and time
+}
 
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, Hash    )]
 pub struct VrfProof ([u8; 32]);
-
-impl VrfProof{
-    fn default() -> Self {
-        return VrfProof([0u8; 32]);
-    }
-}
 
 pub type VrfOutput =  H256;
 

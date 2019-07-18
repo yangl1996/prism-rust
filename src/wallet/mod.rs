@@ -24,8 +24,9 @@ pub struct Wallet {
     db: rocksdb::DB,
     /// Keep key pair (in pkcs8 bytes) in memory for performance, it's duplicated in database as well.
     keypairs: Mutex<HashMap<Address, Keypair>>,
-    /// Keep coin ids in memory for performance, it's duplicated in database as well.
-    coin_ids: Mutex<HashSet<Vec<u8>>>,
+    /// Keep coin ids for mining in memory for performance
+    // TODO: for now in create transaction, we don't touch these coins
+    coins_mining: Mutex<HashMap<Vec<u8>, Vec<u8>>>,
     counter: AtomicUsize,
 }
 
@@ -73,7 +74,7 @@ impl Wallet {
         return Ok(Self {
             db: handle,
             keypairs: Mutex::new(HashMap::new()),
-            coin_ids: Mutex::new(HashSet::new()),
+            coins_mining: Mutex::new(HashMap::new()),
             counter: AtomicUsize::new(0),
         });
     }
@@ -137,18 +138,21 @@ impl Wallet {
                 let key = serialize(&utxo.coin).unwrap();
                 let val = serialize(&output_with_time).unwrap();
                 batch.put_cf(cf, &key, &val)?;
-                let mut coin_ids = self.coin_ids.lock().unwrap();
-                coin_ids.insert(key);
-                drop(coin_ids);
+                let mut coins = self.coins_mining.lock().unwrap();
+                if coins.len() < 200 {
+                    coins.insert(key, val);
+                }
+                drop(coins);
                 self.counter.fetch_add(1, Ordering::Relaxed);
             }
         }
         for coin in remove {
             let key = serialize(&coin.coin).unwrap();
+            let mut coins = self.coins_mining.lock().unwrap();
+            // no coins in coins_mining should be spent
+            assert!(coins.remove(&key).is_none());
+            drop(coins);
             batch.delete_cf(cf, &key)?;
-            let mut coin_ids = self.coin_ids.lock().unwrap();
-            coin_ids.insert(key);
-            drop(coin_ids);
         }
         self.db.write(batch)?;
         Ok(())
@@ -169,16 +173,13 @@ impl Wallet {
 
     /// Returns all the coins before a timestamp
     pub fn coins_before(&self, timestamp: TimeStamp) -> Result<Vec<(Utxo, [u8;KEYPAIR_LENGTH])>> {
-        let cf = self.db.cf_handle(COIN_CF).unwrap();
+        // let cf = self.db.cf_handle(COIN_CF).unwrap();
         // let iter = self.db.iterator_cf(cf, rocksdb::IteratorMode::Start)?;
         let mut utxo_keypairs = vec![];
-        let coin_ids: Vec<Vec<u8>> = self.coin_ids.lock().unwrap().iter().cloned().collect();
-        for k in coin_ids {
+        let coins: Vec<(Vec<u8>,Vec<u8>)> = self.coins_mining.lock().unwrap().iter().map(|x|(x.0.clone(), x.1.clone())).collect();
+        for (k,v) in coins {
             let coin_id: CoinId = bincode::deserialize(&k).unwrap();
-            let coin_data: OutputWithTime = match self.db.get_cf(cf, &k)? {
-                Some(v) => bincode::deserialize(&v).unwrap(),
-                None => continue,
-            };
+            let coin_data: OutputWithTime = bincode::deserialize(&v).unwrap();
             if coin_data.confirm_time > timestamp {
                 continue;
             }
@@ -221,6 +222,11 @@ impl Wallet {
         };
         // iterate through our wallet
         for (k, v) in iter {
+            if self.coins_mining.lock().unwrap().contains_key(k.as_ref()) {
+                // TODO: for now we don't use coins for mining, in case that we are running out of
+                // coins for mining
+                continue;
+            }
             let coin_id: CoinId = bincode::deserialize(k.as_ref()).unwrap();
             let utxo_output: OutputWithTime = bincode::deserialize(v.as_ref()).unwrap();
             value_sum += utxo_output.output.value;

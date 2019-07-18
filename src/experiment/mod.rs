@@ -6,7 +6,7 @@ use crate::crypto::hash::{Hashable, H256};
 use crate::transaction::{CoinId, Input, Output, Transaction};
 use crate::utxodb::UtxoDatabase;
 use crate::wallet::Wallet;
-use crate::config::DELTA;
+use crate::config::{DELTA, TAU};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::SystemTime;
@@ -20,8 +20,11 @@ pub fn ico(
 ) -> Result<(), rocksdb::Error> {
     let recipients: Vec<H256> = recipients.to_vec();
     let recipients = Arc::new(Mutex::new(recipients));
-    let cur_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis();
-    let cur_time = ( cur_time / DELTA ) * DELTA ;
+    let mut ico_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis();
+    if ico_time >= 2*TAU {
+        ico_time -= 2*TAU;
+    }
+    ico_time = ( ico_time / DELTA ) * DELTA ;
     // start a bunch of worker threads to commit those coins
     let mut workers = vec![];
     for _ in 0..16 {
@@ -45,7 +48,7 @@ pub fn ico(
                 hash: RefCell::new(None),
             };
             let hash = tx.hash();
-            let diff = utxodb.add_transaction(&tx, hash, cur_time).unwrap();
+            let diff = utxodb.add_transaction(&tx, hash, ico_time).unwrap();
             wallet.apply_diff(&diff.0, &diff.1).unwrap();
         });
         workers.push(handle);
