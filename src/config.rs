@@ -6,6 +6,8 @@ use bigint::uint::U256;
 pub const DELTA: TimeStamp = 100;
 // Time tau for pos, only coin older than t-tau will be used
 pub const TAU: TimeStamp = 20000;
+// The extra buffer time for holding spent coins
+pub const TAU_NETWORK_DELAY: TimeStamp = 10000;
 // Time u for pos, only proposer after t-u can be voted
 pub const OMEGA: TimeStamp = 400000;
 // Time s for pos, compare voter chain length using s-truncated rule

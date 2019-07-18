@@ -2,7 +2,8 @@ use crate::crypto::hash::Hashable;
 use crate::crypto::hash::H256;
 use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 use crate::transaction::{CoinId, Input, Output, Transaction, Address};
-use bincode::serialize;
+
+use bincode::{serialize, deserialize};
 use rocksdb::*;
 use crate::block::pos_metadata::TimeStamp;
 
@@ -21,14 +22,22 @@ pub struct Utxo {
 }
 
 
+const UNSPENT_COINS_CF: &str = "UNSPENT_COINS"; // Stores the current unspent coins -- the current state.
+const SPENT_COINS_BUFFER_CF: &str = "SPENT_COINS_BUFFER"; // Stores the current spent coins in last Tau+tau_network_delay time.
+
+
 pub struct UtxoDatabase {
-    pub db: rocksdb::DB, // coin id to outputwithtime
+    pub db: rocksdb::DB, // coin id to outputwithtime.
 }
 
 impl UtxoDatabase {
     /// Open the database at the given path, and create a new one if one is missing.
     fn open<P: AsRef<std::path::Path>>(path: P) -> Result<Self, rocksdb::Error> {
-        let cfs = vec![];
+        let unspent_coins_cf =
+            ColumnFamilyDescriptor::new(UNSPENT_COINS_CF, Options::default());
+        let spent_coins_buffer_cf =
+            ColumnFamilyDescriptor::new(SPENT_COINS_BUFFER_CF, Options::default());
+        let cfs = vec![unspent_coins_cf, spent_coins_buffer_cf];
         let mut opts = Options::default();
         opts.set_prefix_extractor(SliceTransform::create_fixed_prefix(32));
         opts.set_allow_concurrent_memtable_write(false);
@@ -59,11 +68,44 @@ impl UtxoDatabase {
     }
 
     /// Check whether the given coin is in the UTXO set.
-    pub fn contains(&self, coin: &CoinId) -> Result<bool, rocksdb::Error> {
-        let result = self.db.get_pinned(serialize(&coin).unwrap())?;
+    pub fn utxo_contains(&self, coin: &CoinId) -> Result<bool, rocksdb::Error> {
+        let unspent_coins_cf = self.db.cf_handle(UNSPENT_COINS_CF).unwrap();
+        let result = self.db.get_pinned_cf(unspent_coins_cf,serialize(&coin).unwrap())?;
         match result {
             Some(_) => return Ok(true),
             None => return Ok(false),
+        };
+    }
+
+    /// Check whether the given coin is unspent at time 'timestamp'.
+    pub fn is_coin_unspent(&self, coin: &CoinId, timestamp: TimeStamp)-> Result<bool, rocksdb::Error> {
+        let unspent_coins_cf = self.db.cf_handle(UNSPENT_COINS_CF).unwrap();
+        let spent_coins_buffer_cf = self.db.cf_handle(SPENT_COINS_BUFFER_CF).unwrap();
+        // first check if the coin is present in unspent_coins cf
+        let option_output_with_time = self.db.get_cf(unspent_coins_cf,serialize(&coin).unwrap())?;
+        match option_output_with_time {
+            Some(ser_output_with_time) => {
+                let output_with_time: OutputWithTime = deserialize(&ser_output_with_time).unwrap();
+                if output_with_time.confirm_time < timestamp {
+                    return Ok(true);
+                }
+            },
+            None => {},
+        };
+
+        // second check if the coin is present in spent_coins_buffer cf
+        let option_output_with_time = self.db.get_cf(spent_coins_buffer_cf,serialize(&coin).unwrap())?;
+        match option_output_with_time {
+            Some(ser_output_with_time) => {
+                let output_with_time: OutputWithTime = deserialize(&ser_output_with_time).unwrap();
+                if output_with_time.confirm_time < timestamp {
+                    return Ok(true);
+                }
+                else{
+                    return Ok(false);
+                }
+            },
+            None => {return Ok(false)},
         };
     }
 
@@ -96,6 +138,9 @@ impl UtxoDatabase {
         hash: H256,
         tx_confirm_time: TimeStamp
     ) -> Result<(Vec<Utxo>, Vec<Input>), rocksdb::Error> {
+        let unspent_coins_cf = self.db.cf_handle(UNSPENT_COINS_CF).unwrap();
+        let spent_coins_buffer_cf = self.db.cf_handle(SPENT_COINS_BUFFER_CF).unwrap();
+
         let mut added_utxos: Vec<Utxo> = vec![];
         let mut removed_inputs: Vec<Input> = vec![];
 
@@ -105,17 +150,25 @@ impl UtxoDatabase {
         // check whether the inputs used in this transaction are all unspent
         for input in &t.input {
             let id_ser = serialize(&input.coin).unwrap();
-            if self.db.get_pinned(&id_ser)?.is_none() {
-                return Ok((vec![], vec![]));
+            let option_output_with_time = self.db.get_cf(unspent_coins_cf, &id_ser).unwrap();
+            match option_output_with_time {
+                Some(ser_output_with_time) => {
+                    // TODO: Can we move data from one cf to another?
+                    // Removing the coin from unspent cf to spent cf
+                    batch.delete_cf(unspent_coins_cf, &id_ser)?;
+                    batch.put_cf(spent_coins_buffer_cf, &id_ser, &ser_output_with_time);
+                }
+                None => {
+                    return Ok((vec![], vec![]));
+                }
             }
-            batch.delete(&id_ser)?;
         }
 
         // remove the input
         removed_inputs = t.input.clone();
 
         // now that we have confirmed that all inputs are unspent, we will add the outputs and
-        // commit to database
+        // commit to unspent_coins_cf of the database
         for (idx, output) in t.output.iter().enumerate() {
             let id = CoinId {
                 hash: hash,
@@ -125,7 +178,7 @@ impl UtxoDatabase {
                 output: *output,
                 confirm_time: tx_confirm_time,
             };
-            batch.put(serialize(&id).unwrap(), serialize(&output_with_time).unwrap())?;
+            batch.put_cf(unspent_coins_cf, serialize(&id).unwrap(), serialize(&output_with_time).unwrap())?;
             let utxo = Utxo {
                 coin: id,
                 value: output.value,
@@ -153,6 +206,8 @@ impl UtxoDatabase {
         hash: H256,
         timestamp: TimeStamp
     ) -> Result<(Vec<Utxo>, Vec<Input>), rocksdb::Error> {
+        let unspent_coins_cf = self.db.cf_handle(UNSPENT_COINS_CF).unwrap();
+        let spent_coins_buffer_cf = self.db.cf_handle(SPENT_COINS_BUFFER_CF).unwrap();
         let mut removed_coins: Vec<Input> = vec![];
         let mut added_utxos: Vec<Utxo> = vec![];
 
@@ -167,10 +222,10 @@ impl UtxoDatabase {
                 index: idx as u32,
             };
             let id_ser = serialize(&id).unwrap();
-            if self.db.get_pinned(&id_ser)?.is_none() {
+            if self.db.get_pinned_cf(unspent_coins_cf,&id_ser)?.is_none() {
                 return Ok((vec![], vec![]));
             }
-            batch.delete(&id_ser)?;
+            batch.delete_cf(unspent_coins_cf, &id_ser)?;
 
             // reconstruct the output coin that is being deleted
             let coin = Input {
@@ -188,7 +243,7 @@ impl UtxoDatabase {
                 value: input.value,
                 recipient: input.owner,
             };
-            batch.put(serialize(&input.coin).unwrap(), serialize(&out).unwrap())?;
+            batch.put_cf(unspent_coins_cf,serialize(&input.coin).unwrap(), serialize(&out).unwrap())?;
             // TODO: The timestamp of the original coin is unknown at this point.
             let utxo = Utxo{
                 coin: input.coin,
@@ -211,6 +266,20 @@ impl UtxoDatabase {
         }
 
         return Ok((added_utxos, removed_coins));
+    }
+
+    /// Delete all the coins which were spent before timestamp
+    pub fn delete_old_spent_coins(&self, timestamp: TimeStamp) {
+        let timestamp = timestamp;
+        let spent_coins_buffer_cf = self.db.cf_handle(SPENT_COINS_BUFFER_CF).unwrap();
+        let iter = self.db.iterator_cf(spent_coins_buffer_cf, rocksdb::IteratorMode::Start).unwrap();
+        let mut batch = rocksdb::WriteBatch::default();
+        for (k,v) in iter {
+            let output_with_time: OutputWithTime = deserialize(v.as_ref()).unwrap();
+            if output_with_time.confirm_time < timestamp {
+                batch.delete_cf(spent_coins_buffer_cf, k);
+            }
+        }
     }
 
     pub fn flush(&self) -> Result<(), rocksdb::Error> {
@@ -236,6 +305,9 @@ mod test {
     #[test]
     fn apply_diff() {
         let db = UtxoDatabase::new("/tmp/prism_test_ledger_apply_diff.rocksdb").unwrap();
+
+        let unspent_coins_cf = db.db.cf_handle(UNSPENT_COINS_CF).unwrap();
+        let spent_coins_buffer_cf = db.db.cf_handle(SPENT_COINS_BUFFER_CF).unwrap();
         let transaction_1 = Transaction {
             input: vec![],
             output: vec![
@@ -264,7 +336,7 @@ mod test {
         db.add_transaction(&transaction_2, transaction_2.hash(), 0).unwrap();
         let out: Output = deserialize(
             &db.db
-                .get(
+                .get_cf(unspent_coins_cf,
                     serialize(&CoinId {
                         hash: transaction_1.hash(),
                         index: 1,
@@ -301,7 +373,7 @@ mod test {
         db.add_transaction(&transaction_3, transaction_3.hash(), 0).unwrap();
         let out = db
             .db
-            .get(
+            .get_cf(unspent_coins_cf,
                 serialize(&CoinId {
                     hash: transaction_1.hash(),
                     index: 0,
