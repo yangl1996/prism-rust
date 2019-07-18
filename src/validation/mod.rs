@@ -264,7 +264,8 @@ pub fn check_difficulty(hash: &VrfOutput, difficulty: &H256, stake: u64) -> Opti
     let big_proposer_range: U256 = PROPOSER_MINING_RANGE.into();
     let big_transaction_range: U256 = TRANSACTION_MINING_RANGE.into();
     let total_mining_range: U256 = big_proposer_range + big_transaction_range;
-
+    // TODO: change big_difficulty / total_mining_range to DEFAULT_DIFFICULTY_DIV
+    // *DEFAULT_DIFFICULTY_DIV
     if big_hash < big_difficulty / total_mining_range * big_proposer_range {
         // proposer block
         Some(PROPOSER_INDEX)

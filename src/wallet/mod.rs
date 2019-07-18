@@ -170,11 +170,15 @@ impl Wallet {
     /// Returns all the coins before a timestamp
     pub fn coins_before(&self, timestamp: TimeStamp) -> Result<Vec<(Utxo, [u8;KEYPAIR_LENGTH])>> {
         let cf = self.db.cf_handle(COIN_CF).unwrap();
-        let iter = self.db.iterator_cf(cf, rocksdb::IteratorMode::Start)?;
+        // let iter = self.db.iterator_cf(cf, rocksdb::IteratorMode::Start)?;
         let mut utxo_keypairs = vec![];
-        for (k,v) in iter {
-            let coin_id: CoinId = bincode::deserialize(k.as_ref()).unwrap();
-            let coin_data: OutputWithTime = bincode::deserialize(v.as_ref()).unwrap();
+        let coin_ids: Vec<Vec<u8>> = self.coin_ids.lock().unwrap().iter().cloned().collect();
+        for k in coin_ids {
+            let coin_id: CoinId = bincode::deserialize(&k).unwrap();
+            let coin_data: OutputWithTime = match self.db.get_cf(cf, &k)? {
+                Some(v) => bincode::deserialize(&v).unwrap(),
+                None => continue,
+            };
             if coin_data.confirm_time > timestamp {
                 continue;
             }

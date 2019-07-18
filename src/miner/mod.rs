@@ -270,6 +270,8 @@ impl Context {
                 0
             };
             let coins = self.wallet.coins_before(time_minus_tau).unwrap();
+            let coins_len = coins.len();
+            
             for (utxo, keypair) in coins {
                 let keypair = Keypair::from_bytes(&keypair).unwrap();
                 let vrf_pubkey: VrfPublicKey = (&keypair.public).into();
@@ -337,9 +339,10 @@ impl Context {
             {
                 let timestamp = self.timestamp;
                 let (s, r) = unbounded();
+                let mined_len = mined_blocks.len();
                 thread::spawn(move || {
                     let start = get_time();
-                    warn!("Plan to sleep {} ms", timestamp as i128 - start as i128);
+                    warn!("Plan to sleep {} ms,\tuse {} coins to mine,\tmined {} blocks.", timestamp as i128 - start as i128, coins_len, mined_len);
                     loop {
                         if get_time()>=timestamp {
                             break;

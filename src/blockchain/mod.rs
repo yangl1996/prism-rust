@@ -420,8 +420,16 @@ impl BlockChain {
                 // race condition, since this update is "stateless" - we are not append/removing
                 // from a record.
                 let mut voter_best = self.voter_best[self_chain as usize].lock().unwrap();
-                // update best block based on s-truncated rule
+                /* TODO update best block based on s-truncated rule
                 if self.s_truncated_rule(voter_best.0, block_hash)? {
+                    PERFORMANCE_COUNTER
+                        .record_update_voter_main_chain(voter_best.1 as usize, self_level as usize);
+                    voter_best.0 = block_hash;
+                    voter_best.1 = self_level;
+                }
+                */
+                // update best block
+                if self_level > voter_best.1 {
                     PERFORMANCE_COUNTER
                         .record_update_voter_main_chain(voter_best.1 as usize, self_level as usize);
                     voter_best.0 = block_hash;

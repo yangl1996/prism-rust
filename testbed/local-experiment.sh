@@ -94,7 +94,7 @@ for (( i = 0; i < $num_nodes; i++ )); do
     echo "nodes_$i,x,127.0.0.1,127.0.0.1,$p2p,$api,$vis" >> nodes.txt
     echo "curl 'http://127.0.0.1:$api/transaction-generator/stop' &> /dev/null" >> stop_nodes.sh
 
-	command="$binary_path --p2p 127.0.0.1:${p2p} --api 127.0.0.1:${api} --visual 127.0.0.1:${vis} --blockdb /tmp/prism-${i}-blockdb.rocksdb --blockchaindb /tmp/prism-${i}-blockchaindb.rocksdb --utxodb /tmp/prism-${i}-utxodb.rocksdb --walletdb /tmp/prism-${i}-wallet.rocksdb -vv --load-key ${i}.pkcs8 --fund-coins 100"
+	command="$binary_path --p2p 127.0.0.1:${p2p} --api 127.0.0.1:${api} --visual 127.0.0.1:${vis} --blockdb /tmp/prism-${i}-blockdb.rocksdb --blockchaindb /tmp/prism-${i}-blockchaindb.rocksdb --utxodb /tmp/prism-${i}-utxodb.rocksdb --walletdb /tmp/prism-${i}-wallet.rocksdb -vv --load-key ${i}.pkcs8 --fund-coins 200"
 
 	for (( j = 0; j < $i; j++ )); do
 		peer_port=`expr $p2p_port + $j`
@@ -118,18 +118,18 @@ done
 echo "Starting transaction generation and mining on each node"
 for (( i = 0; i < $num_nodes; i++ )); do
 	port=`expr $api_port + $i`
-#	url="localhost:${port}/transaction-generator/set-arrival-distribution?interval=10000&distribution=uniform"
-#	curl "$url" &> /dev/null
-#	if [ "$?" -ne 0 ]; then
-#		echo "Failed to set transaction rate for node $i"
-#		exit 1
-#	fi
-#	url="localhost:${port}/transaction-generator/start?throttle=500000"
-#	curl "$url" &> /dev/null
-#	if [ "$?" -ne 0 ]; then
-#		echo "Failed to start transaction generation for node $i"
-#		exit 1
-#	fi
+	url="localhost:${port}/transaction-generator/set-arrival-distribution?interval=2000000&distribution=uniform"
+	curl "$url" &> /dev/null
+	if [ "$?" -ne 0 ]; then
+		echo "Failed to set transaction rate for node $i"
+		exit 1
+	fi
+	url="localhost:${port}/transaction-generator/start?throttle=5"
+	curl "$url" &> /dev/null
+	if [ "$?" -ne 0 ]; then
+		echo "Failed to start transaction generation for node $i"
+		exit 1
+	fi
 	url="localhost:${port}/miner/start?delta=100&lazy=false"
 	curl "$url" &> /dev/null
 	if [ "$?" -ne 0 ]; then

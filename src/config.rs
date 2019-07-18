@@ -1,5 +1,6 @@
 use crate::crypto::hash::H256;
 use crate::block::pos_metadata::{RandomSource, TimeStamp};
+use bigint::uint::U256;
 
 // Time step for pos, in millisecond
 pub const DELTA: TimeStamp = 100;
@@ -54,8 +55,18 @@ lazy_static! {
     pub static ref DEFAULT_DIFFICULTY: H256 = {
         let mut raw: [u8; 32] = [255; 32];
         raw[0]=0x00;
-        raw[1]=0x03;
+        raw[1]=0x00;
+        raw[2]=0xdf;
         raw.into()
+    };
+
+    pub static ref DEFAULT_DIFFICULTY_DIV: U256 = {
+        let difficulty: [u8; 32] = (&*DEFAULT_DIFFICULTY).into();
+        let big_difficulty = U256::from_big_endian(&difficulty);
+        let big_proposer_range: U256 = PROPOSER_MINING_RANGE.into();
+        let big_transaction_range: U256 = TRANSACTION_MINING_RANGE.into();
+        let total_mining_range: U256 = big_proposer_range + big_transaction_range;
+        big_difficulty / total_mining_range 
     };
 
     // Genesis Hashes
