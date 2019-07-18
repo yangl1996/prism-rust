@@ -14,6 +14,9 @@ use crossbeam::channel;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::thread;
+use std::time::SystemTime;
+use stderrlog::Timestamp;
+use crate::config::{TAU, TAU_NETWORK_DELAY};
 
 pub struct LedgerManager {
     blockdb: Arc<BlockDatabase>,
@@ -158,6 +161,16 @@ impl LedgerManager {
             let coin_diff = coin_diff_rx.recv().unwrap();
             wallet.apply_diff(&coin_diff.0, &coin_diff.1);
         });
+
+        /*
+        // start the thread which regularly cleans the spent coins buffer
+        let utxodb = Arc::clone(&self.utxodb);
+        thread::spawn(move || loop {
+            let curr_time: TimeStamp = get_time();
+            utxodb.delete_old_spent_coins(curr_time - TAU - TAU_NETWORK_DELAY);
+        });
+        */
+
     }
 }
 
@@ -239,4 +252,18 @@ fn update_transaction_sequence(
         remove.append(&mut transactions_with_timestamps);
     }
     return (add, remove);
+}
+
+
+/// Get the current UNIX timestamp
+fn get_time() -> TimeStamp {
+    let cur_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH);
+    match cur_time {
+        Ok(v) => {
+            return v.as_millis();
+        }
+        Err(e) => println!("Error parsing time: {:?}", e),
+    }
+    // TODO: there should be a better way of handling this, or just unwrap and panic
+    return 0;
 }
