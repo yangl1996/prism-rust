@@ -39,7 +39,6 @@ worldMapScreen.attr('transform', `translate(${xTranslateScale(transTime)}, ${yTr
 const nodeRadius = 3
 let nodes = []
 
-const t = 1000
 const treeSize = width/3
 const renderLink = d3.linkVertical().x(d => d.x+(1.25-1)/2*longestChainBlockSize).y(d => d.y)
 const longestChainBlockSize = 20
@@ -77,7 +76,7 @@ let drawLongestChain = () => {
 
     longestChainBlock
            .transition()
-           .duration(t)
+           .duration(t/2)
            .style('fill-opacity', d => d.finalized ? 1.0 : 0.4)
            .attr('x', d => { 
                return d.x-longestChainBlockSize/2
@@ -140,12 +139,12 @@ let drawLongestChain = () => {
         .attr('marker-end', 'url(#small-arrow)')
         .on('end', () => {
           const didScroll = scrollLongestChain()
-          if(!didScroll)
+          if(!didScroll && showVotes)
             castVotes()
         })
         .on('interrupt', () => {
           const didScroll = scrollLongestChain()
-          if(!didScroll)
+          if(!didScroll && showVotes)
             castVotes()
         })
     // Remove extra links
@@ -176,7 +175,7 @@ let scrollLongestChain = () => {
     .attr('d', d => {
       return renderLink({source: d.source, target: {x: d.target.x, y: d.target.y+longestChainBlockSize}})
     })
-    .on('end', castVotes())
+    .on('end', showVotes ? d3.timeout(() => castVotes(), t): null)
   return true
 }
 

@@ -3,7 +3,7 @@ import numpy as np
 
 timestamp = 0
 duration = 1000
-f = 0.1
+f = 0.01
 delay_parameter = 1
 num_nodes = 10
 filename = 'low_forking'
@@ -63,9 +63,11 @@ for i in range(0, max_depth):
             s+=str(b['id']) + ','
     print(s)
 
+
+sorted_blocks = sorted(me['blocks'], key=lambda x: x['timestamp'])
 with open(filename+'.csv', 'w+') as f:
     f.write('id,parentId\n')
-    for b in me['blocks']:
+    for b in sorted_blocks:
         if b['parent']!=None:
             f.write(f'{b["id"]},{b["parent"]}')
         else:
