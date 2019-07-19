@@ -1,6 +1,5 @@
 const mock = true
-let reset = false
-const protocol = 'longest-chain'
+let showVotes = true
 let width = 1080,
     height = 600
 
@@ -8,19 +7,6 @@ let svg = d3.select('body').append('svg')
 	.attr('width', width)
 	.attr('height', height)
   .style('position', 'absolute')
-
-svg.append('svg:defs').append('svg:marker')
-    .attr('id', 'small-arrow')
-    .attr('refX', 6)
-    .attr('refY', 3)
-    .attr('markerWidth', 12)
-    .attr('markerHeight', 12)
-    .attr('markerUnits','userSpaceOnUse')
-    .attr('orient', 'auto')
-    .append('path')
-    .attr('d', 'M 0 0 L 6 3 L 0 6')
-    .style('stroke', 'black')
-    .style('fill', 'none')
 
 const transTime = 5000
 let worldMapFocused = false
@@ -69,7 +55,9 @@ let longestChainScreen = svg.append('g')
 let longestChainBlocksGroup = longestChainScreen.append('g').attr('id', 'longestChainBlocksClean')
 let longestChainLinksGroup = longestChainScreen.append('g').attr('id', 'longestChainLinksClean')
 
-let computeLongestChain = () => {
+
+let voteGroup = longestChainScreen.append('g').attr('id', 'votes')
+let setLongestChain = () => {
   let block = longestChainBlocks.reduce( (prev, current) => {
     return (prev.depth > current.depth) ? prev : current
   })
@@ -82,8 +70,7 @@ let computeLongestChain = () => {
 }
 
 let drawLongestChain = () => {
-    computeLongestChain()
-  console.log(longestChainBlocks)
+    setLongestChain()
 
     // Create data join
     let longestChainBlock = longestChainBlocksGroup.selectAll('.longestChainBlock').data(longestChainBlocks, d => 'longestChainBlock'+d.id)
@@ -151,8 +138,16 @@ let drawLongestChain = () => {
         .transition()
         .delay(1)
         .attr('marker-end', 'url(#small-arrow)')
-        .on('end', () => scrollLongestChain())
-        .on('interrupt', () => scrollLongestChain())
+        .on('end', () => {
+          const didScroll = scrollLongestChain()
+          if(!didScroll)
+            castVotes()
+        })
+        .on('interrupt', () => {
+          const didScroll = scrollLongestChain()
+          if(!didScroll)
+            castVotes()
+        })
     // Remove extra links
     link.exit().remove()
 
@@ -181,9 +176,12 @@ let scrollLongestChain = () => {
     .attr('d', d => {
       return renderLink({source: d.source, target: {x: d.target.x, y: d.target.y+longestChainBlockSize}})
     })
+    .on('end', castVotes())
+  return true
 }
 
 let shiftScreen = () => {
+  showVotes = false
   longestChainBlocksGroup.transition()
                          .duration(t)
                          .attr('transform', `translate(-${width/3}, 0)`)
@@ -192,7 +190,7 @@ let shiftScreen = () => {
                          .duration(t)
                          .attr('transform', `translate(-${width/3}, 0)`)
                          .on('end', () => {
-                           reset = true
+                           mineLowRate.stop()
                            let line = longestChainScreen.append('line')
                                                         .attr('x1', -width/10)
                                                         .attr('y1', height/4)
@@ -217,6 +215,7 @@ let shiftScreen = () => {
                                                         .transition()
                                                         .duration(t)
                                                         .style('opacity', 1.0)
+                           modifyProtocol()
                          })
 }
 

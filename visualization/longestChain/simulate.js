@@ -22,14 +22,39 @@ root.sourceNodeId = null
 layoutTree(root)
 longestChainBlocks.push(root)
 drawLongestChain()
-d3.csv('blocksClean.csv').then(data => {
+d3.csv('low_forking.csv').then(data => {
   blocks = data
 })
 let index = 1
 let ugly = false
-let interval = d3.interval(() => {
-  if(reset){
-    d3.csv('blocksUgly.csv').then(data => {
+let mineLowRate = d3.interval(() => {
+  const newBlock = new Node
+  newBlock.id = blocks[index]['id']
+  newBlock.parent = longestChainBlocks.find(i => i.id===blocks[index]['parentId'])
+  newBlock.depth = newBlock.parent.depth+1
+  if(newBlock.parent.children) newBlock.parent.children.push(newBlock)
+  else newBlock.parent.children = [newBlock]
+
+  const sourceNodeId = Math.floor(Math.random() * Math.floor(nodeIndex))
+
+  newBlock.sourceNodeId = sourceNodeId
+  const prevRootY = root.y
+  layoutTree(root)
+  root.y = prevRootY ? prevRootY : root.y
+  longestChainBlocks.push(newBlock)
+  for(let i=0; i<longestChainBlocks.length; i++)
+      if(longestChainBlocks[i].id!=='0')
+        longestChainBlocks[i].y = longestChainBlocks[i].parent.y+2*longestChainBlockSize
+  links.push({source: newBlock,
+              target: newBlock.parent, id: `${newBlock.id}-${newBlock.parent.id}`})
+  pingNode(sourceNodeId)
+  drawLongestChain()
+  index++
+  if(index>blocks.length) mineLowRate.stop()
+}, 4*t)
+
+let modifyProtocol = () => {
+    d3.csv('high_forking.csv').then(data => {
       blocks = data
     })
     index = 1
@@ -41,43 +66,35 @@ let interval = d3.interval(() => {
     layoutTree(root)
     longestChainBlocks.push(root)
     drawLongestChain()
-    ugly = true
-    reset = false
-  }
-  else{
-    const newBlock = new Node
-    newBlock.id = blocks[index]['id']
-    newBlock.parent = longestChainBlocks.find(i => i.id===blocks[index]['parentId'])
-    newBlock.depth = newBlock.parent.depth+1
-    if(newBlock.parent.children) newBlock.parent.children.push(newBlock)
-    else newBlock.parent.children = [newBlock]
+    let mineLowRate = d3.interval(() => {
+      const newBlock = new Node
+      newBlock.id = blocks[index]['id']
+      newBlock.parent = longestChainBlocks.find(i => i.id===blocks[index]['parentId'])
+      newBlock.depth = newBlock.parent.depth+1
+      if(newBlock.parent.children) newBlock.parent.children.push(newBlock)
+      else newBlock.parent.children = [newBlock]
 
-    const sourceNodeId = Math.floor(Math.random() * Math.floor(nodeIndex))
+      const sourceNodeId = Math.floor(Math.random() * Math.floor(nodeIndex))
 
-    newBlock.sourceNodeId = sourceNodeId
-    const prevRootY = root.y
-    layoutTree(root)
-    root.y = prevRootY ? prevRootY : root.y
-    if(ugly){
+      newBlock.sourceNodeId = sourceNodeId
+      const prevRootY = root.y
+      layoutTree(root)
+      root.y = prevRootY ? prevRootY : root.y
       newBlock.xShift = d3.randomUniform(-20, 20)()
       newBlock.yShift = d3.randomUniform(-10, 0)()
-    }
-    else{
-      newBlock.xShift = 0
-      newBlock.yShift = 0
-    }
-    longestChainBlocks.push(newBlock)
-    for(let i=0; i<longestChainBlocks.length; i++){
-        if(longestChainBlocks[i].id!=='0'){
-          longestChainBlocks[i].y = longestChainBlocks[i].parent.y+2*longestChainBlockSize+longestChainBlocks[i].yShift
-          longestChainBlocks[i].x += longestChainBlocks[i].xShift
-        }
-    }
-    links.push({source: newBlock,
-                target: newBlock.parent, id: `${newBlock.id}-${newBlock.parent.id}`})
-    pingNode(sourceNodeId)
-    drawLongestChain()
-    index++
-    if(index>blocks.length) interval.stop()
-  }
-}, 4*t)
+      longestChainBlocks.push(newBlock)
+      for(let i=0; i<longestChainBlocks.length; i++){
+          if(longestChainBlocks[i].id!=='0'){
+            longestChainBlocks[i].y = longestChainBlocks[i].parent.y+2*longestChainBlockSize+longestChainBlocks[i].yShift
+            longestChainBlocks[i].x += longestChainBlocks[i].xShift
+          }
+      }
+      links.push({source: newBlock,
+                  target: newBlock.parent, id: `${newBlock.id}-${newBlock.parent.id}`})
+      pingNode(sourceNodeId)
+      drawLongestChain()
+      index++
+      if(index>blocks.length) mineFastRate.stop()
+    }, 2*t)
+
+}
