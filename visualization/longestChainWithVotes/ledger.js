@@ -1,0 +1,207 @@
+const ledgerHeight = longestChainScreenHeight/2
+const ledgerX = width*0.4
+const blocksToAdd = 10
+
+const ledgerScale = d3.scaleLinear().domain([0, ledgerHeight]).range([0, ledgerBlockSize])
+
+const removeFromTransactionPool = transactionBlockIds => {
+  // Filter out transaction blocks
+  transactionBlocks = transactionBlocks.filter(block => {
+    for(let i=0; i<transactionBlockIds.length; i++){
+      transactionScreen.select('#transactionBlock'+transactionBlockIds[i])
+                       .transition()
+                       .duration(t)
+                       .style('opacity', 0)
+                       .remove()
+      if(block.blockId===transactionBlockIds[i]) return false
+    }
+    return true
+  })
+}
+
+const scrollLedger = (nNewBlocks, scrolled) => {
+  // Scale for ledger blocks
+  const ledgerScale = d3.scaleLinear().domain([ledgerGroup.selectAll('.ledgerBlock').size(), 0]).range([ledgerBlockSize, 0])
+  let _y = 0
+  // Maintain a mapping for x, y coordinates for ledger links
+  let yMapping = {}
+  let xMapping = {}
+  let timeOffset = 100
+  ledgerGroup.selectAll('.ledgerBlock')
+     .transition()
+     .style('opacity', 0.5)
+     .duration((d, i) => {
+       // New blocks get added with an offset to create 'ordering' visualization 
+       if(i>ledgerGroup.selectAll('.ledgerBlock').size()-nNewBlocks){
+         timeOffset+=100
+         return timeOffset+t
+       }
+       return t
+     })
+    .attr('width', (d, i) => {
+      xMapping[d.blockId] = ledgerX+ledgerScale(i)
+      return ledgerScale(i)*1.25
+    })
+    .attr('height', (d, i) => {
+      return ledgerScale(i)
+    })
+    .attr('x', ledgerX)
+    .attr('y', (d, i) => {
+      _y += ledgerScale(i)/2
+      yMapping[d.blockId] = _y
+      return _y
+     })
+
+  let linkOffset = 0
+  timeOffset = 100
+  ledgerGroup.selectAll('.ledgerLink')
+    .transition()
+     .duration((d, i) => {
+       if(i>ledgerGroup.selectAll('.ledgerLink').size()-nNewBlocks){
+         timeOffset+=100
+         return timeOffset+t
+       }
+       return t
+     })
+     // Ledger links go to where their ledger blocks are
+     // unless ledger block is not visible.
+     // If not visible, put ledger link at the top of left infinity ledger
+     .attr('x2', (d, i) => {
+       const ledgerBlockId = d.linkId.split('to')[1]
+       if(ledgerGroup.select('#ledgerBlock'+ledgerBlockId).size()==0) {
+         return ledgerX
+       }
+       return xMapping[ledgerBlockId]
+     })
+     .attr('y2', (d, i) => {
+       const ledgerBlockId = d.linkId.split('to')[1]
+       if(ledgerGroup.select('#ledgerBlock'+ledgerBlockId).size()==0) {
+         return 0
+       }
+       return yMapping[ledgerBlockId]
+     })
+
+  // Remove from ledger
+  let removals = ledgerGroup.selectAll('.ledgerBlock').size()-5*blocksToAdd
+  ledgerGroup.selectAll('.ledgerBlock').each((d, i) => {
+    if(removals>=0){
+      ledgerGroup.select('#'+'ledgerBlock'+d.blockId)
+        .transition()
+        .duration(t)
+        .style('opacity', 0)
+        .remove()
+      removals-=1
+    }
+   })
+
+  // Remove ledger links if proposer block sources are not on screen
+  ledgerGroup.selectAll('.ledgerLink')
+             .attr('y1', (d, i) => {
+               if(d.source.y1<=0) {
+                 ledgerGroup.select('#referenceLink'+d.linkId).remove()
+                 return
+               }
+               return d.source.y1 
+             })
+
+}
+
+const drawLedger = (ledgerBlocks, referenceLinks, scrolled) => {
+  // Draw ledger new blocks and reference links
+  let ledgerBlock = ledgerGroup.selectAll('.newLedgerBlock')
+  ledgerBlock = ledgerBlock.data(ledgerBlocks, d => d.blockId)
+  ledgerBlock = ledgerBlock.enter().append('rect')
+          .attr('class', 'newLedgerBlock')
+          .attr('rx', 3)
+          .attr('id', d => 'ledgerBlock' + d.blockId)
+          .attr('x', d => d.x)
+          .attr('y', d => d.y)
+          .attr('width', ledgerBlockSize*1.25)
+          .attr('height', ledgerBlockSize)
+          .attr('class', 'ledgerBlock')
+
+    let referenceLink = ledgerGroup.selectAll('.referenceLink')
+    referenceLink = referenceLink.data(referenceLinks, d=>d.linkId)
+    referenceLink = referenceLink.enter().append('line')
+                   .attr('class', 'referenceLink')
+                   .attr('id', d => 'referenceLink'+d.linkId)
+                   .merge(referenceLink)
+                   .attr('x1', d=>d.source.x1)
+                   .attr('y1', d=>d.source.y1)
+                   .attr('x2', d=>d.target.x1)
+                   .attr('y2', d=>d.target.y1)
+                   .attr('class', 'referenceLink ledgerLink')
+  scrollLedger(ledgerBlocks.length, scrolled)
+  // No need to remove ledger blocks and reference links since they are removed by id when they
+  // go above screen
+}
+
+let disappearingGroup = svg.append('g')
+const drawDisappearingBlocks = (disappearingBlocks) => {
+  let disappearingBlock = disappearingGroup.selectAll('.disappearingBlock') 
+  disappearingBlock = disappearingBlock.data(disappearingBlocks, d => d.blockId)
+
+  let maxY = 0
+
+  ledgerGroup.selectAll('.ledgerBlock')
+             .each((d, i) => { 
+                const y = d3.select('#ledgerBlock'+d.blockId).attr('y')
+               if(y>maxY) maxY = y 
+             })
+
+  const minY = maxY-100
+  const xShift = 300
+
+  disappearingBlock = disappearingBlock.enter().append('rect')
+                                       .attr('class', 'disappearingBlock')
+                                       .attr('rx', 3)
+                                       .attr('x', d => d.x)
+                                       .attr('y', d => d.y)
+                                       .attr('width', ledgerBlockSize*1.25)
+                                       .attr('height', ledgerBlockSize)
+                                       .transition()
+                                       .duration((d, i) => Math.random()*t)
+                                       .attr('transform', `translate(${xShift}, ${Math.random() * (maxY - minY) + minY})`)
+                                       .style('opacity', 0)
+                                       .remove()
+
+}
+
+const captureTransactionBlocks = (proposerBlock, scrolled) => {
+
+  // Get proposerBlock and proposerBlock location
+  const transactionBlockIds = proposerBlock.transactionBlockIds;
+  const node = nodes.find(node => node.nodeId==proposerBlock.sourceNodeId)
+  const sourceX = proposerBlock.x + width/3 - proposerBlockSize*1.25/2
+  const sourceY = proposerBlock.y + proposerBlockSize/2
+
+  // Get ledger blocks
+  let referenceLinks = []
+  let ledgerBlocks = []
+  let _y = ledgerHeight
+
+  let disappearingBlocks = []
+  for(let i=0; i<transactionBlocks.length; i++){
+    let tb = transactionBlocks[i]
+    for(let j=0; j<transactionBlockIds.length; j++) {
+      if(tb.blockId==transactionBlockIds[j]){
+        if(ledgerBlocks.length<blocksToAdd-1){
+          referenceLinks.push({source: {x1: sourceX, y1: sourceY},
+                               target: {x1: tb.x+transactionBlockSize/2, y1: tb.y+transactionBlockSize/2},
+                               linkId: `from${proposerBlock.blockId}to${tb.blockId}`
+                              })
+            
+          ledgerBlocks.push(tb)
+        }
+        else {
+          disappearingBlocks.push(tb)
+        }
+        break
+      }
+    }
+  }
+
+  removeFromTransactionPool(transactionBlockIds)
+  drawLedger(ledgerBlocks, referenceLinks, scrolled)
+  drawDisappearingBlocks(disappearingBlocks)
+}

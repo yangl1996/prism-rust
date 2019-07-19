@@ -54,8 +54,9 @@ let mineLowRate = d3.interval(() => {
   if(index>blocks.length) mineLowRate.stop()
 }, 4*t)
 
-let modifyProtocol = () => {
+let addVotingChains = () => {
   // Initialize the chains spaced by votingChainScreenWidth/numChains
+  longestChainVotes = false
   let chain = 0, x=0
   let scale = d3.scaleLinear().domain([0, numChainsToDisplay]).range([1.0, 0.0])
   let votingBlockId = 0
@@ -96,4 +97,14 @@ let modifyProtocol = () => {
     mineVotingBlock(randomChain, votingBlockId, sourceNodeId, parentId)
     votingBlockId++
   }, 4*t/numChains)
+}
+let addTransactionBlocks = () => {
+  let transactionBlockId = 0
+  // Add 1 transaction block every 0.2 seconds
+  d3.interval(() => {
+    if(transactionBlocks.length>500) return
+    const sourceNodeId = Math.floor(Math.random() * Math.floor(nodes.length))
+    addTransactionBlock(transactionBlockId, sourceNodeId)
+    transactionBlockId++
+  }, t/5)
 }

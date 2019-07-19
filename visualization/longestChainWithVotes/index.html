@@ -6,6 +6,26 @@
   stroke: black;
   fill: #ff1a1a;
 }
+.transactionBlock{
+  fill: grey;
+  stroke: black;
+  fill-opacity: 1.0;
+}
+.ledgerBlock{
+  fill: grey;
+  stroke: black;
+  opacity: 1.0;
+}
+.newLedgerBlock{
+  fill: grey;
+  stroke: black;
+  opacity: 1.0;
+}
+.disappearingBlock{
+  fill: grey;
+  stroke: black;
+  opacity: 1.0;
+}
 .chainLink {
   fill: none;
   stroke: black;
@@ -40,8 +60,10 @@
 <script src='//d3js.org/topojson.v0.min.js'></script>
 <script src='main.js'></script>
 <script src='defs.js'></script>
+<script src='longestChain.js'></script>
 <script src='simulate.js'></script>
 <script src='worldMap.js'></script>
-<script src='helpers.js'></script>
 <script src='vote.js'></script>
 <script src='votingChains.js'></script>
+<script src='transactionBlocks.js'></script>
+<script src='ledger.js'></script>
