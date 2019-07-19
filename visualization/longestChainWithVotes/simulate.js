@@ -12,7 +12,6 @@ let cities = [
   [47.61,-122.33]
 ]
 let t = 1000
-let nodeIndex = 0
 let blocks = []
 const Node = d3.hierarchy.prototype.constructor
 const root = new Node
@@ -35,7 +34,7 @@ let mineLowRate = d3.interval(() => {
   if(newBlock.parent.children) newBlock.parent.children.push(newBlock)
   else newBlock.parent.children = [newBlock]
 
-  const sourceNodeId = Math.floor(Math.random() * Math.floor(nodeIndex))
+  const sourceNodeId = Math.floor(Math.random() * Math.floor(nodes.length))
 
   newBlock.sourceNodeId = sourceNodeId
   const prevRootY = root.y
@@ -54,53 +53,45 @@ let mineLowRate = d3.interval(() => {
 }, 4*t)
 
 let modifyProtocol = () => {
-    t = 500
-    d3.csv('high_forking.csv').then(data => {
-      blocks = data
-    })
-    index = 1
-    longestChainBlocksGroup = longestChainScreen.append('g').attr('id', 'longestChainBlocksMessy')
-                                                            .attr('transform', 'translate(100, 0)')
-    longestChainLinksGroup = longestChainScreen.append('g').attr('id', 'longestChainLinksMessy')
-                                                            .attr('transform', 'translate(100, 0)')
-    longestChainBlocks = []
-    links = []
-    root.finalized = false
-    layoutTree(root)
-    longestChainBlocks.push(root)
-    drawLongestChain()
-    let mineLowRate = d3.interval(() => {
-      const blocksToMine = Math.random()<0.2 ? 2 : 1
-      for(let x=0; x<blocksToMine; x++){
-        const newBlock = new Node
-        newBlock.id = blocks[index]['id']
-        newBlock.parent = longestChainBlocks.find(i => i.id===blocks[index]['parentId'])
-        newBlock.depth = newBlock.parent.depth+1
-        if(newBlock.parent.children) newBlock.parent.children.push(newBlock)
-        else newBlock.parent.children = [newBlock]
+  // Initialize the chains spaced by votingChainScreenWidth/numChains
+  let chain = 0, x=0
+  let scale = d3.scaleLinear().domain([0, numChainsToDisplay]).range([1.0, 0.0])
+  let votingBlockId = 0
+  while(chain<numChainsToDisplay){
+    chainsData.push({x, y: 0, blocks: [], links: [], lastVotedBlock: 0, fakeBlocks: [], fakeLinks: [], drawn: false})
+    const genesisBlock = {parent: null, blockId: votingBlockId, children: [], sourceNodeLocation: null}
+    chainsData[chain].blocks.push(genesisBlock)
+    votingBlockId++
+    let chainGroup = chainsGroup.append('g')
+                                .attr('id', 'chain'+chain)
+                                .style('opacity', scale(chain))
+    let linkGroup = chainsGroup.append('g')
+                               .attr('id', 'links'+chain)
+                                .style('opacity', scale(chain))
+    chain++
+    x+=votingChainScreenWidth/(numChainsToDisplay+1)
+  }
 
-        const sourceNodeId = Math.floor(Math.random() * Math.floor(nodeIndex))
-        pingNode(sourceNodeId)
-
-        newBlock.sourceNodeId = sourceNodeId
-        const prevRootY = root.y
-        layoutTree(root)
-        root.y = prevRootY ? prevRootY : root.y
-        newBlock.xShift = d3.randomUniform(-20, 20)()
-        newBlock.yShift = d3.randomUniform(-10, 0)()
-        longestChainBlocks.push(newBlock)
-        for(let i=0; i<longestChainBlocks.length; i++){
-            if(longestChainBlocks[i].id!=='0'){
-              longestChainBlocks[i].y = longestChainBlocks[i].parent.y+2*longestChainBlockSize+longestChainBlocks[i].yShift
-              longestChainBlocks[i].x += longestChainBlocks[i].xShift
-            }
-        }
-        links.push({source: newBlock,
-                    target: newBlock.parent, id: `${newBlock.id}-${newBlock.parent.id}`})
-        index++
-        if(index>blocks.length) mineFastRate.stop()
-      }
-      drawLongestChain()
-    }, 3*t)
-
+  while(chain<numChains){
+    chainsData.push({blocks: [], lastVotedBlock: 0, fakeBlocks: [], fakeLinks: []})
+    const genesisBlock = {parent: null, blockId: votingBlockId, children: [], sourceNodeLocation: null}
+    chainsData[chain].blocks.push(genesisBlock)
+    votingBlockId+=1
+    chain++
+  }
+  chain = 0
+  let interval = d3.interval(() => { 
+    chainsData[chain].drawn = true
+    drawVotingChain(chain) 
+    chain++ 
+    if(chain==numChainsToDisplay) interval.stop()
+  }, t)
+  d3.interval(() => {
+    const randomChain = Math.floor(Math.random() * Math.floor(numChains))
+    if(!chainsData[randomChain].drawn) return
+    const sourceNodeId = Math.floor(Math.random() * Math.floor(nodes.length))
+    const parentId = chainsData[randomChain].blocks[chainsData[randomChain].blocks.length-1].blockId
+    mineVotingBlock(randomChain, votingBlockId, sourceNodeId, parentId)
+    votingBlockId++
+  }, 4*t/numChains)
 }

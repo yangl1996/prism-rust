@@ -48,3 +48,12 @@ const castVotes = () => {
   }
   drawVotes(voteData)
 }
+
+const mineVotingBlock = (votingChain, blockId, sourceNodeId, parentId, votes) => {
+  const check = chainsData[votingChain].blocks.find(b => b.blockId===blockId) 
+  if(check==undefined){
+    pingNode(sourceNodeId)
+    if(votingChain>=numChainsToDisplay) return
+    addVotingBlock(votingChain, blockId, sourceNodeId, parentId, votes)
+  }
+}

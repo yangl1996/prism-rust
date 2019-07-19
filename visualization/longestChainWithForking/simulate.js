@@ -12,7 +12,6 @@ let cities = [
   [47.61,-122.33]
 ]
 let t = 1000
-let nodeIndex = 0
 let blocks = []
 const Node = d3.hierarchy.prototype.constructor
 const root = new Node
@@ -35,7 +34,7 @@ let mineLowRate = d3.interval(() => {
   if(newBlock.parent.children) newBlock.parent.children.push(newBlock)
   else newBlock.parent.children = [newBlock]
 
-  const sourceNodeId = Math.floor(Math.random() * Math.floor(nodeIndex))
+  const sourceNodeId = Math.floor(Math.random() * Math.floor(nodes.length))
 
   newBlock.sourceNodeId = sourceNodeId
   const prevRootY = root.y
@@ -79,7 +78,7 @@ let modifyProtocol = () => {
         if(newBlock.parent.children) newBlock.parent.children.push(newBlock)
         else newBlock.parent.children = [newBlock]
 
-        const sourceNodeId = Math.floor(Math.random() * Math.floor(nodeIndex))
+        const sourceNodeId = Math.floor(Math.random() * Math.floor(nodes.length))
         pingNode(sourceNodeId)
 
         newBlock.sourceNodeId = sourceNodeId

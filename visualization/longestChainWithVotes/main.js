@@ -39,6 +39,7 @@ worldMapScreen.attr('transform', `translate(${xTranslateScale(transTime)}, ${yTr
 const nodeRadius = 3
 let nodes = []
 
+
 const treeSize = width/3
 const renderLink = d3.linkVertical().x(d => d.x+(1.25-1)/2*longestChainBlockSize).y(d => d.y)
 const longestChainBlockSize = 20
@@ -50,9 +51,21 @@ let longestChainScreen = svg.append('g')
             .attr('width', longestChainScreenWidth)
             .attr('height', longestChainScreenHeight)
             .attr('transform', `translate(${width/3}, ${longestChainBlockSize})`)
-            .on('click', () => shiftScreen())
+            .on('click', () => addVotingChains())
 let longestChainBlocksGroup = longestChainScreen.append('g').attr('id', 'longestChainBlocksClean')
 let longestChainLinksGroup = longestChainScreen.append('g').attr('id', 'longestChainLinksClean')
+
+// Voting Chain Screen sizes
+let votingChainScreenWidth = width*0.4, votingChainScreenHeight = height
+let votingChainScreen = svg.append('g')
+              .attr('id', 'votingChains')
+              .attr('width', votingChainScreenWidth)
+              .attr('height', votingChainScreenHeight)
+              .attr('transform', `translate(${width*0.6}, ${longestChainBlockSize})`)
+const numChains = 100
+const numChainsToDisplay = 10
+const votingBlockSize = 20
+let chainsData = []
 
 
 let voteGroup = longestChainScreen.append('g').attr('id', 'votes')
@@ -179,43 +192,9 @@ let scrollLongestChain = () => {
   return true
 }
 
-let shiftScreen = () => {
+let addVotingChains = () => {
   showVotes = false
-  longestChainBlocksGroup.transition()
-                         .duration(t)
-                         .attr('transform', `translate(-${width/3}, 0)`)
-
-  longestChainLinksGroup.transition()
-                         .duration(t)
-                         .attr('transform', `translate(-${width/3}, 0)`)
-                         .on('end', () => {
-                           mineLowRate.stop()
-                           let line = longestChainScreen.append('line')
-                                                        .attr('x1', -width/10)
-                                                        .attr('y1', height/4)
-                                                        .attr('x2', -width/10)
-                                                        .attr('y2', height/4)
-                                                        .style('stroke', 'black')
-                                                        .style('stroke-width', 2)
-                                                        .transition()
-                                                        .duration(t)
-                                                        .attr('x2', width/20)
-                                                        .attr('y2', height/4)
-                                                        .style('stroke', 'black')
-                                                        .style('stroke-width', 2)
-                                                        .attr('marker-end', 'url(#small-arrow)')
-
-                           let text = longestChainScreen.append('text')
-                                                        .attr('x', -width/10)
-                                                        .attr('y', height/4-20)
-                                                        .text('Increase mining rate')
-                                                        .style('font-size', '20px')
-                                                        .style('opacity', 0)
-                                                        .transition()
-                                                        .duration(t)
-                                                        .style('opacity', 1.0)
-                           modifyProtocol()
-                         })
+  modifyProtocol()
 }
 
 let longestChainBlocks = []

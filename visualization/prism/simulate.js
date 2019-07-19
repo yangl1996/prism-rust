@@ -55,5 +55,4 @@ if(mock){
       votingBlockId++
     }, 5*t/numChains)
   }
-  if(protocol==='longest-chain'){
 }
