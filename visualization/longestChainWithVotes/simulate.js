@@ -19,6 +19,7 @@ root.id = '0'
 root.parent = null
 root.depth = 0
 root.sourceNodeId = null
+root.finalizationLevel = 0.4
 layoutTree(root)
 longestChainBlocks.push(root)
 drawLongestChain()
@@ -31,6 +32,7 @@ let mineLowRate = d3.interval(() => {
   newBlock.id = blocks[index]['id']
   newBlock.parent = longestChainBlocks.find(i => i.id===blocks[index]['parentId'])
   newBlock.depth = newBlock.parent.depth+1
+  newBlock.finalizationLevel = 0.4
   if(newBlock.parent.children) newBlock.parent.children.push(newBlock)
   else newBlock.parent.children = [newBlock]
 

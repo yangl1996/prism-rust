@@ -18,12 +18,29 @@ const drawVotes = (voteData) => {
               .transition()
               .duration(t)
               .attr('stroke-dashoffset', 0)
+              .on('interrupt', (d) => {
+                if(!voteData)
+                  d3.select('#'+d.id)
+                    .attr('stroke-dasharray', null)
+                    .attr('stroke-dashoffset', 0)
+                    .style('stroke-width', 1.0)
+                    .style('stroke', '#e6e6e6')
+                    .style('filter', 'url(#glow)')
+               })
+              .on('end', (d) => {
+                if(!voteData)
+                  d3.select('#'+d.id)
+                    .attr('stroke-dasharray', null)
+                    .attr('stroke-dashoffset', 0)
+                    .style('stroke-width', 1.0)
+                    .style('stroke', '#e6e6e6')
+                    .style('filter', 'url(#glow)')
+              })
   if(voteData){
-    console.log('here')
-      voteTransition.transition()
-          .duration(t)
-          .style('opacity', 0)
-          .remove()
+    voteTransition.transition()
+        .duration(t)
+        .style('opacity', 0)
+        .remove()
   }
 }
 
@@ -71,7 +88,7 @@ const castVotes = (votingChain) => {
       const targetY = longestChainBlock.y + longestChainBlockSize/2 + longestChainBlockSize
 
       const data = `M${sourceX},${sourceY} Q${sourceX-50},${sourceY-50} ${targetX},${targetY}`
-      const voteObj = {from: lastBlock.blockId, to: longestChainBlock.blockId, fromChain: votingChain, id: 'vote'+lastBlock.blockId+'-'+longestChainBlock.id, curve: `M${sourceX},${sourceY} Q${sourceX-50},${sourceY-50} ${targetX},${targetY}`}
+      const voteObj = {from: lastBlock.blockId, to: longestChainBlock.id, fromChain: votingChain, id: 'vote'+lastBlock.blockId+'-'+longestChainBlock.id, curve: `M${sourceX},${sourceY} Q${sourceX-50},${sourceY-50} ${targetX},${targetY}`}
       let tempPath = voteGroup.append('path')
                               .attr('id', 'tempPath')
                               .attr('d', voteObj.curve)
@@ -79,6 +96,10 @@ const castVotes = (votingChain) => {
       voteGroup.select('#tempPath').remove()
       chainVotes.push(voteObj)
       chainsData[votingChain].lastVotedBlock = voteToCast
+      longestChainBlock.finalizationLevel+=0.01
+      d3.select('#longestChainBlock'+longestChainBlock.id)
+        .style('fill-opacity', longestChainBlock.finalizationLevel)
+      if(longestChainBlock.finalizationLevel>finalizationThreshold) confirmBlock(longestChainBlock)
       voteToCast++
     }
     drawVotes()

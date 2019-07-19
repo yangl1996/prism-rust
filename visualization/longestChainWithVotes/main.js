@@ -43,6 +43,7 @@ let nodes = []
 const treeSize = width/3
 const renderLink = d3.linkVertical().x(d => d.x+(1.25-1)/2*longestChainBlockSize).y(d => d.y)
 const longestChainBlockSize = 20
+const finalizationThreshold = 0.46
 let layoutTree = d3.tree().size([treeSize, height-0.4*height])
 
 let longestChainScreenWidth = treeSize, longestChainScreenHeight = height
@@ -90,7 +91,7 @@ let drawLongestChain = () => {
     longestChainBlock
            .transition()
            .duration(t/2)
-           .style('fill-opacity', d => d.finalized ? 1.0 : 0.4)
+           .style('fill-opacity', d => d.finalized ? 1.0 : d.finalizationLevel)
            .attr('x', d => { 
                return d.x-longestChainBlockSize/2
            })
@@ -189,6 +190,27 @@ let scrollLongestChain = () => {
       return renderLink({source: d.source, target: {x: d.target.x, y: d.target.y+longestChainBlockSize}})
     })
     .on('end', showVotes ? d3.timeout(() => castVotes(), t): null)
+
+  // Shift targetY of voting links by -2*longestChainBlockSize
+  const regex = /M([^,]*),([^,]*) Q([^,]*),([^,]*) ([^,]*),([^,]*)/
+  voteGroup.selectAll('.voteLink')
+    .attr('d', d => {
+      const groups = d.curve.match(regex)
+      const sourceX = groups[1]
+      const sourceY = groups[2]
+      const targetX = groups[5]
+      const targetY = parseInt(groups[6])
+      d.curve = `M${sourceX},${sourceY} Q${sourceX-50},${sourceY-50} ${targetX},${targetY-2*longestChainBlockSize}`
+      return `M${sourceX},${sourceY} Q${sourceX-50},${sourceY-50} ${targetX},${targetY}`
+     })
+    .transition()
+    .duration(t)
+    .attr('d', d => {
+      return d.curve
+    }) 
+    .on('interrupt', d => {
+        d3.select('#'+d.id).attr('d', d.curve)
+     })
   return true
 }
 

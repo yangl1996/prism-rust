@@ -48,7 +48,7 @@ const scrollVotingChain = idx => {
       voteGroup.selectAll('.voteLink')
                .filter(d => d.from===chainsData[idx].blocks[0].blockId)
                .remove()
-      voteData = voteData.filter(d => d.from!==chainsData[idx].blocks[0].blockId)
+      chainVotes = chainVotes.filter(d => d.from!==chainsData[idx].blocks[0].blockId)
       chainsData[idx].blocks.shift()
       chainsData[idx].links.shift()
     }
