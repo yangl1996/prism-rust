@@ -39,10 +39,13 @@ let mineLowRate = d3.interval(() => {
   const sourceNodeId = Math.floor(Math.random() * Math.floor(nodes.length))
 
   newBlock.sourceNodeId = sourceNodeId
+  let transactionBlockIds = transactionBlocks.map(block => block.blockId).filter(() => Math.random()<0.9)
+  newBlock.transactionBlockIds = transactionBlockIds
   const prevRootY = root.y
   layoutTree(root)
   root.y = prevRootY ? prevRootY : root.y
   longestChainBlocks.push(newBlock)
+
   for(let i=0; i<longestChainBlocks.length; i++)
       if(longestChainBlocks[i].id!=='0')
         longestChainBlocks[i].y = longestChainBlocks[i].parent.y+2*longestChainBlockSize

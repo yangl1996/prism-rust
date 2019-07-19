@@ -167,13 +167,13 @@ const drawDisappearingBlocks = (disappearingBlocks) => {
 
 }
 
-const captureTransactionBlocks = (proposerBlock, scrolled) => {
+const captureTransactionBlocks = (longestChainBlock, scrolled) => {
 
-  // Get proposerBlock and proposerBlock location
-  const transactionBlockIds = proposerBlock.transactionBlockIds;
-  const node = nodes.find(node => node.nodeId==proposerBlock.sourceNodeId)
-  const sourceX = proposerBlock.x + width/3 - proposerBlockSize*1.25/2
-  const sourceY = proposerBlock.y + proposerBlockSize/2
+  // Get longestChainBlock and longestChainBlock location
+  const transactionBlockIds = longestChainBlock.transactionBlockIds;
+  const node = nodes.find(node => node.nodeId==longestChainBlock.sourceNodeId)
+  const sourceX = longestChainBlock.x + width/3 - longestChainBlockSize*1.25/2
+  const sourceY = longestChainBlock.y + longestChainBlockSize/2 + longestChainBlockSize
 
   // Get ledger blocks
   let referenceLinks = []
@@ -188,7 +188,7 @@ const captureTransactionBlocks = (proposerBlock, scrolled) => {
         if(ledgerBlocks.length<blocksToAdd-1){
           referenceLinks.push({source: {x1: sourceX, y1: sourceY},
                                target: {x1: tb.x+transactionBlockSize/2, y1: tb.y+transactionBlockSize/2},
-                               linkId: `from${proposerBlock.blockId}to${tb.blockId}`
+                               linkId: `from${longestChainBlock.id}to${tb.blockId}`
                               })
             
           ledgerBlocks.push(tb)

@@ -127,11 +127,15 @@ let drawLongestChain = () => {
           const didScroll = scrollLongestChain()
           if(!didScroll && longestChainVotes)
             castVotes()
+          if(longestChainBlocks[longestChainBlocks.length-1].transactionBlockIds.length>0 && !didScroll)
+              captureTransactionBlocks(longestChainBlocks[longestChainBlocks.length-1], false) 
         })
         .on('interrupt', () => {
           const didScroll = scrollLongestChain()
           if(!didScroll && longestChainVotes)
             castVotes()
+          if(longestChainBlocks[longestChainBlocks.length-1].transactionBlockIds.length>0 && !didScroll)
+              captureTransactionBlocks(longestChainBlocks[longestChainBlocks.length-1], false) 
         })
     // Remove extra links
     link.exit().remove()
@@ -162,6 +166,17 @@ let scrollLongestChain = () => {
       return renderLink({source: d.source, target: {x: d.target.x, y: d.target.y+longestChainBlockSize}})
     })
     .on('end', () => longestChainVotes ? d3.timeout(() => castVotes(), t) : null)
+
+  // Move ledger link sources by -2*longestChainBlockSize
+  ledgerGroup.selectAll('.ledgerLink')
+    .transition()
+     .duration(t)
+     .attr('y1', d => {
+       d.source.y1 = d.source.y1-2*longestChainBlockSize
+       return d.source.y1
+     })
+  
+  d3.timeout(() => captureTransactionBlocks(longestChainBlocks[longestChainBlocks.length-1], true), t)
 
   // Shift targetY of voting links by -2*longestChainBlockSize
   const regex = /M([^,]*),([^,]*) Q([^,]*),([^,]*) ([^,]*),([^,]*)/
