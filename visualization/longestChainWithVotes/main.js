@@ -68,7 +68,7 @@ const votingBlockSize = 20
 let chainsData = []
 
 
-let voteGroup = longestChainScreen.append('g').attr('id', 'votes')
+let voteGroup = svg.append('g').attr('id', 'votes')
 let setLongestChain = () => {
   let block = longestChainBlocks.reduce( (prev, current) => {
     return (prev.depth > current.depth) ? prev : current

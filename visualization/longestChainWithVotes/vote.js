@@ -1,5 +1,7 @@
+let chainVotes = []
 const drawVotes = (voteData) => {
-  let vote = voteGroup.selectAll('.voteLink').data(voteData, d=>d.id)
+  let vote = voteData.length===0 ? voteGroup.selectAll('.voteLink').data(chainVotes, d=>d.id) :
+                                   voteGroup.selectAll('.voteLink').data(voteData, d=>d.id)
 
   vote.exit().remove()
   vote.enter().append('path')
@@ -23,30 +25,61 @@ const drawVotes = (voteData) => {
 }
 
 
-const castVotes = () => {
-  if(!showVotes) return
-  // Get the last block on chain
+const castVotes = (votingChain) => {
   const lastBlock = longestChainBlocks[longestChainBlocks.length-1]
-  const sourceX = lastBlock.x-longestChainBlockSize/2
-  const sourceY = lastBlock.y+longestChainBlockSize/2
-  const longestChain = computeLongestChain()
-  let voteData = []
-  for(let i=0; i<longestChain.length; i++){
-    const target = longestChain[i]
-    if(target.id==lastBlock.id) continue
-    const targetX = target.x - longestChainBlockSize/2
-    const targetY = target.y + longestChainBlockSize/2
+  if(votingChain==null){
+    const sourceX = lastBlock.x-longestChainBlockSize/2+width/3
+    const sourceY = lastBlock.y+longestChainBlockSize/2+longestChainBlockSize
+    // Get the last block on chain
+    const longestChain = computeLongestChain()
+    let voteData = []
+    for(let i=0; i<longestChain.length; i++){
+      const target = longestChain[i]
+      if(target.id==lastBlock.id) continue
+      const targetX = target.x - longestChainBlockSize/2+width/3
+      const targetY = target.y + longestChainBlockSize/2 + longestChainBlockSize
 
-    const data = `M${sourceX},${sourceY} Q${sourceX-50},${sourceY-50} ${targetX},${targetY}`
-    const voteObj = {from: lastBlock.id, to: target.id, id: 'vote'+lastBlock.id+'-'+target.id, curve: `M${sourceX},${sourceY} Q${sourceX-50},${sourceY-50} ${targetX},${targetY}`}
-    let tempPath = voteGroup.append('path')
-                            .attr('id', 'tempPath')
-                            .attr('d', voteObj.curve)
-    voteObj.totalLength = tempPath.node().getTotalLength()
-    voteGroup.select('#tempPath').remove()
-    voteData.push(voteObj)
+      const data = `M${sourceX},${sourceY} Q${sourceX-50},${sourceY-50} ${targetX},${targetY}`
+      const voteObj = {from: lastBlock.id, to: target.id, id: 'vote'+lastBlock.id+'-'+target.id, curve: `M${sourceX},${sourceY} Q${sourceX-50},${sourceY-50} ${targetX},${targetY}`}
+      let tempPath = voteGroup.append('path')
+                              .attr('id', 'tempPath')
+                              .attr('d', voteObj.curve)
+      voteObj.totalLength = tempPath.node().getTotalLength()
+      voteGroup.select('#tempPath').remove()
+      voteData.push(voteObj)
+    }
+    drawVotes(voteData)
   }
-  drawVotes(voteData)
+  else{
+    // Get the last block on voting chain
+    const lastBlock = chainsData[votingChain].blocks[chainsData[votingChain].blocks.length-1]
+    const sourceX = lastBlock.x + 0.6*width
+    const sourceY = lastBlock.y + +votingBlockSize + votingBlockSize/2
+    let voteToCast = chainsData[votingChain].lastVotedBlock+1
+    while(voteToCast<longestChainBlocks.length){
+      // Get the block to vote for
+      const longestChainBlock = longestChainBlocks.find(block => block.id==voteToCast)
+
+      if(longestChainBlock===undefined || longestChainBlock.finalized || !longestChainBlock.x || Number.isNaN(longestChainBlock.y)) {
+        voteToCast++
+        continue
+      }
+      const targetX = longestChainBlock.x + longestChainBlockSize/2+width/3
+      const targetY = longestChainBlock.y + longestChainBlockSize/2 + longestChainBlockSize
+
+      const data = `M${sourceX},${sourceY} Q${sourceX-50},${sourceY-50} ${targetX},${targetY}`
+      const voteObj = {from: lastBlock.blockId, to: longestChainBlock.blockId, fromChain: votingChain, id: 'vote'+lastBlock.blockId+'-'+longestChainBlock.blockId, curve: `M${sourceX},${sourceY} Q${sourceX-50},${sourceY-50} ${targetX},${targetY}`}
+      let tempPath = voteGroup.append('path')
+                              .attr('id', 'tempPath')
+                              .attr('d', voteObj.curve)
+      voteObj.totalLength = tempPath.node().getTotalLength()
+      voteGroup.select('#tempPath').remove()
+      chainVotes.push(voteObj)
+      chainsData[votingChain].lastVotedBlock = voteToCast
+      voteToCast++
+    }
+    drawVotes(chainVotes)
+ }
 }
 
 const mineVotingBlock = (votingChain, blockId, sourceNodeId, parentId, votes) => {
