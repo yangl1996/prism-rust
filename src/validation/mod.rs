@@ -1,6 +1,8 @@
 mod proposer_block;
 mod transaction;
 mod voter_block;
+
+pub use proposer_block::check_ref_proposer_level;
 use crate::block::{Block, Content, pos_metadata};
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
@@ -10,6 +12,13 @@ use crate::crypto::merkle::verify;
 use crate::crypto::vrf::VrfOutput;
 extern crate bigint;
 use bigint::uint::U256;
+
+cached! {
+    U256_DIV;
+    fn u256_div(dividend: U256, divisor: U256) -> U256 = {
+        dividend / divisor
+    }
+}
 
 /// The result of block validation.
 #[derive(Debug)]
@@ -264,9 +273,9 @@ pub fn check_difficulty(hash: &VrfOutput, difficulty: &H256, stake: u64) -> Opti
     let big_proposer_range: U256 = PROPOSER_MINING_RANGE.into();
     let big_transaction_range: U256 = TRANSACTION_MINING_RANGE.into();
     let total_mining_range: U256 = big_proposer_range + big_transaction_range;
-    // TODO: change big_difficulty / total_mining_range to DEFAULT_DIFFICULTY_DIV
     // *DEFAULT_DIFFICULTY_DIV
-    if big_hash < big_difficulty / total_mining_range * big_proposer_range {
+    // big_difficulty / total_mining_range
+    if big_hash < u256_div(big_difficulty, total_mining_range) * big_proposer_range {
         // proposer block
         Some(PROPOSER_INDEX)
     } else if big_hash < big_difficulty {
@@ -278,6 +287,8 @@ pub fn check_difficulty(hash: &VrfOutput, difficulty: &H256, stake: u64) -> Opti
     }
 }
 
+
+
 #[cfg(test)]
 mod tests {
     use super::super::config::*;
@@ -288,8 +299,8 @@ mod tests {
     fn sortition_id() {
         let difficulty = *DEFAULT_DIFFICULTY;
         let hash: H256 = [0; 32].into();
-        assert_eq!(check_difficulty(&hash, &difficulty, 100), Some(PROPOSER_INDEX));
+        assert_eq!(check_difficulty(&hash, &difficulty, 1), Some(PROPOSER_INDEX));
         // This hash should fail PoW test (so result is None)
-        assert_eq!(check_difficulty(&difficulty, &difficulty, 100), None);
+        assert_eq!(check_difficulty(&difficulty, &difficulty, 1), None);
     }
 }

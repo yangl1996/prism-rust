@@ -8,7 +8,7 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Mutex;
+use std::sync::{Mutex, RwLock};
 use std::{error, fmt};
 use crate::utxodb::{UtxoDatabase, Utxo, OutputWithTime};
 use crate::block::pos_metadata::TimeStamp;
@@ -27,6 +27,7 @@ pub struct Wallet {
     /// Keep coin ids for mining in memory for performance
     // TODO: for now in create transaction, we don't touch these coins
     coins_mining: Mutex<HashMap<Vec<u8>, Vec<u8>>>,
+    num_mining: RwLock<usize>,
     counter: AtomicUsize,
 }
 
@@ -63,7 +64,7 @@ impl From<rocksdb::Error> for WalletError {
 }
 
 impl Wallet {
-    fn open<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
+    fn open<P: AsRef<std::path::Path>>(path: P, mining_coins: usize) -> Result<Self> {
         let coin_cf = rocksdb::ColumnFamilyDescriptor::new(COIN_CF, rocksdb::Options::default());
         let keypair_cf =
             rocksdb::ColumnFamilyDescriptor::new(KEYPAIR_CF, rocksdb::Options::default());
@@ -75,13 +76,14 @@ impl Wallet {
             db: handle,
             keypairs: Mutex::new(HashMap::new()),
             coins_mining: Mutex::new(HashMap::new()),
+            num_mining: RwLock::new(mining_coins),
             counter: AtomicUsize::new(0),
         });
     }
 
-    pub fn new<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
+    pub fn new<P: AsRef<std::path::Path>>(path: P, mining_coins: usize) -> Result<Self> {
         rocksdb::DB::destroy(&rocksdb::Options::default(), &path)?;
-        return Self::open(path);
+        return Self::open(path, mining_coins);
     }
 
     pub fn number_of_coins(&self) -> usize {
@@ -139,7 +141,7 @@ impl Wallet {
                 let val = serialize(&output_with_time).unwrap();
                 batch.put_cf(cf, &key, &val)?;
                 let mut coins = self.coins_mining.lock().unwrap();
-                if coins.len() < 200 {
+                if coins.len() < *self.num_mining.read().unwrap() {
                     coins.insert(key, val);
                 }
                 drop(coins);
@@ -309,24 +311,25 @@ pub mod tests {
         let addr = w.generate_keypair().unwrap();
         assert_eq!(w.addresses().unwrap(), vec![addr]);
         assert!(w.create_transaction(H256::default(), 1, None).is_err());
-        // give the test address 10 x 10 coins
+        // give the test address 1000 x 10 coins
         let mut ico = vec![];
         let mut remove_ico = vec![];
-        for _ in 0..10 {
+        for _ in 0..1000 {
+            let coin_id = generate_random_coinid();
             ico.push(Utxo {
                 value: 10,
                 owner: addr,
-                coin: generate_random_coinid(),
+                coin: coin_id,
                 confirm_time: 0,
             });
             remove_ico.push(Input {
                 value: 10,
                 owner: addr,
-                coin: generate_random_coinid(),
+                coin: coin_id,
             });
         }
         w.apply_diff(&ico, &[]).unwrap();
-        assert_eq!(w.balance().unwrap(), 100);
+        assert_eq!(w.balance().unwrap(), 10000);
 
         // generate transactions
         let tx = w.create_transaction(H256::default(), 19, None).unwrap();
@@ -339,11 +342,9 @@ pub mod tests {
         assert_eq!(tx.output[1].recipient, addr);
         assert_eq!(tx.output[1].value, 1);
 
-        /*
         // remove coins
         w.apply_diff(&[], &remove_ico).unwrap();
         assert_eq!(w.balance().unwrap(), 0);
-        */
     }
 
 }

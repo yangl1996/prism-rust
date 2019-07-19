@@ -307,6 +307,7 @@ func log(interval, duration uint, nodesFile, dataDir string, grafana bool) {
 				tm.Printf("        Generated Transactions    %8v  %8v\n", cavg.Generated_transactions/dur, (cavg.Generated_transactions-pavg.Generated_transactions)/int(interval))
 				tm.Printf("        Confirmed Transactions    %8v  %8v\n", cavg.Confirmed_transactions/dur, (cavg.Confirmed_transactions-pavg.Confirmed_transactions)/int(interval))
 				tm.Printf("      Deconfirmed Transactions    %8v  %8v\n", cavg.Deconfirmed_transactions/dur, (cavg.Deconfirmed_transactions-pavg.Deconfirmed_transactions)/int(interval))
+				tm.Printf("      Deconfirmed Transactions    %8v  %8v\n", cavg.Deconfirmed_transactions, (cavg.Deconfirmed_transactions-pavg.Deconfirmed_transactions)/int(interval))
 				tm.Printf("  Confirmed Transaction Blocks    %8v  %8v\n", cavg.Confirmed_transaction_blocks/dur, (cavg.Confirmed_transaction_blocks-pavg.Confirmed_transaction_blocks)/int(interval))
 				tm.Printf("Deconfirmed Transaction Blocks    %8v  %8v\n", cavg.Deconfirmed_transaction_blocks/dur, (cavg.Deconfirmed_transaction_blocks-pavg.Deconfirmed_transaction_blocks)/int(interval))
 				tm.Printf("                  Queue Length    %8v  %8v\n", cavg.Incoming_message_queue, (cavg.Incoming_message_queue-pavg.Incoming_message_queue)/int(interval))

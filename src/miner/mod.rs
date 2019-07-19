@@ -13,7 +13,7 @@ use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 use crate::handler::new_validated_block;
 use crate::network::message::Message;
 use crate::network::server::Handle as ServerHandle;
-use crate::validation::check_difficulty;
+use crate::validation::{check_difficulty, check_ref_proposer_level};
 use crate::crypto::vrf::{VrfSecretKey, VrfPublicKey, VrfInput, vrf_evaluate, VrfOutput};
 use crate::utxodb::Utxo;
 use crate::wallet::Wallet;
@@ -296,7 +296,7 @@ impl Context {
                 let mined_len = mined_blocks.len();
                 thread::spawn(move || {
                     let start = get_time();
-                    warn!("Plan to sleep {} ms,\tuse {} coins to mine,\tmined {} blocks.", timestamp as i128 - start as i128, coins_len, mined_len);
+                    info!("Plan to sleep {} ms,\tuse {} coins to mine,\tmined {} blocks.", timestamp as i128 - start as i128, coins_len, mined_len);
                     loop {
                         if get_time()>=timestamp {
                             break;
@@ -389,11 +389,6 @@ impl MiningManager {
                 drop(s_cloned);
             }));
         }
-        /* maybe unnecessary since r.iter() will block
-        for t in threads {
-            t.join().unwrap();
-        }
-        */
         drop(s);
         let result: Vec<Block> = r.iter().collect();
         let mut mined_chains = self.mined_chains.write().unwrap();
@@ -447,12 +442,20 @@ impl MiningManager {
             let content = if chain_id as u16 == PROPOSER_INDEX {
                 if sortition_id == PROPOSER_INDEX {
                     let transaction_refs = self.blockchain.unreferred_transactions();
-                    let proposer_refs = self.blockchain.unreferred_proposers();
-                    // TODO remove parent from refs
-                    Content::Proposer(proposer::Content {
+                    let mut proposer_refs = self.blockchain.unreferred_proposers();
+                    // remove parent from refs
+                    proposer_refs.retain(|&x|x != self.parents[chain_id].0);
+                    let content = proposer::Content {
                         transaction_refs,
                         proposer_refs,
-                    })
+                    };
+                    // bug fix: for proposer, its content could be later than it's parent since
+                    // we get latest content above (blockchain.unreferred_proposers()).
+                    // so it has to be validated here
+                    if !check_ref_proposer_level(&self.parents[chain_id].0, &content, &self.blockchain) {
+                        return None;
+                    }
+                    Content::Proposer(content)
                 } else {
                     // sortition result is a transaction block
                     let mempool = self.mempool.lock().unwrap();

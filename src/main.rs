@@ -47,6 +47,7 @@ fn main() {
      (@arg init_fund_value: --("fund-value") [INT] default_value("100") "Sets the value of each initial fund coin")
      (@arg load_key_path: --("load-key") ... [PATH] "Loads a key pair into the wallet from the given address")
      (@arg mempool_size: --("mempool-size") ... [SIZE] default_value("500000") "Sets the size limit of the memory pool")
+     (@arg mining_coins: --("mining-coins") ... [SIZE] default_value("100") "Sets the size limit of mining coins")
      (@subcommand keygen =>
       (about: "Generates Prism wallet key pair")
       (@arg display_address: --addr "Prints the address of the key pair to STDERR")
@@ -103,8 +104,16 @@ fn main() {
     let blockchain = BlockChain::new(&matches.value_of("blockchain_db").unwrap()).unwrap();
     let blockchain = Arc::new(blockchain);
 
+    let mining_coins = matches
+        .value_of("mining_coins")
+        .unwrap()
+        .parse::<usize>()
+        .unwrap_or_else(|e| {
+            error!("Error parsing number of mining coins: {}", e);
+            process::exit(1);
+        });
     // init wallet database
-    let wallet = Wallet::new(&matches.value_of("wallet_db").unwrap()).unwrap();
+    let wallet = Wallet::new(&matches.value_of("wallet_db").unwrap(), mining_coins).unwrap();
     let wallet = Arc::new(wallet);
 
     // load wallet keys

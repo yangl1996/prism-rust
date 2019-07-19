@@ -150,13 +150,13 @@ impl UtxoDatabase {
         // check whether the inputs used in this transaction are all unspent
         for input in &t.input {
             let id_ser = serialize(&input.coin).unwrap();
-            let option_output_with_time = self.db.get_cf(unspent_coins_cf, &id_ser).unwrap();
+            let option_output_with_time = self.db.get_cf(unspent_coins_cf, &id_ser)?;
             match option_output_with_time {
                 Some(ser_output_with_time) => {
                     // TODO: Can we move data from one cf to another?
                     // Removing the coin from unspent cf to spent cf
                     batch.delete_cf(unspent_coins_cf, &id_ser)?;
-                    batch.put_cf(spent_coins_buffer_cf, &id_ser, &ser_output_with_time);
+                    batch.put_cf(spent_coins_buffer_cf, &id_ser, &ser_output_with_time)?;
                 }
                 None => {
                     return Ok((vec![], vec![]));
@@ -223,7 +223,7 @@ impl UtxoDatabase {
             };
             let id_ser = serialize(&id).unwrap();
             if self.db.get_pinned_cf(unspent_coins_cf,&id_ser)?.is_none() {
-                return Ok((vec![], vec![]));
+                unreachable!();
             }
             batch.delete_cf(unspent_coins_cf, &id_ser)?;
 
@@ -239,20 +239,29 @@ impl UtxoDatabase {
         // now that we have checked that this transaction was valid when originally added, we will
         // add back the input and commit to database
         for input in &t.input {
-            let out = Output {
-                value: input.value,
-                recipient: input.owner,
-            };
-            batch.put_cf(unspent_coins_cf,serialize(&input.coin).unwrap(), serialize(&out).unwrap())?;
+            let id_ser = serialize(&input.coin).unwrap();
+            let option_output_with_time = self.db.get_cf(spent_coins_buffer_cf, &id_ser)?;
+            match option_output_with_time {
+                Some(ser_output_with_time) => {
+                    // TODO: Can we move data from one cf to another?
+                    // Removing the coin from spent cf to unspent cf
+                    batch.delete_cf(spent_coins_buffer_cf, &id_ser)?;
+                    batch.put_cf(unspent_coins_cf, &id_ser, &ser_output_with_time)?;
+                    let output_with_time: OutputWithTime = deserialize(&ser_output_with_time).unwrap();
+                    let utxo = Utxo{
+                        coin: input.coin,
+                        value: output_with_time.output.value,
+                        owner: output_with_time.output.recipient,
+                        confirm_time: output_with_time.confirm_time,
+                    };
+                    added_utxos.push(utxo);
+                }
+                None => {
+                    unreachable!();
+                }
+            }
             // TODO: The timestamp of the original coin is unknown at this point.
-            let utxo = Utxo{
-                coin: input.coin,
-                value: input.value,
-                owner: input.owner,
-                confirm_time: 0
-            };
-            panic!("UTXO remove_transactions() should be be called because the timestamp issue is not yet fixed");
-            added_utxos.push(utxo);
+            // panic!("UTXO remove_transactions() should be be called because the timestamp issue is not yet fixed");
         }
         // write the transaction as a batch
         // TODO: we don't write to wal here, so should the program crash, the db will be in
