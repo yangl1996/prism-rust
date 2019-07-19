@@ -2,7 +2,7 @@ import random
 import numpy as np
 
 timestamp = 0
-duration = 1000
+duration = 10000
 f = 0.01
 delay_parameter = 1
 num_nodes = 10

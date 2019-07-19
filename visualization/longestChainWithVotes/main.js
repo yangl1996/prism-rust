@@ -76,7 +76,10 @@ let setLongestChain = () => {
   })
   let depth = 0
   while(block!==null){
-    if(depth>6) block.finalized = true
+    if(depth>6) {
+      block.finalized = true
+      chainVotes = chainVotes.filter(d => d.to!==block.id)
+    }
     block = block.parent
     depth++
   }  
