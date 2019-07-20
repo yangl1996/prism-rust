@@ -77,36 +77,31 @@ impl UtxoDatabase {
         };
     }
 
-    /// Check whether the given coin is unspent at time 'timestamp'.
-    pub fn is_coin_unspent(&self, coin: &CoinId, timestamp: TimeStamp)-> Result<bool, rocksdb::Error> {
+    /// Check whether the given coin is confirmed before time 'timestamp'.
+    pub fn is_coin_before(&self, coin: &CoinId, timestamp: TimeStamp)-> Result<bool, rocksdb::Error> {
         let unspent_coins_cf = self.db.cf_handle(UNSPENT_COINS_CF).unwrap();
         let spent_coins_buffer_cf = self.db.cf_handle(SPENT_COINS_BUFFER_CF).unwrap();
         // first check if the coin is present in unspent_coins cf
-        let option_output_with_time = self.db.get_cf(unspent_coins_cf,serialize(&coin).unwrap())?;
-        match option_output_with_time {
-            Some(ser_output_with_time) => {
-                let output_with_time: OutputWithTime = deserialize(&ser_output_with_time).unwrap();
-                if output_with_time.confirm_time < timestamp {
-                    return Ok(true);
-                }
-            },
-            None => {},
+        if let Some(ser_output_with_time) = self.db.get_cf(unspent_coins_cf,serialize(&coin).unwrap())? {
+            let output_with_time: OutputWithTime = deserialize(&ser_output_with_time).unwrap();
+            if output_with_time.confirm_time <= timestamp {
+                return Ok(true);
+            } else {
+                return Ok(false);
+            }
         };
 
         // second check if the coin is present in spent_coins_buffer cf
         let option_output_with_time = self.db.get_cf(spent_coins_buffer_cf,serialize(&coin).unwrap())?;
-        match option_output_with_time {
-            Some(ser_output_with_time) => {
-                let output_with_time: OutputWithTime = deserialize(&ser_output_with_time).unwrap();
-                if output_with_time.confirm_time < timestamp {
-                    return Ok(true);
-                }
-                else{
-                    return Ok(false);
-                }
-            },
-            None => {return Ok(false)},
+        if let Some(ser_output_with_time) = option_output_with_time {
+            let output_with_time: OutputWithTime = deserialize(&ser_output_with_time).unwrap();
+            if output_with_time.confirm_time <= timestamp {
+                return Ok(true);
+            } else {
+                return Ok(false);
+            }
         };
+        Ok(false)
     }
 
     pub fn snapshot(&self) -> Result<Vec<u8>, rocksdb::Error> {

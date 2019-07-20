@@ -1,15 +1,15 @@
-mod proposer_block;
+pub mod proposer_block;
 mod transaction;
 mod voter_block;
 
-pub use proposer_block::check_ref_proposer_level;
 use crate::block::{Block, Content, pos_metadata};
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
 use crate::config::*;
 use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::merkle::verify;
-use crate::crypto::vrf::VrfOutput;
+use crate::crypto::vrf::{vrf_verify, VrfOutput};
+use crate::utxodb::UtxoDatabase;
 extern crate bigint;
 use bigint::uint::U256;
 
@@ -25,12 +25,11 @@ cached! {
 pub enum BlockResult {
     /// The validation passes.
     Pass,
-    /// The PoW doesn't pass.
-    WrongPoW,
-    /// The sortition id and content type doesn't match.
-    WrongSortitionId,
-    /// The content Merkle proof is incorrect.
-    WrongSortitionProof,
+    /// The coin for PoS is invalid.
+    WrongCoin,
+    WrongVrfProof,
+    /// The PoS Vrf value doesn't pass difficulty check.
+    WrongVrfValue,
     /// Some references are missing.
     MissingReferences(Vec<H256>),
     /// Proposer Ref level > parent
@@ -49,9 +48,9 @@ impl std::fmt::Display for BlockResult {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             BlockResult::Pass => write!(f, "validation passed"),
-            BlockResult::WrongPoW => write!(f, "PoW larger than difficulty"),
-            BlockResult::WrongSortitionId => write!(f, "Sortition id is not same as content type"),
-            BlockResult::WrongSortitionProof => write!(f, "Sortition Merkle proof is incorrect"),
+            BlockResult::WrongCoin => write!(f, "Coin donen't satisfy PoS rule"),
+            BlockResult::WrongVrfProof => write!(f, "PoS VRF Proof is wrong"),
+            BlockResult::WrongVrfValue => write!(f, "PoS VRF value larger than difficulty"),
             BlockResult::MissingReferences(_) => write!(f, "referred blocks not in system"),
             BlockResult::WrongProposerRef => {
                 write!(f, "referred proposer blocks level larger than parent")
@@ -68,15 +67,17 @@ impl std::fmt::Display for BlockResult {
     }
 }
 
-/// Validate a block.
-pub fn check_block(block: &Block, blockchain: &BlockChain, blockdb: &BlockDatabase) -> BlockResult {
+// Validate a block. Just used for testing all check_()
+fn check_block(block: &Block, blockchain: &BlockChain, blockdb: &BlockDatabase) -> BlockResult {
     // TODO: Check difficulty. Where should we get the current difficulty ranges?
 
-    match check_pow_sortition_id(block) {
+    /* todo fix this
+    match check_pos(block) {
         // if PoW and sortition id passes, we check other rules
         BlockResult::Pass => {}
         x => return x,
     };
+    */
     match check_proof(block) {
         BlockResult::Pass => {}
         x => return x,
@@ -93,22 +94,28 @@ pub fn check_block(block: &Block, blockchain: &BlockChain, blockdb: &BlockDataba
 }
 
 // check PoW and sortition id
-pub fn check_pow_sortition_id(block: &Block) -> BlockResult {
-    /*
-    let sortition_id = check_difficulty(&block.hash(), &block.header.difficulty);
-    if let Some(sortition_id) = sortition_id {
+pub fn check_pos(block: &Block, utxodb: &UtxoDatabase) -> BlockResult {
+    // check the coin used for pos is valid
+    if !utxodb.is_coin_before(&block.header.pos_metadata.utxo.coin, block.header.pos_metadata.timestamp - TAU).unwrap() {
+        return BlockResult::WrongCoin;
+    }
+    // vrf verify
+    if !vrf_verify(&block.header.pos_metadata.vrf_pubkey, &(&block.header.pos_metadata).into(), &block.header.pos_metadata.vrf_output, &block.header.pos_metadata.vrf_proof) {
+        return BlockResult::WrongVrfProof;
+    }
+    // check vrf value
+    if let Some(sortition_id) = check_difficulty(&block.header.pos_metadata.vrf_output, &block.header.difficulty, block.header.pos_metadata.utxo.value) {
         let correct_sortition_id = match &block.content {
             Content::Proposer(_) => PROPOSER_INDEX,
             Content::Transaction(_) => TRANSACTION_INDEX,
-            Content::Voter(content) => content.chain_number + FIRST_VOTER_INDEX,
+            Content::Voter(_) => PROPOSER_INDEX,
         };
         if sortition_id != correct_sortition_id {
-            return BlockResult::WrongSortitionId;
+            return BlockResult::WrongVrfValue;
         }
     } else {
-        return BlockResult::WrongPoW;
+        return BlockResult::WrongVrfValue;
     }
-    */
     BlockResult::Pass
 }
 
@@ -145,7 +152,7 @@ pub fn check_data_availability(
             }
             // check for missing references
             let missing_refs =
-                proposer_block::get_missing_references(&content, blockchain, blockdb);
+                proposer_block::get_missing_references(&content, blockchain);
             if !missing_refs.is_empty() {
                 missing.extend_from_slice(&missing_refs);
             }

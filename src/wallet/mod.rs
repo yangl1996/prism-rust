@@ -12,6 +12,7 @@ use std::sync::{Mutex, RwLock};
 use std::{error, fmt};
 use crate::utxodb::{UtxoDatabase, Utxo, OutputWithTime};
 use crate::block::pos_metadata::TimeStamp;
+use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 
 pub const COIN_CF: &str = "COIN";
 pub const KEYPAIR_CF: &str = "KEYPAIR"; // &Address to &KeyPairPKCS8
@@ -146,15 +147,20 @@ impl Wallet {
                 }
                 drop(coins);
                 self.counter.fetch_add(1, Ordering::Relaxed);
+                PERFORMANCE_COUNTER.record_wallet_balance_add(utxo.value as usize);
             }
         }
         for coin in remove {
-            let key = serialize(&coin.coin).unwrap();
-            let mut coins = self.coins_mining.lock().unwrap();
-            // no coins in coins_mining should be spent
-            assert!(coins.remove(&key).is_none());
-            drop(coins);
-            batch.delete_cf(cf, &key)?;
+            if self.contains_keypair(&coin.owner) {
+                let key = serialize(&coin.coin).unwrap();
+                let mut coins = self.coins_mining.lock().unwrap();
+                // no coins in coins_mining should be spent
+                assert!(coins.remove(&key).is_none());
+                drop(coins);
+                batch.delete_cf(cf, &key)?;
+                self.counter.fetch_sub(1, Ordering::Relaxed);
+                PERFORMANCE_COUNTER.record_wallet_balance_sub(coin.value as usize);
+            }
         }
         self.db.write(batch)?;
         Ok(())

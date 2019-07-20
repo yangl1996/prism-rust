@@ -13,7 +13,8 @@ use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 use crate::handler::new_validated_block;
 use crate::network::message::Message;
 use crate::network::server::Handle as ServerHandle;
-use crate::validation::{check_difficulty, check_ref_proposer_level};
+use crate::validation::check_difficulty;
+use crate::validation::proposer_block::{get_missing_references, check_ref_proposer_level};
 use crate::crypto::vrf::{VrfSecretKey, VrfPublicKey, VrfInput, vrf_evaluate, VrfOutput};
 use crate::utxodb::Utxo;
 use crate::wallet::Wallet;
@@ -289,6 +290,7 @@ impl Context {
                     &self.server,
                     );
             }
+            let new_block_hashes: Vec<H256> = mined_blocks.iter().map(|x|x.hash()).collect();
             // sleep until the timestamp
             {
                 let timestamp = self.timestamp;
@@ -309,14 +311,16 @@ impl Context {
                 r.recv().unwrap();
             }
             // broadcast after sleeping
-            for mined_block in mined_blocks.iter() {
-                self.server
-                    .broadcast(Message::NewBlockHashes(vec![mined_block.hash()]));
-                // if we are stepping, pause the miner loop
+            self.server
+                .broadcast(Message::NewBlockHashes(new_block_hashes));
+            // if we are stepping, pause the miner loop
+            if !mined_blocks.is_empty() {
                 if let OperatingState::Step = self.operating_state {
                     self.operating_state = OperatingState::Paused;
                 }
-                // after we mined this block, we update the context based on this block
+            }
+            // after we mined this block, we update the context based on this block
+            for mined_block in mined_blocks.iter() {
                 match &mined_block.content {
                     Content::Proposer(_) => self
                         .context_update_tx
@@ -451,7 +455,10 @@ impl MiningManager {
                     };
                     // bug fix: for proposer, its content could be later than it's parent since
                     // we get latest content above (blockchain.unreferred_proposers()).
-                    // so it has to be validated here
+                    // so it has to be validated here for data availability and proposer level
+                    if !get_missing_references(&content, &self.blockchain).is_empty() {
+                        return None;
+                    }
                     if !check_ref_proposer_level(&self.parents[chain_id].0, &content, &self.blockchain) {
                         return None;
                     }
@@ -466,7 +473,7 @@ impl MiningManager {
                     })
                 }
             } else {
-                let votes = self.blockchain.unvoted_proposer(&self.parents[chain_id].0, &self.blockchain.best_proposer().unwrap().0, self.timestamp).unwrap();
+                let votes = self.blockchain.unvoted_proposer(&self.parents[chain_id].0, &self.blockchain.best_proposer().unwrap().0).unwrap();
                 Content::Voter(voter::Content {
                     chain_number: chain_id as u16 - FIRST_VOTER_INDEX,
                     votes,

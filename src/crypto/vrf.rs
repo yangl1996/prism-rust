@@ -1,7 +1,7 @@
 use super::hash::{Hashable, H256};
 use ed25519_dalek::{PublicKey,SecretKey};
 use serde::{Serialize, Deserialize};
-use crate::block::pos_metadata::{TimeStamp, RandomSource};
+use crate::block::pos_metadata::{Metadata, TimeStamp, RandomSource};
 use crate::transaction::CoinId;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, Hash)]
@@ -16,12 +16,21 @@ impl std::convert::From<&PublicKey> for VrfPublicKey {
 pub type VrfSecretKey = SecretKey;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, Hash)]
-pub struct VrfInput{
+pub struct VrfInput {
     pub random_source: RandomSource,
     pub time: TimeStamp,
     pub coin: CoinId,
 }
 
+impl std::convert::From<&Metadata> for VrfInput {
+    fn from(other: &Metadata) -> VrfInput {
+        VrfInput {
+            random_source: other.parent_random_source.clone(),
+            time: other.timestamp,
+            coin: other.utxo.coin.clone(),
+        }
+    }
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, Hash    )]
 pub struct VrfProof ([u8; 32]);
@@ -46,7 +55,7 @@ pub fn vrf_evaluate(public_key: &VrfPublicKey, secret_key: &VrfSecretKey, input:
 }
 
 /// This checks if the random output produced by public_key is valid.
-pub fn vrf_check(public_key: &VrfPublicKey, input: VrfInput, output: VrfOutput, proof: VrfProof) -> bool {
+pub fn vrf_verify(public_key: &VrfPublicKey, input: &VrfInput, output: &VrfOutput, proof: &VrfProof) -> bool {
     let mut ctx = ring::digest::Context::new(&ring::digest::SHA256);
     ctx.update(&input.random_source);
     ctx.update(&input.time.to_be_bytes());
@@ -55,6 +64,6 @@ pub fn vrf_check(public_key: &VrfPublicKey, input: VrfInput, output: VrfOutput, 
     ctx.update(&input.coin.index.to_be_bytes());
     ctx.update(&public_key.0);
     let digest = ctx.finish();
-    output == digest.into()
+    *output == digest.into()
 }
 

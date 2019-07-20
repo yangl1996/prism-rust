@@ -8,8 +8,6 @@ pub const DELTA: TimeStamp = 100;
 pub const TAU: TimeStamp = 20000;
 // The extra buffer time for holding spent coins
 pub const TAU_NETWORK_DELAY: TimeStamp = 10000;
-// Time u for pos, only proposer after t-u can be voted
-pub const OMEGA: TimeStamp = 400000;
 // Time s for pos, compare voter chain length using s-truncated rule
 pub const SIGMA: TimeStamp = 400000;
 // Level c for pos. change random source using c-correlated rule
@@ -56,8 +54,8 @@ pub const FIRST_VOTER_INDEX: u16 = 1;
 lazy_static! {
     pub static ref DEFAULT_DIFFICULTY: H256 = {
         let mut raw: [u8; 32] = [255; 32];
-        raw[0]=0x02;
-        raw[1]=0x07;
+        raw[0]=0x00;
+        raw[1]=0x1e;
         raw.into()
     };
 

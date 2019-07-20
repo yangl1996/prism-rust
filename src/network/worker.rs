@@ -159,8 +159,8 @@ impl Context {
 
                         // check POW here. If POW does not pass, discard the block at this
                         // stage
-                        let pow_check = validation::check_pow_sortition_id(&block);
-                        match pow_check {
+                        let pos_check = validation::check_pos(&block, &self.utxodb);
+                        match pos_check {
                             BlockResult::Pass => {}
                             _ => continue,
                         }
