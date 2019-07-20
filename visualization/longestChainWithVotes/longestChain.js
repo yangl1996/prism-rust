@@ -1,3 +1,7 @@
+
+let blockGlow = glow('blockGlow').rgb('#ff4f3e').stdDeviation(5)
+blockGlow(svg)
+
 let confirmBlock = (longestChainBlock) => {
   voteGroup.selectAll('.voteLink')
            .filter(d => d.to===longestChainBlock.id)
@@ -77,6 +81,7 @@ let drawLongestChain = () => {
            .attr('id', d => 'longestChainBlock'+d.id)
            .attr('class', 'longestChainBlock')
            .style('fill-opacity', 0.4)
+           .style('filter', 'url(#blockGlow)')
            .attr('height', 0)
            .attr('width', 0)
            .attr('rx', 3)
@@ -95,6 +100,7 @@ let drawLongestChain = () => {
            .duration(t)
            // Tune the fill opacity based on finalizationLevel
            .attr('height', longestChainBlockSize)
+  //.style('filter', 'url(#myGlow)')
            .attr('width', longestChainBlockSize*1.25)
            .attr('x', d => { 
                return d.x-longestChainBlockSize/2

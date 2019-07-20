@@ -8,7 +8,7 @@ svg.append('svg:defs').append('svg:marker')
     .attr('orient', 'auto')
     .append('path')
     .attr('d', 'M 0 0 L 6 3 L 0 6')
-    .style('stroke', 'black')
+    .style('stroke', 'white')
     .style('fill', 'none')
 
 let linearGradient = svg.append('defs')
@@ -25,18 +25,54 @@ linearGradient.append('stop')
     .attr('stop-color', 'white')
 
 let blurFilter = svg.append('svg:defs').append('filter')
-    .attr('id','blur');
+    .attr('id','blur')
 blurFilter.append('feGaussianBlur')
     .attr('stdDeviation','1')
 
-let glowFilter = svg.append('svg:defs').append('filter')
-    .attr('id','glow');
-glowFilter.append('feGaussianBlur')
-    .attr('stdDeviation','2')
-    .attr('result','coloredBlur');
+let glow = (url) => {
+    function constructor(svg) {
+      let defs = svg.append('defs')
+      let filter = defs.append('filter')
+          .attr('id', url)
+          .attr('x', '-20%')
+          .attr('y', '-20%')
+          .attr('width', '140%')
+          .attr('height', '140%')
+        .call(svg => {
+          svg.append('feColorMatrix')
+              .attr('type', 'matrix')
+              .attr('values', colorMatrix)
+          svg.append('feGaussianBlur')
+               // .attr('in', 'SourceGraphics')
+              .attr('stdDeviation', stdDeviation)
+              .attr('result', 'coloredBlur')
+        })
 
-let feMerge = glowFilter.append('feMerge');
-feMerge.append('feMergeNode')
-    .attr('in','coloredBlur');
-feMerge.append('feMergeNode')
-    .attr('in','SourceGraphic');
+      filter.append('feMerge')
+        .call(svg => {
+          svg.append('feMergeNode')
+              .attr('in', 'coloredBlur')
+          svg.append('feMergeNode')
+              .attr('in', 'SourceGraphic')
+        })
+    }
+
+  constructor.rgb = (value) => {
+    rgb = value
+    color = d3.rgb(value)
+    let matrix = '0 0 0 red 0 0 0 0 0 green 0 0 0 0 blue 0 0 0 1 0'
+    colorMatrix = matrix
+      .replace('red', color.r)
+      .replace('green', color.g)
+      .replace('blue', color.b)
+
+    return constructor
+  }
+
+  constructor.stdDeviation = (value) => {
+    stdDeviation = value
+    return constructor
+  }
+
+  return constructor
+}

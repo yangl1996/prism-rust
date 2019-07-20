@@ -1,7 +1,9 @@
 let width = 1080,
     height = 600
 let longestChainVotes = true
+
 let svg = d3.select('body').append('svg')
+  .attr('id', 'untransformedSvg')
 	.attr('width', width)
 	.attr('height', height)
   .style('position', 'absolute')
@@ -16,6 +18,8 @@ const xTranslateScale = d3.scaleLinear().domain([0, transTime]).range([-400, -28
 const yTranslateScale = d3.scaleLinear().domain([0, transTime]).range([-200, 0])
 const scaleScale = d3.scaleLinear().domain([0, transTime]).range([2, 1])
 const worldMapShift = -280
+
+
 
 let M = `matrix3d(1.0, 0, 0, 0, 0, ${aScale(transTime)}, 0, ${bScale(transTime)}, 0, 0, 1, 0, 0, ${cScale(transTime)}, 0, 1)`
 
