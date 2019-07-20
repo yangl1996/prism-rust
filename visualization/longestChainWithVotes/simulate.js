@@ -64,7 +64,7 @@ let addVotingChains = () => {
   let scale = d3.scaleLinear().domain([0, numChainsToDisplay]).range([1.0, 0.0])
   let votingBlockId = 0
   while(chain<numChainsToDisplay){
-    chainsData.push({x, y: 0, blocks: [], links: [], lastVotedBlock: 0, fakeBlocks: [], fakeLinks: [], drawn: false})
+    chainsData.push({x, y: 0, blocks: [], links: [], lastVotedBlock: 0, drawn: false})
     const genesisBlock = {parent: null, blockId: votingBlockId, children: [], sourceNodeLocation: null}
     chainsData[chain].blocks.push(genesisBlock)
     votingBlockId++
@@ -92,6 +92,12 @@ let addVotingChains = () => {
     chain++ 
     if(chain==numChainsToDisplay) interval.stop()
   }, t)
+
+  // Cause links to disappear
+  longestChainLinksGroup.transition()
+                         .duration(t)
+                         .style('opacity', 0)
+
   d3.interval(() => {
     const randomChain = Math.floor(Math.random() * Math.floor(numChains))
     if(!chainsData[randomChain].drawn) return
