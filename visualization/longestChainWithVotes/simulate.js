@@ -107,8 +107,21 @@ let addVotingChains = () => {
     votingBlockId++
   }, 4*t/numChains)
 }
+
 let addTransactionBlocks = () => {
+  showTransactionPool = true
+  longestChainBlocksGroup.selectAll('line')
+                    .transition()
+                    .duration(t)
+                    .style('opacity', 0)
+                    .remove()
   let transactionBlockId = 0
+  for(let i=0; i<longestChainBlocks.length; i++){
+    transactionBlocks.push({x: longestChainBlocks[i].x+width/3, y: longestChainBlocks[i].y, blockId: transactionBlockId})
+    transactionBlockId++
+    restart()
+  }
+  console.log(transactionBlocks)
   // Add 1 transaction block every 0.2 seconds
   d3.interval(() => {
     if(transactionBlocks.length>500) return

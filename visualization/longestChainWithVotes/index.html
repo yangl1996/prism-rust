@@ -9,6 +9,10 @@
   stroke: #ff4f3e;
   fill: #ff4f3e;
 }
+.longestChainTransactions {
+  stroke-width: 1;
+  stroke: 'white';
+}
 .transactionBlock{
   fill: grey;
   stroke: white;
@@ -31,13 +35,13 @@
 }
 .chainLink {
   fill: none;
-  stroke: white;
+  stroke: orange;
   stroke-width: 2px;
 }
 .votingBlock{
   stroke: white;
-  stroke-width: white;
-  fill: #81A6C8;
+  stroke-width: 1;
+  fill: #9999ff;
 }
 .voteLink {
   fill: none;
@@ -45,7 +49,7 @@
 .referenceLink {
   fill: none;
   stroke: #ccc;
-  stroke-width: 1.0;
+  stroke-width: 0.5;
 }
 .land {
   fill: #33FF00;
@@ -54,7 +58,6 @@
   stroke-width: 0.0;
 }
 .nodes {
-  opacity: 0.8;
   fill: #f76077; 
 }
 .ripple {
@@ -68,6 +71,7 @@
 <script src='//d3js.org/topojson.v0.min.js'></script>
 <script src='main.js'></script>
 <script src='defs.js'></script>
+<script src='background.js'></script>
 <script src='longestChain.js'></script>
 <script src='simulate.js'></script>
 <script src='worldMap.js'></script>

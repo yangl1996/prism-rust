@@ -1,5 +1,5 @@
 
-let blockGlow = glow('blockGlow').rgb('#ff4f3e').stdDeviation(5)
+let blockGlow = glow('blockGlow').rgb('yellow').stdDeviation(3)
 blockGlow(svg)
 
 let confirmBlock = (longestChainBlock) => {
@@ -77,37 +77,53 @@ let drawLongestChain = () => {
 
 
     // Add new blocks
-    let longestChainBlockEnter = longestChainBlock.enter().append('rect')
+    let longestChainBlockEnter = longestChainBlock.enter().append('g')
            .attr('id', d => 'longestChainBlock'+d.id)
            .attr('class', 'longestChainBlock')
-           .style('fill-opacity', 0.4)
-           .style('filter', 'url(#blockGlow)')
-           .attr('height', 0)
-           .attr('width', 0)
-           .attr('rx', 3)
-           // Cause the block to shoot from the source node's location
-           .attr('x', d => { 
-               const node = d.sourceNodeId!==null ? nodes.find(node => node.nodeId===d.sourceNodeId) : undefined
-               return node ? projection([node.longitude, node.latitude])[0] - width/3 + worldMapShift: d.x-longestChainBlockSize/2 
-              }
-           )
-           .attr('y', d => { 
-                const node = d.sourceNodeId!==null ? nodes.find(node => node.nodeId===d.sourceNodeId) : undefined
-                return node ? projection([node.longitude, node.latitude])[1]+(height-0.6*height) : d.y
-              }
-           )
-           .transition()
-           .duration(t)
-           // Tune the fill opacity based on finalizationLevel
-           .attr('height', longestChainBlockSize)
-  //.style('filter', 'url(#myGlow)')
-           .attr('width', longestChainBlockSize*1.25)
-           .attr('x', d => { 
-               return d.x-longestChainBlockSize/2
-           })
-           .attr('y', d => {
-             return d.y
-           })
+    longestChainBlockEnter.append('rect')
+                           .style('fill-opacity', 0.4)
+                           .style('filter', 'url(#blockGlow)')
+                           .attr('height', 0)
+                           .attr('width', 0)
+                           .attr('rx', 3)
+                           // Cause the block to shoot from the source node's location
+                           .attr('x', d => { 
+                               const node = d.sourceNodeId!==null ? nodes.find(node => node.nodeId===d.sourceNodeId) : undefined
+                               return node ? projection([node.longitude, node.latitude])[0] - width/3 + worldMapShift: d.x-longestChainBlockSize/2 
+                              }
+                           )
+                           .attr('y', d => { 
+                                const node = d.sourceNodeId!==null ? nodes.find(node => node.nodeId===d.sourceNodeId) : undefined
+                                return node ? projection([node.longitude, node.latitude])[1]+(height-0.6*height) : d.y
+                              }
+                           )
+                           .transition()
+                           .duration(t)
+                           // Tune the fill opacity based on finalizationLevel
+                           .attr('height', longestChainBlockSize)
+                  //.style('filter', 'url(#myGlow)')
+                           .attr('width', longestChainBlockSize*1.25)
+                           .attr('x', d => { 
+                               return d.x-longestChainBlockSize/2
+                           })
+                           .attr('y', d => {
+                             return d.y
+                           })
+
+    if(!showTransactionPool){
+      for(let y=6; y<15; y+=3){
+        longestChainBlockEnter.append('line')
+                              .attr('x1', d => d.x - longestChainBlockSize/2+4)
+                              .attr('y1', d => d.y+y)
+                              .attr('x2', d => d.x + longestChainBlockSize/2)
+                              .attr('y2', d => d.y+y)
+                              .style('stroke', 'white')
+                              .style('opacity', 0)
+                              .transition()
+                              .duration(t)
+                              .style('opacity', 0.4)
+      }
+   }
 
     // Remove extra blocks
     longestChainBlock.exit().remove()
@@ -165,6 +181,21 @@ let scrollLongestChain = () => {
             d.y = d.y-2*longestChainBlockSize
             return d.y
           })
+  if(!showTransactionPool){
+    longestChainBlocksGroup.selectAll('line')
+            .transition()
+            .duration(t)
+            .attr('y1', (d, i) => {
+              if(i%3==0) return d.y+5
+              if(i%3==1) return d.y+8
+              if(i%3==2) return d.y+11
+            })
+            .attr('y2', (d, i) => {
+              if(i%3==0) return d.y+5
+              if(i%3==1) return d.y+8
+              if(i%3==2) return d.y+11
+            })
+ }
   longestChainLinksGroup.selectAll('.chainLink')
     .transition()
     .duration(t)

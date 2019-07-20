@@ -1,12 +1,14 @@
 let width = 1080,
     height = 600
 let longestChainVotes = true
+let showTransactionPool = false
 
 let svg = d3.select('body').append('svg')
   .attr('id', 'untransformedSvg')
 	.attr('width', width)
 	.attr('height', height)
   .style('position', 'absolute')
+
 
 const transTime = 5000
 let worldMapFocused = false

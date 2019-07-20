@@ -8,7 +8,7 @@ svg.append('svg:defs').append('svg:marker')
     .attr('orient', 'auto')
     .append('path')
     .attr('d', 'M 0 0 L 6 3 L 0 6')
-    .style('stroke', 'white')
+    .style('stroke', 'orange')
     .style('fill', 'none')
 
 let linearGradient = svg.append('defs')
