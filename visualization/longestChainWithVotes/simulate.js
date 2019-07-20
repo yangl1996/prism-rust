@@ -49,6 +49,7 @@ let mineLowRate = d3.interval(() => {
   for(let i=0; i<longestChainBlocks.length; i++)
       if(longestChainBlocks[i].id!=='0')
         longestChainBlocks[i].y = longestChainBlocks[i].parent.y+2*longestChainBlockSize
+  if(longestChainVotes)
   links.push({source: newBlock,
               target: newBlock.parent, id: `${newBlock.id}-${newBlock.parent.id}`})
   pingNode(sourceNodeId)
@@ -92,11 +93,6 @@ let addVotingChains = () => {
     chain++ 
     if(chain==numChainsToDisplay) interval.stop()
   }, t)
-
-  // Cause links to disappear
-  longestChainLinksGroup.transition()
-                         .duration(t)
-                         .style('opacity', 0)
 
   d3.interval(() => {
     const randomChain = Math.floor(Math.random() * Math.floor(numChains))

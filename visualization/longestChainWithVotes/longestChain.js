@@ -109,6 +109,22 @@ let drawLongestChain = () => {
                            .attr('y', d => {
                              return d.y
                            })
+                            .on('end', () => {
+                              if(longestChainVotes) return
+                              const didScroll = scrollLongestChain()
+                              if(!didScroll && longestChainVotes)
+                                castVotes()
+                              if(longestChainBlocks[longestChainBlocks.length-1].transactionBlockIds.length>0 && !didScroll)
+                                  captureTransactionBlocks(longestChainBlocks[longestChainBlocks.length-1], false) 
+                            })
+                            .on('interrupt', () => {
+                              if(longestChainVotes) return
+                              const didScroll = scrollLongestChain()
+                              if(!didScroll && longestChainVotes)
+                                castVotes()
+                              if(longestChainBlocks[longestChainBlocks.length-1].transactionBlockIds.length>0 && !didScroll)
+                                  captureTransactionBlocks(longestChainBlocks[longestChainBlocks.length-1], false) 
+                            })
 
     if(!showTransactionPool){
       for(let y=6; y<15; y+=3){
@@ -181,21 +197,19 @@ let scrollLongestChain = () => {
             d.y = d.y-2*longestChainBlockSize
             return d.y
           })
-  if(!showTransactionPool){
-    longestChainBlocksGroup.selectAll('line')
-            .transition()
-            .duration(t)
-            .attr('y1', (d, i) => {
-              if(i%3==0) return d.y+5
-              if(i%3==1) return d.y+8
-              if(i%3==2) return d.y+11
-            })
-            .attr('y2', (d, i) => {
-              if(i%3==0) return d.y+5
-              if(i%3==1) return d.y+8
-              if(i%3==2) return d.y+11
-            })
- }
+  longestChainBlocksGroup.selectAll('line')
+          .transition()
+          .duration(t)
+          .attr('y1', (d, i) => {
+            if(i%3==0) return d.y+5
+            if(i%3==1) return d.y+8
+            if(i%3==2) return d.y+11
+          })
+          .attr('y2', (d, i) => {
+            if(i%3==0) return d.y+5
+            if(i%3==1) return d.y+8
+            if(i%3==2) return d.y+11
+          })
   longestChainLinksGroup.selectAll('.chainLink')
     .transition()
     .duration(t)
