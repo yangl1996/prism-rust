@@ -10,7 +10,6 @@ filename = 'high_forking'
 
 def network_delay():
     return delay_parameter
-    #return np.random.exponential(delay_parameter)
 
 timestamps = []
 
