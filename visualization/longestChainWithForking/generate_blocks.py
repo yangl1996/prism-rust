@@ -3,10 +3,10 @@ import numpy as np
 
 timestamp = 0
 duration = 1000
-f = 0.01
-delay_parameter = 1
+f = 2
+delay_parameter = 100
 num_nodes = 10
-filename = 'low_forking'
+filename = 'high_forking'
 
 def network_delay():
     return np.random.exponential(delay_parameter)
@@ -15,7 +15,7 @@ timestamps = []
 
 # generate proposal events
 while timestamp<duration:
-    timestamp = timestamp + random.expovariate(f)
+    timestamp = timestamp + np.random.exponential(1.0/f)
     timestamps.append(timestamp)
 
 nodes = []
