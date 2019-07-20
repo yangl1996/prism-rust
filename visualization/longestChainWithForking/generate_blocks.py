@@ -2,20 +2,21 @@ import random
 import numpy as np
 
 timestamp = 0
-duration = 1000
-f = 2
-delay_parameter = 100
+duration = 100
+f = 10
+delay_parameter = 1
 num_nodes = 10
 filename = 'high_forking'
 
 def network_delay():
-    return np.random.exponential(delay_parameter)
+    return delay_parameter
+    #return np.random.exponential(delay_parameter)
 
 timestamps = []
 
 # generate proposal events
 while timestamp<duration:
-    timestamp = timestamp + np.random.exponential(1.0/f)
+    timestamp = timestamp + np.random.exponential(1/f)
     timestamps.append(timestamp)
 
 nodes = []
@@ -42,7 +43,10 @@ for t in timestamps:
     # create new block with timestamp t
     new_block = {'id': block_id, 'parent': parent['id'], 'depth':
             parent['depth']+1, 'timestamp': t, 'miner': n['id']}
-    n['blocks'].append(new_block)
+    delayed_block = new_block.copy()
+    # delayed block is received with an additional network delay
+    delayed_block['timestamp']+=network_delay()
+    n['blocks'].append(delayed_block)
 
     # broadcast to all other nodes
     for j in range(0, num_nodes): 
