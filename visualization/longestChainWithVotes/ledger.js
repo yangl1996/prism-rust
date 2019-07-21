@@ -110,8 +110,10 @@ const drawLedger = (ledgerBlocks, referenceLinks, scrolled) => {
   // Draw ledger new blocks and reference links
   let ledgerBlock = ledgerGroup.selectAll('.newLedgerBlock')
   ledgerBlock = ledgerBlock.data(ledgerBlocks, d => d.blockId)
-  ledgerBlock = ledgerBlock.enter().append('rect')
+  ledgerBlockEnter = ledgerBlock.enter().append('g')
           .attr('class', 'newLedgerBlock')
+
+  ledgerBlockEnter.append('rect')
           .attr('rx', 3)
           .attr('id', d => 'ledgerBlock' + d.blockId)
           .attr('x', d => d.x)
