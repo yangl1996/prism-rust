@@ -65,7 +65,7 @@ let addVotingChains = () => {
   let scale = d3.scaleLinear().domain([0, numChainsToDisplay]).range([1.0, 0.0])
   let votingBlockId = 0
   while(chain<numChainsToDisplay){
-    chainsData.push({x, y: 0, blocks: [], links: [], lastVotedBlock: 0, drawn: false})
+    chainsData.push({x, y: 0, blocks: [], links: [], lastVotedBlock: longestChainBlocks[longestChainBlocks.length-1]['id'], drawn: false})
     const genesisBlock = {parent: null, blockId: votingBlockId, children: [], sourceNodeLocation: null}
     chainsData[chain].blocks.push(genesisBlock)
     votingBlockId++
