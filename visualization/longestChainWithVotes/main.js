@@ -87,7 +87,7 @@ const ledgerBlockSize = 20
 let transactionBlocks = []
 
 let transactionGroup = transactionScreen.append('g').attr('id', 'transactionGroup').style('opacity', 'inherit')
-let transactionBlock = transactionGroup.selectAll('.transactionBlock')
+let transactionBlock = transactionGroup.selectAll('g').data(transactionBlocks, d => d.blockId)
 
 let voteGroup = svg.append('g').attr('id', 'votes')
 

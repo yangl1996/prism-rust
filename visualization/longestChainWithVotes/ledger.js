@@ -8,7 +8,7 @@ const removeFromTransactionPool = transactionBlockIds => {
   // Filter out transaction blocks
   transactionBlocks = transactionBlocks.filter(block => {
     for(let i=0; i<transactionBlockIds.length; i++){
-      transactionScreen.select('#transactionBlock'+transactionBlockIds[i])
+      transactionGroup.select('#transactionBlock'+transactionBlockIds[i])
                        .transition()
                        .duration(t)
                        .style('opacity', 0)
