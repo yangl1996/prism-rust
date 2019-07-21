@@ -25,6 +25,21 @@ const restart = () => {
           .attr('width', transactionBlockSize*1.25)
           .attr('height', transactionBlockSize)
 
+  transactionBlockEnter.append('line')
+                       .attr('x1', transactionBlockSize/2-6) 
+                       .attr('y1', 5) 
+                       .attr('x2', transactionBlockSize/2+10) 
+                       .attr('y2', 5) 
+  transactionBlockEnter.append('line')
+                       .attr('x1', transactionBlockSize/2-6) 
+                       .attr('y1', 8) 
+                       .attr('x2', transactionBlockSize/2+10) 
+                       .attr('y2', 8) 
+  transactionBlockEnter.append('line')
+                       .attr('x1', transactionBlockSize/2-6) 
+                       .attr('y1', 11) 
+                       .attr('x2', transactionBlockSize/2+10) 
+                       .attr('y2', 11) 
 
   transactionBlockEnter
           .style('opacity', 0.0)
