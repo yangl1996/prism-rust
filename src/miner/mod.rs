@@ -276,7 +276,7 @@ impl Context {
             for (utxo, keypair) in coins {
                 let keypair = Keypair::from_bytes(&keypair).unwrap();
                 trace!("Start mining at time {} with utxo {:?}", self.timestamp, utxo);
-                mined_blocks.append(&mut mining_manager.start(utxo, keypair, 4));
+                mined_blocks.append(&mut mining_manager.start(utxo, keypair, 8));
             }
             // insert into our local database
             for mined_block in mined_blocks.iter() {
