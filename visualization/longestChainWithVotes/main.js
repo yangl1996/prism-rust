@@ -1,13 +1,22 @@
-let width = 1080,
-    height = 600
+let body = document.getElementsByTagName('body')[0]
+
+let width = body.clientWidth,
+    height = body.clientHeight
+let clicks = 0
 let longestChainVotes = true
 let showTransactionPool = false
-
 let svg = d3.select('body').append('svg')
   .attr('id', 'untransformedSvg')
 	.attr('width', width)
 	.attr('height', height)
   .style('position', 'absolute')
+  .on('click', () => {
+    if(clicks==0)
+      addVotingChains()
+    if(clicks==1)
+      addTransactionBlocks()
+    clicks+=1
+  })
 
 
 const transTime = 5000
@@ -56,7 +65,6 @@ let longestChainScreen = svg.append('g')
             .attr('width', longestChainScreenWidth)
             .attr('height', longestChainScreenHeight)
             .attr('transform', `translate(${width/3}, ${longestChainBlockSize})`)
-            .on('click', () => addVotingChains())
 let longestChainBlocksGroup = longestChainScreen.append('g').attr('id', 'longestChainBlocksClean')
 let longestChainLinksGroup = longestChainScreen.append('g').attr('id', 'longestChainLinksClean')
 
@@ -70,7 +78,6 @@ let votingChainScreen = svg.append('g')
               .attr('width', votingChainScreenWidth)
               .attr('height', votingChainScreenHeight)
               .attr('transform', `translate(${width*0.6}, ${longestChainBlockSize})`)
-            .on('click', () => addTransactionBlocks())
 const numChains = 100
 const numChainsToDisplay = 10
 const votingBlockSize = 20
