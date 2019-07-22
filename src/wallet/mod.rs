@@ -274,7 +274,15 @@ impl Wallet {
         }
         // if we have enough money in our wallet, create tx
         // remove used coin from wallet
-        self.apply_diff(&vec![], &coins_to_use)?;
+        {
+            let mut batch = rocksdb::WriteBatch::default();
+            for coin in &coins_to_use {
+                let key = serialize(&coin.coin).unwrap();
+                batch.delete_cf(cf, &key)?;
+            }
+            self.db.write(batch)?;
+        }
+        // TO REMOVE: self.apply_diff(&vec![], &coins_to_use)?;
 
         // create the output
         let mut output = vec![Output { recipient, value }];
