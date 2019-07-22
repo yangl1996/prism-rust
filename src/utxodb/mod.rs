@@ -105,12 +105,13 @@ impl UtxoDatabase {
     }
 
     pub fn snapshot(&self) -> Result<Vec<u8>, rocksdb::Error> {
+        let unspent_coins_cf = self.db.cf_handle(UNSPENT_COINS_CF).unwrap();
         let mut iter_opt = rocksdb::ReadOptions::default();
         iter_opt.set_prefix_same_as_start(false);
         iter_opt.set_total_order_seek(true);
         let iter = self
             .db
-            .iterator_opt(rocksdb::IteratorMode::Start, &iter_opt);
+            .iterator_cf_opt(unspent_coins_cf, &iter_opt, rocksdb::IteratorMode::Start)?;
         let mut inited = false;
         let mut checksum: Vec<u8> = vec![];
         for (k, _) in iter {
@@ -272,6 +273,7 @@ impl UtxoDatabase {
         return Ok((added_utxos, removed_coins));
     }
 
+    /*
     /// Delete all the coins which were spent before timestamp
     pub fn delete_old_spent_coins(&self, timestamp: TimeStamp) {
         let timestamp = timestamp;
@@ -285,6 +287,7 @@ impl UtxoDatabase {
             }
         }
     }
+    */
 
     pub fn flush(&self) -> Result<(), rocksdb::Error> {
         let mut flush_opt = rocksdb::FlushOptions::default();

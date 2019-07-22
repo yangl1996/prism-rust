@@ -7,12 +7,11 @@ use rand::Rng;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicIsize, AtomicUsize, Ordering};
 use std::sync::{Mutex, RwLock};
 use std::{error, fmt};
 use crate::utxodb::{UtxoDatabase, Utxo, OutputWithTime};
 use crate::block::pos_metadata::TimeStamp;
-use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 
 pub const COIN_CF: &str = "COIN";
 pub const KEYPAIR_CF: &str = "KEYPAIR"; // &Address to &KeyPairPKCS8
@@ -27,9 +26,10 @@ pub struct Wallet {
     keypairs: Mutex<HashMap<Address, Keypair>>,
     /// Keep coin ids for mining in memory for performance
     // TODO: for now in create transaction, we don't touch these coins
-    coins_mining: Mutex<HashMap<Vec<u8>, Vec<u8>>>,
+    coins_mining: RwLock<HashMap<Vec<u8>, Vec<u8>>>,
     num_mining: RwLock<usize>,
     counter: AtomicUsize,
+    balance: AtomicIsize,
 }
 
 #[derive(Debug)]
@@ -76,15 +76,20 @@ impl Wallet {
         return Ok(Self {
             db: handle,
             keypairs: Mutex::new(HashMap::new()),
-            coins_mining: Mutex::new(HashMap::new()),
+            coins_mining: RwLock::new(HashMap::new()),
             num_mining: RwLock::new(mining_coins),
             counter: AtomicUsize::new(0),
+            balance: AtomicIsize::new(0),
         });
     }
 
     pub fn new<P: AsRef<std::path::Path>>(path: P, mining_coins: usize) -> Result<Self> {
         rocksdb::DB::destroy(&rocksdb::Options::default(), &path)?;
         return Self::open(path, mining_coins);
+    }
+
+    pub fn atomic_balance(&self) -> isize {
+        self.balance.load(Ordering::Relaxed)
     }
 
     pub fn number_of_coins(&self) -> usize {
@@ -141,25 +146,40 @@ impl Wallet {
                 let key = serialize(&utxo.coin).unwrap();
                 let val = serialize(&output_with_time).unwrap();
                 batch.put_cf(cf, &key, &val)?;
-                let mut coins = self.coins_mining.lock().unwrap();
-                if coins.len() < *self.num_mining.read().unwrap() {
-                    coins.insert(key, val);
+
+                // to deal with RwLock, use twice here
+                {
+                    let remaining_num_mining = self.num_mining.read().unwrap();
+                    if *remaining_num_mining > 0 {
+                        drop(remaining_num_mining);
+                        let mut remaining_num_mining = self.num_mining.write().unwrap();
+                        if *remaining_num_mining > 0 {
+                            *remaining_num_mining -= 1;
+                            let mut coins = self.coins_mining.write().unwrap();
+                            coins.insert(key, val);
+                            drop(coins);
+                        }
+                        drop(remaining_num_mining);
+                    }
                 }
-                drop(coins);
                 self.counter.fetch_add(1, Ordering::Relaxed);
-                PERFORMANCE_COUNTER.record_wallet_balance_add(utxo.value as usize);
+                self.balance.fetch_add(utxo.value as isize, Ordering::Relaxed);
             }
         }
         for coin in remove {
             if self.contains_keypair(&coin.owner) {
                 let key = serialize(&coin.coin).unwrap();
-                let mut coins = self.coins_mining.lock().unwrap();
-                // no coins in coins_mining should be spent
-                assert!(coins.remove(&key).is_none());
-                drop(coins);
+                /*
+                {
+                    let mut coins = self.coins_mining.lock().unwrap();
+                    // no coins in coins_mining should be spent
+                    assert!(coins.remove(&key).is_none());
+                    drop(coins);
+                }
+                */
                 batch.delete_cf(cf, &key)?;
                 self.counter.fetch_sub(1, Ordering::Relaxed);
-                PERFORMANCE_COUNTER.record_wallet_balance_sub(coin.value as usize);
+                self.balance.fetch_sub(coin.value as isize, Ordering::Relaxed);
             }
         }
         self.db.write(batch)?;
@@ -184,7 +204,7 @@ impl Wallet {
         // let cf = self.db.cf_handle(COIN_CF).unwrap();
         // let iter = self.db.iterator_cf(cf, rocksdb::IteratorMode::Start)?;
         let mut utxo_keypairs = vec![];
-        let coins: Vec<(Vec<u8>,Vec<u8>)> = self.coins_mining.lock().unwrap().iter().map(|x|(x.0.clone(), x.1.clone())).collect();
+        let coins: Vec<(Vec<u8>,Vec<u8>)> = self.coins_mining.read().unwrap().iter().map(|x|(x.0.clone(), x.1.clone())).collect();
         for (k,v) in coins {
             let coin_id: CoinId = bincode::deserialize(&k).unwrap();
             let coin_data: OutputWithTime = bincode::deserialize(&v).unwrap();
@@ -230,7 +250,7 @@ impl Wallet {
         };
         // iterate through our wallet
         for (k, v) in iter {
-            if self.coins_mining.lock().unwrap().contains_key(k.as_ref()) {
+            if self.coins_mining.read().unwrap().contains_key(k.as_ref()) {
                 // TODO: for now we don't use coins for mining, in case that we are running out of
                 // coins for mining
                 continue;

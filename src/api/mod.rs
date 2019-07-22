@@ -33,7 +33,8 @@ struct ApiResponse {
 
 #[derive(Serialize)]
 struct WalletBalanceResponse {
-    balance: usize,
+    atomic_balance: isize,
+    balance: u64,
 }
 
 #[derive(Serialize)]
@@ -124,7 +125,8 @@ impl Server {
                         }
                         "/wallet/balance" => {
                             let resp = WalletBalanceResponse {
-                                balance: PERFORMANCE_COUNTER.snapshot().wallet_balance,
+                                balance: wallet.balance().unwrap(),
+                                atomic_balance: wallet.atomic_balance(),
                             };
                             respond_json!(req, resp);
                         }
