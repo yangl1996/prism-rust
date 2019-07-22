@@ -52,7 +52,6 @@ function start_instances
 	tput setaf 2
 	echo "Instance started, SSH config written"
 	tput sgr0
-	curl -s --form-string "token=$PUSHOVER_TOKEN" --form-string "user=$PUSHOVER_USER" --form-string "title=EC2 Instances Launched" --form-string "message=$1 EC2 instances were just launched by user $(whoami)." https://api.pushover.net/1/messages.json &> /dev/null
 }
 
 function fix_ssh_config
@@ -103,7 +102,6 @@ function stop_instances
 	tput setaf 2
 	echo "Instances terminated"
 	tput sgr0
-	curl -s --form-string "token=$PUSHOVER_TOKEN" --form-string "user=$PUSHOVER_USER" --form-string "title=EC2 Instances Stopped" --form-string "message=EC2 instances launched at $(date -r instances.txt) were just terminated by user $(whoami)." https://api.pushover.net/1/messages.json &> /dev/null
 }
 
 function build_prism
@@ -187,9 +185,9 @@ function prepare_payload
 
 function sync_payload
 {
-	echo "Uploading payload to S3"
-	aws s3 rm --quiet --recursive s3://prism-binary/payload
-	aws s3 sync --quiet payload s3://prism-binary/payload
+	#echo "Uploading payload to S3"
+	#aws s3 rm --quiet --recursive s3://prism-binary/payload
+	#aws s3 sync --quiet payload s3://prism-binary/payload
 	echo "Downloading payload on each instance"
 	execute_on_all get_payload
 }
