@@ -171,8 +171,8 @@ func check(nodesFile string, verbose bool) {
 	}
 	wg1.Wait()
 	if !failed {
-		min := ^uint(0)
-		max := uint(0)
+		min := ^int(0)
+		max := int(0)
 		for _, v := range atomic_balance {
 			if v < min {
 				min = v
