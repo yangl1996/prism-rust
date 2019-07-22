@@ -27,7 +27,24 @@ const scrollLedger = (nNewBlocks, scrolled) => {
   let yMapping = {}
   let xMapping = {}
   let timeOffset = 100
+  
   ledgerGroup.selectAll('.ledgerBlock')
+             .transition()
+             .duration((d, i) => {
+               // New blocks get added with an offset to create 'ordering' visualization 
+               if(i>ledgerGroup.selectAll('.ledgerBlock').size()-nNewBlocks){
+                 timeOffset+=100
+                 return timeOffset+t
+               }
+               return t
+             })
+             .attr('transform', (d, i) => {
+                _y += ledgerScale(i)/2
+                yMapping[d.blockId] = _y
+                return `translate(${ledgerX}, ${_y})`
+              })
+
+  ledgerGroup.selectAll('.ledgerBlock').select('rect')
      .transition()
      .style('opacity', 0.5)
      .duration((d, i) => {
@@ -45,11 +62,24 @@ const scrollLedger = (nNewBlocks, scrolled) => {
     .attr('height', (d, i) => {
       return ledgerScale(i)
     })
-    .attr('x', ledgerX)
-    .attr('y', (d, i) => {
-      _y += ledgerScale(i)/2
-      yMapping[d.blockId] = _y
-      return _y
+
+  let counter = 0, index = -1
+  ledgerGroup.selectAll('.ledgerBlock').selectAll('line')
+     .transition()
+     .duration((d, i) => {
+       // New blocks get added with an offset to create 'ordering' visualization 
+       if(i>ledgerGroup.selectAll('.ledgerBlock').size()-nNewBlocks){
+         timeOffset+=100
+         return timeOffset+t
+       }
+       return t
+     })
+     .attr('x1', 3)
+     .attr('x2', (d, i) => {
+       if(counter%3==0)
+         index+=1
+       counter+=1
+       return ledgerScale(index)
      })
 
   let linkOffset = 0
@@ -103,7 +133,6 @@ const scrollLedger = (nNewBlocks, scrolled) => {
                }
                return d.source.y1 
              })
-
 }
 
 const drawLedger = (ledgerBlocks, referenceLinks, scrolled) => {
@@ -111,16 +140,31 @@ const drawLedger = (ledgerBlocks, referenceLinks, scrolled) => {
   let ledgerBlock = ledgerGroup.selectAll('.newLedgerBlock')
   ledgerBlock = ledgerBlock.data(ledgerBlocks, d => d.blockId)
   ledgerBlockEnter = ledgerBlock.enter().append('g')
+          .attr('id', d => 'ledgerBlock' + d.blockId)
           .attr('class', 'newLedgerBlock')
+          .attr('transform', d => `translate(${d.x}, ${d.y})`)
+          .attr('class', 'ledgerBlock')
 
   ledgerBlockEnter.append('rect')
           .attr('rx', 3)
-          .attr('id', d => 'ledgerBlock' + d.blockId)
-          .attr('x', d => d.x)
-          .attr('y', d => d.y)
           .attr('width', ledgerBlockSize*1.25)
           .attr('height', ledgerBlockSize)
-          .attr('class', 'ledgerBlock')
+
+  ledgerBlockEnter.append('line')
+                 .attr('x1', ledgerBlockSize/2-6) 
+                 .attr('y1', 5) 
+                 .attr('x2', ledgerBlockSize/2+10) 
+                 .attr('y2', 5) 
+  ledgerBlockEnter.append('line')
+                       .attr('x1', ledgerBlockSize/2-6) 
+                       .attr('y1', 8) 
+                       .attr('x2', ledgerBlockSize/2+10) 
+                       .attr('y2', 8) 
+  ledgerBlockEnter.append('line')
+                       .attr('x1', ledgerBlockSize/2-6) 
+                       .attr('y1', 11) 
+                       .attr('x2', ledgerBlockSize/2+10) 
+                       .attr('y2', 11) 
 
     let referenceLink = ledgerGroup.selectAll('.referenceLink')
     referenceLink = referenceLink.data(referenceLinks, d=>d.linkId)
