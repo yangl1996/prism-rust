@@ -277,7 +277,7 @@ function start_transactions_single
 
 function start_mining_single
 {
-	curl -s "http://$3:$4/miner/start"
+	curl -s "http://$3:$4/miner/start?delta=100"
 }
 
 function stop_transactions_single
