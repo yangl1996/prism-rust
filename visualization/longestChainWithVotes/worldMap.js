@@ -1,6 +1,6 @@
 let nodesGroup = null
 let realNodesGroup = null
-let landGlow = glow('landGlow').rgb('#33FF00').stdDeviation(5)
+let landGlow = glow('landGlow').rgb('#3b945e').stdDeviation(5)
 landGlow(svg)
 
 // Fine tuned projection parameters
@@ -120,4 +120,3 @@ for(let i=0; i<cities.length; i++){
   const longitude = cities[i][1]
   nodes.push({latitude, longitude, nodeId: i})
 }
-drawNodes()

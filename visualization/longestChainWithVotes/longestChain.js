@@ -1,7 +1,5 @@
-
-let blockGlow = glow('blockGlow').rgb('yellow').stdDeviation(3)
+let blockGlow = glow('blockGlow').rgb('#17e9e0').stdDeviation(3)
 blockGlow(svg)
-
 let confirmBlock = (longestChainBlock) => {
   voteGroup.selectAll('.voteLink')
            .filter(d => d.to===longestChainBlock.id)
@@ -81,7 +79,7 @@ let drawLongestChain = () => {
            .attr('id', d => 'longestChainBlock'+d.id)
            .attr('class', 'longestChainBlock')
     longestChainBlockEnter.append('rect')
-                           .style('fill-opacity', 0.4)
+                           .style('fill-opacity', 0.8)
                            .style('filter', 'url(#blockGlow)')
                            .attr('height', 0)
                            .attr('width', 0)
@@ -129,11 +127,11 @@ let drawLongestChain = () => {
     if(!showTransactionPool){
       for(let y=6; y<15; y+=3){
         longestChainBlockEnter.append('line')
+                              .attr('class', 'transaction')
                               .attr('x1', d => d.x - longestChainBlockSize/2+4)
                               .attr('y1', d => d.y+y)
                               .attr('x2', d => d.x + longestChainBlockSize/2)
                               .attr('y2', d => d.y+y)
-                              .style('stroke', 'white')
                               .style('opacity', 0)
                               .transition()
                               .duration(t)
@@ -143,7 +141,7 @@ let drawLongestChain = () => {
 
     // Remove extra blocks
     longestChainBlock.exit().remove()
-    let link = longestChainLinksGroup.selectAll('.chainLink').data(links, d => `${d.source.id}-${d.target.id}`)
+    let link = longestChainLinksGroup.selectAll('.longestChainLink').data(links, d => `${d.source.id}-${d.target.id}`)
 
     
     link.transition()
@@ -153,14 +151,14 @@ let drawLongestChain = () => {
     // Add new links
     link.enter().append('path')
         .attr('id', d => `${d.source.id}-${d.target.id}`)
-        .attr('class', 'chainLink')
+        .attr('class', 'longestChainLink')
         .attr('d', d => d.source ? renderLink({source: d.source, target: d.source}) : null)
         .transition()
         .duration(t)
         .attr('d', d => d.source ? renderLink({source: d.source, target: {x: d.target.x, y: d.target.y+longestChainBlockSize}}) : null)
         .transition()
         .delay(1)
-        .attr('marker-end', 'url(#small-arrow)')
+        .attr('marker-end', 'url(#longestChain-arrow)')
         .on('end', () => {
           const didScroll = scrollLongestChain()
           if(!didScroll && longestChainVotes)
@@ -210,7 +208,7 @@ let scrollLongestChain = () => {
             if(i%3==1) return d.y+8
             if(i%3==2) return d.y+11
           })
-  longestChainLinksGroup.selectAll('.chainLink')
+  longestChainLinksGroup.selectAll('.longestChainLink')
     .transition()
     .duration(t)
     .attr('d', d => {
