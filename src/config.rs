@@ -1,4 +1,17 @@
 use crate::crypto::hash::H256;
+use crate::block::pos_metadata::{RandomSource, TimeStamp};
+use bigint::uint::U256;
+
+// Time step for pos, in millisecond
+pub const DELTA: TimeStamp = 100;
+// Time tau for pos, only coin older than t-tau will be used
+pub const TAU: TimeStamp = 20000;
+// The extra buffer time for holding spent coins
+pub const TAU_NETWORK_DELAY: TimeStamp = 10000;
+// Time s for pos, compare voter chain length using s-truncated rule
+pub const SIGMA: TimeStamp = 400000;
+// Level c for pos. change random source using c-correlated rule
+pub const GAMMA: u64 = 5;
 
 // Network parameters
 pub const NETWORK_DELAY: f32 = 2.0; // the expected block propagation delay (in seconds)
@@ -36,12 +49,23 @@ pub const TRANSACTION_MINING_RANGE: u32 = (RATE_DIFFICULTY_MULTIPLIER * RATIO.2)
 // Chain id
 pub const TRANSACTION_INDEX: u16 = 1;
 pub const PROPOSER_INDEX: u16 = 0;
-pub const FIRST_VOTER_INDEX: u16 = 2;
+pub const FIRST_VOTER_INDEX: u16 = 1;
 
 lazy_static! {
     pub static ref DEFAULT_DIFFICULTY: H256 = {
-        let raw: [u8; 32] = [255; 32];
+        let mut raw: [u8; 32] = [255; 32];
+        raw[0]=0x00;
+        raw[1]=0x6e;
         raw.into()
+    };
+
+    pub static ref DEFAULT_DIFFICULTY_DIV: U256 = {
+        let difficulty: [u8; 32] = (&*DEFAULT_DIFFICULTY).into();
+        let big_difficulty = U256::from_big_endian(&difficulty);
+        let big_proposer_range: U256 = PROPOSER_MINING_RANGE.into();
+        let big_transaction_range: U256 = TRANSACTION_MINING_RANGE.into();
+        let total_mining_range: U256 = big_proposer_range + big_transaction_range;
+        big_difficulty / total_mining_range 
     };
 
     // Genesis Hashes
@@ -59,6 +83,24 @@ lazy_static! {
             voter_hash_raw[30] = b1;
             voter_hash_raw[31] = b2;
             v.push(voter_hash_raw.into());
+        }
+        v
+    };
+    // Genesis RandomSource
+    pub static ref PROPOSER_GENESIS_RAND: RandomSource= {
+        let raw: [u8; 32] = [0; 32];
+        raw
+    };
+    pub static ref VOTER_GENESIS_RANDS: Vec<RandomSource> = {
+        let mut v: Vec<RandomSource> = vec![];
+        for chain_num in 0..NUM_VOTER_CHAINS {
+            let chain_num = chain_num as u16;
+            let b1 = ((chain_num + 1) >> 8) as u8;
+            let b2 = (chain_num + 1) as u8;
+            let mut voter_hash_raw: [u8; 32] = [0; 32];
+            voter_hash_raw[30] = b1;
+            voter_hash_raw[31] = b2;
+            v.push(voter_hash_raw);
         }
         v
     };

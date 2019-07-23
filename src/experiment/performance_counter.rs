@@ -50,6 +50,7 @@ pub struct Counter {
     total_transaction_block_squared_confirmation_latency: AtomicUsize,
     proposer_main_chain_length: AtomicUsize,
     voter_main_chain_length_sum: AtomicIsize,
+    wallet_balance: AtomicUsize,
 }
 
 #[derive(Serialize)]
@@ -89,6 +90,7 @@ pub struct Snapshot {
     pub total_transaction_block_squared_confirmation_latency: usize,
     pub proposer_main_chain_length: usize,
     pub voter_main_chain_length_sum: isize,
+    pub wallet_balance: usize,
 }
 
 impl Counter {
@@ -129,6 +131,7 @@ impl Counter {
             total_transaction_block_squared_confirmation_latency: AtomicUsize::new(0),
             proposer_main_chain_length: AtomicUsize::new(0),
             voter_main_chain_length_sum: AtomicIsize::new(0),
+            wallet_balance: AtomicUsize::new(0),
         };
     }
 
@@ -141,7 +144,7 @@ impl Counter {
     }
 
     pub fn record_receive_block(&self, b: &Block) {
-        let mined_time = b.header.timestamp;
+        let mined_time = b.header.pos_metadata.timestamp;
         let current_time = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap()
@@ -239,7 +242,7 @@ impl Counter {
     }
 
     pub fn record_confirm_transaction_block(&self, b: &Block) {
-        let mined_time = b.header.timestamp;
+        let mined_time = b.header.pos_metadata.timestamp;
         let current_time = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap()
@@ -287,6 +290,14 @@ impl Counter {
                     .fetch_add(1, Ordering::Relaxed);
             }
         }
+    }
+
+    pub fn record_wallet_balance_add(&self, value: usize) {
+        self.wallet_balance.fetch_add(value, Ordering::Relaxed);
+    }
+
+    pub fn record_wallet_balance_sub(&self, value: usize) {
+        self.wallet_balance.fetch_sub(value, Ordering::Relaxed);
     }
 
     pub fn snapshot(&self) -> Snapshot {
@@ -363,6 +374,7 @@ impl Counter {
                 .load(Ordering::Relaxed),
             proposer_main_chain_length: self.proposer_main_chain_length.load(Ordering::Relaxed),
             voter_main_chain_length_sum: voter_main_chain_length_sum,
+            wallet_balance: self.wallet_balance.load(Ordering::Relaxed)
         };
     }
 }

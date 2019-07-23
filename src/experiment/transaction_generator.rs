@@ -24,7 +24,7 @@ pub enum ArrivalDistribution {
 }
 
 pub struct UniformArrival {
-    pub interval: u64, // ms
+    pub interval: u64, // micro second
 }
 
 pub enum ValueDistribution {

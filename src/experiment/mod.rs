@@ -2,10 +2,12 @@ use std::cell::RefCell;
 pub mod performance_counter;
 pub mod transaction_generator;
 
+use crate::block::proposer;
 use crate::crypto::hash::{Hashable, H256};
 use crate::transaction::{CoinId, Input, Output, Transaction};
 use crate::utxodb::UtxoDatabase;
 use crate::wallet::Wallet;
+use crate::config::DELTA;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
@@ -18,7 +20,8 @@ pub fn ico(
 ) -> Result<(), rocksdb::Error> {
     let recipients: Vec<H256> = recipients.to_vec();
     let recipients = Arc::new(Mutex::new(recipients));
-
+    let mut ico_time = proposer::genesis().header.pos_metadata.timestamp;//SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis();
+    ico_time = ( ico_time / DELTA ) * DELTA ;
     // start a bunch of worker threads to commit those coins
     let mut workers = vec![];
     for _ in 0..16 {
@@ -42,7 +45,7 @@ pub fn ico(
                 hash: RefCell::new(None),
             };
             let hash = tx.hash();
-            let diff = utxodb.add_transaction(&tx, hash).unwrap();
+            let diff = utxodb.add_transaction(&tx, hash, ico_time).unwrap();
             wallet.apply_diff(&diff.0, &diff.1).unwrap();
         });
         workers.push(handle);

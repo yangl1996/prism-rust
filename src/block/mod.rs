@@ -1,7 +1,9 @@
 pub mod header;
+pub mod pos_metadata;
 pub mod proposer;
 pub mod transaction;
 pub mod voter;
+
 use crate::crypto::hash::{Hashable, H256};
 use crate::experiment::performance_counter::PayloadSize;
 
@@ -13,35 +15,30 @@ pub struct Block {
     /// The content of the block. It could contain transactions, references, or votes, depending on
     /// the block type.
     pub content: Content,
-    /// The sortition proof of the content. In addition to the content Merkle root in block header, we are
-    /// able to verify that the block is mined on a set of content candidates.
-    pub sortition_proof: Vec<H256>,
 }
 
 impl Block {
     /// Create a new block.
     pub fn new(
         parent: H256,
-        timestamp: u128,
-        nonce: u32,
-        content_merkle_root: H256,
-        sortition_proof: Vec<H256>,
-        content: Content,
+        pos_metadata: pos_metadata::Metadata,
+        content_root: H256,
         extra_content: [u8; 32],
         difficulty: H256,
+        header_signature: Vec<u8>,
+        content: Content,
     ) -> Self {
         let header = header::Header::new(
             parent,
-            timestamp,
-            nonce,
-            content_merkle_root,
+            pos_metadata,
+            content_root,
             extra_content,
             difficulty,
+            header_signature,
         );
         Self {
             header,
             content,
-            sortition_proof,
         }
     }
 
@@ -50,12 +47,10 @@ impl Block {
     pub fn from_header(
         header: header::Header,
         content: Content,
-        sortition_proof: Vec<H256>,
     ) -> Self {
         Self {
             header,
             content,
-            sortition_proof,
         }
     }
 }
@@ -71,7 +66,7 @@ impl PayloadSize for Block {
     fn size(&self) -> usize {
         return std::mem::size_of::<header::Header>()
             + self.content.size()
-            + self.sortition_proof.len() * std::mem::size_of::<H256>();
+
     }
 }
 
@@ -112,21 +107,25 @@ impl PayloadSize for Content {
 pub mod tests {
 
     use super::*;
+    use super::pos_metadata::{TimeStamp, RandomSource, Metadata};
     use crate::config;
     use crate::transaction::Transaction;
     use rand::Rng;
 
-    macro_rules! random_nonce {
+    macro_rules! random_source {
         () => {{
             let mut rng = rand::thread_rng();
-            let random_u32: u32 = rng.gen();
-            random_u32
+            let mut random_source = [0u8;32];
+            for i in 0..32 {
+                random_source[i] = rng.gen();
+            }
+            random_source
         }};
     }
 
     pub fn proposer_block(
         parent: H256,
-        timestamp: u128,
+        timestamp: TimeStamp,
         proposer_refs: Vec<H256>,
         transaction_refs: Vec<H256>,
     ) -> Block {
@@ -135,15 +134,17 @@ pub mod tests {
             proposer_refs,
         });
         let content_hash = content.hash();
+        let mut metadata = Metadata::default();
+        metadata.timestamp = timestamp;
+        metadata.random_source = random_source!();
         Block::new(
             parent,
-            timestamp,
-            random_nonce!(),
+            metadata,
             content_hash,
-            vec![content_hash],
-            content,
             [0u8; 32],
             *config::DEFAULT_DIFFICULTY,
+            vec![],
+            content,
         )
     }
 
@@ -151,24 +152,24 @@ pub mod tests {
         parent: H256,
         timestamp: u128,
         chain_number: u16,
-        voter_parent: H256,
         votes: Vec<H256>,
     ) -> Block {
         let content = Content::Voter(voter::Content {
             chain_number,
-            voter_parent,
             votes,
         });
         let content_hash = content.hash();
+        let mut metadata = Metadata::default();
+        metadata.timestamp = timestamp;
+        metadata.random_source = random_source!();
         Block::new(
             parent,
-            timestamp,
-            random_nonce!(),
+            metadata,
             content_hash,
-            vec![content_hash],
-            content,
             [0u8; 32],
             *config::DEFAULT_DIFFICULTY,
+            vec![],
+            content,
         )
     }
 
@@ -179,15 +180,17 @@ pub mod tests {
     ) -> Block {
         let content = Content::Transaction(transaction::Content { transactions });
         let content_hash = content.hash();
+        let mut metadata = Metadata::default();
+        metadata.timestamp = timestamp;
+        metadata.random_source = random_source!();
         Block::new(
             parent,
-            timestamp,
-            random_nonce!(),
+            metadata,
             content_hash,
-            vec![content_hash],
-            content,
             [0u8; 32],
             *config::DEFAULT_DIFFICULTY,
+            vec![],
+            content,
         )
     }
 }

@@ -159,10 +159,24 @@ impl Context {
 
                         // check POW here. If POW does not pass, discard the block at this
                         // stage
-                        let pow_check = validation::check_pow_sortition_id(&block);
-                        match pow_check {
+                        let pos_check = validation::check_pos(&block, &self.utxodb);
+                        match pos_check {
                             BlockResult::Pass => {}
                             _ => continue,
+                        }
+
+                        // check proof
+                        let proof = validation::check_proof(&block);
+                        match proof {
+                            BlockResult::Pass => {}
+                            _ => {
+                                warn!(
+                                    "Ignoring invalid block {:.8}:",
+                                    block.hash(),
+                                    // TODO: Print a better warning statement
+                                );
+                                continue;
+                            }
                         }
 
                         // check whether the block is being processed. note that here we use lock
@@ -239,19 +253,7 @@ impl Context {
                             _ => unreachable!(),
                         }
 
-                        // check sortition proof and content semantics
-                        let sortition_proof = validation::check_sortition_proof(&block);
-                        match sortition_proof {
-                            BlockResult::Pass => {}
-                            _ => {
-                                warn!(
-                                    "Ignoring invalid block {:.8}: {}",
-                                    block.hash(),
-                                    sortition_proof
-                                );
-                                continue;
-                            }
-                        }
+                        // check content semantics
                         let content_semantic =
                             validation::check_content_semantic(&block, &self.chain, &self.blockdb);
                         match content_semantic {

@@ -125,6 +125,17 @@ impl MemoryPool {
         }
     }
 
+    /// pop n transaction by fifo
+    pub fn pop_transactions(&mut self, n: u32) -> Vec<Transaction> {
+        let indices: Vec<u64> = self.by_storage_index.keys().take(n as usize).cloned().collect();
+        let mut result = vec![];
+        for index in indices {
+            let hash = self.by_storage_index.remove(&index).unwrap();
+            result.push(self.remove_and_get(&hash).unwrap().transaction);
+        }
+        result
+    }
+
     /// get n transaction by fifo
     pub fn get_transactions(&self, n: u32) -> Vec<Transaction> {
         self.by_storage_index

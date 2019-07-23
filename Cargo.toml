@@ -36,6 +36,7 @@ hex = "0.3"
 url = "1.7"
 base64 = "0.10"
 crossbeam = "0.7"
+cached = "0.9"
 
 [dependencies.ed25519-dalek]
 version = "1.0.0-pre.1"

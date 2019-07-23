@@ -1,4 +1,5 @@
-use crate::block::{Block, Content};
+use crate::block::{Block, Content, proposer, voter};
+use crate::block::pos_metadata::TimeStamp;
 use crate::config::*;
 use crate::crypto::hash::{Hashable, H256};
 
@@ -10,6 +11,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::mem;
 use std::sync::Mutex;
 use std::time;
+use std::time::SystemTime;
 
 // Column family names for node/chain metadata
 const PROPOSER_NODE_LEVEL_CF: &str = "PROPOSER_NODE_LEVEL"; // hash to node level (u64)
@@ -22,9 +24,10 @@ const PROPOSER_LEADER_SEQUENCE_CF: &str = "PROPOSER_LEADER_SEQUENCE"; // level (
 const PROPOSER_LEDGER_ORDER_CF: &str = "PROPOSER_LEDGER_ORDER"; // level (u64) to the list of proposer blocks confirmed
                                                                 // by this level, including the leader itself. The list
                                                                 // is in the order that those blocks should live in the ledger.
+const NODE_TIMESTAMP_CF: &str = "NODE_TIMESTAMP"; //Timestamp of the proposer blocks
 
 // Column family names for graph neighbors
-const PARENT_NEIGHBOR_CF: &str = "GRAPH_PARENT_NEIGHBOR"; // the proposer parent of a block
+const PROPOSER_PARENT_NEIGHBOR_CF: &str = "GRAPH_PROPOSER_PARENT_NEIGHBOR"; // the proposer parent of a block
 const VOTE_NEIGHBOR_CF: &str = "GRAPH_VOTE_NEIGHBOR"; // neighbors associated by a vote
 const VOTER_PARENT_NEIGHBOR_CF: &str = "GRAPH_VOTER_PARENT_NEIGHBOR"; // the voter parent of a block
 const TRANSACTION_REF_NEIGHBOR_CF: &str = "GRAPH_TRANSACTION_REF_NEIGHBOR";
@@ -63,6 +66,8 @@ impl BlockChain {
             ColumnFamilyDescriptor::new(PROPOSER_LEADER_SEQUENCE_CF, Options::default());
         let proposer_ledger_order_cf =
             ColumnFamilyDescriptor::new(PROPOSER_LEDGER_ORDER_CF, Options::default());
+        let node_timestamp_cf =
+            ColumnFamilyDescriptor::new(NODE_TIMESTAMP_CF, Options::default());
 
         let mut proposer_tree_level_option = Options::default();
         proposer_tree_level_option.set_merge_operator(
@@ -80,8 +85,8 @@ impl BlockChain {
 
         let mut parent_neighbor_option = Options::default();
         parent_neighbor_option.set_merge_operator("append H256 vec", h256_vec_append_merge, None);
-        let parent_neighbor_cf =
-            ColumnFamilyDescriptor::new(PARENT_NEIGHBOR_CF, parent_neighbor_option);
+        let proposer_parent_neighbor_cf =
+            ColumnFamilyDescriptor::new(PROPOSER_PARENT_NEIGHBOR_CF, parent_neighbor_option);
 
         let mut vote_neighbor_option = Options::default();
         vote_neighbor_option.set_merge_operator("append H256 vec", h256_vec_append_merge, None);
@@ -123,9 +128,10 @@ impl BlockChain {
             voter_node_voted_level_cf,
             proposer_leader_sequence_cf,
             proposer_ledger_order_cf,
+            node_timestamp_cf,
             proposer_tree_level_cf,
             proposer_node_vote_cf,
-            parent_neighbor_cf,
+            proposer_parent_neighbor_cf,
             vote_neighbor_cf,
             voter_parent_neighbor_cf,
             transaction_ref_neighbor_cf,
@@ -156,6 +162,7 @@ impl BlockChain {
 
     /// Destroy the existing database at the given path, create a new one, and initialize the content.
     pub fn new<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
+
         DB::destroy(&Options::default(), &path)?;
         let db = Self::open(&path)?;
         // get cf handles
@@ -165,12 +172,13 @@ impl BlockChain {
         let voter_node_voted_level_cf = db.db.cf_handle(VOTER_NODE_VOTED_LEVEL_CF).unwrap();
         let proposer_node_vote_cf = db.db.cf_handle(PROPOSER_NODE_VOTE_CF).unwrap();
         let proposer_tree_level_cf = db.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
-        let parent_neighbor_cf = db.db.cf_handle(PARENT_NEIGHBOR_CF).unwrap();
+        let proposer_parent_neighbor_cf = db.db.cf_handle(PROPOSER_PARENT_NEIGHBOR_CF).unwrap();
         let vote_neighbor_cf = db.db.cf_handle(VOTE_NEIGHBOR_CF).unwrap();
         let proposer_leader_sequence_cf = db.db.cf_handle(PROPOSER_LEADER_SEQUENCE_CF).unwrap();
         let proposer_ledger_order_cf = db.db.cf_handle(PROPOSER_LEDGER_ORDER_CF).unwrap();
         let proposer_ref_neighbor_cf = db.db.cf_handle(PROPOSER_REF_NEIGHBOR_CF).unwrap();
         let transaction_ref_neighbor_cf = db.db.cf_handle(TRANSACTION_REF_NEIGHBOR_CF).unwrap();
+        let node_timestamp_cf = db.db.cf_handle(NODE_TIMESTAMP_CF).unwrap();
 
         // insert genesis blocks
         let mut wb = WriteBatch::default();
@@ -185,6 +193,12 @@ impl BlockChain {
             proposer_tree_level_cf,
             serialize(&(0 as u64)).unwrap(),
             serialize(&(*PROPOSER_GENESIS_HASH)).unwrap(),
+        )?;
+        let genesis_timestamp = proposer::genesis().header.pos_metadata.timestamp;
+        wb.put_cf(
+            node_timestamp_cf,
+            serialize(&(*PROPOSER_GENESIS_HASH)).unwrap(),
+            serialize(&genesis_timestamp).unwrap(),
         )?;
         let mut unreferred_proposers = db.unreferred_proposers.lock().unwrap();
         unreferred_proposers.insert(*PROPOSER_GENESIS_HASH);
@@ -214,11 +228,6 @@ impl BlockChain {
         // voter genesis blocks
         let mut voter_ledger_tips = db.voter_ledger_tips.lock().unwrap();
         for chain_num in 0..NUM_VOTER_CHAINS {
-            wb.put_cf(
-                parent_neighbor_cf,
-                serialize(&VOTER_GENESIS_HASHES[chain_num as usize]).unwrap(),
-                serialize(&(*PROPOSER_GENESIS_HASH)).unwrap(),
-            )?;
             wb.merge_cf(
                 vote_neighbor_cf,
                 serialize(&VOTER_GENESIS_HASHES[chain_num as usize]).unwrap(),
@@ -244,6 +253,12 @@ impl BlockChain {
                 serialize(&VOTER_GENESIS_HASHES[chain_num as usize]).unwrap(),
                 serialize(&(chain_num as u16)).unwrap(),
             )?;
+            let genesis_timestamp = voter::genesis(chain_num).header.pos_metadata.timestamp;
+            wb.put_cf(
+                node_timestamp_cf,
+                serialize(&VOTER_GENESIS_HASHES[chain_num as usize]).unwrap(),
+                serialize(&genesis_timestamp).unwrap(),
+                )?;
             let mut voter_best = db.voter_best[chain_num as usize].lock().unwrap();
             voter_best.0 = VOTER_GENESIS_HASHES[chain_num as usize];
             drop(voter_best);
@@ -264,11 +279,12 @@ impl BlockChain {
         let voter_node_chain_cf = self.db.cf_handle(VOTER_NODE_CHAIN_CF).unwrap();
         let voter_node_voted_level_cf = self.db.cf_handle(VOTER_NODE_VOTED_LEVEL_CF).unwrap();
         let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
-        let parent_neighbor_cf = self.db.cf_handle(PARENT_NEIGHBOR_CF).unwrap();
+        let proposer_parent_neighbor_cf = self.db.cf_handle(PROPOSER_PARENT_NEIGHBOR_CF).unwrap();
         let vote_neighbor_cf = self.db.cf_handle(VOTE_NEIGHBOR_CF).unwrap();
         let voter_parent_neighbor_cf = self.db.cf_handle(VOTER_PARENT_NEIGHBOR_CF).unwrap();
         let transaction_ref_neighbor_cf = self.db.cf_handle(TRANSACTION_REF_NEIGHBOR_CF).unwrap();
         let proposer_ref_neighbor_cf = self.db.cf_handle(PROPOSER_REF_NEIGHBOR_CF).unwrap();
+        let node_timestamp_cf = self.db.cf_handle(NODE_TIMESTAMP_CF).unwrap();
 
         let mut wb = WriteBatch::default();
 
@@ -293,10 +309,13 @@ impl BlockChain {
         // insert parent link
         let block_hash = block.hash();
         let parent_hash = block.header.parent;
-        put_value!(parent_neighbor_cf, block_hash, parent_hash);
+        // TODO do we need timestamp for transaction block?
+        put_value!(node_timestamp_cf, block_hash, block.header.pos_metadata.timestamp);
 
         match &block.content {
             Content::Proposer(content) => {
+                // add parent for proposer or transaction block
+                put_value!(proposer_parent_neighbor_cf, block_hash, parent_hash);
                 // add ref'ed blocks
                 // note that the parent is the first proposer block that we refer
                 let mut refed_proposer: Vec<H256> = vec![parent_hash];
@@ -365,16 +384,15 @@ impl BlockChain {
 
                 info!(
                     "Adding proposer block {} at timestamp {} at level {}",
-                    block_hash, block.header.timestamp, self_level
+                    block_hash, block.header.pos_metadata.timestamp, self_level
                 );
             }
             Content::Voter(content) => {
                 // add voter parent
-                let voter_parent_hash = content.voter_parent;
-                put_value!(voter_parent_neighbor_cf, block_hash, voter_parent_hash);
+                put_value!(voter_parent_neighbor_cf, block_hash, parent_hash);
                 // get current block level and chain number
-                let voter_parent_level: u64 = get_value!(voter_node_level_cf, voter_parent_hash);
-                let voter_parent_chain: u16 = get_value!(voter_node_chain_cf, voter_parent_hash);
+                let voter_parent_level: u64 = get_value!(voter_node_level_cf, parent_hash);
+                let voter_parent_chain: u16 = get_value!(voter_node_chain_cf, parent_hash);
                 let self_level = voter_parent_level + 1;
                 let self_chain = voter_parent_chain;
                 // set current block level and chain number
@@ -382,12 +400,16 @@ impl BlockChain {
                 put_value!(voter_node_chain_cf, block_hash, self_chain as u16);
                 // add voted blocks and set deepest voted level
                 put_value!(vote_neighbor_cf, block_hash, content.votes);
-                // set the voted level to be until proposer parent
-                let proposer_parent_level: u64 = get_value!(proposer_node_level_cf, parent_hash);
+                // set the voted level
+                let last_voted_proposer_level: u64 = if let Some(proposer_hash) = content.votes.last() {
+                    get_value!(proposer_node_level_cf, proposer_hash)
+                } else {
+                    get_value!(voter_node_voted_level_cf, parent_hash)
+                };
                 put_value!(
                     voter_node_voted_level_cf,
                     block_hash,
-                    proposer_parent_level as u64
+                    last_voted_proposer_level as u64
                 );
 
                 self.db.write(wb)?;
@@ -398,6 +420,14 @@ impl BlockChain {
                 // race condition, since this update is "stateless" - we are not append/removing
                 // from a record.
                 let mut voter_best = self.voter_best[self_chain as usize].lock().unwrap();
+                /* TODO update best block based on s-truncated rule
+                if self.s_truncated_rule(voter_best.0, block_hash)? {
+                    PERFORMANCE_COUNTER
+                        .record_update_voter_main_chain(voter_best.1 as usize, self_level as usize);
+                    voter_best.0 = block_hash;
+                    voter_best.1 = self_level;
+                }
+                */
                 // update best block
                 if self_level > voter_best.1 {
                     PERFORMANCE_COUNTER
@@ -408,6 +438,8 @@ impl BlockChain {
                 drop(voter_best);
             }
             Content::Transaction(content) => {
+                // add parent for proposer or transaction block
+                put_value!(proposer_parent_neighbor_cf, block_hash, parent_hash);
                 // mark itself as unreferred
                 // Note that this could happen before committing to db, because no module will try
                 // to access transaction content based on pointers in unreferred_transactions.
@@ -422,7 +454,7 @@ impl BlockChain {
         return Ok(());
     }
 
-    pub fn update_ledger(&self) -> Result<(Vec<H256>, Vec<H256>)> {
+    pub fn update_ledger(&self) -> Result<(Vec<(H256, TimeStamp)>, Vec<(H256, TimeStamp)>)> {
         let proposer_node_vote_cf = self.db.cf_handle(PROPOSER_NODE_VOTE_CF).unwrap();
         let proposer_node_level_cf = self.db.cf_handle(PROPOSER_NODE_LEVEL_CF).unwrap();
         let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
@@ -430,6 +462,7 @@ impl BlockChain {
         let proposer_ledger_order_cf = self.db.cf_handle(PROPOSER_LEDGER_ORDER_CF).unwrap();
         let proposer_ref_neighbor_cf = self.db.cf_handle(PROPOSER_REF_NEIGHBOR_CF).unwrap();
         let transaction_ref_neighbor_cf = self.db.cf_handle(TRANSACTION_REF_NEIGHBOR_CF).unwrap();
+        let node_timestamp_cf = self.db.cf_handle(NODE_TIMESTAMP_CF).unwrap();
 
         macro_rules! get_value {
             ($cf:expr, $key:expr) => {{
@@ -603,8 +636,8 @@ impl BlockChain {
         if let Some(change_begin) = change_begin {
             let mut proposer_ledger_tip = self.proposer_ledger_tip.lock().unwrap();
             let mut unconfirmed_proposers = self.unconfirmed_proposers.lock().unwrap();
-            let mut removed: Vec<H256> = vec![];
-            let mut added: Vec<H256> = vec![];
+            let mut removed: Vec<(H256, TimeStamp)> = vec![];
+            let mut added: Vec<(H256, TimeStamp)> = vec![];
             let mut wb = WriteBatch::default();
             macro_rules! merge_value {
                 ($cf:expr, $key:expr, $value:expr) => {{
@@ -627,9 +660,11 @@ impl BlockChain {
                 let original_ledger: Vec<H256> =
                     get_value!(proposer_ledger_order_cf, level as u64).unwrap();
                 delete_value!(proposer_ledger_order_cf, level as u64);
+                let original_leader_block: H256 = get_value!(proposer_leader_sequence_cf, level as u64).unwrap()        ;
+                let timestamp_original_leader = get_value!(node_timestamp_cf, original_leader_block).unwrap();
                 for block in &original_ledger {
                     unconfirmed_proposers.insert(*block);
-                    removed.push(*block);
+                    removed.push((*block, timestamp_original_leader));
                 }
             }
 
@@ -645,8 +680,9 @@ impl BlockChain {
                         Some(leader) => leader,
                     };
                     // Get the sequence of blocks by doing a depth-first traverse
-                    let mut order: Vec<H256> = vec![];
+                    let mut order: Vec<(H256, TimeStamp)> = vec![];
                     let mut stack: Vec<H256> = vec![leader];
+                    let timestamp_leader = get_value!(node_timestamp_cf, leader).unwrap();
                     while let Some(top) = stack.pop() {
                         // if it's already
                         // confirmed before, ignore it
@@ -656,7 +692,7 @@ impl BlockChain {
                         let refs: Vec<H256> = get_value!(proposer_ref_neighbor_cf, top).unwrap();
 
                         // add the current block to the ordered ledger, could be duplicated
-                        order.push(top);
+                        order.push((top, timestamp_leader));
 
                         // search all referred blocks
                         for ref_hash in &refs {
@@ -669,7 +705,7 @@ impl BlockChain {
                     // deduplicate, keep the one copy that is former in this order
                     order = order
                         .into_iter()
-                        .filter(|h| unconfirmed_proposers.remove(h))
+                        .filter(|(h,_)| unconfirmed_proposers.remove(h))
                         .collect();
                     put_value!(proposer_ledger_order_cf, level as u64, order);
                     added.extend(&order);
@@ -678,15 +714,20 @@ impl BlockChain {
             // commit the new ledger into the database
             self.db.write(wb)?;
 
-            let mut removed_transaction_blocks: Vec<H256> = vec![];
-            let mut added_transaction_blocks: Vec<H256> = vec![];
-            for block in &removed {
-                let t: Vec<H256> = get_value!(transaction_ref_neighbor_cf, block).unwrap();
-                removed_transaction_blocks.extend(&t);
+            let mut removed_transaction_blocks: Vec<(H256, TimeStamp)> = vec![];
+            let mut added_transaction_blocks: Vec<(H256, TimeStamp)> = vec![];
+            for (block, timestamp) in &removed {
+                let t_blocks: Vec<H256> = get_value!(transaction_ref_neighbor_cf, block).unwrap();
+                for t in t_blocks.iter(){
+                    removed_transaction_blocks.push((*t, *timestamp));
+                }
             }
-            for block in &added {
-                let t: Vec<H256> = get_value!(transaction_ref_neighbor_cf, block).unwrap();
-                added_transaction_blocks.extend(&t);
+            for (block, timestamp) in &added {
+                let t_blocks: Vec<H256> = get_value!(transaction_ref_neighbor_cf, block).unwrap();
+                //TODO: Do dedup while preserving the order
+                for t in t_blocks.iter(){
+                    added_transaction_blocks.push((*t, *timestamp));
+                }
             }
             return Ok((added_transaction_blocks, removed_transaction_blocks));
         } else {
@@ -754,7 +795,76 @@ impl BlockChain {
         return Ok((added_votes, removed_votes));
     }
 
-    pub fn best_proposer(&self) -> Result<H256> {
+    /// Given two voter blocks on the same chain, calculate which is better based on s-truncated
+    /// rule. Return true if `to` is better.
+    fn s_truncated_rule(&self, from: H256, to: H256) -> Result<bool> {
+        // get cf handles
+        let voter_node_level_cf = self.db.cf_handle(VOTER_NODE_LEVEL_CF).unwrap();
+        let voter_parent_neighbor_cf = self.db.cf_handle(VOTER_PARENT_NEIGHBOR_CF).unwrap();
+        let node_timestamp_cf = self.db.cf_handle(NODE_TIMESTAMP_CF).unwrap();
+
+        macro_rules! get_value {
+            ($cf:expr, $key:expr) => {{
+                deserialize(&self.db.get_cf($cf, serialize(&$key).unwrap())?.unwrap()).unwrap()
+            }};
+        }
+
+        let mut to_chain = vec![];
+        let mut from_chain = vec![];
+
+        let mut to: H256 = to;
+        let mut from: H256 = from;
+
+        let mut to_level: u64 = get_value!(voter_node_level_cf, to);
+        let mut from_level: u64 = get_value!(voter_node_level_cf, from);
+
+        // trace back to forking point
+        while to_level != from_level {
+            if to_level > from_level {
+                to_chain.push(to);
+                to = get_value!(voter_parent_neighbor_cf, to);
+                to_level -= 1;
+            } else if to_level < from_level {
+                from_chain.push(from);
+                from = get_value!(voter_parent_neighbor_cf, from);
+                from_level -= 1;
+            }
+        }
+        while to != from {
+            to_chain.push(to);
+            to = get_value!(voter_parent_neighbor_cf, to);
+            to_level -= 1;
+            from_chain.push(from);
+            from = get_value!(voter_parent_neighbor_cf, from);
+            from_level -= 1;
+        }
+        // it is extension rather than forking
+        if from_chain.is_empty() {
+            return Ok(true);
+        }
+        let fork_begin_time: TimeStamp = get_value!(node_timestamp_cf, from);
+        let mut both_empty = true;//TODO: if both empty, we need to increase s?
+        while let Some(to) = to_chain.pop() {
+            if let Some(from) = from_chain.pop() {
+                let to_time: TimeStamp = get_value!(node_timestamp_cf, to);
+                let from_time: TimeStamp = get_value!(node_timestamp_cf, from);
+                if to_time <= fork_begin_time + SIGMA || from_time <= fork_begin_time + SIGMA {
+                    both_empty = false;
+                }
+                if to_time > fork_begin_time + SIGMA {
+                    return Ok(false);
+                }
+                if from_time > fork_begin_time + SIGMA {
+                    return Ok(true);
+                }
+            } else {
+                return Ok(true);
+            }
+        }
+        return Ok(false);
+    }
+
+    pub fn best_proposer(&self) -> Result<(H256, u64)> {
         let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
 
         let proposer_best = self.proposer_best_level.lock().unwrap();
@@ -767,14 +877,14 @@ impl BlockChain {
                 .unwrap(),
         )
         .unwrap();
-        return Ok(blocks[0]);
+        return Ok((blocks[0], level));
     }
 
-    pub fn best_voter(&self, chain_num: usize) -> H256 {
+    pub fn best_voter(&self, chain_num: usize) -> (H256, u64) {
         let voter_best = self.voter_best[chain_num].lock().unwrap();
-        let hash = voter_best.0;
+        let result = *voter_best;
         drop(voter_best);
-        return hash;
+        return result;
     }
 
     pub fn unreferred_proposers(&self) -> Vec<H256> {
@@ -800,6 +910,7 @@ impl BlockChain {
         let voter_node_voted_level_cf = self.db.cf_handle(VOTER_NODE_VOTED_LEVEL_CF).unwrap();
         let proposer_node_level_cf = self.db.cf_handle(PROPOSER_NODE_LEVEL_CF).unwrap();
         let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
+        let node_timestamp_cf = self.db.cf_handle(NODE_TIMESTAMP_CF).unwrap();
         // get the deepest voted level
         let first_vote_level: u64 = deserialize(
             &self
@@ -899,10 +1010,10 @@ impl BlockChain {
     /// Check whether the given transaction block exists in the database.
     // TODO: we can't tell whether it's is a transaction block!
     pub fn contains_transaction(&self, hash: &H256) -> Result<bool> {
-        let parent_neighbor_cf = self.db.cf_handle(PARENT_NEIGHBOR_CF).unwrap();
+        let proposer_parent_neighbor_cf = self.db.cf_handle(PROPOSER_PARENT_NEIGHBOR_CF).unwrap();
         return match self
             .db
-            .get_cf(parent_neighbor_cf, serialize(&hash).unwrap())?
+            .get_cf(proposer_parent_neighbor_cf, serialize(&hash).unwrap())?
         {
             Some(_) => Ok(true),
             None => Ok(false),
@@ -1089,7 +1200,7 @@ impl BlockChain {
 
         let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
         let proposer_leader_sequence_cf = self.db.cf_handle(PROPOSER_LEADER_SEQUENCE_CF).unwrap();
-        let parent_neighbor_cf = self.db.cf_handle(PARENT_NEIGHBOR_CF).unwrap();
+        let proposer_parent_neighbor_cf = self.db.cf_handle(PROPOSER_PARENT_NEIGHBOR_CF).unwrap();
         let proposer_node_vote_cf = self.db.cf_handle(PROPOSER_NODE_VOTE_CF).unwrap();
         let voter_parent_neighbor_cf = self.db.cf_handle(VOTER_PARENT_NEIGHBOR_CF).unwrap();
         let voter_node_voted_level_cf = self.db.cf_handle(VOTER_NODE_VOTED_LEVEL_CF).unwrap();
@@ -1150,7 +1261,7 @@ impl BlockChain {
         for (level, blocks) in proposer_tree.iter() {
             for block in blocks {
                 // get parent edges
-                match snapshot.get_cf(parent_neighbor_cf, serialize(block).unwrap())? {
+                match snapshot.get_cf(proposer_parent_neighbor_cf, serialize(block).unwrap())? {
                     Some(d) => {
                         let parent: H256 = deserialize(&d).unwrap();
                         edges.push(Edge {
@@ -1486,7 +1597,8 @@ fn h256_vec_append_merge(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::block::{proposer, transaction, voter, Block, Content};
+    use crate::block::{proposer, transaction, voter, Block};
+    use crate::block::tests::{proposer_block, voter_block, transaction_block};
     use crate::crypto::hash::H256;
 
     #[test]
@@ -1499,7 +1611,7 @@ mod tests {
         let voter_node_chain_cf = db.db.cf_handle(VOTER_NODE_CHAIN_CF).unwrap();
         let voter_node_voted_level_cf = db.db.cf_handle(VOTER_NODE_VOTED_LEVEL_CF).unwrap();
         let proposer_tree_level_cf = db.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
-        let parent_neighbor_cf = db.db.cf_handle(PARENT_NEIGHBOR_CF).unwrap();
+        let proposer_parent_neighbor_cf = db.db.cf_handle(PROPOSER_PARENT_NEIGHBOR_CF).unwrap();
         let vote_neighbor_cf = db.db.cf_handle(VOTE_NEIGHBOR_CF).unwrap();
         let proposer_leader_sequence_cf = db.db.cf_handle(PROPOSER_LEADER_SEQUENCE_CF).unwrap();
         let proposer_ledger_order_cf = db.db.cf_handle(PROPOSER_LEDGER_ORDER_CF).unwrap();
@@ -1601,17 +1713,6 @@ mod tests {
             )
             .unwrap();
             assert_eq!(genesis_chain, chain_num as u16);
-            let parent: H256 = deserialize(
-                &db.db
-                    .get_cf(
-                        parent_neighbor_cf,
-                        serialize(&VOTER_GENESIS_HASHES[chain_num as usize]).unwrap(),
-                    )
-                    .unwrap()
-                    .unwrap(),
-            )
-            .unwrap();
-            assert_eq!(parent, *PROPOSER_GENESIS_HASH);
             let voted_proposer: Vec<H256> = deserialize(
                 &db.db
                     .get_cf(
@@ -1642,7 +1743,7 @@ mod tests {
         let voter_node_chain_cf = db.db.cf_handle(VOTER_NODE_CHAIN_CF).unwrap();
         let voter_node_voted_level_cf = db.db.cf_handle(VOTER_NODE_VOTED_LEVEL_CF).unwrap();
         let proposer_tree_level_cf = db.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
-        let parent_neighbor_cf = db.db.cf_handle(PARENT_NEIGHBOR_CF).unwrap();
+        let proposer_parent_neighbor_cf = db.db.cf_handle(PROPOSER_PARENT_NEIGHBOR_CF).unwrap();
         let vote_neighbor_cf = db.db.cf_handle(VOTE_NEIGHBOR_CF).unwrap();
         let voter_parent_neighbor_cf = db.db.cf_handle(VOTER_PARENT_NEIGHBOR_CF).unwrap();
         let transaction_ref_neighbor_cf = db.db.cf_handle(TRANSACTION_REF_NEIGHBOR_CF).unwrap();
@@ -1667,7 +1768,7 @@ mod tests {
         let parent: H256 = deserialize(
             &db.db
                 .get_cf(
-                    parent_neighbor_cf,
+                    proposer_parent_neighbor_cf,
                     serialize(&new_transaction_block.hash()).unwrap(),
                 )
                 .unwrap()
@@ -1719,7 +1820,7 @@ mod tests {
         let parent: H256 = deserialize(
             &db.db
                 .get_cf(
-                    parent_neighbor_cf,
+                    proposer_parent_neighbor_cf,
                     serialize(&new_proposer_block_2.hash()).unwrap(),
                 )
                 .unwrap()
@@ -1824,7 +1925,7 @@ mod tests {
         let parent: H256 = deserialize(
             &db.db
                 .get_cf(
-                    parent_neighbor_cf,
+                    proposer_parent_neighbor_cf,
                     serialize(&new_voter_block.hash()).unwrap(),
                 )
                 .unwrap()
@@ -2099,39 +2200,25 @@ mod tests {
     fn best_proposer_and_voter() {
         let db =
             BlockChain::new("/tmp/prism_test_blockchain_best_proposer_and_voter.rocksdb").unwrap();
-        assert_eq!(db.best_proposer().unwrap(), *PROPOSER_GENESIS_HASH);
-        assert_eq!(db.best_voter(0), VOTER_GENESIS_HASHES[0]);
+        assert_eq!(db.best_proposer().unwrap().0, *PROPOSER_GENESIS_HASH);
+        assert_eq!(db.best_voter(0).0, VOTER_GENESIS_HASHES[0]);
 
-        let new_proposer_content = Content::Proposer(proposer::Content::new(vec![], vec![]));
-        let new_proposer_block = Block::new(
+        let new_proposer_block = proposer_block(
             *PROPOSER_GENESIS_HASH,
             0,
-            0,
-            H256::default(),
             vec![],
-            new_proposer_content,
-            [0; 32],
-            H256::default(),
+            vec![],
         );
         db.insert_block(&new_proposer_block).unwrap();
-        let new_voter_content = Content::Voter(voter::Content::new(
-            0,
+        let new_voter_block = voter_block(
             VOTER_GENESIS_HASHES[0],
+            0,
+            0,
             vec![new_proposer_block.hash()],
-        ));
-        let new_voter_block = Block::new(
-            new_proposer_block.hash(),
-            0,
-            0,
-            H256::default(),
-            vec![],
-            new_voter_content,
-            [1; 32],
-            H256::default(),
         );
         db.insert_block(&new_voter_block).unwrap();
-        assert_eq!(db.best_proposer().unwrap(), new_proposer_block.hash());
-        assert_eq!(db.best_voter(0), new_voter_block.hash());
+        assert_eq!(db.best_proposer().unwrap().0, new_proposer_block.hash());
+        assert_eq!(db.best_voter(0).0, new_voter_block.hash());
     }
 
     #[test]
@@ -2140,16 +2227,10 @@ mod tests {
             BlockChain::new("/tmp/prism_test_blockchain_unreferred_transactions_proposer.rocksdb")
                 .unwrap();
 
-        let new_transaction_content = Content::Transaction(transaction::Content::new(vec![]));
-        let new_transaction_block = Block::new(
+        let new_transaction_block = transaction_block(
             *PROPOSER_GENESIS_HASH,
             0,
-            0,
-            H256::default(),
             vec![],
-            new_transaction_content,
-            [0; 32],
-            H256::default(),
         );
         db.insert_block(&new_transaction_block).unwrap();
         assert_eq!(
@@ -2158,16 +2239,11 @@ mod tests {
         );
         assert_eq!(db.unreferred_proposers(), vec![*PROPOSER_GENESIS_HASH]);
 
-        let new_proposer_content = Content::Proposer(proposer::Content::new(vec![], vec![]));
-        let new_proposer_block_1 = Block::new(
+        let new_proposer_block_1 = proposer_block(
             *PROPOSER_GENESIS_HASH,
-            0,
-            0,
-            H256::default(),
+            1,
             vec![],
-            new_proposer_content,
-            [1; 32],
-            H256::default(),
+            vec![],
         );
         db.insert_block(&new_proposer_block_1).unwrap();
         assert_eq!(
@@ -2176,19 +2252,11 @@ mod tests {
         );
         assert_eq!(db.unreferred_proposers(), vec![new_proposer_block_1.hash()]);
 
-        let new_proposer_content = Content::Proposer(proposer::Content::new(
-            vec![new_transaction_block.hash()],
-            vec![new_proposer_block_1.hash()],
-        ));
-        let new_proposer_block_2 = Block::new(
+        let new_proposer_block_2 = proposer_block(
             *PROPOSER_GENESIS_HASH,
-            0,
-            0,
-            H256::default(),
-            vec![],
-            new_proposer_content,
-            [2; 32],
-            H256::default(),
+            2,
+            vec![new_proposer_block_1.hash()],
+            vec![new_transaction_block.hash()],
         );
         db.insert_block(&new_proposer_block_2).unwrap();
         assert_eq!(db.unreferred_transactions(), vec![]);
@@ -2199,66 +2267,47 @@ mod tests {
     fn unvoted_proposer() {
         let db = BlockChain::new("/tmp/prism_test_blockchain_unvoted_proposer.rocksdb").unwrap();
         assert_eq!(
-            db.unvoted_proposer(&VOTER_GENESIS_HASHES[0], &db.best_proposer().unwrap())
+            db.unvoted_proposer(&VOTER_GENESIS_HASHES[0], &db.best_proposer().unwrap().0, 0)
                 .unwrap(),
             vec![]
         );
 
-        let new_proposer_content = Content::Proposer(proposer::Content::new(vec![], vec![]));
-        let new_proposer_block_1 = Block::new(
+        let new_proposer_block_1 = proposer_block(
             *PROPOSER_GENESIS_HASH,
-            0,
-            0,
-            H256::default(),
+            1,
             vec![],
-            new_proposer_content,
-            [0; 32],
-            H256::default(),
+            vec![],
         );
         db.insert_block(&new_proposer_block_1).unwrap();
 
-        let new_proposer_content = Content::Proposer(proposer::Content::new(vec![], vec![]));
-        let new_proposer_block_2 = Block::new(
+        let new_proposer_block_2 = proposer_block(
             *PROPOSER_GENESIS_HASH,
-            0,
-            0,
-            H256::default(),
+            2,
             vec![],
-            new_proposer_content,
-            [1; 32],
-            H256::default(),
+            vec![],
         );
         db.insert_block(&new_proposer_block_2).unwrap();
         assert_eq!(
-            db.unvoted_proposer(&VOTER_GENESIS_HASHES[0], &db.best_proposer().unwrap())
+            db.unvoted_proposer(&VOTER_GENESIS_HASHES[0], &db.best_proposer().unwrap().0, 0)
                 .unwrap(),
             vec![new_proposer_block_1.hash()]
         );
 
-        let new_voter_content = Content::Voter(voter::Content::new(
-            0,
+        let new_voter_block = voter_block(
             VOTER_GENESIS_HASHES[0],
+            3,
+            0,
             vec![new_proposer_block_1.hash()],
-        ));
-        let new_voter_block = Block::new(
-            new_proposer_block_2.hash(),
-            0,
-            0,
-            H256::default(),
-            vec![],
-            new_voter_content,
-            [2; 32],
-            H256::default(),
         );
         db.insert_block(&new_voter_block).unwrap();
 
         assert_eq!(
-            db.unvoted_proposer(&VOTER_GENESIS_HASHES[0], &db.best_proposer().unwrap())
+            db.unvoted_proposer(&VOTER_GENESIS_HASHES[0], &db.best_proposer().unwrap().0, 0)
                 .unwrap(),
             vec![new_proposer_block_1.hash()]
         );
         assert_eq!(
-            db.unvoted_proposer(&new_voter_block.hash(), &db.best_proposer().unwrap())
+            db.unvoted_proposer(&new_voter_block.hash(), &db.best_proposer().unwrap().0, 0)
                 .unwrap(),
             vec![]
         );
@@ -2267,7 +2316,7 @@ mod tests {
     #[test]
     fn merge_operator_h256_vec() {
         let db = BlockChain::new("/tmp/prism_test_blockchain_merge_op_h256_vec.rocksdb").unwrap();
-        let cf = db.db.cf_handle(PARENT_NEIGHBOR_CF).unwrap();
+        let cf = db.db.cf_handle(PROPOSER_PARENT_NEIGHBOR_CF).unwrap();
 
         let hash_1: H256 = [0u8; 32].into();
         let hash_2: H256 = [1u8; 32].into();
@@ -2345,46 +2394,27 @@ mod tests {
     fn dump() {
         let db = BlockChain::new("/tmp/prism_test_blockchain_dump.rocksdb").unwrap();
 
-        let new_proposer_content = Content::Proposer(proposer::Content::new(vec![], vec![]));
-        let new_proposer_block_1 = Block::new(
+        let new_proposer_block_1 = proposer_block(
             *PROPOSER_GENESIS_HASH,
-            0,
-            0,
-            H256::default(),
+            1,
             vec![],
-            new_proposer_content,
-            [0; 32],
-            H256::default(),
+            vec![],
         );
         db.insert_block(&new_proposer_block_1).unwrap();
 
-        let new_proposer_content = Content::Proposer(proposer::Content::new(vec![], vec![]));
-        let new_proposer_block_2 = Block::new(
+        let new_proposer_block_2 = proposer_block(
             *PROPOSER_GENESIS_HASH,
-            0,
-            0,
-            H256::default(),
+            2,
             vec![],
-            new_proposer_content,
-            [1; 32],
-            H256::default(),
+            vec![],
         );
         db.insert_block(&new_proposer_block_2).unwrap();
 
-        let new_voter_content = Content::Voter(voter::Content::new(
-            0,
+        let new_voter_block = voter_block(
             VOTER_GENESIS_HASHES[0],
+            3,
+            0,
             vec![new_proposer_block_1.hash()],
-        ));
-        let new_voter_block = Block::new(
-            new_proposer_block_2.hash(),
-            0,
-            0,
-            H256::default(),
-            vec![],
-            new_voter_content,
-            [2; 32],
-            H256::default(),
         );
         db.insert_block(&new_voter_block).unwrap();
         println!("{}", db.dump(100, true).unwrap());

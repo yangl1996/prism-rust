@@ -12,6 +12,7 @@ import (
 
 type WalletBalance struct {
 	Balance uint
+    Atomic_balance int
 }
 
 type UTXOSnapshot struct {
@@ -135,6 +136,7 @@ func check(nodesFile string, verbose bool) {
 
 	// check balance
 	balance := make(map[string]uint)
+	atomic_balance := make(map[string]int)
 	failed = false
 	var m1 sync.Mutex
 	var wg1 sync.WaitGroup
@@ -163,6 +165,7 @@ func check(nodesFile string, verbose bool) {
 			}
 			m1.Lock()
 			balance[node] = data.Balance
+            atomic_balance[node] = data.Atomic_balance
 			m1.Unlock()
 		}(node, url)
 	}
@@ -185,7 +188,7 @@ func check(nodesFile string, verbose bool) {
 			if verbose {
 				for idx := range node_list {
 					n := node_list[idx]
-					fmt.Printf("%10v: %v\n", n, balance[n])
+					fmt.Printf("%10v: %v (%v)\n", n, balance[n], atomic_balance[n])
 				}
 			}
 			return

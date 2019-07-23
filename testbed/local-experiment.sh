@@ -83,12 +83,18 @@ vis_port=8000
 
 pids=""
 
+rm nodes.txt
+rm stop_nodes.sh
+
 echo "Starting ${num_nodes} Prism nodes"
 for (( i = 0; i < $num_nodes; i++ )); do
 	p2p=`expr $p2p_port + $i`
 	api=`expr $api_port + $i`
 	vis=`expr $vis_port + $i`
-	command="$binary_path --p2p 127.0.0.1:${p2p} --api 127.0.0.1:${api} --visual 127.0.0.1:${vis} --blockdb /tmp/prism-${i}-blockdb.rocksdb --blockchaindb /tmp/prism-${i}-blockchaindb.rocksdb --utxodb /tmp/prism-${i}-utxodb.rocksdb --walletdb /tmp/prism-${i}-wallet.rocksdb -vv --load-key ${i}.pkcs8"
+    echo "nodes_$i,x,127.0.0.1,127.0.0.1,$p2p,$api,$vis" >> nodes.txt
+    echo "curl 'http://127.0.0.1:$api/transaction-generator/stop' &> /dev/null" >> stop_nodes.sh
+
+	command="$binary_path --p2p 127.0.0.1:${p2p} --api 127.0.0.1:${api} --visual 127.0.0.1:${vis} --blockdb /tmp/prism-${i}-blockdb.rocksdb --blockchaindb /tmp/prism-${i}-blockchaindb.rocksdb --utxodb /tmp/prism-${i}-utxodb.rocksdb --walletdb /tmp/prism-${i}-wallet.rocksdb -vv --load-key ${i}.pkcs8 --fund-coins 500000 --mining-coins `expr 20 + 10 \* $i`"
 
 	for (( j = 0; j < $i; j++ )); do
 		peer_port=`expr $p2p_port + $j`
@@ -112,19 +118,25 @@ done
 echo "Starting transaction generation and mining on each node"
 for (( i = 0; i < $num_nodes; i++ )); do
 	port=`expr $api_port + $i`
-	url="localhost:${port}/transaction-generator/set-arrival-distribution?interval=1000&distribution=uniform"
+	url="localhost:${port}/transaction-generator/set-value-distribution?distribution=uniform&min=100&max=100"
 	curl "$url" &> /dev/null
 	if [ "$?" -ne 0 ]; then
 		echo "Failed to set transaction rate for node $i"
 		exit 1
 	fi
-	url="localhost:${port}/transaction-generator/start?throttle=500000"
+	url="localhost:${port}/transaction-generator/set-arrival-distribution?interval=100&distribution=uniform"
+	curl "$url" &> /dev/null
+	if [ "$?" -ne 0 ]; then
+		echo "Failed to set transaction rate for node $i"
+		exit 1
+	fi
+	url="localhost:${port}/transaction-generator/start?throttle=10000"
 	curl "$url" &> /dev/null
 	if [ "$?" -ne 0 ]; then
 		echo "Failed to start transaction generation for node $i"
 		exit 1
 	fi
-	url="localhost:${port}/miner/start?lambda=0&lazy=false"
+	url="localhost:${port}/miner/start?delta=100"
 	curl "$url" &> /dev/null
 	if [ "$?" -ne 0 ]; then
 		echo "Failed to start mining for node $i"

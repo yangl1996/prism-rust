@@ -7,7 +7,7 @@ use std::cell::RefCell;
 use std::hash::{Hash, Hasher};
 
 /// A unique identifier of a transaction output, a.k.a. a coin.
-#[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq, Hash, Default)]
 pub struct CoinId {
     /// The hash of the transaction that produces this coin.
     pub hash: H256,
@@ -95,6 +95,8 @@ pub mod tests {
     use super::*;
     use crate::crypto::hash::tests::generate_random_hash;
     use rand::{Rng, RngCore};
+    use rand::rngs::OsRng;
+    use ed25519_dalek::Keypair;
 
     pub fn generate_random_coinid() -> CoinId {
         let mut rng = rand::thread_rng();
@@ -121,25 +123,24 @@ pub mod tests {
         }
     }
 
-    /*
     pub fn generate_random_transaction() -> Transaction {
         let mut rng = rand::thread_rng();
-        let unsigned = Transaction {
-            input: (0..rng.gen_range(1,5)).map(|_|generate_random_input()).collect(),
-            output: (0..rng.gen_range(1,5)).map(|_|generate_random_output()).collect(),
-            authorization: vec![],
-            hash: RefCell::new(None),
-        };
-        let mut authorization = vec![];
-        let keypair = KeyPair::random();
-        authorization.push(Authorization {
-            pubkey: keypair.public_key(),
-            signature: unsigned.sign(&keypair),
-        });
+        let input: Vec<Input> = (0..rng.gen_range(1,5)).map(|_|generate_random_input()).collect();
+        let output: Vec<Output> = (0..rng.gen_range(1,5)).map(|_|generate_random_output()).collect();
+        let raw_inputs = bincode::serialize(&input).unwrap();
+        let raw_outputs = bincode::serialize(&output).unwrap();
+        let raw_unsigned = [&raw_inputs[..], &raw_outputs[..]].concat();
+        let mut csprng: OsRng = OsRng::new().unwrap();
+        let keypair: Keypair = Keypair::generate(&mut csprng);
+        let authorization = vec![ Authorization {
+            pubkey: keypair.public.to_bytes().to_vec(),
+            signature: keypair.sign(&raw_unsigned).to_bytes().to_vec(),
+        }];
         Transaction {
+            input,
+            output,
             authorization,
-            ..unsigned
+            hash: RefCell::new(None),
         }
     }
-    */
 }

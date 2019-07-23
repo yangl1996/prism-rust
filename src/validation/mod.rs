@@ -1,26 +1,35 @@
-mod proposer_block;
+pub mod proposer_block;
 mod transaction;
 mod voter_block;
-use crate::block::{Block, Content};
+
+use crate::block::{Block, Content, pos_metadata};
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
 use crate::config::*;
 use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::merkle::verify;
+use crate::crypto::vrf::{vrf_verify, VrfValue};
+use crate::utxodb::UtxoDatabase;
 extern crate bigint;
 use bigint::uint::U256;
+
+cached! {
+    U256_DIV;
+    fn u256_div(dividend: U256, divisor: U256) -> U256 = {
+        dividend / divisor
+    }
+}
 
 /// The result of block validation.
 #[derive(Debug)]
 pub enum BlockResult {
     /// The validation passes.
     Pass,
-    /// The PoW doesn't pass.
-    WrongPoW,
-    /// The sortition id and content type doesn't match.
-    WrongSortitionId,
-    /// The content Merkle proof is incorrect.
-    WrongSortitionProof,
+    /// The coin for PoS is invalid.
+    WrongCoin,
+    WrongVrfProof,
+    /// The PoS Vrf value doesn't pass difficulty check.
+    WrongVrfValue,
     /// Some references are missing.
     MissingReferences(Vec<H256>),
     /// Proposer Ref level > parent
@@ -39,9 +48,9 @@ impl std::fmt::Display for BlockResult {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             BlockResult::Pass => write!(f, "validation passed"),
-            BlockResult::WrongPoW => write!(f, "PoW larger than difficulty"),
-            BlockResult::WrongSortitionId => write!(f, "Sortition id is not same as content type"),
-            BlockResult::WrongSortitionProof => write!(f, "Sortition Merkle proof is incorrect"),
+            BlockResult::WrongCoin => write!(f, "Coin donen't satisfy PoS rule"),
+            BlockResult::WrongVrfProof => write!(f, "PoS VRF Proof is wrong"),
+            BlockResult::WrongVrfValue => write!(f, "PoS VRF value larger than difficulty"),
             BlockResult::MissingReferences(_) => write!(f, "referred blocks not in system"),
             BlockResult::WrongProposerRef => {
                 write!(f, "referred proposer blocks level larger than parent")
@@ -58,16 +67,18 @@ impl std::fmt::Display for BlockResult {
     }
 }
 
-/// Validate a block.
-pub fn check_block(block: &Block, blockchain: &BlockChain, blockdb: &BlockDatabase) -> BlockResult {
+// Validate a block. Just used for testing all check_()
+fn check_block(block: &Block, blockchain: &BlockChain, blockdb: &BlockDatabase) -> BlockResult {
     // TODO: Check difficulty. Where should we get the current difficulty ranges?
 
-    match check_pow_sortition_id(block) {
+    /* todo fix this
+    match check_pos(block) {
         // if PoW and sortition id passes, we check other rules
         BlockResult::Pass => {}
         x => return x,
     };
-    match check_sortition_proof(block) {
+    */
+    match check_proof(block) {
         BlockResult::Pass => {}
         x => return x,
     };
@@ -83,39 +94,42 @@ pub fn check_block(block: &Block, blockchain: &BlockChain, blockdb: &BlockDataba
 }
 
 // check PoW and sortition id
-pub fn check_pow_sortition_id(block: &Block) -> BlockResult {
-    let sortition_id = get_sortition_id(&block.hash(), &block.header.difficulty);
-    if let Some(sortition_id) = sortition_id {
+pub fn check_pos(block: &Block, utxodb: &UtxoDatabase) -> BlockResult {
+    // check the coin used for pos is valid
+    if !utxodb.is_coin_before(&block.header.pos_metadata.utxo.coin, block.header.pos_metadata.timestamp - TAU).unwrap() {
+        return BlockResult::WrongCoin;
+    }
+    // vrf verify
+    if !vrf_verify(&block.header.pos_metadata.vrf_pubkey, &(&block.header.pos_metadata).into(), &block.header.pos_metadata.vrf_value, &block.header.pos_metadata.vrf_proof) {
+        return BlockResult::WrongVrfProof;
+    }
+    // check vrf value
+    if let Some(sortition_id) = check_difficulty(&block.header.pos_metadata.vrf_value, &block.header.difficulty, block.header.pos_metadata.utxo.value) {
         let correct_sortition_id = match &block.content {
             Content::Proposer(_) => PROPOSER_INDEX,
             Content::Transaction(_) => TRANSACTION_INDEX,
-            Content::Voter(content) => content.chain_number + FIRST_VOTER_INDEX,
+            Content::Voter(_) => PROPOSER_INDEX,
         };
         if sortition_id != correct_sortition_id {
-            return BlockResult::WrongSortitionId;
+            return BlockResult::WrongVrfValue;
         }
     } else {
-        return BlockResult::WrongPoW;
+        return BlockResult::WrongVrfValue;
     }
     BlockResult::Pass
 }
 
 /// check sortition proof
-pub fn check_sortition_proof(block: &Block) -> BlockResult {
-    let sortition_id = get_sortition_id(&block.hash(), &block.header.difficulty);
-    if let Some(sortition_id) = sortition_id {
-        if !verify(
-            &block.header.content_merkle_root,
-            &block.content.hash(),
-            &block.sortition_proof,
-            sortition_id as usize,
-            (NUM_VOTER_CHAINS + FIRST_VOTER_INDEX) as usize,
-        ) {
-            return BlockResult::WrongSortitionProof;
-        }
-    } else {
-        unreachable!();
-    }
+pub fn check_proof(block: &Block) -> BlockResult {
+//        if !verify(
+//            &block.header.content_merkle_root,
+//            &block.content.hash(),
+//            &block.proof,
+//            sortition_id as usize,
+//            (NUM_VOTER_CHAINS + FIRST_VOTER_INDEX) as usize,
+//        ) {
+//            return BlockResult::WrongSortitionProof;
+//        }
     BlockResult::Pass
 }
 /// Validate a block that already passes pow and sortition test. See if parents/refs are missing.
@@ -126,24 +140,29 @@ pub fn check_data_availability(
 ) -> BlockResult {
     let mut missing = vec![];
 
-    // check whether the parent exists
     let parent = block.header.parent;
-    let parent_availability = check_proposer_block_exists(parent, blockchain);
-    if !parent_availability {
-        missing.push(parent);
-    }
 
     // match the block type and check content
     match &block.content {
         Content::Proposer(content) => {
+            // check whether the parent exists
+            let parent_availability = check_proposer_block_exists(parent, blockchain);
+            if !parent_availability {
+                missing.push(parent);
+            }
             // check for missing references
             let missing_refs =
-                proposer_block::get_missing_references(&content, blockchain, blockdb);
+                proposer_block::get_missing_references(&content, blockchain);
             if !missing_refs.is_empty() {
                 missing.extend_from_slice(&missing_refs);
             }
         }
         Content::Voter(content) => {
+            // check whether the parent exists
+            let parent_availability = check_voter_block_exists(parent, blockchain);
+            if !parent_availability {
+                missing.push(parent);
+            }
             // check for missing references
             let missing_refs = voter_block::get_missing_references(&content, blockchain, blockdb);
             if !missing_refs.is_empty() {
@@ -151,6 +170,11 @@ pub fn check_data_availability(
             }
         }
         Content::Transaction(_) => {
+            // check whether the parent exists
+            let parent_availability = check_proposer_block_exists(parent, blockchain);
+            if !parent_availability {
+                missing.push(parent);
+            }
             // TODO: note that we don't care about blockdb here, since all blocks at this stage
             // should have been inserted into the blockdb
         }
@@ -180,7 +204,7 @@ pub fn check_content_semantic(
         }
         Content::Voter(content) => {
             // check chain number
-            if !voter_block::check_chain_number(&content, blockchain) {
+            if !voter_block::check_chain_number(&parent, &content, blockchain) {
                 return BlockResult::WrongChainNumber;
             }
             // check whether all proposer levels deeper than the one our parent voted are voted
@@ -245,46 +269,45 @@ fn check_transaction_block_exists(hash: H256, blockchain: &BlockChain) -> bool {
 }
 
 /// Calculate which chain should we attach the new block to
-pub fn get_sortition_id(hash: &H256, difficulty: &H256) -> Option<u16> {
+/// Returns Some(chain_id) where chain_id=0 for proposer or voter, chain_id=1 for transaction block
+/// Returns None for not passing difficulty validation
+pub fn check_difficulty(hash: &VrfValue, difficulty: &H256, stake: u64) -> Option<u16> {
     let hash: [u8; 32] = hash.into();
     let big_hash = U256::from_big_endian(&hash);
     let difficulty: [u8; 32] = difficulty.into();
     let big_difficulty = U256::from_big_endian(&difficulty);
-    let total_mining_range: U256 = TOTAL_MINING_RANGE.into();
+    let big_difficulty = big_difficulty * stake.into();//TODO: relative stake
     let big_proposer_range: U256 = PROPOSER_MINING_RANGE.into();
     let big_transaction_range: U256 = TRANSACTION_MINING_RANGE.into();
-
-    if big_hash < big_difficulty / total_mining_range * big_proposer_range {
+    let total_mining_range: U256 = big_proposer_range + big_transaction_range;
+    // *DEFAULT_DIFFICULTY_DIV
+    // big_difficulty / total_mining_range
+    if big_hash < u256_div(big_difficulty, total_mining_range) * big_proposer_range {
         // proposer block
         Some(PROPOSER_INDEX)
-    } else if big_hash
-        < big_difficulty / total_mining_range * (big_transaction_range + big_proposer_range)
-    {
+    } else if big_hash < big_difficulty {
         // transaction block
         Some(TRANSACTION_INDEX)
-    } else if big_hash < big_difficulty {
-        // voter index, figure out which voter tree we are in
-        let voter_id =
-            (big_hash - big_transaction_range - big_proposer_range) % NUM_VOTER_CHAINS.into();
-        Some(voter_id.as_u32() as u16 + FIRST_VOTER_INDEX)
     } else {
-        // Didn't pass PoW
+        // Didn't pass PoS
         None
     }
 }
 
+
+
 #[cfg(test)]
 mod tests {
     use super::super::config::*;
-    use super::get_sortition_id;
+    use super::check_difficulty;
     use crate::crypto::hash::H256;
 
     #[test]
     fn sortition_id() {
         let difficulty = *DEFAULT_DIFFICULTY;
         let hash: H256 = [0; 32].into();
-        assert_eq!(get_sortition_id(&hash, &difficulty), Some(PROPOSER_INDEX));
+        assert_eq!(check_difficulty(&hash, &difficulty, 1), Some(PROPOSER_INDEX));
         // This hash should fail PoW test (so result is None)
-        assert_eq!(get_sortition_id(&difficulty, &difficulty), None);
+        assert_eq!(check_difficulty(&difficulty, &difficulty, 1), None);
     }
 }

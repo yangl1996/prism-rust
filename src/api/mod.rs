@@ -33,6 +33,7 @@ struct ApiResponse {
 
 #[derive(Serialize)]
 struct WalletBalanceResponse {
+    atomic_balance: isize,
     balance: u64,
 }
 
@@ -125,49 +126,32 @@ impl Server {
                         "/wallet/balance" => {
                             let resp = WalletBalanceResponse {
                                 balance: wallet.balance().unwrap(),
+                                atomic_balance: wallet.atomic_balance(),
                             };
                             respond_json!(req, resp);
                         }
                         "/miner/start" => {
                             let params = url.query_pairs();
                             let params: HashMap<_, _> = params.into_owned().collect();
-                            let lambda = match params.get("lambda") {
+                            let delta = match params.get("delta") {
                                 Some(v) => v,
                                 None => {
-                                    respond_result!(req, false, "missing lambda");
+                                    respond_result!(req, false, "missing delta");
                                     return;
                                 }
                             };
-                            let lambda = match lambda.parse::<u64>() {
+                            let delta = match delta.parse::<u64>() {
                                 Ok(v) => v,
                                 Err(e) => {
                                     respond_result!(
                                         req,
                                         false,
-                                        format!("error parsing lambda: {}", e)
+                                        format!("error parsing delta: {}", e)
                                     );
                                     return;
                                 }
                             };
-                            let lazy = match params.get("lazy") {
-                                Some(v) => v,
-                                None => {
-                                    respond_result!(req, false, "missing lazy switch");
-                                    return;
-                                }
-                            };
-                            let lazy = match lazy.parse::<bool>() {
-                                Ok(v) => v,
-                                Err(e) => {
-                                    respond_result!(
-                                        req,
-                                        false,
-                                        format!("error parsing lazy switch: {}", e)
-                                    );
-                                    return;
-                                }
-                            };
-                            miner.start(lambda, lazy);
+                            miner.start(delta);
                             respond_result!(req, true, "ok");
                         }
                         "/miner/step" => {

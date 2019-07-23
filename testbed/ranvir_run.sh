@@ -1,6 +1,6 @@
 #!/bin/bash
 
-LAUNCH_TEMPLATE=lt-0d789704710d85427
+LAUNCH_TEMPLATE=lt-00a49875c863ef240
 
 function start_instances
 {
@@ -185,21 +185,22 @@ function prepare_payload
 
 function sync_payload
 {
-	#echo "Uploading payload to S3"
-	#aws s3 rm --quiet --recursive s3://prism-binary/payload
-	#aws s3 sync --quiet payload s3://prism-binary/payload
+	echo "Uploading payload to S3"
+	aws s3 rm --quiet --recursive s3://prism-binary/payload
+	aws s3 sync --quiet payload s3://prism-binary/payload
 	echo "Downloading payload on each instance"
 	execute_on_all get_payload
 }
 
 function get_payload_single
 {
+	echo "Are you even here"
 	ssh $1 -- "rm -f /home/ubuntu/*.tar.gz && rm -rf /home/ubuntu/payload && mkdir -p /home/ubuntu/payload"
 	echo "Deleted payload"
 	rsync  payload/$1.tar.gz $1:/home/ubuntu/payload
 	rsync  payload/common.tar.gz $1:/home/ubuntu/payload
 	echo "Synced payload"
-    ssh $1 -- "mv /home/ubuntu/payload/$1.tar.gz /home/ubuntu/payload/local.tar.gz && tar xf /home/ubuntu/payload/local.tar.gz -C /home/ubuntu/payload && tar xf /home/ubuntu/payload/common.tar.gz -C /home/ubuntu/payload"
+        ssh $1 -- "mv /home/ubuntu/payload/$1.tar.gz /home/ubuntu/payload/local.tar.gz && tar xf /home/ubuntu/payload/local.tar.gz -C /home/ubuntu/payload && tar xf /home/ubuntu/payload/common.tar.gz -C /home/ubuntu/payload"
 }
 
 function install_perf_single
@@ -270,14 +271,14 @@ function get_performance_single
 
 function start_transactions_single
 {
-	curl -s "http://$3:$4/transaction-generator/set-arrival-distribution?interval=100&distribution=uniform"
+	curl -s "http://$3:$4/transaction-generator/set-arrival-distribution?interval=0&distribution=uniform"
 	curl -s "http://$3:$4/transaction-generator/set-value-distribution?min=100&max=100&distribution=uniform"
-	curl -s "http://$3:$4/transaction-generator/start?throttle=8000"
+	curl -s "http://$3:$4/transaction-generator/start?throttle=50000"
 }
 
 function start_mining_single
 {
-	curl -s "http://$3:$4/miner/start?delta=100"
+	curl -s "http://$3:$4/miner/start?lambda=10000&lazy=false"
 }
 
 function stop_transactions_single
@@ -498,7 +499,6 @@ function show_demo
 	#pkill grafana-rrd-server
 	#~/go/bin/grafana-rrd-server -r data/ -s 1 &
 	#./telematics/telematics log -duration 7200 -grafana
-	./telematics/telematics log -duration 7200
 }
 
 mkdir -p log
@@ -506,9 +506,7 @@ case "$1" in
 	help)
 		cat <<- EOF
 		Helper script to run Prism distributed tests
-
 		Manage AWS EC2 Instances
-
 		  start-instances n     Start n EC2 instances
 		  stop-instances        Terminate EC2 instances
 		  install-tools         Install tools
@@ -517,9 +515,7 @@ case "$1" in
 		  unmount-ramdisk       Unmount RAM disk
 		  mount-nvme            Mount NVME 
 		  unmount-nvme          Unmount NVME
-
 		Run Experiment
-
 		  gen-payload topo      Generate scripts and configuration files
 		  build [nostrip]	Build the Prism client binary
 		  sync-payload          Synchronize payload to remote servers
@@ -529,7 +525,6 @@ case "$1" in
 		  show-demo             Start the demo workflow
 		  stop-tx               Stop generating transactions
 		  stop-mine             Stop mining
-
 		Collect Data
 		  
 		  get-perf              Get performance data
@@ -537,9 +532,7 @@ case "$1" in
 		  profile node f d      Capture stack trace for node with frequency f and duration d
 		  flamegraph node       Generate and download flamegraph for node
 		  open-dashboard        Open the performance dashboard
-
 		Connect to Testbed
-
 		  run-all cmd           Run command on all instances
 		  ssh i                 SSH to the i-th server (1-based index)
 		  scp i src dst         Copy file from remote
