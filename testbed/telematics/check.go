@@ -171,9 +171,9 @@ func check(nodesFile string, verbose bool) {
 	}
 	wg1.Wait()
 	if !failed {
-		min := ^int(0)
-		max := int(0)
-		for _, v := range atomic_balance {
+		min := ^uint(0)
+		max := uint(0)
+		for _, v := range balance {
 			if v < min {
 				min = v
 			}
@@ -188,7 +188,7 @@ func check(nodesFile string, verbose bool) {
 			if verbose {
 				for idx := range node_list {
 					n := node_list[idx]
-					fmt.Printf("%10v: %v (%v)\n", n, atomic_balance[n], balance[n])
+					fmt.Printf("%10v: %v (%v)\n", n, balance[n], atomic_balance[n])
 				}
 			}
 			return
