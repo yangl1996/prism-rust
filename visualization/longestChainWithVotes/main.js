@@ -18,6 +18,10 @@ let svg = d3.select('body').append('svg')
     clicks+=1
   })
 
+svg.append('image')
+     .attr("xlink:href", './background.png') 
+     .style('background-size', '100% 100%')
+
 
 const transTime = 5000
 let worldMapFocused = false

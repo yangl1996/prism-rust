@@ -24,6 +24,7 @@ const restart = () => {
   transactionBlockEnter.append('rect').attr('rx', 3)
           .attr('width', transactionBlockSize*1.25)
           .attr('height', transactionBlockSize)
+          .style('filter', 'url(#blockGlow)')
 
   transactionBlockEnter.append('line')
                        .attr('class', 'transaction')

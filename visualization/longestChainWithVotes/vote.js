@@ -109,7 +109,6 @@ const castVotes = (votingChain) => {
       chainsData[votingChain].lastVotedBlock = voteToCast
       longestChainBlock.finalizationLevel+=0.01
       d3.select('#longestChainBlock'+longestChainBlock.id)
-        .style('fill-opacity', longestChainBlock.finalizationLevel)
       if(longestChainBlock.finalizationLevel>finalizationThreshold) confirmBlock(longestChainBlock)
       voteToCast++
     }

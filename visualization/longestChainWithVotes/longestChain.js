@@ -1,4 +1,4 @@
-let blockGlow = glow('blockGlow').rgb('#17e9e0').stdDeviation(3)
+let blockGlow = glow('blockGlow').rgb('#17e9e0').stdDeviation(2)
 blockGlow(svg)
 let confirmBlock = (longestChainBlock) => {
   voteGroup.selectAll('.voteLink')
@@ -17,8 +17,6 @@ let confirmBlock = (longestChainBlock) => {
   d3.select('#longestChainBlock'+longestChainBlock.blockId)
     .transition()
     .duration(t/2)
-    .style('opacity', 1.0)
-    .style('fill-opacity', 1.0)
     .attr('x', d => d.x-(enlargement+longestChainBlockSize)/2)
     .attr('y', d => d.y-(enlargement)/2)
     .attr('width', longestChainBlockSize+enlargement)
@@ -35,8 +33,6 @@ let confirmBlock = (longestChainBlock) => {
         .attr('y', d => d.y)
         .attr('width', longestChainBlockSize*1.25)
         .attr('height', longestChainBlockSize)
-        .style('opacity', 1.0)
-        .style('fill-opacity', 1.0)
     })
 
 }
@@ -65,7 +61,6 @@ let drawLongestChain = () => {
     longestChainBlock
            .transition()
            .duration(t/2)
-           .style('fill-opacity', d => d.finalized ? 1.0 : d.finalizationLevel)
            .attr('x', d => { 
                return d.x-longestChainBlockSize/2
            })
@@ -79,7 +74,6 @@ let drawLongestChain = () => {
            .attr('id', d => 'longestChainBlock'+d.id)
            .attr('class', 'longestChainBlock')
     longestChainBlockEnter.append('rect')
-                           .style('fill-opacity', 0.8)
                            .style('filter', 'url(#blockGlow)')
                            .attr('height', 0)
                            .attr('width', 0)
@@ -132,10 +126,8 @@ let drawLongestChain = () => {
                               .attr('y1', d => d.y+y)
                               .attr('x2', d => d.x + longestChainBlockSize/2)
                               .attr('y2', d => d.y+y)
-                              .style('opacity', 0)
                               .transition()
                               .duration(t)
-                              .style('opacity', 0.4)
       }
    }
 

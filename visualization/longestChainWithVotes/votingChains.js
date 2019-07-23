@@ -1,5 +1,3 @@
-let voteGlow = glow('voteGlow').rgb('#2b7a78').stdDeviation(3)
-voteGlow(svg)
 let chainsGroup = votingChainScreen.append('g').attr('class', 'chains').attr('id', 'chainsGroup')
 const renderVotingLink = d3.linkVertical().x(d => d.x+(1.25-1)/2*votingBlockSize).y(d => d.y)
 
@@ -72,7 +70,7 @@ const drawVotingChain = (idx, votes) => {
   // Add new blocks
   votingBlocksEnter.append('rect')
          .attr('class', 'votingBlock')
-         .style('filter', 'url(#voteGlow)')
+         .style('filter', 'url(#blockGlow)')
          .attr('id', d => 'votingBlock'+d.blockId)
          .attr('height', votingBlockSize)
          .attr('width', votingBlockSize*1.25)

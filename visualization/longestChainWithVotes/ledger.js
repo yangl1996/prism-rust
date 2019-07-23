@@ -149,6 +149,7 @@ const drawLedger = (ledgerBlocks, referenceLinks, scrolled) => {
           .attr('rx', 3)
           .attr('width', ledgerBlockSize*1.25)
           .attr('height', ledgerBlockSize)
+          .style('filter', 'url(#blockGlow)')
 
   ledgerBlockEnter.append('line')
                  .attr('class', 'transaction')
@@ -206,6 +207,7 @@ const drawDisappearingBlocks = (disappearingBlocks) => {
                                        .attr('rx', 3)
                                        .attr('x', d => d.x)
                                        .attr('y', d => d.y)
+                                       .style('filter', 'url(#blockGlow)')
                                        .attr('width', ledgerBlockSize*1.25)
                                        .attr('height', ledgerBlockSize)
                                        .transition()
