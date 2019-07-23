@@ -8,7 +8,7 @@ use crate::blockdb::BlockDatabase;
 use crate::config::*;
 use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::merkle::verify;
-use crate::crypto::vrf::{vrf_verify, VrfOutput};
+use crate::crypto::vrf::{vrf_verify, VrfValue};
 use crate::utxodb::UtxoDatabase;
 extern crate bigint;
 use bigint::uint::U256;
@@ -100,11 +100,11 @@ pub fn check_pos(block: &Block, utxodb: &UtxoDatabase) -> BlockResult {
         return BlockResult::WrongCoin;
     }
     // vrf verify
-    if !vrf_verify(&block.header.pos_metadata.vrf_pubkey, &(&block.header.pos_metadata).into(), &block.header.pos_metadata.vrf_output, &block.header.pos_metadata.vrf_proof) {
+    if !vrf_verify(&block.header.pos_metadata.vrf_pubkey, &(&block.header.pos_metadata).into(), &block.header.pos_metadata.vrf_value, &block.header.pos_metadata.vrf_proof) {
         return BlockResult::WrongVrfProof;
     }
     // check vrf value
-    if let Some(sortition_id) = check_difficulty(&block.header.pos_metadata.vrf_output, &block.header.difficulty, block.header.pos_metadata.utxo.value) {
+    if let Some(sortition_id) = check_difficulty(&block.header.pos_metadata.vrf_value, &block.header.difficulty, block.header.pos_metadata.utxo.value) {
         let correct_sortition_id = match &block.content {
             Content::Proposer(_) => PROPOSER_INDEX,
             Content::Transaction(_) => TRANSACTION_INDEX,
@@ -271,7 +271,7 @@ fn check_transaction_block_exists(hash: H256, blockchain: &BlockChain) -> bool {
 /// Calculate which chain should we attach the new block to
 /// Returns Some(chain_id) where chain_id=0 for proposer or voter, chain_id=1 for transaction block
 /// Returns None for not passing difficulty validation
-pub fn check_difficulty(hash: &VrfOutput, difficulty: &H256, stake: u64) -> Option<u16> {
+pub fn check_difficulty(hash: &VrfValue, difficulty: &H256, stake: u64) -> Option<u16> {
     let hash: [u8; 32] = hash.into();
     let big_hash = U256::from_big_endian(&hash);
     let difficulty: [u8; 32] = difficulty.into();

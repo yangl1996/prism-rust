@@ -1,6 +1,6 @@
 use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::vrf;
-use crate::crypto::vrf::{VrfPublicKey, VrfSecretKey, VrfInput, VrfProof, VrfOutput};
+use crate::crypto::vrf::{VrfPublicKey, VrfSecretKey, VrfInput, VrfProof, VrfValue};
 use super::pos_metadata::Metadata;
 
 // TODO: Add the address of the miner
@@ -43,8 +43,8 @@ impl Header {
         }
     }
 
-    pub fn pos_hash(&self) -> VrfOutput {
-        return self.pos_metadata.vrf_output;
+    pub fn pos_hash(&self) -> VrfValue {
+        return self.pos_metadata.vrf_value;
     }
 }
 

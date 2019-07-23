@@ -1,4 +1,4 @@
-use crate::crypto::vrf::{VrfPublicKey, VrfSecretKey, VrfInput, VrfProof, VrfOutput};
+use crate::crypto::vrf::{VrfPublicKey, VrfSecretKey, VrfInput, VrfProof, VrfValue};
 use crate::utxodb::Utxo;
 
 
@@ -8,7 +8,7 @@ pub type TimeStamp = u128;
 #[derive(Serialize, Deserialize, Clone, Debug, Hash, Default)]
 pub struct Metadata {
     pub vrf_proof: VrfProof,
-    pub vrf_output: VrfOutput,
+    pub vrf_value: VrfValue,
     pub vrf_pubkey: VrfPublicKey,
     /// Coin which "mined" the block
     pub utxo: Utxo,

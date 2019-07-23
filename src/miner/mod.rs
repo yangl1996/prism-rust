@@ -15,7 +15,7 @@ use crate::network::message::Message;
 use crate::network::server::Handle as ServerHandle;
 use crate::validation::check_difficulty;
 use crate::validation::proposer_block::{get_missing_references, check_ref_proposer_level};
-use crate::crypto::vrf::{VrfSecretKey, VrfPublicKey, VrfInput, vrf_evaluate, VrfOutput};
+use crate::crypto::vrf::{VrfSecretKey, VrfPublicKey, VrfInput, vrf_evaluate, VrfValue};
 use crate::utxodb::Utxo;
 use crate::wallet::Wallet;
 use ed25519_dalek::Keypair;
@@ -394,15 +394,16 @@ impl MiningManager {
         let result: Vec<Block> = r.iter().collect();
         let mut blocks: Vec<Block> = vec![];
         // remove blocks on same parent
+        // use rev to keep later block
         for block in result.into_iter().rev() {
             match &block.content {
                 Content::Proposer(_) => {
-                    if !self.mined_chains.insert(PROPOSER_INDEX) {
+                    if self.mined_chains.insert(PROPOSER_INDEX) {
                         blocks.push(block);
                     }
                 }
                 Content::Voter(content) => {
-                    if !self.mined_chains.insert(FIRST_VOTER_INDEX + content.chain_number) {
+                    if self.mined_chains.insert(FIRST_VOTER_INDEX + content.chain_number) {
                         blocks.push(block);
                     }
                 }
@@ -438,7 +439,7 @@ impl MiningManager {
             // Create metadata
             let metadata = Metadata {
                 vrf_proof,
-                vrf_output: vrf_value,
+                vrf_value,
                 vrf_pubkey,
                 utxo: utxo.clone(),
                 parent_random_source: self.random_sources[chain_id],
@@ -468,8 +469,9 @@ impl MiningManager {
                     Content::Proposer(content)
                 } else {
                     // sortition result is a transaction block
-                    let mempool = self.mempool.lock().unwrap();
-                    let transactions = mempool.get_transactions(TX_BLOCK_TRANSACTIONS);
+                    let mut mempool = self.mempool.lock().unwrap();
+                    // use mempool.pop to make next transaction block contain different transactions
+                    let transactions = mempool.pop_transactions(TX_BLOCK_TRANSACTIONS);
                     drop(mempool);
                     Content::Transaction(transaction::Content {
                         transactions,
