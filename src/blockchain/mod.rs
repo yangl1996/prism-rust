@@ -2267,7 +2267,7 @@ mod tests {
     fn unvoted_proposer() {
         let db = BlockChain::new("/tmp/prism_test_blockchain_unvoted_proposer.rocksdb").unwrap();
         assert_eq!(
-            db.unvoted_proposer(&VOTER_GENESIS_HASHES[0], &db.best_proposer().unwrap().0, 0)
+            db.unvoted_proposer(&VOTER_GENESIS_HASHES[0], &db.best_proposer().unwrap().0)
                 .unwrap(),
             vec![]
         );
@@ -2288,7 +2288,7 @@ mod tests {
         );
         db.insert_block(&new_proposer_block_2).unwrap();
         assert_eq!(
-            db.unvoted_proposer(&VOTER_GENESIS_HASHES[0], &db.best_proposer().unwrap().0, 0)
+            db.unvoted_proposer(&VOTER_GENESIS_HASHES[0], &db.best_proposer().unwrap().0)
                 .unwrap(),
             vec![new_proposer_block_1.hash()]
         );
@@ -2302,12 +2302,12 @@ mod tests {
         db.insert_block(&new_voter_block).unwrap();
 
         assert_eq!(
-            db.unvoted_proposer(&VOTER_GENESIS_HASHES[0], &db.best_proposer().unwrap().0, 0)
+            db.unvoted_proposer(&VOTER_GENESIS_HASHES[0], &db.best_proposer().unwrap().0)
                 .unwrap(),
             vec![new_proposer_block_1.hash()]
         );
         assert_eq!(
-            db.unvoted_proposer(&new_voter_block.hash(), &db.best_proposer().unwrap().0, 0)
+            db.unvoted_proposer(&new_voter_block.hash(), &db.best_proposer().unwrap().0)
                 .unwrap(),
             vec![]
         );

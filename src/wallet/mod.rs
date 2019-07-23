@@ -335,16 +335,16 @@ pub mod tests {
 
     #[test]
     fn wallet() {
-        let w = Wallet::new(std::path::Path::new("/tmp/walletdb_test.rocksdb")).unwrap();
+        let w = Wallet::new(std::path::Path::new("/tmp/walletdb_test.rocksdb"), 0).unwrap();
         assert_eq!(w.balance().unwrap(), 0);
         assert_eq!(w.addresses().unwrap().len(), 0);
         let addr = w.generate_keypair().unwrap();
         assert_eq!(w.addresses().unwrap(), vec![addr]);
         assert!(w.create_transaction(H256::default(), 1, None).is_err());
-        // give the test address 1000 x 10 coins
+        // give the test address 10 x 10 coins
         let mut ico = vec![];
         let mut remove_ico = vec![];
-        for _ in 0..1000 {
+        for _ in 0..10 {
             let coin_id = generate_random_coinid();
             ico.push(Utxo {
                 value: 10,
@@ -359,7 +359,7 @@ pub mod tests {
             });
         }
         w.apply_diff(&ico, &[]).unwrap();
-        assert_eq!(w.balance().unwrap(), 10000);
+        assert_eq!(w.balance().unwrap(), 100);
 
         // generate transactions
         let tx = w.create_transaction(H256::default(), 19, None).unwrap();
