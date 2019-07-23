@@ -7,9 +7,17 @@ use crate::transaction::CoinId;
 #[derive(Serialize, Deserialize, Clone, Debug, Default, Hash)]
 pub struct VrfPublicKey([u8; 32]); //TODO: We are using a fake public key for now
 
+// Now VrfPublicKey and PublicKey are essentially the same, so we can convert
 impl std::convert::From<&PublicKey> for VrfPublicKey {
     fn from(other: &PublicKey) -> Self {
         VrfPublicKey(other.to_bytes())
+    }
+}
+
+// Now VrfPublicKey and PublicKey are essentially the same, so we can convert
+impl std::convert::From<&VrfPublicKey> for PublicKey {
+    fn from(other: &VrfPublicKey) -> Self {
+        PublicKey::from_bytes(&other.0).unwrap()
     }
 }
 
