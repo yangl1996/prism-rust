@@ -7,6 +7,12 @@ use crate::transaction::CoinId;
 #[derive(Serialize, Deserialize, Clone, Debug, Default, Hash)]
 pub struct VrfPublicKey([u8; 32]); //TODO: We are using a fake public key for now
 
+impl Hashable for VrfPublicKey {
+    fn hash(&self) -> H256 {
+        return ring::digest::digest(&ring::digest::SHA256, &self.0).into();
+    }
+}
+
 // Now VrfPublicKey and PublicKey are essentially the same, so we can convert
 impl std::convert::From<&PublicKey> for VrfPublicKey {
     fn from(other: &PublicKey) -> Self {
