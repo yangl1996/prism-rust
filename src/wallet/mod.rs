@@ -26,7 +26,7 @@ pub struct Wallet {
     keypairs: Mutex<HashMap<Address, Keypair>>,
     /// Keep coin ids for mining in memory for performance
     // TODO: for now in create transaction, we don't touch these coins
-    coins_mining: RwLock<HashMap<Vec<u8>, Vec<u8>>>,
+    coins_mining: RwLock<HashMap<CoinId, OutputWithTime>>,
     num_mining: RwLock<usize>,
     counter: AtomicUsize,
     balance: AtomicIsize,
@@ -143,27 +143,28 @@ impl Wallet {
                     output: output,
                     confirm_time: utxo.confirm_time
                 };
-                let key = serialize(&utxo.coin).unwrap();
-                let val = serialize(&output_with_time).unwrap();
-                batch.put_cf(cf, &key, &val)?;
 
                 // to deal with RwLock, use twice here
-                {
-                    let remaining_num_mining = self.num_mining.read().unwrap();
+                let remaining_num_mining = self.num_mining.read().unwrap();
+                if *remaining_num_mining > 0 {
+                    drop(remaining_num_mining);
+                    let mut remaining_num_mining = self.num_mining.write().unwrap();
                     if *remaining_num_mining > 0 {
-                        drop(remaining_num_mining);
-                        let mut remaining_num_mining = self.num_mining.write().unwrap();
-                        if *remaining_num_mining > 0 {
-                            *remaining_num_mining -= 1;
-                            let mut coins = self.coins_mining.write().unwrap();
-                            coins.insert(key, val);
-                            drop(coins);
-                        }
-                        drop(remaining_num_mining);
+                        *remaining_num_mining -= 1;
+                        let mut coins = self.coins_mining.write().unwrap();
+                        coins.insert(utxo.coin.clone(), output_with_time);
+                        drop(coins);
                     }
+                    drop(remaining_num_mining);
+                } else {
+                    drop(remaining_num_mining);
+                    let key = serialize(&utxo.coin).unwrap();
+                    let val = serialize(&output_with_time).unwrap();
+                    batch.put_cf(cf, &key, &val)?;
+                    self.balance.fetch_add(utxo.value as isize, Ordering::Relaxed);
                 }
+
                 self.counter.fetch_add(1, Ordering::Relaxed);
-                self.balance.fetch_add(utxo.value as isize, Ordering::Relaxed);
             }
         }
         for coin in remove {
@@ -204,10 +205,10 @@ impl Wallet {
         // let cf = self.db.cf_handle(COIN_CF).unwrap();
         // let iter = self.db.iterator_cf(cf, rocksdb::IteratorMode::Start)?;
         let mut utxo_keypairs = vec![];
-        let coins: Vec<(Vec<u8>,Vec<u8>)> = self.coins_mining.read().unwrap().iter().map(|x|(x.0.clone(), x.1.clone())).collect();
-        for (k,v) in coins {
-            let coin_id: CoinId = bincode::deserialize(&k).unwrap();
-            let coin_data: OutputWithTime = bincode::deserialize(&v).unwrap();
+        let coins: Vec<(CoinId, OutputWithTime)> = self.coins_mining.read().unwrap().iter().map(|x|(x.0.clone(), x.1.clone())).collect();
+        for (coin_id, coin_data) in coins {
+            //let coin_id: CoinId = bincode::deserialize(&k).unwrap();
+            //let coin_data: OutputWithTime = bincode::deserialize(&v).unwrap();
             if coin_data.confirm_time > timestamp {
                 continue;
             }
@@ -250,11 +251,6 @@ impl Wallet {
         };
         // iterate through our wallet
         for (k, v) in iter {
-            if self.coins_mining.read().unwrap().contains_key(k.as_ref()) {
-                // TODO: for now we don't use coins for mining, in case that we are running out of
-                // coins for mining
-                continue;
-            }
             let coin_id: CoinId = bincode::deserialize(k.as_ref()).unwrap();
             let utxo_output: OutputWithTime = bincode::deserialize(v.as_ref()).unwrap();
             value_sum += utxo_output.output.value;

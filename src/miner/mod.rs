@@ -272,7 +272,7 @@ impl Context {
             let coins = self.wallet.coins_before(time_minus_tau).unwrap();
             let coins_len = coins.len();
             
-            let mining_manager: MiningManager = (&*self).into();
+            let mut mining_manager: MiningManager = (&*self).into();
             for (utxo, keypair) in coins {
                 let keypair = Keypair::from_bytes(&keypair).unwrap();
                 trace!("Start mining at time {} with utxo {:?}", self.timestamp, utxo);
@@ -351,7 +351,7 @@ struct MiningManager {
     parents: Arc<[(H256, u64); (FIRST_VOTER_INDEX + NUM_VOTER_CHAINS) as usize]>,
     difficulties: Arc<[H256; (FIRST_VOTER_INDEX + NUM_VOTER_CHAINS) as usize]>,
     random_sources: Arc<[RandomSource; (FIRST_VOTER_INDEX + NUM_VOTER_CHAINS) as usize]>,
-    mined_chains: Arc<RwLock<BTreeSet<usize>>>,
+    mined_chains: BTreeSet<u16>,
 }
 
 impl std::convert::From<&Context> for MiningManager {
@@ -364,13 +364,13 @@ impl std::convert::From<&Context> for MiningManager {
             parents: Arc::new(other.parents.clone()),
             difficulties: Arc::new(other.difficulties.clone()),
             random_sources: Arc::new(other.random_sources.clone()),
-            mined_chains: Arc::new(RwLock::new(BTreeSet::new())),
+            mined_chains: BTreeSet::new(),
         }
     }
 }
 
 impl MiningManager {
-    fn start(&self, utxo: Utxo, keypair: Keypair, num_workers: usize) -> Vec<Block> {
+    fn start(&mut self, utxo: Utxo, keypair: Keypair, num_workers: usize) -> Vec<Block> {
         let utxo = Arc::new(utxo);
         let keypair = Arc::new(keypair);
         let (s, r) = unbounded();
@@ -383,9 +383,6 @@ impl MiningManager {
             threads.push(thread::spawn(move || {
                 for chain_id in (i..(FIRST_VOTER_INDEX + NUM_VOTER_CHAINS) as usize).step_by(num_workers) {
                     //do the mining, get the result
-                    if self_cloned.mined_chains.read().unwrap().contains(&chain_id) {
-                        continue;
-                    }
                     if let Some(block) = self_cloned.pos_mining(&utxo_clone, chain_id, &keypair_clone) {
                         s_cloned.send(block).unwrap();
                     }
@@ -395,20 +392,26 @@ impl MiningManager {
         }
         drop(s);
         let result: Vec<Block> = r.iter().collect();
-        let mut mined_chains = self.mined_chains.write().unwrap();
-        for block in result.iter() {
+        let mut blocks: Vec<Block> = vec![];
+        // remove blocks on same parent
+        for block in result.into_iter().rev() {
             match &block.content {
                 Content::Proposer(_) => {
-                    mined_chains.insert(PROPOSER_INDEX as usize);
+                    if !self.mined_chains.insert(PROPOSER_INDEX) {
+                        blocks.push(block);
+                    }
                 }
                 Content::Voter(content) => {
-                    mined_chains.insert((FIRST_VOTER_INDEX + content.chain_number) as usize);
+                    if !self.mined_chains.insert(FIRST_VOTER_INDEX + content.chain_number) {
+                        blocks.push(block);
+                    }
                 }
-                _ => {}
+                Content::Transaction(_) => {
+                    blocks.push(block);
+                }
             };
         }
-        drop(mined_chains);
-        result
+        blocks
     }
 
     fn pos_mining(&self, utxo: &Utxo, chain_id: usize, keypair: &Keypair) -> Option<Block> {
@@ -473,6 +476,10 @@ impl MiningManager {
                     })
                 }
             } else {
+                // redundent `if` to reduce forking
+                if self.parents[chain_id].0 != self.blockchain.best_voter(chain_id - FIRST_VOTER_INDEX as usize).0 {
+                    return None;
+                }
                 let votes = self.blockchain.unvoted_proposer(&self.parents[chain_id].0, &self.blockchain.best_proposer().unwrap().0).unwrap();
                 Content::Voter(voter::Content {
                     chain_number: chain_id as u16 - FIRST_VOTER_INDEX,
