@@ -1,6 +1,6 @@
 let nodesGroup = null
 let realNodesGroup = null
-let landGlow = glow('landGlow').rgb('#3b945e').stdDeviation(5)
+let landGlow = glow('landGlow').rgb('#3b945e').stdDeviation(10)
 landGlow(svg)
 
 // Fine tuned projection parameters
@@ -24,7 +24,18 @@ d3.json('world-continents.json', function(error) {
         .attr('d', path)
         .style('filter', 'url(#landGlow)')
   nodesGroup = worldMapScreen.append('g').attr('id', 'fakeNodesGroup')
-  realNodesGroup = svg.append('g').attr('class', 'nodes').attr('id', 'nodesGroup')
+  let realNodesSvg = d3.select('body').append('svg').attr('id', 'realNodesSvg') 
+    .style('position', 'absolute')
+    .attr('width', width)
+    .attr('height', height)
+    .on('click', () => {
+      if(clicks==0)
+        addVotingChains()
+      if(clicks==1)
+        addTransactionBlocks()
+      clicks+=1
+    })
+  realNodesGroup = realNodesSvg.append('g').attr('class', 'nodes').attr('id', 'nodesGroup')
   drawNodes()
 })
 

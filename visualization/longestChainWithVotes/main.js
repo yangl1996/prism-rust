@@ -44,6 +44,13 @@ let svgTransform = d3.select('body').append('svg')
     .attr('height', height)
     .attr('id', 'svgTransform')
     .style('transform', M)
+    .on('click', () => {
+      if(clicks==0)
+        addVotingChains()
+      if(clicks==1)
+        addTransactionBlocks()
+      clicks+=1
+    })
 
 // World Map Screen sizes
 let worldMapScreenWidth = 0.7*width, worldMapScreenHeight = 0.6*height
