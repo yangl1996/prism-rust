@@ -1,39 +1,40 @@
 <!DOCTYPE html>
 <meta charset='utf-8'>
 <style>
-.proposerBlock {
-  stroke-width: 1;
-  stroke: black;
-  fill: #ff1a1a;
+body {
+  background-color: black;
+  position: fixed;
+  left: 0px;
+  right: 0px;
+  top: 0px;
+  bottom: 0px;
 }
-.votingBlock{
-  stroke: black;
-  stroke-width: black;
-  fill: #81A6C8;
+#untransformedSvg{
+  background: black;
+}
+.transaction {
+  stroke-width: 1;
+  stroke: grey;
+}
+.proposerBlock{
+  stroke-width: 2px;
+  stroke: teal;
+  fill: black;
 }
 .transactionBlock{
-  fill: grey;
-  stroke: black;
+  fill: black;
+  stroke: #8552CB;
   fill-opacity: 1.0;
-}
-.ledgerBlock{
-  fill: grey;
-  stroke: black;
-  opacity: 1.0;
-}
-.newLedgerBlock{
-  fill: grey;
-  stroke: black;
-  opacity: 1.0;
-}
-.disappearingBlock{
-  fill: grey;
-  stroke: black;
-  opacity: 1.0;
+  stroke-width: 2px;
 }
 .chainLink {
   fill: none;
-  stroke: black;
+  stroke: royalblue;
+  stroke-width: 2px;
+}
+.votingBlock{
+  fill: black;
+  stroke: royalblue;
   stroke-width: 2px;
 }
 .voteLink {
@@ -42,32 +43,22 @@
 .referenceLink {
   fill: none;
   stroke: #ccc;
-  stroke-width: 1.0;
+  stroke-width: 0.5;
 }
 .land {
-  fill: grey;
-  opacity: 0.1;
-  stroke: black;
-  stroke-width: 2.0;
+  position: absolute;
+  fill: black;
+  opacity: 0.2;
+  stroke: white;
+  stroke-width: 0.5;
 }
 .nodes {
-  opacity: 0.8;
-  fill: #f76077; 
+  fill: white; 
 }
 .ripple {
   fill: none;
-  stroke: #f76077; 
+  stroke: white; 
   opacity: 0.1;
-}
-.maliciousRipple {
-  fill: none;
-  stroke: gold; 
-  opacity: 0.1;
-}
-.malicious{
-  stroke-width: 1;
-  stroke: black;
-  fill: gold;
 }
 </style>
 <body>

@@ -54,5 +54,4 @@ if(mock){
       mineVotingBlock(randomChain, votingBlockId, sourceNodeId, parentId)
       votingBlockId++
     }, 5*t/numChains)
-  }
 }
