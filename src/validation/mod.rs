@@ -5,13 +5,15 @@ mod voter_block;
 use crate::block::{Block, Content, pos_metadata};
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
+use crate::transaction::Address;
 use crate::config::*;
 use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::merkle::verify;
 use crate::crypto::vrf::{vrf_verify, VrfValue};
-use crate::utxodb::UtxoDatabase;
+use crate::utxodb::{UtxoDatabase, Utxo};
 extern crate bigint;
 use bigint::uint::U256;
+use ed25519_dalek::{PublicKey, Signature};
 
 cached! {
     U256_DIV;
@@ -25,6 +27,12 @@ cached! {
 pub enum BlockResult {
     /// The validation passes.
     Pass,
+    // coin not owned by public key
+    WrongCoinOwner,
+    //Header does not pass signature check
+    WrongHeader,
+    // Merkle root of the content does not match root in header
+    WrongContentRoot,
     /// The coin for PoS is invalid.
     WrongCoin,
     WrongVrfProof,
@@ -48,6 +56,9 @@ impl std::fmt::Display for BlockResult {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             BlockResult::Pass => write!(f, "validation passed"),
+            BlockResult::WrongCoinOwner => write!(f, "Coin does not belong to the miner"),
+            BlockResult::WrongHeader => write!(f, "Header does not pass signature check"),
+            BlockResult::WrongContentRoot => write!(f, "Merkle root of content does not match with header"),
             BlockResult::WrongCoin => write!(f, "Coin donen't satisfy PoS rule"),
             BlockResult::WrongVrfProof => write!(f, "PoS VRF Proof is wrong"),
             BlockResult::WrongVrfValue => write!(f, "PoS VRF value larger than difficulty"),
@@ -78,6 +89,18 @@ fn check_block(block: &Block, blockchain: &BlockChain, blockdb: &BlockDatabase) 
         x => return x,
     };
     */
+    match check_coin_ownership(block) {
+        BlockResult::Pass => {}
+        x => return x,
+    };
+    match check_header_signature(block) {
+        BlockResult::Pass => {}
+        x => return x,
+    };
+    match check_content_hash(block) {
+        BlockResult::Pass => {}
+        x => return x,
+    };
     match check_proof(block) {
         BlockResult::Pass => {}
         x => return x,
@@ -92,6 +115,52 @@ fn check_block(block: &Block, blockchain: &BlockChain, blockdb: &BlockDatabase) 
     };
     BlockResult::Pass
 }
+
+// check the coin used to mine the block does belong to miner
+pub fn check_coin_ownership(block: &Block) -> BlockResult {
+    match block.header.pos_metadata.vrf_pubkey.hash() == block.header.pos_metadata.utxo.owner  {
+        true => return BlockResult::Pass,
+        false => return BlockResult::WrongCoinOwner,
+    }   
+} 
+
+// check digital signature of block header
+pub fn check_header_signature(block: &Block) -> BlockResult {
+    // To check the validity of the digital signature, we need
+    // 1. raw header to be signed
+    // 2. public key of the coin that mines the block
+    // 3. digital signature
+    let mut message: Vec<&[u8]> = vec![];
+    let mut signature: Vec<Signature> = vec![];
+    let mut public_key: Vec<PublicKey> = vec![];
+
+    // copy the block header with a valid signature
+    let mut header = block.header.clone();
+    
+    // remove the signature to get the unsigned header
+    header.header_signature = vec![];
+    let header_unsigned = bincode::serialize(&header).unwrap();
+
+    message.push(&header_unsigned);
+
+    //println!("The received header signature is {:?}", block.header.header_signature);
+    signature.push(Signature::from_bytes(&block.header.header_signature).unwrap());
+
+    public_key.push((&block.header.pos_metadata.vrf_pubkey).into());
+
+    match ed25519_dalek::verify_batch(&message, &signature, &public_key) {
+        Ok(()) => return BlockResult::Pass,
+        Err(_) => return BlockResult::WrongHeader,
+    }        
+}
+
+//Check Merkle root of content matches with root in header
+pub fn check_content_hash(block: &Block) -> BlockResult {
+    match block.content.hash() == block.header.content_root  {
+        true => return BlockResult::Pass,
+        false => return BlockResult::WrongContentRoot,
+    }   
+} 
 
 // check PoW and sortition id
 pub fn check_pos(block: &Block, utxodb: &UtxoDatabase) -> BlockResult {

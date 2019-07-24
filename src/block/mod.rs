@@ -6,6 +6,7 @@ pub mod voter;
 
 use crate::crypto::hash::{Hashable, H256};
 use crate::experiment::performance_counter::PayloadSize;
+use crate::utxodb::Utxo;
 
 /// A block in the Prism blockchain.
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -105,12 +106,14 @@ impl PayloadSize for Content {
 
 #[cfg(any(test, feature = "test-utilities"))]
 pub mod tests {
-
     use super::*;
     use super::pos_metadata::{TimeStamp, RandomSource, Metadata};
     use crate::config;
     use crate::transaction::Transaction;
     use rand::Rng;
+    use rand::rngs::OsRng;
+    use ed25519_dalek::{Keypair, PublicKey, Signature};
+    use crate::crypto::vrf::{VrfSecretKey, VrfPublicKey, VrfInput, vrf_evaluate, VrfValue};
 
     macro_rules! random_source {
         () => {{
@@ -134,16 +137,63 @@ pub mod tests {
             proposer_refs,
         });
         let content_hash = content.hash();
-        let mut metadata = Metadata::default();
-        metadata.timestamp = timestamp;
-        metadata.random_source = random_source!();
+        // let mut metadata = Metadata::default();
+        // metadata.timestamp = timestamp;
+        // metadata.random_source = random_source!();
+
+        let mut csprng: OsRng = OsRng::new().unwrap();
+        let keypair: Keypair = Keypair::generate(&mut csprng);
+
+        let vrf_pubkey: VrfPublicKey = (&keypair.public).into();
+        
+        let mut utxo = Utxo::default();
+        utxo.owner = vrf_pubkey.hash();
+        
+        //random source from parent
+        let random_source_mining = random_source!();
+
+        let input = VrfInput {
+            random_source: random_source_mining,
+            time: timestamp,
+            coin: utxo.coin.clone(),
+        };
+        let (vrf_value, vrf_proof) = vrf_evaluate(&vrf_pubkey, &keypair.secret, &input);
+
+        let metadata = Metadata {
+            vrf_proof,
+            vrf_value,
+            vrf_pubkey,
+            utxo: utxo,
+            parent_random_source: random_source_mining,
+            timestamp: timestamp,
+            random_source: random_source!(),
+        };
+        
+        // sign the header with keypair
+        let header = header::Header {
+            parent: parent,
+            pos_metadata: metadata.clone(),
+            content_root: content_hash,
+            extra_content: [0u8; 32],
+            difficulty: *config::DEFAULT_DIFFICULTY,
+            header_signature: vec![],
+        };
+
+        let raw_unsigned = bincode::serialize(&header).unwrap();
+        let header_signature = keypair.sign(&raw_unsigned).to_bytes().to_vec();
+
+        //assert!(keypair.verify(&raw_unsigned, &keypair.sign(&raw_unsigned)).is_ok());
+
+        //let public_key: PublicKey = keypair.public;
+        //assert!(public_key.verify(&raw_unsigned, &keypair.sign(&raw_unsigned)).is_ok());
+
         Block::new(
             parent,
             metadata,
             content_hash,
             [0u8; 32],
             *config::DEFAULT_DIFFICULTY,
-            vec![],
+            header_signature,
             content,
         )
     }

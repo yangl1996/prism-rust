@@ -540,7 +540,7 @@ mod tests {
     use crate::crypto::merkle::MerkleTree;
     use crate::network::server;
     use crate::transaction::tests as tx_generator;
-    use crate::validation::{check_block, BlockResult};
+    //use crate::validation::{check_block, BlockResult};
     use std::sync::{Arc, Mutex};
 
     /*

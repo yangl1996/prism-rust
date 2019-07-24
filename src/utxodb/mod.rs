@@ -273,21 +273,21 @@ impl UtxoDatabase {
         return Ok((added_utxos, removed_coins));
     }
 
-    /*
-    /// Delete all the coins which were spent before timestamp
-    pub fn delete_old_spent_coins(&self, timestamp: TimeStamp) {
-        let timestamp = timestamp;
-        let spent_coins_buffer_cf = self.db.cf_handle(SPENT_COINS_BUFFER_CF).unwrap();
-        let iter = self.db.iterator_cf(spent_coins_buffer_cf, rocksdb::IteratorMode::Start).unwrap();
-        let mut batch = rocksdb::WriteBatch::default();
-        for (k,v) in iter {
-            let output_with_time: OutputWithTime = deserialize(v.as_ref()).unwrap();
-            if output_with_time.confirm_time < timestamp {
-                batch.delete_cf(spent_coins_buffer_cf, k);
-            }
-        }
-    }
-    */
+    
+    // /// Delete all the coins which were spent before timestamp
+    // pub fn delete_old_spent_coins(&self, timestamp: TimeStamp) {
+    //     let timestamp = timestamp;
+    //     let spent_coins_buffer_cf = self.db.cf_handle(SPENT_COINS_BUFFER_CF).unwrap();
+    //     let iter = self.db.iterator_cf(spent_coins_buffer_cf, rocksdb::IteratorMode::Start).unwrap();
+    //     let mut batch = rocksdb::WriteBatch::default();
+    //     for (k,v) in iter {
+    //         let output_with_time: OutputWithTime = deserialize(v.as_ref()).unwrap();
+    //         if output_with_time.confirm_time < timestamp {
+    //             batch.delete_cf(spent_coins_buffer_cf, k);
+    //         }
+    //     }
+    // }
+    
 
     pub fn flush(&self) -> Result<(), rocksdb::Error> {
         let mut flush_opt = rocksdb::FlushOptions::default();
