@@ -111,14 +111,15 @@ const drawLedger = (ledgerBlocks, referenceLinks, scrolled) => {
   let ledgerBlock = ledgerGroup.selectAll('.newLedgerBlock')
   ledgerBlock = ledgerBlock.data(ledgerBlocks, d => d.blockId)
   ledgerBlock = ledgerBlock.enter().append('rect')
-          .attr('class', 'newLedgerBlock')
+          .attr('class', 'newLedgerBlock transactionBlock')
+          .style('filter', 'url(#blockGlow)')
           .attr('rx', 3)
           .attr('id', d => 'ledgerBlock' + d.blockId)
           .attr('x', d => d.x)
           .attr('y', d => d.y)
           .attr('width', ledgerBlockSize*1.25)
           .attr('height', ledgerBlockSize)
-          .attr('class', 'ledgerBlock')
+          .attr('class', 'ledgerBlock transactionBlock')
 
     let referenceLink = ledgerGroup.selectAll('.referenceLink')
     referenceLink = referenceLink.data(referenceLinks, d=>d.linkId)
@@ -153,7 +154,8 @@ const drawDisappearingBlocks = (disappearingBlocks) => {
   const xShift = 300
 
   disappearingBlock = disappearingBlock.enter().append('rect')
-                                       .attr('class', 'disappearingBlock')
+                                       .attr('class', 'disappearingBlock transactionBlock')
+                                       .style('filter', 'url(#blockGlow)')
                                        .attr('rx', 3)
                                        .attr('x', d => d.x)
                                        .attr('y', d => d.y)

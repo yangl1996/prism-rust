@@ -1,4 +1,6 @@
 let proposerBlocksGroup = proposerScreen.append('g').attr('id', 'proposerBlocks')
+let blockGlow = glow('blockGlow').rgb('#17e9e0').stdDeviation(2)
+blockGlow(svg)
 
 const confirmBlock = proposerBlock => {
   voteGroup.selectAll('.voteLink')
@@ -15,10 +17,10 @@ const confirmBlock = proposerBlock => {
   const enlargement = 20
   proposerBlock.finalized = true
   d3.select('#proposerBlock'+proposerBlock.blockId)
+    .style('stroke-width', 4)
+  d3.select('#proposerBlock'+proposerBlock.blockId)
     .transition()
     .duration(t/2)
-    .style('opacity', 1.0)
-    .style('fill-opacity', 1.0)
     .attr('x', d => d.x-(enlargement+proposerBlockSize)/2)
     .attr('y', d => d.y-(enlargement)/2)
     .attr('width', proposerBlockSize+enlargement)
@@ -35,13 +37,10 @@ const confirmBlock = proposerBlock => {
         .attr('y', d => d.y)
         .attr('width', proposerBlockSize*1.25)
         .attr('height', proposerBlockSize)
-        .style('opacity', 1.0)
-        .style('fill-opacity', 1.0)
     })
     for(let i=0; i<proposerBlock.transactionBlockIds.length; i++){
       let confirmedTxBlock = d3.select('#ledgerBlock'+proposerBlock.transactionBlockIds[i])
-                               .style('opacity', 1.0)
-                               .style('fill', '#ff1a1a')
+                               .style('stroke-width', 4)
     }
 
 }
@@ -56,6 +55,7 @@ let drawProposerChain = () => {
            .attr('class', d => d.malicious ? 'malicious proposerBlock' : 'proposerBlock')
            .attr('height', 0)
            .attr('width', 0)
+           .style('filter', 'url(#blockGlow)')
            .attr('rx', 3)
            // Cause the block to shoot from the source node's location
            .attr('x', d => { 
@@ -84,11 +84,8 @@ let drawProposerChain = () => {
                 return node ? projection([node.longitude, node.latitude])[1]+(height-0.6*height) : d.y
               }
            )
-           .style('fill-opacity', 0.0) 
            .transition()
            .duration(t)
-           // Tune the fill opacity based on finalizationLevel
-           .style('fill-opacity', d => d.finalizationLevel)
            .attr('height', proposerBlockSize)
            .attr('width', proposerBlockSize*1.25)
            .attr('x', d => { 

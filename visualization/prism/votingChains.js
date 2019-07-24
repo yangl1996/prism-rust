@@ -24,7 +24,6 @@ const scrollVotingChain = idx => {
             let l = renderLink({source: d.target, target: {x: d.source.x, y: d.source.y+votingBlockSize}})
             return l
           })
-          .attr('marker-end', 'url(#small-arrow)')
     const regex = /M([^,]*),([^,]*) Q([^,]*),([^,]*) ([^,]*),([^,]*)/
     voteGroup.selectAll('.voteLink')
       .filter(d => d.fromChain==idx)
@@ -71,6 +70,7 @@ const drawVotingChain = (idx, votes) => {
   // Add new blocks
   votingBlocksEnter.append('rect')
          .attr('class', 'votingBlock')
+         .style('filter', 'url(#blockGlow)')
          .attr('id', d => 'votingBlock'+d.blockId)
          .attr('height', votingBlockSize)
          .attr('width', votingBlockSize*1.25)
@@ -115,7 +115,7 @@ const drawVotingChain = (idx, votes) => {
       })
       .transition()
       .delay(1)
-      .attr('marker-end', 'url(#small-arrow)')
+      .attr('marker-end', 'url(#vote-arrow)')
   // Remove extra links
   link.exit().remove()
 

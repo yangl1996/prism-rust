@@ -1,7 +1,8 @@
 const mock = true
-const protocol = 'prism'
-let width = 1080,
-    height = 600
+let body = document.getElementsByTagName('body')[0]
+
+let width = body.clientWidth,
+    height = body.clientHeight
 
 let svg = d3.select('body').append('svg')
 	.attr('width', width)
@@ -17,9 +18,9 @@ const tStep = 10
 const aScale = d3.scaleLinear().domain([0, transTime]).range([1.0, 0.6])
 const bScale = d3.scaleLinear().domain([0, transTime]).range([0.0, -0.002])
 const cScale = d3.scaleLinear().domain([0, transTime]).range([0, 250])
-const xTranslateScale = d3.scaleLinear().domain([0, transTime]).range([-400, -280])
-const yTranslateScale = d3.scaleLinear().domain([0, transTime]).range([-200, 0])
-const scaleScale = d3.scaleLinear().domain([0, transTime]).range([2, 1])
+const xTranslateScale = d3.scaleLinear().domain([0, transTime]).range([-600, -400])
+const yTranslateScale = d3.scaleLinear().domain([0, transTime]).range([-300, 0])
+const scaleScale = d3.scaleLinear().domain([0, transTime]).range([3, 1.5])
 const worldMapShift = -280
 
 let M = `matrix3d(1.0, 0, 0, 0, 0, ${aScale(transTime)}, 0, ${bScale(transTime)}, 0, 0, 1, 0, 0, ${cScale(transTime)}, 0, 1)`
@@ -54,50 +55,6 @@ let interval = d3.interval((elapsed) => {
 }, tStep)
 */
 const t = 1000
-
-svg.append('svg:defs').append('svg:marker')
-    .attr('id', 'small-arrow')
-    .attr('refX', 6)
-    .attr('refY', 3)
-    .attr('markerWidth', 12)
-    .attr('markerHeight', 12)
-    .attr('markerUnits','userSpaceOnUse')
-    .attr('orient', 'auto')
-    .append('path')
-    .attr('d', 'M 0 0 L 6 3 L 0 6')
-    .style('stroke', 'black')
-    .style('fill', 'none')
-
-let linearGradient = svg.append('defs')
-            .append('linearGradient')
-            .attr('id', 'linear-gradient')
-            .attr('gradientTransform', 'rotate(0)')
-
-linearGradient.append('stop')
-    .attr('offset', '0%')
-    .attr('stop-color', 'grey')
-
-linearGradient.append('stop')
-    .attr('offset', '100%')
-    .attr('stop-color', 'white')
-
-let blurFilter = svg.append('svg:defs').append('filter')
-    .attr('id','blur');
-blurFilter.append('feGaussianBlur')
-    .attr('stdDeviation','1')
-
-let glowFilter = svg.append('svg:defs').append('filter')
-    .attr('id','glow');
-glowFilter.append('feGaussianBlur')
-    .attr('stdDeviation','2')
-    .attr('result','coloredBlur');
-
-let feMerge = glowFilter.append('feMerge');
-feMerge.append('feMergeNode')
-    .attr('in','coloredBlur');
-feMerge.append('feMergeNode')
-    .attr('in','SourceGraphic');
-
 
 // Proposer Chain Screen sizes
 let proposerScreenWidth = width/3, proposerScreenHeight = height

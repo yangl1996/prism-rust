@@ -20,6 +20,7 @@ const restart = () => {
       .remove()
 
   transactionBlock = transactionBlock.enter().append('rect')
+          .style('filter', 'url(#blockGlow)')
           .attr('id', d => 'transactionBlock' + d.blockId )
           .attr('class', 'transactionBlock')
           .attr('x', d => d.x )
