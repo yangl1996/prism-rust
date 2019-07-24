@@ -1,5 +1,7 @@
 let nodesGroup = null
 let realNodesGroup = null
+let landGlow = glow('landGlow').rgb('#3b945e').stdDeviation(10)
+landGlow(svg)
 
 // Fine tuned projection parameters
 let projection = d3.geoNaturalEarth1()
@@ -20,6 +22,7 @@ d3.json('world-continents.json', function(error) {
         .append('path')
         .attr('class', 'land')
         .attr('d', path)
+        .style('filter', 'url(#landGlow)')
   nodesGroup = worldMapScreen.append('g').attr('id', 'fakeNodesGroup')
   realNodesGroup = svg.append('g').attr('class', 'nodes').attr('id', 'nodesGroup')
   drawNodes()

@@ -9,6 +9,11 @@ let svg = d3.select('body').append('svg')
 	.attr('height', height)
   .style('position', 'absolute')
 
+svg.append('rect')
+    .attr('width', width)
+    .attr('height', height)
+    .style('fill', 'url(#background-gradient)')
+
 const focusedOpacities = {proposerChain: 1.0, transactionPool: 1.0, votingChains: 1.0, proposerChain: 1.0, worldMap: 1.0, ledger: 1.0, vote: 1.0, nodesGroup: 1.0}
 const unfocusedOpacities = {proposerChain: 0.3, transactionPool: 0.3, votingChains: 0.3, proposerChain: 0.3, worldMap: 0.3, ledger: 0.3, vote: 0.3, nodesGroup: 0.3}
 
