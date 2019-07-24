@@ -91,7 +91,7 @@ const drawVotingChain = (idx, votes) => {
             return 0.5
           })
          .transition()
-         .duration(t)
+         .duration(3*t)
          .style('opacity', (d, i) => {
             if(i===0) return 1.0
             return 1.0
@@ -102,6 +102,10 @@ const drawVotingChain = (idx, votes) => {
          .attr('y', d => {
            return d.y
          })
+        .on('end', () => {
+          scrollVotingChain(idx)
+          castVotes(idx, votes)
+        })
   // Remove extra blocks
   votingBlocks.exit().remove()
 
@@ -115,12 +119,8 @@ const drawVotingChain = (idx, votes) => {
       .attr('d', d => d.source ? renderVotingLink({source: d.target, target: d.target}) : null)
       .transition()
       .delay(t)
-      .duration(t)
+      .duration(2*t)
       .attr('d', d => d.source ? renderVotingLink({source: d.target, target: {x: d.source.x, y: d.source.y+votingBlockSize}}) : null)
-      .on('end', () => {
-        scrollVotingChain(idx)
-        castVotes(idx, votes)
-      })
       .transition()
       .delay(1)
       .attr('marker-end', 'url(#vote-arrow)')
