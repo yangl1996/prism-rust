@@ -1,5 +1,6 @@
 let blockGlow = glow('blockGlow').rgb('#17e9e0').stdDeviation(2)
 blockGlow(svg)
+
 let confirmBlock = (longestChainBlock) => {
   voteGroup.selectAll('.voteLink')
            .filter(d => d.to===longestChainBlock.id)
@@ -9,134 +10,68 @@ let confirmBlock = (longestChainBlock) => {
            .style('stroke-opacity', 0.0)
            .remove()
   chainVotes = chainVotes.filter(d => d.to!==longestChainBlock.id)
-  if(longestChainBlock.finalized) return
-  longestChainBlock.finalized = true
-  longestChainBlock.finalizationLevel = 1
-  const enlargement = 20
-  longestChainBlock.finalized = true
-  d3.select('#longestChainBlock'+longestChainBlock.blockId)
-    .transition()
-    .duration(t/2)
-    .attr('x', d => d.x-(enlargement+longestChainBlockSize)/2)
-    .attr('y', d => d.y-(enlargement)/2)
-    .attr('width', longestChainBlockSize+enlargement)
-    .attr('height', longestChainBlockSize+enlargement)
-    .transition()
-    .duration(t/2)
-    .attr('x', d => d.x-longestChainBlockSize/2)
-    .attr('y', d => d.y)
-    .attr('width', longestChainBlockSize*1.25)
-    .attr('height', longestChainBlockSize)
-    .on('interrupt', () => {
-      d3.select('#longestChainBlock'+longestChainBlock.blockId)
-        .attr('x', d => d.x-longestChainBlockSize/2)
-        .attr('y', d => d.y)
-        .attr('width', longestChainBlockSize*1.25)
-        .attr('height', longestChainBlockSize)
-    })
-
 }
 
-let setLongestChain = () => {
-  let block = longestChainBlocks.reduce( (prev, current) => {
-    return (prev.depth > current.depth) ? prev : current
-  })
-  let depth = 0
-  while(block!==null){
-    if(depth>6) {
-      block.finalized = true
-      chainVotes = chainVotes.filter(d => d.to!==block.id)
-    }
-    block = block.parent
-    depth++
-  }  
+let longestChainCallback = fromBlockEnd => {
+  if(fromBlockEnd && longestChainVotes) return
+  const didScroll = scrollLongestChain()
+  if(!didScroll && longestChainVotes)
+    castVotes()
+  if(longestChainBlocks[longestChainBlocks.length-1].transactionBlockIds.length>0 && !didScroll)
+      captureTransactionBlocks(longestChainBlocks[longestChainBlocks.length-1], false) 
 }
 
 let drawLongestChain = () => {
-    setLongestChain()
-
     // Create data join
     let longestChainBlock = longestChainBlocksGroup.selectAll('.longestChainBlock').data(longestChainBlocks, d => 'longestChainBlock'+d.id)
-
-    longestChainBlock
-           .transition()
-           .duration(t/2)
-           .attr('x', d => { 
-               return d.x-longestChainBlockSize/2
-           })
-           .attr('y', d => {
-             return d.y
-           })
 
 
     // Add new blocks
     let longestChainBlockEnter = longestChainBlock.enter().append('g')
            .attr('id', d => 'longestChainBlock'+d.id)
            .attr('class', 'longestChainBlock')
+           // Cause group to shoot up from source node
+           .attr('transform', d => {
+            const node = d.sourceNodeId!==null ? nodes.find(node => node.nodeId===d.sourceNodeId) : undefined
+            const x = node ? projection([node.longitude, node.latitude])[0] - width/3 + worldMapShift: d.x-longestChainBlockSize/2 
+            const y = node ? projection([node.longitude, node.latitude])[1]+(height-0.6*height) : d.y
+            return `translate(${x}, ${y})`
+           })
+
+    // Add a rect to the group
     longestChainBlockEnter.append('rect')
                            .style('filter', 'url(#blockGlow)')
-                           .attr('height', 0)
-                           .attr('width', 0)
-                           .attr('rx', 3)
-                           // Cause the block to shoot from the source node's location
-                           .attr('x', d => { 
-                               const node = d.sourceNodeId!==null ? nodes.find(node => node.nodeId===d.sourceNodeId) : undefined
-                               return node ? projection([node.longitude, node.latitude])[0] - width/3 + worldMapShift: d.x-longestChainBlockSize/2 
-                              }
-                           )
-                           .attr('y', d => { 
-                                const node = d.sourceNodeId!==null ? nodes.find(node => node.nodeId===d.sourceNodeId) : undefined
-                                return node ? projection([node.longitude, node.latitude])[1]+(height-0.6*height) : d.y
-                              }
-                           )
-                           .transition()
-                           .duration(t)
-                           // Tune the fill opacity based on finalizationLevel
                            .attr('height', longestChainBlockSize)
-                  //.style('filter', 'url(#myGlow)')
                            .attr('width', longestChainBlockSize*1.25)
-                           .attr('x', d => { 
-                               return d.x-longestChainBlockSize/2
-                           })
-                           .attr('y', d => {
-                             return d.y
-                           })
-                            .on('end', () => {
-                              if(longestChainVotes) return
-                              const didScroll = scrollLongestChain()
-                              if(!didScroll && longestChainVotes)
-                                castVotes()
-                              if(longestChainBlocks[longestChainBlocks.length-1].transactionBlockIds.length>0 && !didScroll)
-                                  captureTransactionBlocks(longestChainBlocks[longestChainBlocks.length-1], false) 
-                            })
-                            .on('interrupt', () => {
-                              if(longestChainVotes) return
-                              const didScroll = scrollLongestChain()
-                              if(!didScroll && longestChainVotes)
-                                castVotes()
-                              if(longestChainBlocks[longestChainBlocks.length-1].transactionBlockIds.length>0 && !didScroll)
-                                  captureTransactionBlocks(longestChainBlocks[longestChainBlocks.length-1], false) 
-                            })
+                           .attr('rx', 3)
 
+    // If transaction blocks have not been added yet, longest chain blocks contain transactions
     if(!showTransactionPool){
       for(let y=6; y<15; y+=3){
         longestChainBlockEnter.append('line')
                               .attr('class', 'transaction')
-                              .attr('x1', d => d.x - longestChainBlockSize/2+4)
-                              .attr('y1', d => d.y+y)
-                              .attr('x2', d => d.x + longestChainBlockSize/2)
-                              .attr('y2', d => d.y+y)
+                              .attr('x1', 4)
+                              .attr('y1', y)
+                              .attr('x2', 20)
+                              .attr('y2', y)
       }
-   }
+    }
+
+    // Cause longest chain blocks to shoot to proper location
+    longestChainBlockEnter.transition()
+                          .duration(t)
+                          .attr('transform', d => {
+                            return `translate(${d.x-longestChainBlockSize/2}, ${d.y})`
+                          })
+                          .on('end', () => longestChainCallback(true))
+                          .on('interrupt', () => longestChainCallback(true))
+
 
     // Remove extra blocks
     longestChainBlock.exit().remove()
-    let link = longestChainLinksGroup.selectAll('.longestChainLink').data(links, d => `${d.source.id}-${d.target.id}`)
 
-    
-    link.transition()
-        .duration(t)
-        .attr('d', d => d.source ? renderLink({source: d.source, target: {x: d.target.x, y: d.target.y+longestChainBlockSize}}) : null)
+    // Create data joins for links
+    let link = longestChainLinksGroup.selectAll('.longestChainLink').data(links, d => `${d.source.id}-${d.target.id}`)
 
     // Add new links
     link.enter().append('path')
@@ -149,20 +84,9 @@ let drawLongestChain = () => {
         .transition()
         .delay(1)
         .attr('marker-end', 'url(#longestChain-arrow)')
-        .on('end', () => {
-          const didScroll = scrollLongestChain()
-          if(!didScroll && longestChainVotes)
-            castVotes()
-          if(longestChainBlocks[longestChainBlocks.length-1].transactionBlockIds.length>0 && !didScroll)
-              captureTransactionBlocks(longestChainBlocks[longestChainBlocks.length-1], false) 
-        })
-        .on('interrupt', () => {
-          const didScroll = scrollLongestChain()
-          if(!didScroll && longestChainVotes)
-            castVotes()
-          if(longestChainBlocks[longestChainBlocks.length-1].transactionBlockIds.length>0 && !didScroll)
-              captureTransactionBlocks(longestChainBlocks[longestChainBlocks.length-1], false) 
-        })
+        .on('end', () => longestChainCallback(false))
+        .on('interrupt', () => longestChainCallback(false))
+
     // Remove extra links
     link.exit().remove()
 
@@ -175,29 +99,19 @@ let scrollLongestChain = () => {
     if(lowestBlock.y<longestChainBlocks[i].y){
       lowestBlock = longestChainBlocks[i]
     }
+
   if(lowestBlock.y-2*longestChainBlockSize<height-0.5*height)
     return false
-  // Move proposer blocks by -2*longestChainBlockSize
-  longestChainBlocksGroup.selectAll('rect')
+
+  // Move longest chain blocks by -2*longestChainBlockSize
+  longestChainBlocksGroup.selectAll('.longestChainBlock')
           .transition()
           .duration(t)
-          .attr('y', d => {
+          .attr('transform', d => {
             d.y = d.y-2*longestChainBlockSize
-            return d.y
+            return `translate(${d.x-longestChainBlockSize/2}, ${d.y})`
           })
-  longestChainBlocksGroup.selectAll('line')
-          .transition()
-          .duration(t)
-          .attr('y1', (d, i) => {
-            if(i%3==0) return d.y+5
-            if(i%3==1) return d.y+8
-            if(i%3==2) return d.y+11
-          })
-          .attr('y2', (d, i) => {
-            if(i%3==0) return d.y+5
-            if(i%3==1) return d.y+8
-            if(i%3==2) return d.y+11
-          })
+
   longestChainLinksGroup.selectAll('.longestChainLink')
     .transition()
     .duration(t)
@@ -236,7 +150,7 @@ let scrollLongestChain = () => {
     }) 
     .on('interrupt', d => {
         d3.select('#'+d.id).attr('d', d.curve)
-     })
+   })
   return true
 }
 

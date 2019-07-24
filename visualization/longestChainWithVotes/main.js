@@ -1,7 +1,7 @@
 let body = document.getElementsByTagName('body')[0]
 
-let width = 1600,
-    height = 900
+let width = body.clientWidth,
+    height = body.clientHeight
 let clicks = 0
 let longestChainVotes = true
 let showTransactionPool = false
@@ -18,25 +18,14 @@ let svg = d3.select('body').append('svg')
     clicks+=1
   })
 
-svg.append('image')
-     .attr("xlink:href", './background.png') 
-     .style('background-size', '100% 100%')
+svg.append('rect')
+    .attr('width', width)
+    .attr('height', height)
+    .style('fill', 'url(#background-gradient)')
 
+const worldMapShift = -100
 
-const transTime = 5000
-let worldMapFocused = false
-const tStep = 10
-const aScale = d3.scaleLinear().domain([0, transTime]).range([1.0, 0.6])
-const bScale = d3.scaleLinear().domain([0, transTime]).range([0.0, -0.002])
-const cScale = d3.scaleLinear().domain([0, transTime]).range([0, 250])
-const xTranslateScale = d3.scaleLinear().domain([0, transTime]).range([-400, -280])
-const yTranslateScale = d3.scaleLinear().domain([0, transTime]).range([-200, 0])
-const scaleScale = d3.scaleLinear().domain([0, transTime]).range([2, 1])
-const worldMapShift = -280
-
-
-
-let M = `matrix3d(1.0, 0, 0, 0, 0, ${aScale(transTime)}, 0, ${bScale(transTime)}, 0, 0, 1, 0, 0, ${cScale(transTime)}, 0, 1)`
+let M = `matrix3d(1.0, 0, 0, 0, 0, 0.6, 0, -0.002, 0, 0, 1, 0, 0, 250, 0, 1)`
 
 let svgTransform = d3.select('body').append('svg')
     .style('position', 'absolute')
@@ -56,9 +45,8 @@ let svgTransform = d3.select('body').append('svg')
 let worldMapScreenWidth = 0.7*width, worldMapScreenHeight = 0.6*height
 let worldMapScreen = svgTransform.append('g')
               .attr('id', 'worldMap')
-              .attr('transform', `translate(-280, 0)scale(2)`)
 
-worldMapScreen.attr('transform', `translate(${xTranslateScale(transTime)}, ${yTranslateScale(transTime)})scale(${scaleScale(transTime)})`)
+worldMapScreen.attr('transform', `translate(-400, 0)scale(1.5)`)
 
 const nodeRadius = 3
 let nodes = []

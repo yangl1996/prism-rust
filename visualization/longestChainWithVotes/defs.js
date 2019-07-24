@@ -26,6 +26,25 @@ svg.append('svg:defs').append('svg:marker')
     .style('fill', 'none')
     .style('stroke-opacity', 0.6)
 
+let backgroundGradient = svg.append('defs')
+  .append('linearGradient')
+    .attr('id', 'background-gradient')
+    .attr('x1', '0%')
+    .attr('y1', '0%')
+    .attr('x2', '100%')
+    .attr('y2', '100%')
+    .attr('spreadMethod', 'pad');
+
+backgroundGradient.append('stop')
+    .attr('offset', '0%')
+    .attr('stop-color', 'black')
+    .attr('stop-opacity', 1);
+
+backgroundGradient.append('stop')
+    .attr('offset', '100%')
+    .attr('stop-color', '#19194d')
+    .attr('stop-opacity', 1);
+
 let linearGradient = svg.append('defs')
             .append('linearGradient')
             .attr('id', 'linear-gradient')
