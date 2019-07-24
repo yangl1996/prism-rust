@@ -24,15 +24,14 @@ const drawVotes = (voteData) => {
 
 
 const castVotes = () => {
-  if(!showVotes) return
+  if(!longestChainVotes) return
   // Get the last block on chain
   const lastBlock = longestChainBlocks[longestChainBlocks.length-1]
   const sourceX = lastBlock.x-longestChainBlockSize/2
   const sourceY = lastBlock.y+longestChainBlockSize/2
-  const longestChain = computeLongestChain()
   let voteData = []
-  for(let i=0; i<longestChain.length; i++){
-    const target = longestChain[i]
+  for(let i=0; i<longestChainBlocks.length; i++){
+    const target = longestChainBlocks[i]
     if(target.id==lastBlock.id) continue
     const targetX = target.x - longestChainBlockSize/2
     const targetY = target.y + longestChainBlockSize/2

@@ -1,32 +1,52 @@
 <!DOCTYPE html>
 <meta charset='utf-8'>
 <style>
-.longestChainBlock {
+body {
+  position: fixed;
+  left: 0px;
+  right: 0px;
+  top: 0px;
+  bottom: 0px;
+}
+#untransformedSvg{
+  background: black;
+}
+.transaction {
   stroke-width: 1;
-  stroke: black;
-  fill: #ff1a1a;
+  stroke: grey;
+}
+.longestChainBlock{
+  stroke-width: 2px;
+  stroke: teal;
+  fill: black;
+}
+.longestChainLink{
+  fill: none;
+  stroke: #3aafa9;
+  stroke-width: 2px;
+  stroke-opacity: 0.6;
 }
 .chainLink {
   fill: none;
-  stroke: black;
+  stroke: royalblue;
   stroke-width: 2px;
 }
 .voteLink {
   fill: none;
 }
 .land {
-  fill: grey;
-  opacity: 0.1;
-  stroke: black;
-  stroke-width: 2.0;
+  position: absolute;
+  fill: black;
+  opacity: 0.2;
+  stroke: white;
+  stroke-width: 0.5;
 }
 .nodes {
-  opacity: 0.8;
-  fill: #f76077; 
+  fill: white; 
 }
 .ripple {
   fill: none;
-  stroke: #f76077; 
+  stroke: white; 
   opacity: 0.1;
 }
 </style>
@@ -35,7 +55,7 @@
 <script src='//d3js.org/topojson.v0.min.js'></script>
 <script src='main.js'></script>
 <script src='defs.js'></script>
+<script src='longestChain.js'></script>
 <script src='simulate.js'></script>
 <script src='worldMap.js'></script>
-<script src='helpers.js'></script>
 <script src='vote.js'></script>

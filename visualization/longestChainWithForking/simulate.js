@@ -50,7 +50,7 @@ let mineLowRate = d3.interval(() => {
   drawLongestChain()
   index++
   if(index>blocks.length) mineLowRate.stop()
-}, 4*t)
+}, 2*t)
 
 let modifyProtocol = () => {
     t = 500
@@ -68,7 +68,7 @@ let modifyProtocol = () => {
     layoutTree(root)
     longestChainBlocks.push(root)
     drawLongestChain()
-    let mineLowRate = d3.interval(() => {
+    let mineFastRate = d3.interval(() => {
       const blocksToMine = Math.random()<0.2 ? 2 : 1
       for(let x=0; x<blocksToMine; x++){
         const newBlock = new Node
