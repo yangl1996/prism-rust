@@ -6,33 +6,57 @@ let simulation = d3.forceSimulation(transactionBlocks)
     .on('tick', ticked)
 
 function ticked() {
-  transactionBlock.attr('x', d=> d.x)
-        .attr('y', d => d.y)
+  transactionBlock.attr('transform', d => `translate(${d.x}, ${d.y})`)
 }
 
 const restart = () => {
   // Restart the simulation with new transaction block dataset
-  transactionBlock = transactionBlock.data(transactionBlocks, d => d.blockId)
-
-  transactionBlock.exit().transition()
-      .attr('width', 0)
-      .attr('height', 0)
+  transactionBlock = transactionGroup.selectAll('g').data(transactionBlocks, d => d.blockId)
+  transactionBlock.exit()
       .remove()
 
-  transactionBlock = transactionBlock.enter().append('rect')
-          .style('filter', 'url(#blockGlow)')
+  transactionBlockEnter = transactionBlock.enter().append('g')
           .attr('id', d => 'transactionBlock' + d.blockId )
           .attr('class', 'transactionBlock')
-          .attr('x', d => d.x )
-          .attr('y', d => d.y )
-          .attr('rx', 3)
+          .attr('transform', d => `translate(${d.x}, ${d.y})`)
+
+  transactionBlockEnter.append('rect').attr('rx', 3)
           .attr('width', transactionBlockSize*1.25)
           .attr('height', transactionBlockSize)
-    .merge(transactionBlock)
+          .style('filter', 'url(#blockGlow)')
+
+  transactionBlockEnter.append('line')
+                       .attr('class', 'transaction')
+                       .attr('x1', transactionBlockSize/2-6) 
+                       .attr('y1', 5) 
+                       .attr('x2', transactionBlockSize/2+10) 
+                       .attr('x1', transactionBlockSize/2-6) 
+                       .attr('y1', 5) 
+                       .attr('x2', transactionBlockSize/2+10) 
+                       .attr('y2', 5) 
+  transactionBlockEnter.append('line')
+                       .attr('class', 'transaction')
+                       .attr('x1', transactionBlockSize/2-6) 
+                       .attr('y1', 8) 
+                       .attr('x2', transactionBlockSize/2+10) 
+                       .attr('y2', 8) 
+  transactionBlockEnter.append('line')
+                       .attr('class', 'transaction')
+                       .attr('x1', transactionBlockSize/2-6) 
+                       .attr('y1', 11) 
+                       .attr('x2', transactionBlockSize/2+10) 
+                       .attr('y2', 11) 
+
+  transactionBlockEnter
+          .style('opacity', 0.0)
+          .transition()
+          .duration(t)
+          .style('opacity', 1.0)
+
+  transactionBlock = transactionBlock.merge(transactionBlock)
    
   // Restart simulation
   simulation.nodes(transactionBlocks)
-
   simulation.alpha(0.1).restart()
 }
 
