@@ -126,8 +126,6 @@ let drawLongestChain = () => {
                               .attr('y1', d => d.y+y)
                               .attr('x2', d => d.x + longestChainBlockSize/2)
                               .attr('y2', d => d.y+y)
-                              .transition()
-                              .duration(t)
       }
    }
 

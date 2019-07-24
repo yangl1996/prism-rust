@@ -1,7 +1,7 @@
 let body = document.getElementsByTagName('body')[0]
 
-let width = body.clientWidth,
-    height = body.clientHeight
+let width = 1600,
+    height = 900
 let clicks = 0
 let longestChainVotes = true
 let showTransactionPool = false
