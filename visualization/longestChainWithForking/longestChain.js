@@ -147,7 +147,7 @@ let shiftScreen = () => {
                                                         .attr('x2', width/20)
                                                         .attr('y2', height/4)
                                                         .style('stroke-width', 2)
-                                                        .attr('marker-end', 'url(#vote-arrow)')
+                                                        .attr('marker-end', 'url(#arrow)')
 
                            let text = longestChainScreen.append('text')
                                                         .attr('x', -width/10)

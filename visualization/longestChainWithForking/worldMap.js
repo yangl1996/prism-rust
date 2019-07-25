@@ -28,12 +28,26 @@ d3.json('world-continents.json', function(error) {
     .attr('width', width)
     .attr('height', height)
     .on('click', () => {
-      if(clicks==0)
-        shiftScreen()
-      else if(clicks==1)
+      if(clicks<5)
+        drawText()
+      else if(clicks==5){
+        d3.select('#textScreen1')
+          .transition()
+          .duration(t)
+          .style('opacity', 0)
+          .remove()
+          .on('end', () => {
+            shiftScreen()
+          })
+        d3.select('#textScreen2')
+          .transition()
+          .duration(t)
+          .style('opacity', 0)
+          .remove()
+      }
+      else if(clicks==6)
         drawGraph()
-      console.log(clicks)
-      clicks++ 
+      clicks++
     })
   nodesGroup = worldMapScreen.append('g').attr('id', 'fakeNodesGroup')
   realNodesGroup = realNodesSvg.append('g').attr('class', 'nodes').attr('id', 'nodesGroup')
