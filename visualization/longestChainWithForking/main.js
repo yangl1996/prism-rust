@@ -10,7 +10,14 @@ let svg = d3.select('body').append('svg')
 	.attr('width', width)
 	.attr('height', height)
   .style('position', 'absolute')
-  .on('click', () => shiftScreen())
+  .on('click', () => {
+    if(clicks==0)
+      shiftScreen()
+    else if(clicks==1)
+      drawGraph()
+    console.log(clicks)
+    clicks++ 
+  })
 
 svg.append('rect')
     .attr('width', width)

@@ -27,7 +27,14 @@ d3.json('world-continents.json', function(error) {
     .style('position', 'absolute')
     .attr('width', width)
     .attr('height', height)
-    .on('click', () => shiftScreen())
+    .on('click', () => {
+      if(clicks==0)
+        shiftScreen()
+      else if(clicks==1)
+        drawGraph()
+      console.log(clicks)
+      clicks++ 
+    })
   nodesGroup = worldMapScreen.append('g').attr('id', 'fakeNodesGroup')
   realNodesGroup = realNodesSvg.append('g').attr('class', 'nodes').attr('id', 'nodesGroup')
   drawNodes()

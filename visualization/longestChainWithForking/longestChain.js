@@ -136,9 +136,9 @@ let shiftScreen = () => {
                          .on('end', () => {
                            mineLowRate.stop()
                            let line = longestChainScreen.append('line')
-                                                        .attr('x1', -width/10)
+                                                        .attr('x1', -width/8)
                                                         .attr('y1', height/4)
-                                                        .attr('x2', -width/10)
+                                                        .attr('x2', -width/8)
                                                         .attr('y2', height/4)
                                                         .style('stroke', 'white')
                                                         .style('stroke-width', 2)
