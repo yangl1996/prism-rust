@@ -50,7 +50,7 @@ let mineLowRate = d3.interval(() => {
   drawLongestChain()
   index++
   if(index>blocks.length) mineLowRate.stop()
-}, 2*t)
+}, 4*t)
 
 let modifyProtocol = () => {
     t = 500
@@ -100,6 +100,5 @@ let modifyProtocol = () => {
         if(index>blocks.length) mineFastRate.stop()
       }
       drawLongestChain()
-    }, 3*t)
-
+    }, 4*t/4)
 }

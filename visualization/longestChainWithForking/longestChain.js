@@ -1,30 +1,16 @@
 let blockGlow = glow('blockGlow').rgb('#17e9e0').stdDeviation(2)
 blockGlow(svg)
 
-let setLongestChain = () => {
-  let block = longestChainBlocks.reduce( (prev, current) => {
-    return (prev.depth > current.depth) ? prev : current
-  })
-  let depth = 0
-  while(block!==null){
-    if(depth>6) block.finalized = true
-    block = block.parent
-    depth++
-  }  
-}
-
 let drawLongestChain = () => {
-    setLongestChain()
-
     // Create data join
     let longestChainBlock = longestChainBlocksGroup.selectAll('.longestChainBlock').data(longestChainBlocks, d => 'longestChainBlock'+d.id)
 
     longestChainBlock
            .transition()
            .duration(t/2)
-                          .attr('transform', d => {
-                               return `translate(${d.x-longestChainBlockSize/2}, ${d.y})`
-                          })
+            .attr('transform', d => {
+                 return `translate(${d.x-longestChainBlockSize/2}, ${d.y})`
+            })
 
 
     // Add new blocks

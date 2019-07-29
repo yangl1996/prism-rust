@@ -1,4 +1,6 @@
-svg.append('svg:defs').append('svg:marker')
+let defs = svg.append('defs')
+
+defs.append('svg:marker')
     .attr('id', 'longestChain-arrow')
     .attr('refX', 6)
     .attr('refY', 3)
@@ -14,7 +16,7 @@ svg.append('svg:defs').append('svg:marker')
     .style('stroke-opacity', 0.6)
 
 
-svg.append('svg:defs').append('svg:marker')
+defs.append('svg:marker')
 				.attr('id', 'arrow')
 				.attr('id', 'arrow')
         .attr('refX', 5)
@@ -28,8 +30,7 @@ svg.append('svg:defs').append('svg:marker')
 					.attr('d', 'M0,-5L10,0L0,5')
 					.attr('class','arrowHead');
 
-let backgroundGradient = svg.append('defs')
-  .append('linearGradient')
+let backgroundGradient = defs.append('linearGradient')
     .attr('id', 'background-gradient')
     .attr('x1', '0%')
     .attr('y1', '0%')
@@ -47,8 +48,7 @@ backgroundGradient.append('stop')
     .attr('stop-color', '#19194d')
     .attr('stop-opacity', 1)
 
-let linearGradient = svg.append('defs')
-            .append('linearGradient')
+let linearGradient = defs.append('linearGradient')
             .attr('id', 'linear-gradient')
             .attr('gradientTransform', 'rotate(0)')
 
@@ -60,7 +60,7 @@ linearGradient.append('stop')
     .attr('offset', '100%')
     .attr('stop-color', 'white')
 
-let blurFilter = svg.append('svg:defs').append('filter')
+let blurFilter = defs.append('filter')
     .attr('id','blur')
 blurFilter.append('feGaussianBlur')
     .attr('stdDeviation','1')
