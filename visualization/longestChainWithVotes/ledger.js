@@ -186,6 +186,7 @@ const drawLedger = (ledgerBlocks, referenceLinks, scrolled) => {
   // go above screen
 }
 
+// Blocks that disappear as they are captured
 let disappearingGroup = svg.append('g')
 const drawDisappearingBlocks = (disappearingBlocks) => {
   let disappearingBlock = disappearingGroup.selectAll('.disappearingBlock') 
@@ -219,7 +220,6 @@ const drawDisappearingBlocks = (disappearingBlocks) => {
 }
 
 const captureTransactionBlocks = (longestChainBlock, scrolled) => {
-
   // Get longestChainBlock and longestChainBlock location
   const transactionBlockIds = longestChainBlock.transactionBlockIds;
   const node = nodes.find(node => node.nodeId==longestChainBlock.sourceNodeId)

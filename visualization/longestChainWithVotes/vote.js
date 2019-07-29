@@ -1,7 +1,7 @@
 let chainVotes = []
 const drawVotes = (voteData) => {
-  let vote = voteData ? voteGroup.selectAll('.voteLink').data(voteData, d=>d.id) :
-                                   voteGroup.selectAll('.voteLink').data(chainVotes, d=>d.id)
+  let vote = voteData ? voteGroup.selectAll('.voteLink').data(voteData, d=>d.id) : 
+                        voteGroup.selectAll('.voteLink').data(chainVotes, d=>d.id)
 
   vote.exit().remove()
   let voteTransition = vote.enter().append('path')
@@ -11,7 +11,7 @@ const drawVotes = (voteData) => {
                 return d.curve
               })
               .style('stroke-width', 3.0)
-              .attr('stroke', 'url(#linear-gradient)')
+              .style('filter', 'url(#linear-gradient)')
               .style('filter', 'url(#blur)')
               .attr('stroke-dasharray', d => d.totalLength + ' ' + d.totalLength)
               .attr('stroke-dashoffset', d => d.totalLength)
@@ -25,7 +25,6 @@ const drawVotes = (voteData) => {
                     .attr('stroke-dashoffset', 0)
                     .style('stroke-width', 1.0)
                     .style('stroke', '#e6e6e6')
-                    .style('filter', 'url(#glow)')
                })
               .on('end', (d) => {
                 if(!voteData)
@@ -34,27 +33,14 @@ const drawVotes = (voteData) => {
                     .attr('stroke-dashoffset', 0)
                     .style('stroke-width', 1.0)
                     .style('stroke', '#e6e6e6')
-                    .style('filter', 'url(#glow)')
               })
   if(voteData){
     voteTransition.transition()
-        .duration(t)
+        .duration(t/2)
         .style('opacity', 0)
         .remove()
   }
 }
-
-let computeLongestChain = () => {
-  let longestChain = []
-  let block = longestChainBlocks.reduce((prev, current) => (prev.depth > current.depth) ? prev : current)
-  while(block!==null){
-    longestChain.push(block)
-    block=block.parent
-  }
-
-  return longestChain
-}
-
 
 const castVotes = (votingChain) => {
   const lastBlock = longestChainBlocks[longestChainBlocks.length-1]
@@ -62,7 +48,12 @@ const castVotes = (votingChain) => {
     const sourceX = lastBlock.x-longestChainBlockSize/2+width/3
     const sourceY = lastBlock.y+longestChainBlockSize/2+longestChainBlockSize
     // Get the last block on chain
-    const longestChain = computeLongestChain()
+    let longestChain = []
+    let block = longestChainBlocks.reduce((prev, current) => (prev.depth > current.depth) ? prev : current)
+    while(block!==null){
+      longestChain.push(block)
+      block=block.parent
+    }
     let voteData = []
     for(let i=0; i<longestChain.length; i++){
       const target = longestChain[i]

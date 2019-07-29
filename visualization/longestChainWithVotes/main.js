@@ -41,7 +41,7 @@ let svgTransform = d3.select('body').append('svg')
       clicks+=1
     })
 
-// World Map Screen sizes
+// World Map Screen
 let worldMapScreenWidth = 0.7*width, worldMapScreenHeight = 0.6*height
 let worldMapScreen = svgTransform.append('g')
               .attr('id', 'worldMap')
@@ -51,7 +51,7 @@ worldMapScreen.attr('transform', `translate(-400, 0)scale(1.5)`)
 const nodeRadius = 3
 let nodes = []
 
-
+// Longest Chain Screen
 const treeSize = width/3
 const renderLink = d3.linkVertical().x(d => d.x+(1.25-1)/2*longestChainBlockSize).y(d => d.y)
 const longestChainBlockSize = 20
@@ -67,10 +67,8 @@ let longestChainScreen = svg.append('g')
 let longestChainBlocksGroup = longestChainScreen.append('g').attr('id', 'longestChainBlocksClean')
 let longestChainLinksGroup = longestChainScreen.append('g').attr('id', 'longestChainLinksClean')
 
-let ledgerGroup = svg.append('g')
-                     .attr('id', 'ledger')
 
-// Voting Chain Screen sizes
+// Voting Chain Screen
 let votingChainScreenWidth = width*0.4, votingChainScreenHeight = height
 let votingChainScreen = svg.append('g')
               .attr('id', 'votingChains')
@@ -82,7 +80,7 @@ const numChainsToDisplay = 10
 const votingBlockSize = 20
 let chainsData = []
 
-// Transaction Screen sizes
+// Transaction Screen
 let transactionScreenWidth = width/3, transactionScreenHeight = height
 let transactionScreen = svg.append('g')
             .attr('id', 'transactionPool')
@@ -95,7 +93,11 @@ let transactionBlocks = []
 let transactionGroup = transactionScreen.append('g').attr('id', 'transactionGroup').style('opacity', 'inherit')
 let transactionBlock = transactionGroup.selectAll('g').data(transactionBlocks, d => d.blockId)
 
+// Votes Group
 let voteGroup = svg.append('g').attr('id', 'votes')
+
+// Ledger Group
+let ledgerGroup = svg.append('g').attr('id', 'ledger')
 
 let longestChainBlocks = []
 let links = []

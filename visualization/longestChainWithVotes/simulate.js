@@ -26,6 +26,8 @@ drawLongestChain()
 d3.csv('low_forking.csv').then(data => {
   blocks = data
 })
+
+// Mine slowly on main chain
 let index = 1
 let mineLowRate = d3.interval(() => {
   const newBlock = new Node
@@ -58,6 +60,7 @@ let mineLowRate = d3.interval(() => {
   if(index>blocks.length) mineLowRate.stop()
 }, 4*t)
 
+// Add voting chains
 let addVotingChains = () => {
   // Initialize the chains spaced by votingChainScreenWidth/numChains
   longestChainVotes = false
@@ -95,6 +98,7 @@ let addVotingChains = () => {
     if(chain==numChainsToDisplay) interval.stop()
   }, t)
 
+  // Mine on voting chains
   d3.interval(() => {
     const randomChain = Math.floor(Math.random() * Math.floor(numChains))
     if(!chainsData[randomChain].drawn) return
@@ -105,6 +109,7 @@ let addVotingChains = () => {
   }, 4*t/numChains)
 }
 
+// Add transaction blocks
 let addTransactionBlocks = () => {
   showTransactionPool = true
   let transactionBlockId = 0
