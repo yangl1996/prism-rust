@@ -1,4 +1,6 @@
-svg.append('svg:defs').append('svg:marker')
+let defs = svg.append('defs')
+
+defs.append('svg:marker')
     .attr('id', 'longestChain-arrow')
     .attr('refX', 6)
     .attr('refY', 3)
@@ -13,23 +15,22 @@ svg.append('svg:defs').append('svg:marker')
     .style('fill', 'none')
     .style('stroke-opacity', 0.6)
 
-svg.append('svg:defs').append('svg:marker')
-    .attr('id', 'vote-arrow')
-    .attr('refX', 6)
-    .attr('refY', 3)
-    .attr('markerWidth', 12)
-    .attr('markerHeight', 12)
-    .attr('markerUnits','userSpaceOnUse')
-    .attr('orient', 'auto')
-    .append('path')
-    .attr('d', 'M 0 0 L 6 3 L 0 6')
-    .style('stroke-width', 2)
-    .style('stroke', 'white')
-    .style('fill', 'none')
-    .style('stroke-opacity', 0.6)
 
-let backgroundGradient = svg.append('defs')
-  .append('linearGradient')
+defs.append('svg:marker')
+				.attr('id', 'arrow')
+				.attr('id', 'arrow')
+        .attr('refX', 5)
+        .attr('refY', 0)
+			  .attr('markerWidth', 4)
+				.attr('markerHeight', 4)
+			  .attr('orient', 'auto')
+			  .attr('viewBox', '0 -5 10 10')
+				.append('path')
+			  .attr('fill', 'white')
+					.attr('d', 'M0,-5L10,0L0,5')
+					.attr('class','arrowHead');
+
+let backgroundGradient = defs.append('linearGradient')
     .attr('id', 'background-gradient')
     .attr('x1', '0%')
     .attr('y1', '0%')
@@ -47,8 +48,7 @@ backgroundGradient.append('stop')
     .attr('stop-color', '#19194d')
     .attr('stop-opacity', 1)
 
-let linearGradient = svg.append('defs')
-            .append('linearGradient')
+let linearGradient = defs.append('linearGradient')
             .attr('id', 'linear-gradient')
             .attr('gradientTransform', 'rotate(0)')
 
@@ -60,7 +60,7 @@ linearGradient.append('stop')
     .attr('offset', '100%')
     .attr('stop-color', 'white')
 
-let blurFilter = svg.append('svg:defs').append('filter')
+let blurFilter = defs.append('filter')
     .attr('id','blur')
 blurFilter.append('feGaussianBlur')
     .attr('stdDeviation','1')
@@ -112,3 +112,4 @@ let glow = (url) => {
 
   return constructor
 }
+
