@@ -1,3 +1,4 @@
+// Create glow for longest chain blocks
 let blockGlow = glow('blockGlow').rgb('#17e9e0').stdDeviation(2)
 blockGlow(svg)
 
