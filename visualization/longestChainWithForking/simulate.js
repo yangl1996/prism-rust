@@ -69,7 +69,12 @@ let modifyProtocol = () => {
     longestChainBlocks.push(root)
     drawLongestChain()
     let mineFastRate = d3.interval(() => {
-      const blocksToMine = Math.random()<0.2 ? 2 : 1
+      const p = Math.random()
+      let blocksToMine = 1
+      if(p<0.2)
+        blocksToMine = 3
+      else if (p<0.5)
+        blocksToMine = 2
       for(let x=0; x<blocksToMine; x++){
         const newBlock = new Node
         newBlock.id = blocks[index]['id']
