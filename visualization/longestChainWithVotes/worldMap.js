@@ -24,6 +24,7 @@ d3.json('world-continents.json', function(error) {
         .attr('d', path)
         .style('filter', 'url(#landGlow)')
   nodesGroup = worldMapScreen.append('g').attr('id', 'fakeNodesGroup')
+  // Real nodes go above on a new svg
   let realNodesSvg = d3.select('body').append('svg').attr('id', 'realNodesSvg') 
     .style('position', 'absolute')
     .attr('width', width)
@@ -41,6 +42,7 @@ d3.json('world-continents.json', function(error) {
 
 
 let pingNode = (nodeId) => {
+  // Ping a node to create a ripple effect
   const globalNode = globalNodesData.find(n => n.nodeId===nodeId)
   const isLargeNode = globalNode.nodeId===globalNodesData[0].nodeId
   for(let i=1; i<=5; i++) {
@@ -62,6 +64,7 @@ let pingNode = (nodeId) => {
 }
 let globalNodesData = []
 
+// Drop path defines the Google Map icon shape
 const dropPath = 'M 243.44676,222.01677 C 243.44676,288.9638 189.17548,343.23508 122.22845,343.23508 C 55.281426,343.23508 1.0101458,288.9638 1.0101458,222.01677 C 1.0101458,155.06975 40.150976,142.95572 122.22845,0.79337431 C 203.60619,141.74374 243.44676,155.06975 243.44676,222.01677 z';
       
 const drawNodes = () => {
@@ -87,6 +90,7 @@ const drawNodes = () => {
   newNodes.exit().remove()
 
 
+  // Real nodes are based on globalNodesData. globalNodesData gets a node if we have a defined nodeId
   globalNodesData = []
   for(let i=0; i<nodes.length; i++){
     if(nodes[i].nodeId===undefined) continue

@@ -1,3 +1,4 @@
+// Forces for transaction pool
 let simulation = d3.forceSimulation(transactionBlocks)
     .force('collide', d3.forceCollide().radius(5*transactionBlockSize/8).iterations(10).strength(0.05))
     .force('x', d3.forceX(transactionScreenWidth/4).strength(0.1))
@@ -9,8 +10,8 @@ function ticked() {
   transactionBlock.attr('transform', d => `translate(${d.x}, ${d.y})`)
 }
 
+// Restart the simulation with new transaction block dataset
 const restart = () => {
-  // Restart the simulation with new transaction block dataset
   transactionBlock = transactionGroup.selectAll('g').data(transactionBlocks, d => d.blockId)
 
   transactionBlock.exit()
@@ -42,7 +43,6 @@ const restart = () => {
 
   transactionBlock = transactionBlock.merge(transactionBlock)
    
-  // Restart simulation
   simulation.nodes(transactionBlocks)
   simulation.alpha(0.1).restart()
 }
@@ -53,7 +53,6 @@ const addTransactionBlock = (blockId, sourceNodeId) => {
   // Check if already added
   const check = transactionBlocks.find(b => b.blockId===blockId) 
   if(check==undefined){
-    // Add a transaction block at the bottom of the screen
     pingNode(sourceNodeId)
     const sourceNode = nodes.find(node => node.nodeId==sourceNodeId)
     const sourceNodeLocation = projection([sourceNode.longitude, sourceNode.latitude])

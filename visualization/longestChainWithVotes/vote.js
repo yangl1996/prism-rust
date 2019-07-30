@@ -25,7 +25,6 @@ const drawVotes = (voteData) => {
                     .attr('stroke-dashoffset', 0)
                     .style('stroke-width', 1.0)
                     .style('stroke', '#e6e6e6')
-                    .style('filter', 'url(#glow)')
                })
               .on('end', (d) => {
                 if(!voteData)
@@ -34,7 +33,6 @@ const drawVotes = (voteData) => {
                     .attr('stroke-dashoffset', 0)
                     .style('stroke-width', 1.0)
                     .style('stroke', '#e6e6e6')
-                    .style('filter', 'url(#glow)')
               })
   if(voteData){
     voteTransition.transition()

@@ -1,10 +1,13 @@
 let chainsGroup = votingChainScreen.append('g').attr('class', 'chains').attr('id', 'chainsGroup')
+
 const renderVotingLink = d3.linkVertical().x(d => d.x+(1.25-1)/2*votingBlockSize).y(d => d.y)
 
 const scrollVotingChain = idx => {
+  let didScroll = false
   let lastBlock = chainsData[idx].blocks[chainsData[idx].blocks.length-1]
   // Check if last block is below the screen's height
   while(lastBlock.y-2*votingBlockSize>height-0.4*height){
+    didScroll = true
     // Select all chains and links for that specific chain and scroll by 2*votingBlockSize
     let scrollingBlocks = chainsGroup.select('#chain'+idx).selectAll('rect')
     scrollingBlocks
@@ -24,6 +27,7 @@ const scrollVotingChain = idx => {
             return l
           })
           .attr('marker-end', 'url(#vote-arrow)')
+    // Scroll voting links
     const regex = /M([^,]*),([^,]*) Q([^,]*),([^,]*) ([^,]*),([^,]*)/
     voteGroup.selectAll('.voteLink')
       .filter(d => d.fromChain==idx)
@@ -44,6 +48,8 @@ const scrollVotingChain = idx => {
       .on('interrupt', d => {
           d3.select('#'+d.id).attr('d', d.curve)
        })
+
+    // Remove out of screen voting links
     if(chainsData[idx].shouldShift){
       voteGroup.selectAll('.voteLink')
                .filter(d => d.from===chainsData[idx].blocks[0].blockId)
@@ -56,6 +62,7 @@ const scrollVotingChain = idx => {
       chainsData[idx].shouldShift = true 
     lastBlock = chainsData[idx].blocks[chainsData[idx].blocks.length-1]
   }
+  return didScroll
 }
 
 const drawVotingChain = (idx, votes) => {
@@ -88,14 +95,11 @@ const drawVotingChain = (idx, votes) => {
          })
          .style('opacity', (d, i) => {
             if(i===0) return 0.0
-            return 0.5
+            return 0.25
           })
          .transition()
          .duration(3*t)
-         .style('opacity', (d, i) => {
-            if(i===0) return 1.0
-            return 1.0
-          })
+         .style('opacity', 1.0)
          .attr('x', d => { 
            return d.x - votingBlockSize/2
          })
@@ -103,9 +107,14 @@ const drawVotingChain = (idx, votes) => {
            return d.y
          })
         .on('end', () => {
-          scrollVotingChain(idx)
-          castVotes(idx, votes)
+          const didScroll = scrollVotingChain(idx)
+          if(didScroll){
+            d3.timeout(() => castVotes(idx, votes), t)
+          }
+          else
+            castVotes(idx, votes)
         })
+
   // Remove extra blocks
   votingBlocks.exit().remove()
 
@@ -138,6 +147,5 @@ const addVotingBlock = (idx, blockId, sourceNodeId, parentId, votes) => {
   if(parent) parent.children.push(newNode)
   chainsData[idx].links.push({source: parent, target: newNode})
   chainsData[idx].blocks.push(newNode)
-  // 1) Add block to voting chain and draw
   drawVotingChain(idx, votes)
 }

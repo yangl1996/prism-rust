@@ -1,4 +1,7 @@
-svg.append('svg:defs').append('svg:marker')
+let defs = svg.append('defs')
+
+// Longest Chain Arrow
+defs.append('svg:marker')
     .attr('id', 'longestChain-arrow')
     .attr('refX', 6)
     .attr('refY', 3)
@@ -13,7 +16,8 @@ svg.append('svg:defs').append('svg:marker')
     .style('fill', 'none')
     .style('stroke-opacity', 0.6)
 
-svg.append('svg:defs').append('svg:marker')
+// Vote Arrow
+defs.append('svg:marker')
     .attr('id', 'vote-arrow')
     .attr('refX', 6)
     .attr('refY', 3)
@@ -28,8 +32,8 @@ svg.append('svg:defs').append('svg:marker')
     .style('fill', 'none')
     .style('stroke-opacity', 0.6)
 
-let backgroundGradient = svg.append('defs')
-  .append('linearGradient')
+// Background
+let backgroundGradient = defs.append('linearGradient')
     .attr('id', 'background-gradient')
     .attr('x1', '0%')
     .attr('y1', '0%')
@@ -47,8 +51,8 @@ backgroundGradient.append('stop')
     .attr('stop-color', '#19194d')
     .attr('stop-opacity', 1)
 
-let linearGradient = svg.append('defs')
-            .append('linearGradient')
+// Linear gradient for votes
+let linearGradient = defs.append('linearGradient')
             .attr('id', 'linear-gradient')
             .attr('gradientTransform', 'rotate(0)')
 
@@ -60,7 +64,8 @@ linearGradient.append('stop')
     .attr('offset', '100%')
     .attr('stop-color', 'white')
 
-let blurFilter = svg.append('svg:defs').append('filter')
+// Blur filter for votes
+let blurFilter = defs.append('filter')
     .attr('id','blur')
 blurFilter.append('feGaussianBlur')
     .attr('stdDeviation','1')
