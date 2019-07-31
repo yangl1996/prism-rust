@@ -1,6 +1,6 @@
 #!/bin/bash
 
-LAUNCH_TEMPLATE=lt-02226ebae5fbef5f3
+LAUNCH_TEMPLATE=lt-07c210f12b766840c
 
 function start_instances
 {
@@ -146,8 +146,8 @@ function prepare_payload
 	mkdir -p payload/common/scripts
 
 	echo "Download binaries"
-	scp prism:~/prism/target/release/prism-copy payload/common/binary/prism
-	scp prism:~/go/bin/comcast payload/common/binary/comcast
+	#scp prism:~/prism/target/release/prism-copy payload/common/binary/prism
+	cp ../target/release/prism payload/common/binary/prism
 	cp scripts/start-prism.sh payload/common/scripts/start-prism.sh
 	cp scripts/stop-prism.sh payload/common/scripts/stop-prism.sh
 
@@ -187,16 +187,21 @@ function prepare_payload
 
 function sync_payload
 {
-	echo "Uploading payload to S3"
-	aws s3 rm --quiet --recursive s3://prism-binary/payload
-	aws s3 sync --quiet payload s3://prism-binary/payload
+	#echo "Uploading payload to S3"
+	#aws s3 rm --quiet --recursive s3://prism-binary/payload
+	#aws s3 sync --quiet payload s3://prism-binary/payload
 	echo "Downloading payload on each instance"
 	execute_on_all get_payload
 }
 
 function get_payload_single
 {
-	ssh $1 -- "rm -f /home/ubuntu/*.tar.gz && rm -rf /home/ubuntu/payload && wget https://prism-binary.s3.amazonaws.com/payload/$1.tar.gz -O local.tar.gz && wget https://prism-binary.s3.amazonaws.com/payload/common.tar.gz && mkdir -p /home/ubuntu/payload && tar xf local.tar.gz -C /home/ubuntu/payload && tar xf common.tar.gz -C /home/ubuntu/payload"
+	ssh $1 -- "rm -f /home/ubuntu/*.tar.gz && rm -rf /home/ubuntu/payload && mkdir -p /home/ubuntu/payload"
+	echo "Deleted payload"
+	rsync  payload/$1.tar.gz $1:/home/ubuntu/payload
+	rsync  payload/common.tar.gz $1:/home/ubuntu/payload
+	echo "Synced payload"
+    ssh $1 -- "mv /home/ubuntu/payload/$1.tar.gz /home/ubuntu/payload/local.tar.gz && tar xf /home/ubuntu/payload/local.tar.gz -C /home/ubuntu/payload && tar xf /home/ubuntu/payload/common.tar.gz -C /home/ubuntu/payload"
 }
 
 function install_perf_single
@@ -513,7 +518,7 @@ function show_demo
 	run_experiment
 	echo "Demo Started"
 	pkill grafana-rrd-server
-	~/go/bin/grafana-rrd-server -r data/ -s 1 &
+	#~/go/bin/grafana-rrd-server -r data/ -s 1 &
 	./telematics/telematics log -duration 7200 -grafana
 }
 
