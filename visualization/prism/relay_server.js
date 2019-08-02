@@ -1,6 +1,6 @@
 const WebSocket = require('ws')
 
-const wss = new WebSocket.Server({ host: '127.0.0.1', port: 8080 })
+const wss = new WebSocket.Server({ host: 'ec2-54-183-248-97.us-west-1.compute.amazonaws.com', port: 8080 })
 let visSocket = null
 let prismSocket = null
 

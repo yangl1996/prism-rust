@@ -1,4 +1,4 @@
-let websocket = new WebSocket('ws://127.0.0.1:8080', 'visualization');
+let websocket = new WebSocket('ws://ec2-54-183-248-97.us-west-1.compute.amazonaws.com:8080', 'visualization');
 websocket.onmessage = function (event) {
   const data = JSON.parse(event.data)
   if('VoterBlock' in data){
