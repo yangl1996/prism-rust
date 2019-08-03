@@ -10,7 +10,7 @@ let drawLongestChain = () => {
            .transition()
            .duration(t/2)
            .attr('transform', d => {
-               if(longestChainBlocks.length - d.depth>6){
+               if(longestChainBlocks.length - d.depth>6 && longestChainVotes){
                    d3.timeout(() => {
                      d3.select('#longestChainBlock'+d.id).select('rect')
                        .style('stroke-width', 4)
