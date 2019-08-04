@@ -48,7 +48,6 @@ let drawLongestChain = () => {
             return `translate(${x}, ${y})`
            })
 
-    if(showTransactionPool) captureTransactionBlocks(longestChainBlocks[longestChainBlocks.length-1], true)
 
     // Add a rect to the group
     longestChainBlockEnter.append('rect')
@@ -80,13 +79,14 @@ let drawLongestChain = () => {
                             if(i==0 && !didScroll && longestChainVotes)
                               castVotes()
                              if(longestChainBlocks.length - d.depth>6 && longestChainVotes && !d.finalized){
-                                console.log(didScroll)
                                  let timeout = didScroll ? 4*t : 2*t
                                  d.finalized=true
                                  d3.timeout(() => {
                                    confirmBlock(d)
                                   }, timeout)
                               }
+                            if(i==longestChainBlocks.length-1 && !didScroll)
+                              captureTransactionBlocks(longestChainBlocks[longestChainBlocks.length-1], true)
 
                           })
 
@@ -156,6 +156,8 @@ let scrollLongestChain = () => {
        d.source.y2 = d.source.y2-2*longestChainBlockSize
        return d.source.y2
      })
+
+  d3.timeout(() => captureTransactionBlocks(longestChainBlocks[longestChainBlocks.length-1], true), t)
   
 
   // Shift targetY of voting links by -2*longestChainBlockSize

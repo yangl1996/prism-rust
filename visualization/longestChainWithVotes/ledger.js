@@ -110,6 +110,12 @@ const scrollLedger = (nNewBlocks, scrolled) => {
        }
        return yMapping[ledgerBlockId]
      })
+     .on('interrupt', d => {
+        const ledgerBlockId = d.linkId.split('to')[1]
+        d3.select('#ledgerBlock'+ledgerBlockId).attr('x2', xMapping[ledgerBlockId])
+                                               .attr('y2', yMapping[ledgerBlockId]) 
+
+     })
 
   // Remove from ledger
   let removals = ledgerGroup.selectAll('.ledgerBlock').size()-5*blocksToAdd
@@ -175,7 +181,6 @@ const drawLedger = (ledgerBlocks, referenceLinks, scrolled) => {
     referenceLink = referenceLink.enter().append('line')
                    .attr('class', 'referenceLink')
                    .attr('id', d => 'referenceLink'+d.linkId)
-                   .merge(referenceLink)
                    .attr('x1', d=>d.source.x2)
                    .attr('y1', d=>d.source.y2)
                    .attr('x2', d=>d.target.x1)

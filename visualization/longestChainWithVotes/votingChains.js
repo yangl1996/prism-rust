@@ -106,13 +106,15 @@ const drawVotingChain = (idx, votes) => {
          .attr('y', d => {
            return d.y
          })
-        .on('end', () => {
-          const didScroll = scrollVotingChain(idx)
-          if(didScroll){
-            d3.timeout(() => castVotes(idx, votes), t)
+        .on('end', (d, i) => {
+          if(i==chainsData[idx].blocks.length-1){
+            const didScroll = scrollVotingChain(idx)
+            if(didScroll){
+              d3.timeout(() => castVotes(idx, votes), t)
+            }
+            else
+              castVotes(idx, votes)
           }
-          else
-            castVotes(idx, votes)
         })
 
   // Remove extra blocks
