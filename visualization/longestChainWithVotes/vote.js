@@ -15,7 +15,7 @@ const drawVotes = (voteData) => {
               .style('filter', 'url(#blur)')
               .attr('stroke-dasharray', d => d.totalLength + ' ' + d.totalLength)
               .attr('stroke-dashoffset', d => d.totalLength)
-              .transition()
+              .transition('voteDraw')
               .duration(t)
               .attr('stroke-dashoffset', 0)
               .on('interrupt', (d) => {

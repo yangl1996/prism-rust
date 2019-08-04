@@ -171,7 +171,7 @@ let scrollLongestChain = () => {
       d.curve = `M${sourceX},${sourceY} Q${sourceX-50},${sourceY-50} ${targetX},${targetY-2*longestChainBlockSize}`
       return `M${sourceX},${sourceY} Q${sourceX-50},${sourceY-50} ${targetX},${targetY}`
      })
-    .transition()
+    .transition('voteScroll')
     .duration(t)
     .attr('d', d => {
       return d.curve

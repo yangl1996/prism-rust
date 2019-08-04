@@ -40,7 +40,7 @@ const scrollVotingChain = idx => {
         d.curve = `M${sourceX},${sourceY-2*votingBlockSize} Q${sourceX-50},${sourceY-50-2*votingBlockSize} ${targetX},${targetY}`
         return `M${sourceX},${sourceY} Q${sourceX-50},${sourceY-50} ${targetX},${targetY}`
        })
-      .transition()
+      .transition('voteLinkScroll')
       .duration(t)
       .attr('d', d => {
         return d.curve
