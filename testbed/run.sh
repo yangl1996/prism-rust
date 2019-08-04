@@ -192,6 +192,63 @@ function prepare_payload
 	tput sgr0
 }
 
+function prepare_algorand_payload
+{
+	# $1: topology file to use
+	if [ $# -ne 1 ]; then
+		tput setaf 1
+		echo "Required: topology file"
+		tput sgr0
+		exit 1
+	fi
+	echo "Deleting existing files"
+	rm -rf payload
+	mkdir -p payload
+	mkdir -p payload/common/binary
+
+	echo "Download binaries"
+	scp algorand:~/go/bin/\{algod,algoh,algokey,carpenter,goal,kmd\} payload/common/binary/
+
+	echo "Generate etcd config files for each EC2 instance"
+	local instances=`cat instances.txt`
+	local instance_ids=""
+	for instance in $instances ;
+	do
+		local id
+		local ip
+		local lan
+		IFS=',' read -r id ip lan <<< "$instance"
+		mkdir -p payload/$id
+		python3 scripts/gen_etcd_config.py $id $lan instances.txt
+	done
+
+	echo "Generating Algorand network template file"
+	size=`cat $1 | jq '.nodes | length'`
+	python3 scripts/gen_algorand_template.py $size > algorand_template.json
+
+	echo "Generating and copying Algorand network"
+	scp algorand_template.json algorand:~
+	ssh algorand -- 'rm -rf ~/eval && ~/go/bin/goal network create -r ~/eval -n eval -t ~/algorand_template.json' &> /dev/null
+	rm -f algorand_template.json
+
+	echo "Compressing payload files"
+	local instances=`cat instances.txt`
+	local instance_ids=""
+	for instance in $instances ;
+	do
+		local id
+		IFS=',' read -r id _ <<< "$instance"
+		tar cvzf payload/$id.tar.gz -C payload/$id . &> /dev/null
+		rm -rf payload/$id
+	done
+	tar cvzf payload/common.tar.gz -C payload/common . &> /dev/null
+	rm -rf payload/common
+
+	tput setaf 2
+	echo "Payload written"
+	tput sgr0
+}
+
 function sync_payload
 {
 	echo "Uploading payload to S3"
@@ -629,6 +686,10 @@ case "$1" in
 		  stop-tx               Stop generating transactions
 		  stop-mine             Stop mining
 
+		Run Algorand Experiment
+
+		  gen-algorand topo     Generate config and data folders for Algorand
+
 		Collect Data
 		  
 		  get-perf              Get performance data
@@ -687,6 +748,8 @@ case "$1" in
 		execute_on_all remove_traffic_shaping ;;
 	tune-tcp)
 		execute_on_all tune_tcp ;;
+	gen-algorand)
+		prepare_algorand_payload $2 ;;
 	get-perf)
 		show_performance $2 ;;
 	show-vis)
