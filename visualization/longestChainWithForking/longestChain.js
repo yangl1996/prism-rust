@@ -159,7 +159,7 @@ let shiftScreen = () => {
                                                         .attr('marker-end', 'url(#arrow)')
 
                            let text = longestChainScreen.append('text')
-                                                        .attr('x', -width/10)
+                                                        .attr('x', -width/8)
                                                         .attr('y', height/4-20)
                                                         .attr('font-family', 'monospace')
                                                         .text('Increase mining rate')
