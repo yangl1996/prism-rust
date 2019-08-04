@@ -85,7 +85,7 @@ const scrollLedger = (nNewBlocks, scrolled) => {
   let linkOffset = 0
   timeOffset = 100
   ledgerGroup.selectAll('.ledgerLink')
-    .transition()
+    .transition('t1')
      .duration((d, i) => {
        if(i>ledgerGroup.selectAll('.ledgerLink').size()-nNewBlocks){
          timeOffset+=100
@@ -97,26 +97,37 @@ const scrollLedger = (nNewBlocks, scrolled) => {
      // unless ledger block is not visible.
      // If not visible, put ledger link at the top of left infinity ledger
      .attr('x2', (d, i) => {
-       const ledgerBlockId = d.linkId.split('to')[1]
-       if(ledgerGroup.select('#ledgerBlock'+ledgerBlockId).size()==0) {
-         return ledgerX
-       }
-       return xMapping[ledgerBlockId]
+        const ledgerBlockId = d.linkId.split('to')[1]
+        if(ledgerGroup.select('#ledgerBlock'+ledgerBlockId).size()==0)
+          return ledgerX
+        return xMapping[ledgerBlockId]
      })
      .attr('y2', (d, i) => {
-       const ledgerBlockId = d.linkId.split('to')[1]
-       if(ledgerGroup.select('#ledgerBlock'+ledgerBlockId).size()==0) {
-         return 0
-       }
-       return yMapping[ledgerBlockId]
-     })
-     .on('interrupt', d => {
         const ledgerBlockId = d.linkId.split('to')[1]
-        d3.select('#ledgerBlock'+ledgerBlockId).attr('x2', xMapping[ledgerBlockId])
-                                               .attr('y2', yMapping[ledgerBlockId]) 
-
+        if(ledgerGroup.select('#ledgerBlock'+ledgerBlockId).size()==0) 
+          return 0
+        return yMapping[ledgerBlockId]
+      })
+      .on('end', () => {
+        // Remove ledger links if proposer block sources are not on screen
+        ledgerGroup.selectAll('.ledgerLink')
+                   .attr('y1', (d, i) => {
+                     if(d.source.y2<=0) {
+                       ledgerGroup.select('#referenceLink'+d.linkId).remove()
+                       return
+                     }
+                     return d.source.y2 
+                   })
+      })
+  ledgerGroup.selectAll('.ledgerLink')
+     .transition('t2')
+     .duration(t)
+     .attr('x1', (d, i) => {
+        return d.source.x2
      })
-
+     .attr('y1', (d, i) => {
+        return d.source.y2
+     })
   // Remove from ledger
   let removals = ledgerGroup.selectAll('.ledgerBlock').size()-5*blocksToAdd
   ledgerGroup.selectAll('.ledgerBlock').each((d, i) => {
@@ -130,15 +141,6 @@ const scrollLedger = (nNewBlocks, scrolled) => {
     }
    })
 
-  // Remove ledger links if proposer block sources are not on screen
-  ledgerGroup.selectAll('.ledgerLink')
-             .attr('y1', (d, i) => {
-               if(d.source.y1<=0) {
-                 ledgerGroup.select('#referenceLink'+d.linkId).remove()
-                 return
-               }
-               return d.source.y2 
-             })
 }
 
 const drawLedger = (ledgerBlocks, referenceLinks, scrolled) => {
@@ -181,8 +183,8 @@ const drawLedger = (ledgerBlocks, referenceLinks, scrolled) => {
     referenceLink = referenceLink.enter().append('line')
                    .attr('class', 'referenceLink')
                    .attr('id', d => 'referenceLink'+d.linkId)
-                   .attr('x1', d=>d.source.x2)
-                   .attr('y1', d=>d.source.y2)
+                   .attr('x1', d=>d.source.x1)
+                   .attr('y1', d=>d.source.y1)
                    .attr('x2', d=>d.target.x1)
                    .attr('y2', d=>d.target.y1)
                    .attr('class', 'referenceLink ledgerLink')
@@ -226,7 +228,7 @@ const drawDisappearingBlocks = (disappearingBlocks) => {
 
 const captureTransactionBlocks = (longestChainBlock, scrolled) => {
   // Get longestChainBlock and longestChainBlock location
-  const transactionBlockIds = longestChainBlock.transactionBlockIds;
+  const transactionBlockIds = longestChainBlock.transactionBlockIds
   const node = globalNodesData.find(node => node.nodeId==longestChainBlock.sourceNodeId)
   const x1 = node.x
   const y1 = node.y

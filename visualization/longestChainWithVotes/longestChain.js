@@ -31,11 +31,22 @@ let confirmBlock = (longestChainBlock) => {
   chainVotes = chainVotes.filter(d => d.to!==longestChainBlock.id)
 }
 
+let shouldScroll = () => {
+  // Check if last block is below appropriate height
+  let lowestBlock = longestChainBlocks[0]
+  for(let i=0; i<longestChainBlocks.length; i++)
+    if(lowestBlock.y<longestChainBlocks[i].y){
+      lowestBlock = longestChainBlocks[i]
+    }
+  return lowestBlock.y-2*longestChainBlockSize<height-0.5*height ? false : true
+}
+
 let drawLongestChain = () => {
     // Create data join
     let longestChainBlock = longestChainBlocksGroup.selectAll('.longestChainBlock').data(longestChainBlocks, d => 'longestChainBlock'+d.id)
 
 
+    const willScroll = shouldScroll()
     // Add new blocks
     let longestChainBlockEnter = longestChainBlock.enter().append('g')
            .attr('id', d => 'longestChainBlock'+d.id)
@@ -68,28 +79,26 @@ let drawLongestChain = () => {
       }
     }
 
-    let didScroll = false
     longestChainBlockEnter.merge(longestChainBlock).transition()
                           .duration(t)
                           .attr('transform', d => {
                                return `translate(${d.x-longestChainBlockSize/2}, ${d.y})`
                           })
                           .on('end', (d, i) => {
-                            didScroll = didScroll ? true : scrollLongestChain()
-                            if(i==0 && !didScroll && longestChainVotes)
+                            if(willScroll && i==0) scrollLongestChain()
+                            if(i==0 && !willScroll && longestChainVotes)
                               castVotes()
                              if(longestChainBlocks.length - d.depth>6 && longestChainVotes && !d.finalized){
-                                 let timeout = didScroll ? 4*t : 2*t
+                                 let timeout = willScroll ? 4*t : 2*t
                                  d.finalized=true
                                  d3.timeout(() => {
                                    confirmBlock(d)
                                   }, timeout)
                               }
-                            if(i==longestChainBlocks.length-1 && !didScroll)
-                              captureTransactionBlocks(longestChainBlocks[longestChainBlocks.length-1], true)
 
                           })
 
+    if(!willScroll && longestChainBlocks.length>1) captureTransactionBlocks(longestChainBlocks[longestChainBlocks.length-1], false)
 
     // Remove extra blocks
     longestChainBlock.exit().remove()
@@ -115,16 +124,6 @@ let drawLongestChain = () => {
 }
 
 let scrollLongestChain = () => {
-  // Check if last block is below appropriate height
-  let lowestBlock = longestChainBlocks[0]
-  for(let i=0; i<longestChainBlocks.length; i++)
-    if(lowestBlock.y<longestChainBlocks[i].y){
-      lowestBlock = longestChainBlocks[i]
-    }
-
-  if(lowestBlock.y-2*longestChainBlockSize<height-0.5*height)
-    return false
-
   let voted = false
   // Move longest chain blocks by -2*longestChainBlockSize
   longestChainBlocksGroup.selectAll('.longestChainBlock')
@@ -157,7 +156,7 @@ let scrollLongestChain = () => {
        return d.source.y2
      })
 
-  d3.timeout(() => captureTransactionBlocks(longestChainBlocks[longestChainBlocks.length-1], true), t)
+  captureTransactionBlocks(longestChainBlocks[longestChainBlocks.length-1], true)
   
 
   // Shift targetY of voting links by -2*longestChainBlockSize
@@ -180,6 +179,5 @@ let scrollLongestChain = () => {
     .on('interrupt', d => {
         d3.select('#'+d.id).attr('d', d.curve)
    })
-  return true
 }
 
