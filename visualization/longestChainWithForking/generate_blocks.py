@@ -2,11 +2,11 @@ import random
 import numpy as np
 
 timestamp = 0
-duration = 100
-f = 10
-delay_parameter = 1
+duration = 100000
+f = 1
+delay_parameter = 0
 num_nodes = 10
-filename = 'high_forking'
+filename = 'low_forking'
 
 def network_delay():
     return delay_parameter
@@ -29,7 +29,10 @@ for i in range(0, num_nodes):
 
 # set which node is 'me'
 me = nodes[0]
+c = 0
 for t in timestamps:
+    c+=1
+    print(c, len(timestamps))
     # choose a random node
     n = random.choice(nodes)
     # look at all blocks the node has received prior to the event
@@ -56,6 +59,7 @@ for t in timestamps:
             nodes[j]['blocks'].append(delayed_block)
     block_id+=1
 
+'''
 print('\n\n')
 # To see the amount of forking, print all blocks at a certain depth
 max_depth = max([b['depth'] for b in me['blocks']])
@@ -65,7 +69,7 @@ for i in range(0, max_depth):
         if b['depth']==i:
             s+=str(b['id']) + ','
     print(s)
-
+'''
 
 sorted_blocks = sorted(me['blocks'], key=lambda x: x['timestamp'])
 with open(filename+'.csv', 'w+') as f:
