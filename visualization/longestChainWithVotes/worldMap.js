@@ -62,7 +62,6 @@ let pingNode = (nodeId) => {
       }
    }
 }
-let globalNodesData = []
 
 // Drop path defines the Google Map icon shape
 const dropPath = 'M 243.44676,222.01677 C 243.44676,288.9638 189.17548,343.23508 122.22845,343.23508 C 55.281426,343.23508 1.0101458,288.9638 1.0101458,222.01677 C 1.0101458,155.06975 40.150976,142.95572 122.22845,0.79337431 C 203.60619,141.74374 243.44676,155.06975 243.44676,222.01677 z';
@@ -97,18 +96,18 @@ const drawNodes = () => {
     const rect = document.getElementById('node'+nodes[i].nodeId).getBoundingClientRect()
     const x = rect.left + window.scrollX 
     const y = rect.top + window.scrollY
-    globalNodesData.push({x, y, nodeId: nodes[i].nodeId, malicious: nodes[i].malicious})
+    globalNodesData.push({x, y, nodeId: nodes[i].nodeId})
   }
   let realNodes = realNodesGroup.selectAll('g.node').data(globalNodesData, d => 'globalNode'+d.nodeId)
 
   realNodes.exit().remove()
 
   realNodes.attr('transform', d => `translate(${d.x}, ${d.y-6})`)
-           .attr('class', d => d.malicious ? 'malicious node' : 'node')
-           .attr('transform', d => d.malicious ? `translate(${d.x}, ${d.y-6})scale(1.425)` : `translate(${d.x}, ${d.y-6})`)
+           .attr('class', 'node')
+           .attr('transform', d => `translate(${d.x}, ${d.y-6})`)
 
   let realNodesEnter = realNodes.enter().append('g')
-                                        .attr('class', d => d.malicious ? 'malicious node' : 'node')
+                                        .attr('class', 'node')
                                         .attr('transform', d => `translate(${d.x}, ${d.y-6})`)
                                         .attr('id', d=>'globalNode'+d.nodeId)
 

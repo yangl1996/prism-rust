@@ -42,11 +42,13 @@ let drawLongestChain = () => {
            .attr('class', 'longestChainBlock')
            // Cause group to shoot up from source node
            .attr('transform', d => {
-            const node = d.sourceNodeId!==null ? nodes.find(node => node.nodeId===d.sourceNodeId) : undefined
-            const x = node ? projection([node.longitude, node.latitude])[0] - width/3 + worldMapShift: d.x-longestChainBlockSize/2 
-            const y = node ? projection([node.longitude, node.latitude])[1]+(height-0.6*height) : d.y
+            const node = d.sourceNodeId!==null ? globalNodesData.find(node => node.nodeId===d.sourceNodeId) : undefined
+            const x = node ? node.x - width/3: d.x-longestChainBlockSize/2
+            const y = node ? node.y : d.y
             return `translate(${x}, ${y})`
            })
+
+    if(showTransactionPool) captureTransactionBlocks(longestChainBlocks[longestChainBlocks.length-1], true)
 
     // Add a rect to the group
     longestChainBlockEnter.append('rect')
@@ -151,11 +153,10 @@ let scrollLongestChain = () => {
     .transition()
      .duration(t)
      .attr('y1', d => {
-       d.source.y1 = d.source.y1-2*longestChainBlockSize
-       return d.source.y1
+       d.source.y2 = d.source.y2-2*longestChainBlockSize
+       return d.source.y2
      })
   
-  d3.timeout(() => captureTransactionBlocks(longestChainBlocks[longestChainBlocks.length-1], true), t)
 
   // Shift targetY of voting links by -2*longestChainBlockSize
   const regex = /M([^,]*),([^,]*) Q([^,]*),([^,]*) ([^,]*),([^,]*)/

@@ -131,7 +131,7 @@ const scrollLedger = (nNewBlocks, scrolled) => {
                  ledgerGroup.select('#referenceLink'+d.linkId).remove()
                  return
                }
-               return d.source.y1 
+               return d.source.y2 
              })
 }
 
@@ -176,8 +176,8 @@ const drawLedger = (ledgerBlocks, referenceLinks, scrolled) => {
                    .attr('class', 'referenceLink')
                    .attr('id', d => 'referenceLink'+d.linkId)
                    .merge(referenceLink)
-                   .attr('x1', d=>d.source.x1)
-                   .attr('y1', d=>d.source.y1)
+                   .attr('x1', d=>d.source.x2)
+                   .attr('y1', d=>d.source.y2)
                    .attr('x2', d=>d.target.x1)
                    .attr('y2', d=>d.target.y1)
                    .attr('class', 'referenceLink ledgerLink')
@@ -222,9 +222,11 @@ const drawDisappearingBlocks = (disappearingBlocks) => {
 const captureTransactionBlocks = (longestChainBlock, scrolled) => {
   // Get longestChainBlock and longestChainBlock location
   const transactionBlockIds = longestChainBlock.transactionBlockIds;
-  const node = nodes.find(node => node.nodeId==longestChainBlock.sourceNodeId)
-  const sourceX = longestChainBlock.x + width/3 - longestChainBlockSize*1.25/2
-  const sourceY = longestChainBlock.y + longestChainBlockSize/2 + longestChainBlockSize
+  const node = globalNodesData.find(node => node.nodeId==longestChainBlock.sourceNodeId)
+  const x1 = node.x
+  const y1 = node.y
+  const x2 = longestChainBlock.x + width/3 - longestChainBlockSize*1.25/2
+  const y2 = longestChainBlock.y + longestChainBlockSize/2 + longestChainBlockSize
 
   // Get ledger blocks
   let referenceLinks = []
@@ -237,7 +239,7 @@ const captureTransactionBlocks = (longestChainBlock, scrolled) => {
     for(let j=0; j<transactionBlockIds.length; j++) {
       if(tb.blockId==transactionBlockIds[j]){
         if(ledgerBlocks.length<blocksToAdd-1){
-          referenceLinks.push({source: {x1: sourceX, y1: sourceY},
+          referenceLinks.push({source: {x1, y1, x2, y2},
                                target: {x1: tb.x+transactionBlockSize/2, y1: tb.y+transactionBlockSize/2},
                                linkId: `from${longestChainBlock.id}to${tb.blockId}`
                               })

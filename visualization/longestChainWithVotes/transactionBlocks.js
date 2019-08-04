@@ -54,9 +54,8 @@ const addTransactionBlock = (blockId, sourceNodeId) => {
   const check = transactionBlocks.find(b => b.blockId===blockId) 
   if(check==undefined){
     pingNode(sourceNodeId)
-    const sourceNode = nodes.find(node => node.nodeId==sourceNodeId)
-    const sourceNodeLocation = projection([sourceNode.longitude, sourceNode.latitude])
-    transactionBlocks.push({x: sourceNodeLocation[0]+worldMapShift, y: sourceNodeLocation[1]+(height-0.6*height), blockId})
+    const sourceNode = globalNodesData.find(node => node.nodeId==sourceNodeId)
+    transactionBlocks.push({x: sourceNode.x, y: sourceNode.y, blockId})
     restart()
  }
 }
