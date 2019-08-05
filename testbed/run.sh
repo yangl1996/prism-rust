@@ -208,7 +208,11 @@ function prepare_algorand_payload
 	mkdir -p payload/common/scripts
 
 	echo "Download binaries"
+	cd algorand
+	GOOS=linux GOARCH=amd64 go build
+	cd ..
 	scp algorand:~/go/bin/\{algod,algoh,algokey,carpenter,goal,kmd\} payload/common/binary/
+	cp algorand/algorand payload/common/binary
 	cp scripts/start-algorand.sh payload/common/scripts/start-algorand.sh
 	cp scripts/stop-algorand.sh payload/common/scripts/stop-algorand.sh
 
