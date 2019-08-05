@@ -85,7 +85,7 @@ const scrollLedger = (nNewBlocks, scrolled) => {
   let linkOffset = 0
   timeOffset = 100
   ledgerGroup.selectAll('.ledgerLink')
-    .transition()
+    .transition('t1')
      .duration((d, i) => {
        if(i>ledgerGroup.selectAll('.ledgerLink').size()-nNewBlocks){
          timeOffset+=100
@@ -97,20 +97,35 @@ const scrollLedger = (nNewBlocks, scrolled) => {
      // unless ledger block is not visible.
      // If not visible, put ledger link at the top of left infinity ledger
      .attr('x2', (d, i) => {
-       const ledgerBlockId = d.linkId.split('to')[1]
-       if(ledgerGroup.select('#ledgerBlock'+ledgerBlockId).size()==0) {
-         return ledgerX
-       }
-       return xMapping[ledgerBlockId]
+        const ledgerBlockId = d.linkId.split('to')[1]
+        if(ledgerGroup.select('#ledgerBlock'+ledgerBlockId).size()==0)
+          return ledgerX
+        return xMapping[ledgerBlockId]
      })
      .attr('y2', (d, i) => {
-       const ledgerBlockId = d.linkId.split('to')[1]
-       if(ledgerGroup.select('#ledgerBlock'+ledgerBlockId).size()==0) {
-         return 0
-       }
-       return yMapping[ledgerBlockId]
+        const ledgerBlockId = d.linkId.split('to')[1]
+        if(ledgerGroup.select('#ledgerBlock'+ledgerBlockId).size()==0) 
+          return 0
+        return yMapping[ledgerBlockId]
+      })
+      .on('end', () => {
+        // Remove ledger links if proposer block sources are not on screen
+        ledgerGroup.selectAll('.ledgerLink')
+                   .each((d, i) => {
+                     if(d.source.y2<=-2*longestChainBlockSize) {
+                       ledgerGroup.select('#referenceLink'+d.linkId).remove()
+                     }
+                   })
+      })
+  ledgerGroup.selectAll('.ledgerLink')
+     .transition('t2')
+     .duration(t)
+     .attr('x1', (d, i) => {
+        return d.source.x2
      })
-
+     .attr('y1', (d, i) => {
+        return d.source.y2
+     })
   // Remove from ledger
   let removals = ledgerGroup.selectAll('.ledgerBlock').size()-5*blocksToAdd
   ledgerGroup.selectAll('.ledgerBlock').each((d, i) => {
@@ -124,15 +139,6 @@ const scrollLedger = (nNewBlocks, scrolled) => {
     }
    })
 
-  // Remove ledger links if proposer block sources are not on screen
-  ledgerGroup.selectAll('.ledgerLink')
-             .attr('y1', (d, i) => {
-               if(d.source.y1<=0) {
-                 ledgerGroup.select('#referenceLink'+d.linkId).remove()
-                 return
-               }
-               return d.source.y1 
-             })
 }
 
 const drawLedger = (ledgerBlocks, referenceLinks, scrolled) => {
@@ -175,7 +181,6 @@ const drawLedger = (ledgerBlocks, referenceLinks, scrolled) => {
     referenceLink = referenceLink.enter().append('line')
                    .attr('class', 'referenceLink')
                    .attr('id', d => 'referenceLink'+d.linkId)
-                   .merge(referenceLink)
                    .attr('x1', d=>d.source.x1)
                    .attr('y1', d=>d.source.y1)
                    .attr('x2', d=>d.target.x1)
@@ -221,10 +226,12 @@ const drawDisappearingBlocks = (disappearingBlocks) => {
 
 const captureTransactionBlocks = (longestChainBlock, scrolled) => {
   // Get longestChainBlock and longestChainBlock location
-  const transactionBlockIds = longestChainBlock.transactionBlockIds;
-  const node = nodes.find(node => node.nodeId==longestChainBlock.sourceNodeId)
-  const sourceX = longestChainBlock.x + width/3 - longestChainBlockSize*1.25/2
-  const sourceY = longestChainBlock.y + longestChainBlockSize/2 + longestChainBlockSize
+  const transactionBlockIds = longestChainBlock.transactionBlockIds
+  const node = globalNodesData.find(node => node.nodeId==longestChainBlock.sourceNodeId)
+  const x1 = node.x
+  const y1 = node.y
+  const x2 = longestChainBlock.x + width/3 - longestChainBlockSize*1.25/2
+  const y2 = longestChainBlock.y + longestChainBlockSize/2 + longestChainBlockSize
 
   // Get ledger blocks
   let referenceLinks = []
@@ -237,7 +244,7 @@ const captureTransactionBlocks = (longestChainBlock, scrolled) => {
     for(let j=0; j<transactionBlockIds.length; j++) {
       if(tb.blockId==transactionBlockIds[j]){
         if(ledgerBlocks.length<blocksToAdd-1){
-          referenceLinks.push({source: {x1: sourceX, y1: sourceY},
+          referenceLinks.push({source: {x1, y1, x2, y2},
                                target: {x1: tb.x+transactionBlockSize/2, y1: tb.y+transactionBlockSize/2},
                                linkId: `from${longestChainBlock.id}to${tb.blockId}`
                               })

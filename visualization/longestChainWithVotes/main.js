@@ -50,6 +50,7 @@ worldMapScreen.attr('transform', `translate(-400, 0)scale(1.5)`)
 
 const nodeRadius = 3
 let nodes = []
+let globalNodesData = []
 
 // Longest Chain Screen
 const treeSize = width/3

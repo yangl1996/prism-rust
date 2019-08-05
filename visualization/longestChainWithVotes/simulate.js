@@ -35,6 +35,7 @@ let mineLowRate = d3.interval(() => {
   newBlock.parent = longestChainBlocks.find(i => i.id===blocks[index]['parentId'])
   newBlock.depth = newBlock.parent.depth+1
   newBlock.finalizationLevel = 0.4
+  newBlock.finalized = false
   if(newBlock.parent.children) newBlock.parent.children.push(newBlock)
   else newBlock.parent.children = [newBlock]
 

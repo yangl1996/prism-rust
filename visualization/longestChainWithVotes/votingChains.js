@@ -40,7 +40,7 @@ const scrollVotingChain = idx => {
         d.curve = `M${sourceX},${sourceY-2*votingBlockSize} Q${sourceX-50},${sourceY-50-2*votingBlockSize} ${targetX},${targetY}`
         return `M${sourceX},${sourceY} Q${sourceX-50},${sourceY-50} ${targetX},${targetY}`
        })
-      .transition()
+      .transition('voteLinkScroll')
       .duration(t)
       .attr('d', d => {
         return d.curve
@@ -85,13 +85,13 @@ const drawVotingChain = (idx, votes) => {
          .attr('x', d => {
            // Voting block's x coordinate is equivalent to chain's x coordinate
            d.x = chainsData[idx].x
-           return d.sourceNodeLocation ? d.sourceNodeLocation[0]-0.6*width + worldMapShift : d.x - votingBlockSize/2
+           return d.sourceNodeLocation ? d.sourceNodeLocation[0] - width*0.6 : d.x - votingBlockSize/2
           })
          .attr('y', d => {
            // Voting block's y coordinate is 2 below it's parent.
            // If parent does not exist, the block should appear at the top of the screen.
            d.y = d.parent ? d.parent.y+2*votingBlockSize : 0
-           return d.sourceNodeLocation ? d.sourceNodeLocation[1]+(height-0.6*height) : d.y
+           return d.sourceNodeLocation ? d.sourceNodeLocation[1] : d.y
          })
          .style('opacity', (d, i) => {
             if(i===0) return 0.0
@@ -106,13 +106,15 @@ const drawVotingChain = (idx, votes) => {
          .attr('y', d => {
            return d.y
          })
-        .on('end', () => {
-          const didScroll = scrollVotingChain(idx)
-          if(didScroll){
-            d3.timeout(() => castVotes(idx, votes), t)
+        .on('end', (d, i) => {
+          if(i==chainsData[idx].blocks.length-1){
+            const didScroll = scrollVotingChain(idx)
+            if(didScroll){
+              d3.timeout(() => castVotes(idx, votes), t)
+            }
+            else
+              castVotes(idx, votes)
           }
-          else
-            castVotes(idx, votes)
         })
 
   // Remove extra blocks
@@ -140,10 +142,9 @@ const drawVotingChain = (idx, votes) => {
 
 const addVotingBlock = (idx, blockId, sourceNodeId, parentId, votes) => {
   if(!chainsData[idx].blocks) return
-  const sourceNode = nodes.find(node => node.nodeId==sourceNodeId)
-  const sourceNodeLocation = projection([sourceNode.longitude, sourceNode.latitude])
+  const sourceNode = globalNodesData.find(node => node.nodeId==sourceNodeId)
   const parent = parentId!==null ? chainsData[idx].blocks.find(b => b.blockId===parentId) : null
-  const newNode = {parent, blockId, children: [], sourceNodeLocation} 
+  const newNode = {parent, blockId, children: [], sourceNodeLocation: [sourceNode.x, sourceNode.y]} 
   if(parent) parent.children.push(newNode)
   chainsData[idx].links.push({source: parent, target: newNode})
   chainsData[idx].blocks.push(newNode)
