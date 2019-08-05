@@ -205,9 +205,12 @@ function prepare_algorand_payload
 	rm -rf payload
 	mkdir -p payload
 	mkdir -p payload/common/binary
+	mkdir -p payload/common/scripts
 
 	echo "Download binaries"
 	scp algorand:~/go/bin/\{algod,algoh,algokey,carpenter,goal,kmd\} payload/common/binary/
+	cp scripts/start-algorand.sh payload/common/scripts/start-algorand.sh
+	cp scripts/stop-algorand.sh payload/common/scripts/stop-algorand.sh
 
 	echo "Generate etcd config files for each EC2 instance"
 	local instances=`cat instances.txt`
@@ -248,6 +251,7 @@ function prepare_algorand_payload
 	tar cvzf payload/common.tar.gz -C payload/common . &> /dev/null
 	rm -rf payload/common
 	rm -rf payload/staging
+	rm -rf payload/scripts
 
 	tput setaf 2
 	echo "Payload written"
@@ -301,6 +305,16 @@ function start_prism_single
 function stop_prism_single
 {
 	ssh $1 -- 'bash /home/ubuntu/payload/scripts/stop-prism.sh &>/home/ubuntu/log/stop.log'
+}
+
+function start_algorand_single
+{
+	ssh $1 -- 'mkdir -p /home/ubuntu/log && bash /home/ubuntu/payload/scripts/start-algorand.sh &>/home/ubuntu/log/start.log'
+}
+
+function stop_algorand_single
+{
+	ssh $1 -- 'bash /home/ubuntu/payload/scripts/stop-algorand.sh &>/home/ubuntu/log/stop.log'
 }
 
 function join_by
@@ -694,6 +708,8 @@ case "$1" in
 		Run Algorand Experiment
 
 		  gen-algorand topo     Generate config and data folders for Algorand
+		  start-algorand        Start Algorand nodes on each remote server
+		  stop-algorand         Stop Algorand nodes on each remote server
 
 		Collect Data
 		  
@@ -755,6 +771,10 @@ case "$1" in
 		execute_on_all tune_tcp ;;
 	gen-algorand)
 		prepare_algorand_payload $2 ;;
+	start-algorand)
+		execute_on_all start_algorand ;;
+	stop-algorand)
+		execute_on_all stop_algorand ;;
 	get-perf)
 		show_performance $2 ;;
 	show-vis)
