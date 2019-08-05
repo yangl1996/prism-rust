@@ -7,10 +7,12 @@ import (
 	"strings"
 	"io/ioutil"
 	"net/http"
+	"time"
+	"math/rand"
 
 	"github.com/algorand/go-algorand-sdk/client/algod"
 	"github.com/algorand/go-algorand-sdk/client/kmd"
-	//"github.com/algorand/go-algorand-sdk/transaction"
+	"github.com/algorand/go-algorand-sdk/transaction"
 )
 
 func main() {
@@ -116,14 +118,40 @@ func gentx(args []string) {
 	}
 	addr := listKeysResp.Addresses[0]
 
-	fmt.Printf("Start sending payments from %v to itself\n", addr)
-	fmt.Println(algodClient)
-
 	// increase the number of keepalive connections
 	// algorand's benchmark does this, so we might as well do it here
 	http.DefaultTransport.(*http.Transport).MaxIdleConnsPerHost = 100
 
+	// get suggested transaction parameters
+	txParams, err := algodClient.SuggestedParams()
+	if err != nil {
+		fmt.Printf("Failed to retrieve suggested transaction parameters: %v\n", err)
+		os.Exit(1)
+	}
 
-
-	fmt.Println(*rate)
+	interval := 1000000 / *rate
+	ticker := time.NewTicker(time.Duration(interval) * time.Microsecond)
+	fmt.Printf("Start sending payments from %v to itself at rate %v\n", addr, *rate)
+	for range ticker.C {
+		go func() {
+			randNote := make([]byte, 32)
+			rand.Read(randNote)
+			tx, err := transaction.MakePaymentTxn(addr, addr, 2000, 100000, txParams.LastRound, txParams.LastRound + 1000, randNote, "", txParams.GenesisID, txParams.GenesisHash)
+			if err != nil {
+				fmt.Printf("Error generating transaction: %v\n", err)
+				return
+			}
+			signed, err := kmdClient.SignTransaction(wallet, "", tx)
+			if err != nil {
+				fmt.Printf("Error signing transaction: %v\n", err)
+				return
+			}
+			sendResp, err := algodClient.SendRawTransaction(signed.SignedTransaction)
+			if err != nil {
+				fmt.Printf("Error sending transaction: %v\n", err)
+				return
+			}
+			fmt.Printf("Queued transaction %v\n", sendResp.TxID)
+		}()
+	}
 }
