@@ -226,10 +226,14 @@ function prepare_algorand_payload
 	size=`cat $1 | jq '.nodes | length'`
 	python3 scripts/gen_algorand_template.py $size > algorand_template.json
 
-	echo "Generating and copying Algorand network"
+	echo "Generating and copying Algorand network data"
 	scp algorand_template.json algorand:~
 	ssh algorand -- 'rm -rf ~/eval && ~/go/bin/goal network create -r ~/eval -n eval -t ~/algorand_template.json' &> /dev/null
 	rm -f algorand_template.json
+	scp -r algorand:~/eval payload/staging &> /dev/null
+
+	echo "Generating payload for each AWS EC2 instance"
+	python3 scripts/gen_algorand_payload.py instances.txt $1
 
 	echo "Compressing payload files"
 	local instances=`cat instances.txt`
@@ -243,6 +247,7 @@ function prepare_algorand_payload
 	done
 	tar cvzf payload/common.tar.gz -C payload/common . &> /dev/null
 	rm -rf payload/common
+	rm -rf payload/staging
 
 	tput setaf 2
 	echo "Payload written"
