@@ -66,7 +66,7 @@ for name, node in nodes.items():
         json.dump(config, f, sort_keys=True, indent=4)
 
 # create startup script for each node
-template = '/home/ubuntu/payload/binary/goal node start -d /home/ubuntu/payload/algorand-nodedata/{node_name} -p "{peer_address_list}" -l "{api_address}"'
+template = '/home/ubuntu/payload/binary/goal node start -d /tmp/prism/{node_name} -p "{peer_address_list}" -l "{api_address}"'
 for name, node in nodes.items():
     os.makedirs("payload/{}/algorand-startup".format(node['host']), exist_ok=True)
     peer_addresses=[]
