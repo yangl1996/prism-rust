@@ -2,5 +2,6 @@
   "host": "ec2-54-183-248-97.us-west-1.compute.amazonaws.com",
   "visualization port": 5000,
   "num_nodes": 1,
+  "demo_location": "apr-server",
   "mock": false
 }
