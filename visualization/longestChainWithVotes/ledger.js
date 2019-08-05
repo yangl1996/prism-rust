@@ -111,12 +111,10 @@ const scrollLedger = (nNewBlocks, scrolled) => {
       .on('end', () => {
         // Remove ledger links if proposer block sources are not on screen
         ledgerGroup.selectAll('.ledgerLink')
-                   .attr('y1', (d, i) => {
-                     if(d.source.y2<=0) {
+                   .each((d, i) => {
+                     if(d.source.y2<=-2*longestChainBlockSize) {
                        ledgerGroup.select('#referenceLink'+d.linkId).remove()
-                       return
                      }
-                     return d.source.y2 
                    })
       })
   ledgerGroup.selectAll('.ledgerLink')

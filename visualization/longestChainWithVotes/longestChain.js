@@ -38,7 +38,7 @@ let shouldScroll = () => {
     if(lowestBlock.y<longestChainBlocks[i].y){
       lowestBlock = longestChainBlocks[i]
     }
-  return lowestBlock.y-2*longestChainBlockSize<height-0.5*height ? false : true
+  return lowestBlock.y-2*longestChainBlockSize<height*0.5 ? false : true
 }
 
 let drawLongestChain = () => {
@@ -98,7 +98,7 @@ let drawLongestChain = () => {
 
                           })
 
-    if(!willScroll && longestChainBlocks.length>1) captureTransactionBlocks(longestChainBlocks[longestChainBlocks.length-1], false)
+    if(longestChainBlocks.length>1) captureTransactionBlocks(longestChainBlocks[longestChainBlocks.length-1], false)
 
     // Remove extra blocks
     longestChainBlock.exit().remove()
@@ -149,15 +149,12 @@ let scrollLongestChain = () => {
 
   // Move ledger link sources by -2*longestChainBlockSize
   ledgerGroup.selectAll('.ledgerLink')
-    .transition()
+     .transition('ledgerScroll')
      .duration(t)
      .attr('y1', d => {
        d.source.y2 = d.source.y2-2*longestChainBlockSize
        return d.source.y2
      })
-
-  captureTransactionBlocks(longestChainBlocks[longestChainBlocks.length-1], true)
-  
 
   // Shift targetY of voting links by -2*longestChainBlockSize
   const regex = /M([^,]*),([^,]*) Q([^,]*),([^,]*) ([^,]*),([^,]*)/
