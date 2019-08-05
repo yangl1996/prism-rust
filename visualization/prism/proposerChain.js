@@ -106,8 +106,8 @@ let drawProposerChain = () => {
            .attr('y', d => {
              return d.y
            })
-          .on('end', (d, i) => {
-            if(willScroll && i==0) scrollProposerChain()
+          .on('end', d => {
+            if(willScroll) scrollProposerChain()
           })
 
     if(proposerBlocks.length>1) captureTransactionBlocks(proposerBlocks[proposerBlocks.length-1], false) 
@@ -134,8 +134,8 @@ const scrollProposerChain = () => {
     .transition()
      .duration(t)
      .attr('y1', d => {
-       d.source.y1 = d.source.y1-2*proposerBlockSize
-       return d.source.y1
+       d.source.y2 = d.source.y2-2*proposerBlockSize
+       return d.source.y2
      })
   
   // Shift targetY of voting links by -2*proposerBlockSize

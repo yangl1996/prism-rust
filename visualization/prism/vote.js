@@ -5,37 +5,37 @@ const drawVotes = () => {
   })
 
   let vote = voteGroup.selectAll('.voteLink').data(voteData, d=>d.id)
-
-  vote.enter().append('path')
-      .attr('id', d => d.id)
-      .attr('class', d => 'voteLink to' + d.to)
-      .attr('d', d=>{
-        return d.curve
-      })
-      .style('stroke-width', 3.0)
-      .attr('stroke', 'url(#linear-gradient)')
-      .style('filter', 'url(#blur)')
-      .attr('stroke-dasharray', d => d.totalLength + ' ' + d.totalLength)
-        .attr('stroke-dashoffset', d => d.totalLength)
-        .transition()
-        .duration(t)
-      .attr('stroke-dashoffset', 0)
-        .on('interrupt', (d) => {
-          d3.select('#'+d.id)
-            .attr('stroke-dasharray', null)
-            .attr('stroke-dashoffset', 0)
-            .style('stroke-width', 1.0)
-            .style('stroke', '#e6e6e6')
-            .style('filter', 'url(#glow)')
-         })
-        .on('end', (d) => {
-          d3.select('#'+d.id)
-           .attr('stroke-dasharray', null)
-           .attr('stroke-dashoffset', 0)
-           .style('stroke-width', 1.0)
-           .style('stroke', '#e6e6e6')
-           .style('filter', 'url(#glow)')
-        })
+  vote.exit().remove()
+  let voteTransition = vote.enter().append('path')
+              .attr('id', d => d.id)
+              .attr('class', d => 'voteLink to' + d.to)
+              .attr('d', d=>{
+                return d.curve
+              })
+              .style('stroke-width', 3.0)
+              .attr('stroke', 'url(#linear-gradient)')
+              .style('filter', 'url(#blur)')
+              .attr('stroke-dasharray', d => d.totalLength + ' ' + d.totalLength)
+              .attr('stroke-dashoffset', d => d.totalLength)
+              .transition('voteDraw')
+              .duration(t)
+              .attr('stroke-dashoffset', 0)
+              .on('interrupt', (d) => {
+                if(!voteData)
+                  d3.select('#'+d.id)
+                    .attr('stroke-dasharray', null)
+                    .attr('stroke-dashoffset', 0)
+                    .style('stroke-width', 1.0)
+                    .style('stroke', '#e6e6e6')
+               })
+              .on('end', (d) => {
+                if(!voteData)
+                  d3.select('#'+d.id)
+                    .attr('stroke-dasharray', null)
+                    .attr('stroke-dashoffset', 0)
+                    .style('stroke-width', 1.0)
+                    .style('stroke', '#e6e6e6')
+              })
 }
 
 

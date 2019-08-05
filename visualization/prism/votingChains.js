@@ -87,13 +87,23 @@ const drawVotingChain = (idx, votes) => {
            return d.sourceNodeLocation ? d.sourceNodeLocation[1]+(height-0.6*height) : d.y
          })
          .transition()
-         .duration(t)
+         .duration(3*t)
          .attr('x', d => { 
            return d.x - votingBlockSize/2
          })
          .attr('y', d => {
            return d.y
          })
+        .on('end', (d, i) => {
+          if(i==chainsData[idx].blocks.length-1){
+            const didScroll = scrollVotingChain(idx)
+            if(didScroll){
+              d3.timeout(() => castVotes(idx, votes), t)
+            }
+            else
+              castVotes(idx, votes)
+          }
+        })
   // Remove extra blocks
   votingBlocks.exit().remove()
 
@@ -109,10 +119,6 @@ const drawVotingChain = (idx, votes) => {
       .delay(t)
       .duration(t)
       .attr('d', d => d.source ? renderLink({source: d.target, target: {x: d.source.x, y: d.source.y+votingBlockSize}}) : null)
-      .on('end', () => {
-        scrollVotingChain(idx)
-        castVotes(idx, votes)
-      })
       .transition()
       .delay(1)
       .attr('marker-end', 'url(#vote-arrow)')
