@@ -123,8 +123,8 @@ const drawVotingChain = (idx, votes) => {
 
 const addVotingBlock = (idx, blockId, sourceNodeId, parentId, votes) => {
   if(!chainsData[idx].blocks) return
-  const sourceNode = nodes.find(node => node.nodeId==sourceNodeId)
-  const sourceNodeLocation = projection([sourceNode.longitude, sourceNode.latitude])
+  const sourceNode = globalNodesData.find(node => node.nodeId==sourceNodeId)
+  const sourceNodeLocation = [sourceNode.x, sourceNode.y]
   const parent = parentId!==null ? chainsData[idx].blocks.find(b => b.blockId===parentId) : null
   const newNode = {parent, blockId, children: [], sourceNodeLocation} 
   if(parent) parent.children.push(newNode)

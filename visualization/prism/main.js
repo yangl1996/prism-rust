@@ -1,4 +1,4 @@
-const mock = false
+const mock = true
 let body = document.getElementsByTagName('body')[0]
 
 let width = body.clientWidth,
@@ -49,6 +49,7 @@ worldMapScreen.attr('transform', `translate(${xTranslateScale(transTime)}, ${yTr
 
 const nodeRadius = 3
 let nodes = []
+let globalNodesData = []
 
 /*
 let interval = d3.interval((elapsed) => {

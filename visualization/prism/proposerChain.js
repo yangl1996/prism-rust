@@ -52,14 +52,14 @@ let drawProposerChain = () => {
     // Add new blocks
     let proposerBlockEnter = proposerBlock.enter().append('rect')
            .attr('id', d => 'proposerBlock'+d.blockId)
-           .attr('class', d => d.malicious ? 'malicious proposerBlock' : 'proposerBlock')
+           .attr('class', 'proposerBlock')
            .attr('height', 0)
            .attr('width', 0)
            .style('filter', 'url(#blockGlow)')
            .attr('rx', 3)
            // Cause the block to shoot from the source node's location
            .attr('x', d => { 
-                const node = nodes.find(node => node.nodeId==d.sourceNodeId)
+                const node = globalNodesData.find(node => node.nodeId==d.sourceNodeId)
                // If no parent or only has one sibling, the block appears at center
                if(!d.parent || d.parent.children.length==1)
                  d.x = proposerScreenWidth/2
@@ -70,18 +70,18 @@ let drawProposerChain = () => {
                  else
                   d.x = proposerScreenWidth/2+2*proposerBlockSize
                }
-                return node ? projection([node.longitude, node.latitude])[0]-width/3 + worldMapShift: d.x-proposerBlockSize/2 
+                return node ? node.x-width/3 : d.x-proposerBlockSize/2 
               }
            )
            .attr('y', d => { 
-                const node = nodes.find(node => node.nodeId==d.sourceNodeId)
+                const node = globalNodesData.find(node => node.nodeId==d.sourceNodeId)
                // The block is normal and should be offset by 2 proposerBlocks
                if(d.parent) 
                  d.y = d.parent.y+2*proposerBlockSize
                // If the block has no parent, the block appears at top of screen
                else 
                  d.y = proposerBlockSize/2
-                return node ? projection([node.longitude, node.latitude])[1]+(height-0.6*height) : d.y
+                return node ? node.y : d.y
               }
            )
            .transition()
@@ -176,12 +176,12 @@ const addProposerBlock = (blockId, parent=null, sourceNodeId, transactionBlockId
 }
 
 if(mock){
-  const genesisBlock = {parent: null, blockId: proposerBlockId, children: [], sourceNodeId: null, finalizationLevel: 0.3, transactionBlockIds: [], malicious: false}
+  const genesisBlock = {parent: null, blockId: proposerBlockId, children: [], sourceNodeId: null, finalizationLevel: 0.3, transactionBlockIds: []}
   proposerBlockId++
   proposerBlocks.push(genesisBlock)
 }
 else{
-  const genesisBlock = {parent: null, blockId: ''.padStart(64, '0'), children: [], sourceNodeId: null, finalizationLevel: 0.3, transactionBlockIds: [], malicious: false}
+  const genesisBlock = {parent: null, blockId: ''.padStart(64, '0'), children: [], sourceNodeId: null, finalizationLevel: 0.3, transactionBlockIds: []}
   proposerBlocks.push(genesisBlock)
 }
 

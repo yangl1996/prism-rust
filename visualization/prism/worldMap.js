@@ -29,9 +29,9 @@ d3.json('world-continents.json', function(error) {
 })
 
 
-let pingNode = (nodeId, malicious=false) => {
+let pingNode = (nodeId) => {
   let node = nodes.find(n => n.nodeId===nodeId)
-  if(node===undefined || malicious){
+  if(node===undefined){
     for(let i=0; i<nodes.length; i++){
       if(!('nodeId' in nodes[i])){
         nodes[i].nodeId = nodeId
@@ -39,7 +39,6 @@ let pingNode = (nodeId, malicious=false) => {
         break
       }
     }
-    node.malicious = malicious
     drawNodes()
   }
   const globalNode = globalNodesData.find(n => n.nodeId===node.nodeId)
@@ -47,21 +46,20 @@ let pingNode = (nodeId, malicious=false) => {
   for(let i=1; i<=5; i++) {
     for(let d=0; d<300; d+=100) {
         realNodesGroup.append('circle')
-            .attr('class', () => globalNode.malicious ? 'maliciousRipple' : 'ripple')
-            .attr('cx', () => isLargeNode || globalNode.malicious ? globalNode.x-12 : globalNode.x-7)
-            .attr('cy', () => isLargeNode || globalNode.malicious ? globalNode.y-28 : globalNode.y-20)
-            .attr('r', () => isLargeNode || globalNode.malicious ? 12 : 9)
+            .attr('class', () => 'ripple')
+            .attr('cx', () => isLargeNode ? globalNode.x-12 : globalNode.x-7)
+            .attr('cy', () => isLargeNode ? globalNode.y-28 : globalNode.y-20)
+            .attr('r', () => isLargeNode ? 12 : 9)
             .transition()
             .delay(d)
             .style('stroke-opacity', 0.7)
             .duration(0.7*t)
             .style('stroke-opacity', 0)
-            .attr('r', () => isLargeNode || globalNode.malicious ? 25 : 15)
+            .attr('r', () => isLargeNode ? 25 : 15)
             .remove()
       }
    }
 }
-let globalNodesData = []
 
 const dropPath = 'M 243.44676,222.01677 C 243.44676,288.9638 189.17548,343.23508 122.22845,343.23508 C 55.281426,343.23508 1.0101458,288.9638 1.0101458,222.01677 C 1.0101458,155.06975 40.150976,142.95572 122.22845,0.79337431 C 203.60619,141.74374 243.44676,155.06975 243.44676,222.01677 z';
       
@@ -94,18 +92,18 @@ const drawNodes = () => {
     const rect = document.getElementById('node'+nodes[i].nodeId).getBoundingClientRect()
     const x = rect.left + window.scrollX 
     const y = rect.top + window.scrollY
-    globalNodesData.push({x, y, nodeId: nodes[i].nodeId, malicious: nodes[i].malicious})
+    globalNodesData.push({x, y, nodeId: nodes[i].nodeId})
   }
   let realNodes = realNodesGroup.selectAll('g.node').data(globalNodesData, d => 'globalNode'+d.nodeId)
 
   realNodes.exit().remove()
 
   realNodes.attr('transform', d => `translate(${d.x}, ${d.y-6})`)
-           .attr('class', d => d.malicious ? 'malicious node' : 'node')
-           .attr('transform', d => d.malicious ? `translate(${d.x}, ${d.y-6})scale(1.425)` : `translate(${d.x}, ${d.y-6})`)
+           .attr('class', d => 'node')
+           .attr('transform', d => `translate(${d.x}, ${d.y-6})`)
 
   let realNodesEnter = realNodes.enter().append('g')
-                                        .attr('class', d => d.malicious ? 'malicious node' : 'node')
+                                        .attr('class', d => 'node')
                                         .attr('transform', d => `translate(${d.x}, ${d.y-6})`)
                                         .attr('id', d=>'globalNode'+d.nodeId)
 

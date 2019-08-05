@@ -17,7 +17,6 @@ let proposerBlockId = 0
 let votingBlockId = 0
 if(mock){
     const forkProbability = 0.05
-
     // Add 1 transaction block every 0.2 seconds
     d3.interval(() => {
       if(transactionBlocks.length>500) return
