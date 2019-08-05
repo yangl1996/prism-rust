@@ -57,16 +57,16 @@ for name, node in nodes.items():
     shutil.move('payload/staging/{}'.format(name), 'payload/{}/algorand-nodedata/{}'.format(node['host'], name))
     config = {
             "GossipFanout": num_nodes,
-            "EndpointAddress": "0.0.0.0:{}".format(node['api_port']),
-            "NetAddress": "0.0.0.0:{}".format(node['p2p_port']),
-            "NodeExporterListenAddress": "0.0.0.0:{}".format(node['vis_port']),
+            "EndpointAddress": "{}:{}".format(node['ip'], node['api_port']),
+            "NetAddress": "{}:{}".format(node['ip'], node['p2p_port']),
+            "NodeExporterListenAddress": "{}:{}".format(node['ip'], node['vis_port']),
             "DNSBootstrapID": ""
             }
     with open('payload/{}/algorand-nodedata/{}/config.json'.format(node['host'], name), 'w') as f:
         json.dump(config, f, sort_keys=True, indent=4)
 
 # create startup script for each node
-template = '/home/ubuntu/payload/binary/goal node start -d /home/ubuntu/payload/algorand-nodedata/{node_name} -p "{peer_address_list}"'
+template = '/home/ubuntu/payload/binary/goal node start -d /home/ubuntu/payload/algorand-nodedata/{node_name} -p "{peer_address_list}" -l "{api_address}"'
 for name, node in nodes.items():
     os.makedirs("payload/{}/algorand-startup".format(node['host']), exist_ok=True)
     peer_addresses=[]
@@ -75,7 +75,7 @@ for name, node in nodes.items():
             dst = c['to']
             peer_addresses.append("{}:{}".format(nodes[dst]['ip'], nodes[dst]['p2p_port']))
     peer_list = ';'.join(peer_addresses)
-    startup_str = template.format(node_name=name, peer_address_list=peer_list)
+    startup_str = template.format(node_name=name, peer_address_list=peer_list, api_address=node['ip']+':'+str(node['api_port']))
     with open('payload/{}/algorand-startup/{}.sh'.format(node['host'], name), 'w') as f:
         f.write(startup_str)
 
