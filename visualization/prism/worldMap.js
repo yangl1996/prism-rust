@@ -42,6 +42,7 @@ let pingNode = (nodeId) => {
     drawNodes()
   }
   const globalNode = globalNodesData.find(n => n.nodeId===node.nodeId)
+  if(globalNode===undefined) return
   const isLargeNode = globalNode.nodeId===globalNodesData[0].nodeId
   for(let i=1; i<=5; i++) {
     for(let d=0; d<300; d+=100) {

@@ -45,10 +45,22 @@ const confirmBlock = proposerBlock => {
 
 }
 
+let shouldScroll = () => {
+  // Check if last block is below appropriate height
+  let lowestBlock = proposerBlocks[0]
+  for(let i=0; i<proposerBlocks.length; i++)
+    if(lowestBlock.y< proposerBlocks[i].y){
+      lowestBlock = proposerBlocks[i]
+    }
+  if(lowestBlock.y===undefined) return false
+  return lowestBlock.y-2*proposerBlockSize<height*0.5 ? false : true
+}
+
 let drawProposerChain = () => {
     // Create data join
     let proposerBlock = proposerBlocksGroup.selectAll('.proposerBlock').data(proposerBlocks, d => 'proposerBlock'+d.blockId)
 
+    const willScroll = shouldScroll()
     // Add new blocks
     let proposerBlockEnter = proposerBlock.enter().append('rect')
            .attr('id', d => 'proposerBlock'+d.blockId)
@@ -94,23 +106,17 @@ let drawProposerChain = () => {
            .attr('y', d => {
              return d.y
            })
-          .on('end', d => {
-            const didScroll = scrollProposerChain()
-            if(proposerBlocks[proposerBlocks.length-1].transactionBlockIds.length>0 && !didScroll){ 
-              captureTransactionBlocks(proposerBlocks[proposerBlocks.length-1], false) 
-            }
+          .on('end', (d, i) => {
+            if(willScroll && i==0) scrollProposerChain()
           })
 
+    if(proposerBlocks.length>1) captureTransactionBlocks(proposerBlocks[proposerBlocks.length-1], false) 
     // Remove extra blocks
     proposerBlock.exit().remove()
 
 }
 
 const scrollProposerChain = () => {
-  // Check if last block is below appropriate height
-  const lastBlock = proposerBlocks[proposerBlocks.length-1]
-  if(lastBlock.y-2*proposerBlockSize<height-0.4*height)
-    return false
   // Move proposer blocks by -2*proposerBlockSize
   proposerBlocksGroup.selectAll('rect')
           .transition()
@@ -153,14 +159,11 @@ const scrollProposerChain = () => {
         d3.select('#'+d.id).attr('d', d.curve)
      })
 
-  d3.timeout(() => captureTransactionBlocks(proposerBlocks[proposerBlocks.length-1], true), t)
   voteGroup.selectAll('.voteLink')
            .filter(d => d.to===proposerBlocks[0].blockId)
            .remove()
   voteData = voteData.filter(d => d.to!==proposerBlocks[0].blockId)
   proposerBlocks.shift()
-  // Indicate that we did scroll
-  return true
 }
 
 const addProposerBlock = (blockId, parent=null, sourceNodeId, transactionBlockIds) => {

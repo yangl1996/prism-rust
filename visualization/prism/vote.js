@@ -6,7 +6,6 @@ const drawVotes = () => {
 
   let vote = voteGroup.selectAll('.voteLink').data(voteData, d=>d.id)
 
-  vote.exit().remove()
   vote.enter().append('path')
       .attr('id', d => d.id)
       .attr('class', d => 'voteLink to' + d.to)
