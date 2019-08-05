@@ -215,6 +215,9 @@ function prepare_algorand_payload
 	cp algorand/algorand payload/common/binary
 	cp scripts/start-algorand.sh payload/common/scripts/start-algorand.sh
 	cp scripts/stop-algorand.sh payload/common/scripts/stop-algorand.sh
+	cp scripts/start-algorand-transaction.sh payload/common/scripts/start-algorand-transaction.sh
+	cp scripts/stop-algorand-transaction.sh payload/common/scripts/stop-algorand-transaction.sh
+
 
 	echo "Generate etcd config files for each EC2 instance"
 	local instances=`cat instances.txt`
@@ -319,6 +322,16 @@ function start_algorand_single
 function stop_algorand_single
 {
 	ssh $1 -- 'bash /home/ubuntu/payload/scripts/stop-algorand.sh &>/home/ubuntu/log/stop.log'
+}
+
+function start_algorand_transaction_single
+{
+	ssh $1 -- "bash /home/ubuntu/payload/scripts/start-algorand-transaction.sh $2 &>/home/ubuntu/log/start-tx.log"
+}
+
+function stop_algorand_transaction_single
+{
+	ssh $1 -- 'bash /home/ubuntu/payload/scripts/stop-algorand-transaction.sh &>/home/ubuntu/log/stop-tx.log'
 }
 
 function join_by
@@ -714,6 +727,8 @@ case "$1" in
 		  gen-algorand topo     Generate config and data folders for Algorand
 		  start-algorand        Start Algorand nodes on each remote server
 		  stop-algorand         Stop Algorand nodes on each remote server
+		  start-algorand-tx r   Start Algorand transactions on each remote server at rate r txn/s
+		  stop-algorand-tx      Stop Algorand transactions on each remote server
 
 		Collect Data
 		  
@@ -779,6 +794,10 @@ case "$1" in
 		execute_on_all start_algorand ;;
 	stop-algorand)
 		execute_on_all stop_algorand ;;
+	start-algorand-tx)
+		execute_on_all start_algorand_transaction $2 ;;
+	stop-algorand-tx)
+		execute_on_all stop_algorand_transaction ;;
 	get-perf)
 		show_performance $2 ;;
 	show-vis)

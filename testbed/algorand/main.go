@@ -25,7 +25,7 @@ func main() {
 	case "gentx":
 		gentx(os.Args[2:])
 	default:
-		fmt.Println("Subcommands: log, plot, check")
+		fmt.Println("Subcommands: gentx")
 		os.Exit(1)
 	}
 }
