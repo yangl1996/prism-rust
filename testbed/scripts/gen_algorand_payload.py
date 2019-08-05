@@ -73,7 +73,7 @@ for name, node in nodes.items():
     for c in topo['connections']:
         if c['from'] == name:
             dst = c['to']
-            peer_addresses.append("{}:{}".format(nodes[dst]['ip'], nodes[dst]['p2p_port']))
+            peer_addresses.append("{}:{}".format(nodes[dst]['pubfacing_ip'], nodes[dst]['p2p_port']))
     peer_list = ';'.join(peer_addresses)
     startup_str = template.format(node_name=name, peer_address_list=peer_list, api_address=node['ip']+':'+str(node['api_port']))
     with open('payload/{}/algorand-startup/{}.sh'.format(node['host'], name), 'w') as f:
