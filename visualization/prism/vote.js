@@ -105,8 +105,6 @@ const castVotes = (votingChain, votes) => {
       voteObj.totalLength = tempPath.node().getTotalLength()
       voteGroup.select('#tempPath').remove()
       votedProposerBlock.finalizationLevel+=0.01
-      d3.select('#proposerBlock'+votes[i])
-        .style('fill-opacity', votedProposerBlock.finalizationLevel)
       //if(votedProposerBlock.finalizationLevel>finalizationThreshold) confirmBlock(votedProposerBlock)
       voteData.push(voteObj)
     }

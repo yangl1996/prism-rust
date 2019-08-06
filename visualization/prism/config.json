@@ -3,5 +3,5 @@
   "visualization port": 5000,
   "num_nodes": 1,
   "demo_location": "apr-server",
-  "mock": true
+  "mock": false
 }
