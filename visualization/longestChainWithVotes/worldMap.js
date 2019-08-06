@@ -30,11 +30,10 @@ d3.json('world-continents.json', function(error) {
     .attr('width', width)
     .attr('height', height)
     .on('click', () => {
-      if(clicks==0)
+      if(longestChainVotes)
         addVotingChains()
-      if(clicks==1)
+      else
         addTransactionBlocks()
-      clicks+=1
     })
   realNodesGroup = realNodesSvg.append('g').attr('class', 'nodes').attr('id', 'nodesGroup')
   drawNodes()

@@ -2,7 +2,6 @@ let body = document.getElementsByTagName('body')[0]
 
 let width = body.clientWidth,
     height = body.clientHeight
-let clicks = 0
 let longestChainVotes = true
 
 let svg = d3.select('body').append('svg')

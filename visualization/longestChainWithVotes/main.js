@@ -2,7 +2,6 @@ let body = document.getElementsByTagName('body')[0]
 
 let width = body.clientWidth,
     height = body.clientHeight
-let clicks = 0
 let longestChainVotes = true
 let showTransactionPool = false
 let svg = d3.select('body').append('svg')
@@ -10,13 +9,6 @@ let svg = d3.select('body').append('svg')
 	.attr('width', width)
 	.attr('height', height)
   .style('position', 'absolute')
-  .on('click', () => {
-    if(clicks==0)
-      addVotingChains()
-    if(clicks==1)
-      addTransactionBlocks()
-    clicks+=1
-  })
 
 svg.append('rect')
     .attr('width', width)
@@ -33,13 +25,6 @@ let svgTransform = d3.select('body').append('svg')
     .attr('height', height)
     .attr('id', 'svgTransform')
     .style('transform', M)
-    .on('click', () => {
-      if(clicks==0)
-        addVotingChains()
-      if(clicks==1)
-        addTransactionBlocks()
-      clicks+=1
-    })
 
 // World Map Screen
 let worldMapScreenWidth = 0.7*width, worldMapScreenHeight = 0.6*height
