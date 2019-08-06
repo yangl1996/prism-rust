@@ -7,6 +7,8 @@ def print_pressed_keys(e):
     key = list(keyboard._pressed_events.keys())
     if len(key)>0 and key[0]==126:
         os.system('killall LiveSlides')
+    if len(key)>0 and key[0]==125:
+        os.system('open -a LiveSlides')
 
 keyboard.hook(print_pressed_keys)
 keyboard.wait()
