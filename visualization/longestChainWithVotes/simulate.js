@@ -61,6 +61,8 @@ let mineLowRate = d3.interval(() => {
   if(index>blocks.length) mineLowRate.stop()
 }, 4*t)
 
+let mineVotingChains = null
+
 // Add voting chains
 let addVotingChains = () => {
   // Initialize the chains spaced by votingChainScreenWidth/numChains
@@ -100,7 +102,7 @@ let addVotingChains = () => {
   }, t)
 
   // Mine on voting chains
-  d3.interval(() => {
+  mineVotingChains = d3.interval(() => {
     const randomChain = Math.floor(Math.random() * Math.floor(numChains))
     if(!chainsData[randomChain].drawn) return
     const sourceNodeId = Math.floor(Math.random() * Math.floor(nodes.length))
@@ -110,15 +112,23 @@ let addVotingChains = () => {
   }, 4*t/numChains)
 }
 
+let mineTransactionBlocks = null
+
 // Add transaction blocks
 let addTransactionBlocks = () => {
   showTransactionPool = true
   let transactionBlockId = 0
   // Add 1 transaction block every 0.2 seconds
-  d3.interval(() => {
+  mineTransactionBlocks = d3.interval(() => {
     if(transactionBlocks.length>500) return
     const sourceNodeId = Math.floor(Math.random() * Math.floor(nodes.length))
     addTransactionBlock(transactionBlockId, sourceNodeId)
     transactionBlockId++
   }, t/5)
+}
+let endSimulation = () => {
+  d3.selectAll('svg').remove()
+  mineLowRate.stop()
+  mineVotingChains.stop()
+  mineTransactionBlocks.stop()
 }
