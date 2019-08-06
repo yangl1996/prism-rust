@@ -58,9 +58,14 @@ if not MOCK and DEMO_LOCATION=='local':
 
 if not MOCK and DEMO_LOCATION=='apr-server':
     os.chdir('../../testbed')
+    TOPO = config['topology']
+    if TOPO=='randreg':
+        topo_p = subprocess.run(['python3', 'scripts/generate_topo.py', f'{NUM_NODES}', f'{TOPO}', str(config['degree']), '>', 'randreg.json']) 
+    else:
+        topo_p = subprocess.run(['python3', 'scripts/generate_topo.py', f'{NUM_NODES}', f'{TOPO}', '>', 'clique.json']) 
     p4 = subprocess.run(['./run.sh', 'start-instances', f'{NUM_NODES}'], input='1'.encode('utf-8'))
     p5 = subprocess.run(['./run.sh', 'mount-nvme'])
-    p6 = subprocess.run(['./run.sh', 'gen-payload', 'randreg.json'])
+    p6 = subprocess.run(['./run.sh', 'gen-payload', f'{TOPO}.json'])
     p7 = subprocess.run(['./run.sh', 'sync-payload'])
     p3 = subprocess.Popen(['./run.sh', 'show-demo'])
 

@@ -1,12 +1,17 @@
 let simulation = d3.forceSimulation(transactionBlocks)
     .force('collide', d3.forceCollide().radius(5*transactionBlockSize/8).iterations(10).strength(0.05))
-    .force('x', d3.forceX(transactionScreenWidth/4).strength(0.1))
-    .force('y', d3.forceY(transactionScreenHeight*0.2).strength(0.1))
+    .force('x', d3.forceX(transactionScreenWidth/4).strength(0.05))
+    .force('y', d3.forceY(transactionScreenHeight*0.2).strength(0.05))
     .alphaTarget(0.1)
     .on('tick', ticked)
 
+
 function ticked() {
   transactionBlock.attr('transform', d => `translate(${d.x}, ${d.y})`)
+		  .attr('opacity', d => {
+			d.opacity+=0.01
+			return d.opacity
+		   })
 }
 
 const restart = () => {
@@ -18,6 +23,10 @@ const restart = () => {
   transactionBlockEnter = transactionBlock.enter().append('g')
           .attr('id', d => 'transactionBlock' + d.blockId )
           .attr('class', 'transactionBlock')
+	  .attr('opacity', d => {
+		d.opacity = 0
+		return d.opacity
+	  })
           .attr('transform', d => `translate(${d.x}, ${d.y})`)
 
   transactionBlockEnter.append('rect').attr('rx', 3)
@@ -32,12 +41,6 @@ const restart = () => {
                    .attr('y1', y) 
                    .attr('x2', 20) 
                    .attr('y2', y) 
-
-  transactionBlockEnter
-          .style('opacity', 0.0)
-          .transition()
-          .duration(t)
-          .style('opacity', 1.0)
 
   transactionBlock = transactionBlock.merge(transactionBlock)
    

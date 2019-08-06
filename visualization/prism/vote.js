@@ -82,6 +82,7 @@ const castVotes = (votingChain, votes) => {
     }
   }
   else {
+    if(votes===undefined) return	  
     // Get the last block on voting chain
     const lastBlock = chainsData[votingChain].blocks[chainsData[votingChain].blocks.length-1]
     // Calculate the vote's source coordinate
