@@ -1,3 +1,3 @@
 #!/bin/bash
-pkill algorand
+pkill -f 'algorand gentx'
 wait $!
