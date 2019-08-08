@@ -106,6 +106,17 @@ func gentx(args []string) {
 	}
 	wallet := walletHandleResp.WalletHandleToken
 
+	// renew the handle every 10 seconds. why on earth does the handle auto-expire
+	go func() {
+		ticker := time.NewTicker(time.Duration(10) * time.Second)
+		for range ticker.C {
+			_, err := kmdClient.RenewWalletHandle(wallet)
+			if err != nil {
+				fmt.Printf("Failed to renew wallet handle: %v\n", err)
+			}
+		}
+	}()
+
 	// get the address
 	listKeysResp, err := kmdClient.ListKeys(wallet)
 	if err != nil {
