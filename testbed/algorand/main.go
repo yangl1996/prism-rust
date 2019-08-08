@@ -88,16 +88,26 @@ func perf(args []string) {
 		resp.Body.Close()
 		d := string(body)
 
+		totalTxMatch := totalTxRe.FindStringSubmatch(d)
+		if totalTxMatch == nil {
+			continue
+		}
+		totalTx, _ := strconv.Atoi(totalTxMatch[1])
+		roundMatch := roundRe.FindStringSubmatch(d)
+		if roundMatch == nil {
+			continue
+		}
+		round, _ := strconv.Atoi(roundMatch[1])
+		txPoolMatch := txPoolRe.FindStringSubmatch(d)
+		if txPoolMatch == nil {
+			continue
+		}
+		txPool, _ := strconv.Atoi(txPoolMatch[1])
+
 		tm.Clear()
 		tm.MoveCursor(1, 1)
 		duration := int(now.Sub(start).Seconds())
 		tm.Printf("Time since start - %v sec\n", duration)
-		totalTxMatch := totalTxRe.FindStringSubmatch(d)
-		totalTx, _ := strconv.Atoi(totalTxMatch[1])
-		roundMatch := roundRe.FindStringSubmatch(d)
-		round, _ := strconv.Atoi(roundMatch[1])
-		txPoolMatch := txPoolRe.FindStringSubmatch(d)
-		txPool, _ := strconv.Atoi(txPoolMatch[1])
 		tm.Printf("Total Tx         - %v\n", totalTx)
 		tm.Printf("Round            - %v\n", round)
 		tm.Printf("Memory Pool      - %v\n", txPool)
