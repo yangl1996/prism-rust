@@ -9,7 +9,10 @@ import (
 	"net/http"
 	"time"
 	"math/rand"
+	"regexp"
+	"strconv"
 
+	tm "github.com/buger/goterm"
 	"github.com/algorand/go-algorand-sdk/client/algod"
 	"github.com/algorand/go-algorand-sdk/client/kmd"
 	"github.com/algorand/go-algorand-sdk/transaction"
@@ -17,16 +20,88 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Println("Subcommands: gentx")
+		fmt.Println("Subcommands: gentx perf")
 		os.Exit(1)
 	}
 
 	switch os.Args[1] {
 	case "gentx":
 		gentx(os.Args[2:])
+	case "perf":
+		perf(os.Args[2:])
 	default:
-		fmt.Println("Subcommands: gentx")
+		fmt.Println("Subcommands: gentx perf")
 		os.Exit(1)
+	}
+}
+
+func perf(args []string) {
+	perfCommand := flag.NewFlagSet("perf", flag.ExitOnError)
+	node := perfCommand.String("node", "", "Sets the name of the node to measure performance")
+	interval := perfCommand.Uint("interval", 500, "Sets the interval (in ms) between queries")
+
+	perfCommand.Parse(args)
+
+	if *node == "" {
+		fmt.Println("Missing option 'node'")
+		os.Exit(1)
+	}
+
+	// get algod API address and token
+	algodAddrBytes, err := ioutil.ReadFile("/tmp/prism/" + *node + "/algod.net")
+	algodAddr := strings.TrimSpace(string(algodAddrBytes))
+	algodAddr = "http://" + algodAddr
+	if err != nil {
+		fmt.Printf("Failed to read algod listening address: %v\n", err)
+		os.Exit(1)
+	}
+	algodTokenBytes, err := ioutil.ReadFile("/tmp/prism/" + *node + "/algod.token")
+	algodToken := strings.TrimSpace(string(algodTokenBytes))
+	if err != nil {
+		fmt.Printf("Failed to read algod token: %v\n", err)
+		os.Exit(1)
+	}
+
+	// compile regular expressions
+	totalTxRe := regexp.MustCompile(`algod_ledger_transactions_total\{\} (\d+)`)
+	roundRe := regexp.MustCompile(`algod_ledger_round\{\} (\d+)`)
+	txPoolRe := regexp.MustCompile(`algod_tx_pool_count\{\} (\d+)`)
+
+	// start querying metrics
+	client := &http.Client{}
+	ticker := time.NewTicker(time.Duration(*interval * 1000) * time.Microsecond)
+	start := time.Now()
+	for now := range ticker.C {
+		req, err := http.NewRequest("GET", algodAddr + "/metrics", nil)
+		if err != nil {
+			fmt.Printf("Failed to create HTTP request: %v\n", err)
+		}
+		req.Header.Add("X-Algo-API-Token", algodToken)
+		resp, err := client.Do(req)
+		if err != nil {
+			fmt.Printf("Failed to request metrics: %v\n", err)
+		}
+		body, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			fmt.Printf("Failed to read algod response: %v\n", err)
+		}
+		resp.Body.Close()
+		d := string(body)
+
+		tm.Clear()
+		tm.MoveCursor(1, 1)
+		duration := int(now.Sub(start).Seconds())
+		tm.Printf("Time since start - %v sec\n", duration)
+		totalTxMatch := totalTxRe.FindStringSubmatch(d)
+		totalTx, _ := strconv.Atoi(totalTxMatch[1])
+		roundMatch := roundRe.FindStringSubmatch(d)
+		round, _ := strconv.Atoi(roundMatch[1])
+		txPoolMatch := txPoolRe.FindStringSubmatch(d)
+		txPool, _ := strconv.Atoi(txPoolMatch[1])
+		tm.Printf("Total Tx         - %v\n", totalTx)
+		tm.Printf("Round            - %v\n", round)
+		tm.Printf("Memory Pool      - %v\n", txPool)
+		tm.Flush()
 	}
 }
 
@@ -47,38 +122,38 @@ func gentx(args []string) {
 	kmdAddr := strings.TrimSpace(string(kmdAddrBytes))
 	kmdAddr = "http://" + kmdAddr
 	if err != nil {
-		fmt.Printf("Failed to read kmd listening address: %v", err)
+		fmt.Printf("Failed to read kmd listening address: %v\n", err)
 		os.Exit(1)
 	}
 	kmdTokenBytes, err := ioutil.ReadFile("/tmp/prism/" + *node + "/kmd-v0.5/kmd.token")
 	kmdToken := strings.TrimSpace(string(kmdTokenBytes))
 	if err != nil {
-		fmt.Printf("Failed to read kmd token: %v", err)
+		fmt.Printf("Failed to read kmd token: %v\n", err)
 		os.Exit(1)
 	}
 	algodAddrBytes, err := ioutil.ReadFile("/tmp/prism/" + *node + "/algod.net")
 	algodAddr := strings.TrimSpace(string(algodAddrBytes))
 	algodAddr = "http://" + algodAddr
 	if err != nil {
-		fmt.Printf("Failed to read algod listening address: %v", err)
+		fmt.Printf("Failed to read algod listening address: %v\n", err)
 		os.Exit(1)
 	}
 	algodTokenBytes, err := ioutil.ReadFile("/tmp/prism/" + *node + "/algod.token")
 	algodToken := strings.TrimSpace(string(algodTokenBytes))
 	if err != nil {
-		fmt.Printf("Failed to read algod token: %v", err)
+		fmt.Printf("Failed to read algod token: %v\n", err)
 		os.Exit(1)
 	}
 
 	// get kmd and algod clients
 	kmdClient, err := kmd.MakeClient(kmdAddr, kmdToken)
 	if err != nil {
-		fmt.Printf("Failed to initialize kmd client: %v", err)
+		fmt.Printf("Failed to initialize kmd client: %v\n", err)
 		os.Exit(1)
 	}
 	algodClient, err := algod.MakeClient(algodAddr, algodToken)
 	if err != nil {
-		fmt.Printf("Failed to initialize algod client: %v", err)
+		fmt.Printf("Failed to initialize algod client: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -87,7 +162,7 @@ func gentx(args []string) {
 	wallets, err := kmdClient.ListWallets()
 	walletID := ""
 	if err != nil {
-		fmt.Printf("Failed to list wallets: %v", err)
+		fmt.Printf("Failed to list wallets: %v\n", err)
 		os.Exit(1)
 	}
 	for _, wallet := range wallets.Wallets {
@@ -96,12 +171,12 @@ func gentx(args []string) {
 		}
 	}
 	if walletID == "" {
-		fmt.Printf("Unable to find the test wallet")
+		fmt.Printf("Unable to find the test wallet\n")
 		os.Exit(1)
 	}
 	walletHandleResp, err := kmdClient.InitWalletHandle(walletID, "")
 	if err != nil {
-		fmt.Printf("Failed to initialize wallet handle: %v", err)
+		fmt.Printf("Failed to initialize wallet handle: %v\n", err)
 		os.Exit(1)
 	}
 	wallet := walletHandleResp.WalletHandleToken
