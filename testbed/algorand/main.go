@@ -20,7 +20,7 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Println("Subcommands: gentx perf")
+		fmt.Println("Subcommands: gentx perf block")
 		os.Exit(1)
 	}
 
@@ -29,10 +29,55 @@ func main() {
 		gentx(os.Args[2:])
 	case "perf":
 		perf(os.Args[2:])
+	case "block":
+		block(os.Args[2:])
 	default:
-		fmt.Println("Subcommands: gentx perf")
+		fmt.Println("Subcommands: gentx perf block")
 		os.Exit(1)
 	}
+}
+
+func block(args []string) {
+	blockCommand := flag.NewFlagSet("block", flag.ExitOnError)
+	node := blockCommand.String("node", "", "Sets the name of the node to request data")
+	round := blockCommand.Uint64("round", 0, "Sets the round to request")
+
+	blockCommand.Parse(args)
+
+	if *node == "" {
+		fmt.Println("Missing option 'node'")
+		os.Exit(1)
+	}
+
+	// get algod API address and token
+	algodAddrBytes, err := ioutil.ReadFile("/tmp/prism/" + *node + "/algod.net")
+	algodAddr := strings.TrimSpace(string(algodAddrBytes))
+	algodAddr = "http://" + algodAddr
+	if err != nil {
+		fmt.Printf("Failed to read algod listening address: %v\n", err)
+		os.Exit(1)
+	}
+	algodTokenBytes, err := ioutil.ReadFile("/tmp/prism/" + *node + "/algod.token")
+	algodToken := strings.TrimSpace(string(algodTokenBytes))
+	if err != nil {
+		fmt.Printf("Failed to read algod token: %v\n", err)
+		os.Exit(1)
+	}
+
+	// get the block we are requesting
+	algodClient, err := algod.MakeClient(algodAddr, algodToken)
+	if err != nil {
+		fmt.Printf("Failed to initialize algod client: %v\n", err)
+		os.Exit(1)
+	}
+	block, err := algodClient.Block(*round)
+	if err != nil {
+		fmt.Printf("Failed to request block data: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("Block of round %v\n", block.Round)
+	fmt.Printf("Transactions:  %v\n", len(block.Transactions.Transactions))
+	fmt.Printf("Timestamp:     %v\n", block.Timestamp)
 }
 
 func perf(args []string) {
