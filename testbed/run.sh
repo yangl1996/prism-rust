@@ -1,16 +1,11 @@
 #!/bin/bash
 
-LAUNCH_TEMPLATE=lt-02226ebae5fbef5f3
+declare -a regions=("eu-north-1" "ap-south-1" "eu-west-3" "eu-west-2" "eu-west-1" "ap-northeast-2" "ap-northeast-1" "me-south-1" "ca-central-1" "ap-east-1" "ap-southeast-1" "ap-southeast-2" "eu-central-1" "us-east-1" "us-east-2" "us-west-1" "us-west-2")
+
+declare -a launch_template_ids=("lt-074165339867aa834" "lt-0e85ca27c485a13ce" "lt-0b77f96fe8631b010" "lt-0228fc0f23033acf5" "lt-00f97677e33e94706" "lt-0e380a9ccc0c4276a" "lt-0bd3ab2ea92f9c1f1" "lt-0d75559e93ea6b22d" "lt-094dfaed17f258c8d" "lt-0837a4136e9862849" "lt-0a154de3c17fb82ef" "lt-04153cb112577a813" "lt-009f97b35d4f1de3d" "lt-0d9bcde49095f337d" "lt-0e50969fb1afb62f2" "lt-0366c997befb2eee8" "lt-0a7e1261dc0dca417")
 
 function start_instances
 {
-	# $1: number of instances to start
-	if [ $# -ne 1 ]; then
-		tput setaf 1
-		echo "Required: number of instances to start"
-		tput sgr0
-		exit 1
-	fi
 	echo "Really?"
 	select yn in "Yes" "No"; do
 		case $yn in
@@ -18,14 +13,42 @@ function start_instances
 			No ) echo "Nothing happened."; exit ;;
 		esac
 	done
-	echo "Launching $1 AWS EC2 instances"
-	local instances=`aws ec2 run-instances --launch-template LaunchTemplateId=$LAUNCH_TEMPLATE --count $1 --query 'Instances[*].InstanceId' | jq -r '. | join(" ")'`
 	rm -f instances.txt
 	rm -f ~/.ssh/config.d/prism
+	input="config.txt"
+	while IFS= read -r line
+	do
+		reg="$(cut -d',' -f1 <<<"$line")"
+		instances="$(cut -d',' -f2 <<<"$line")"
+		region_flag=false
+		index=0
+		for region in "${regions[@]}" 
+		do
+			if [ "$reg" == "$region" ]; then
+				region_flag=true
+				break
+			fi
+			index=$((index+1))
+		done
+		if [ "$region_flag" = false ]; then
+			tput setaf 1
+			echo "Region must be one of the following:"
+			echo ${regions[*]}
+			tput sgr0
+			exit 1
+		fi
+		start_instances_single ${region} ${instances} ${launch_template_ids[$index]}
+	done < "$input"
+}
+
+function start_instances_single
+{
+	echo "Launching AWS EC2 $2 instances at $1"
+	local instances=`aws ec2 run-instances --launch-template LaunchTemplateId=$3 --region $1 --count $2 --query 'Instances[*].InstanceId' | jq -r '. | join(" ")'`
 	echo "Querying public IPs and writing to SSH config"
 	while [ 1 ]
 	do
-		rawdetails=`aws ec2 describe-instances --instance-ids $instances --query 'Reservations[*].Instances[*].{publicip:PublicIpAddress,id:InstanceId,privateip:PrivateIpAddress}[]'`
+		rawdetails=`aws ec2 describe-instances --instance-ids $instances --region $1 --query 'Reservations[*].Instances[*].{publicip:PublicIpAddress,id:InstanceId,privateip:PrivateIpAddress}[]'`
 		if echo $rawdetails | jq '.[].publicip' | grep null &> /dev/null ; then
 			echo "Waiting for public IP addresses to be assigned"
 			sleep 3
@@ -40,7 +63,7 @@ function start_instances
 		local instance=`echo $instancedetail | jq -r '.id'`
 		local ip=`echo $instancedetail | jq -r '.publicip'`
 		local lan=`echo $instancedetail | jq -r '.privateip'`
-		echo "$instance,$ip,$lan" >> instances.txt
+		echo "$instance,$ip,$lan,$1" >> instances.txt
 		echo "Host $instance" >> ~/.ssh/config.d/prism
 		echo "    Hostname $ip" >> ~/.ssh/config.d/prism
 		echo "    User ubuntu" >> ~/.ssh/config.d/prism
@@ -49,12 +72,10 @@ function start_instances
 		echo "    UserKnownHostsFile=/dev/null" >> ~/.ssh/config.d/prism
 		echo "" >> ~/.ssh/config.d/prism
 	done
-	echo "SSH config written, waiting for instances to initialize"
-	aws ec2 wait instance-running --instance-ids $instances
 	tput setaf 2
-	echo "Instances started"
+	echo "Instance started, SSH config written"
 	tput sgr0
-	curl -s --form-string "token=$PUSHOVER_TOKEN" --form-string "user=$PUSHOVER_USER" --form-string "title=EC2 Instances Launched" --form-string "message=$1 EC2 instances were just launched by user $(whoami)." https://api.pushover.net/1/messages.json &> /dev/null
+	curl -s --form-string "token=$PUSHOVER_TOKEN" --form-string "user=$PUSHOVER_USER" --form-string "title=EC2 Instances Launched" --form-string "message=$2 EC2 instances were just launched by user $(whoami)." https://api.pushover.net/1/messages.json &> /dev/null
 }
 
 function fix_ssh_config
@@ -97,21 +118,15 @@ function stop_instances
 		local id
 		local ip
 		local lan
-		IFS=',' read -r id ip lan <<< "$instance"
+		IFS=',' read -r id ip lan reg <<< "$instance"
 		instance_ids="$instance_ids $id"
+		aws ec2 terminate-instances --instance-ids $id --region $reg > log/aws_stop.log
 	done
 	echo "Terminating instances $instance_ids"
-	aws ec2 terminate-instances --instance-ids $instance_ids > log/aws_stop.log
 	tput setaf 2
 	echo "Instances terminated"
 	tput sgr0
 	curl -s --form-string "token=$PUSHOVER_TOKEN" --form-string "user=$PUSHOVER_USER" --form-string "title=EC2 Instances Stopped" --form-string "message=EC2 instances launched at $(date -r instances.txt) were just terminated by user $(whoami)." https://api.pushover.net/1/messages.json &> /dev/null
-}
-
-function count_instances
-{
-	result=`aws ec2 describe-instances --query 'Reservations[*].Instances[*].[InstanceId][][]' --filters Name=instance-state-name,Values=running Name=tag-key,Values=prism --output text`
-	echo "$(echo $result | wc -w | tr -d ' ')"
 }
 
 function build_prism
@@ -154,7 +169,8 @@ function prepare_payload
 	mkdir -p payload/common/scripts
 
 	echo "Download binaries"
-	scp prism:~/prism/target/release/prism-copy payload/common/binary/prism
+	#scp prism:~/prism/target/release/prism-copy payload/common/binary/prism
+	cp ../target/release/prism payload/common/binary/prism
 	cp scripts/start-prism.sh payload/common/scripts/start-prism.sh
 	cp scripts/stop-prism.sh payload/common/scripts/stop-prism.sh
 
@@ -194,16 +210,21 @@ function prepare_payload
 
 function sync_payload
 {
-	echo "Uploading payload to S3"
-	aws s3 rm --quiet --recursive s3://prism-binary/payload
-	aws s3 sync --quiet payload s3://prism-binary/payload
+	#echo "Uploading payload to S3"
+	#aws s3 rm --quiet --recursive s3://prism-binary/payload
+	#aws s3 sync --quiet payload s3://prism-binary/payload
 	echo "Downloading payload on each instance"
 	execute_on_all get_payload
 }
 
 function get_payload_single
 {
-	ssh $1 -- "rm -f /home/ubuntu/*.tar.gz && rm -rf /home/ubuntu/payload && wget https://prism-binary.s3.amazonaws.com/payload/$1.tar.gz -O local.tar.gz && wget https://prism-binary.s3.amazonaws.com/payload/common.tar.gz && mkdir -p /home/ubuntu/payload && tar xf local.tar.gz -C /home/ubuntu/payload && tar xf common.tar.gz -C /home/ubuntu/payload"
+	ssh $1 -- "rm -f /home/ubuntu/*.tar.gz && rm -rf /home/ubuntu/payload && mkdir -p /home/ubuntu/payload"
+	echo "Deleted payload"
+	rsync  payload/$1.tar.gz $1:/home/ubuntu/payload
+	rsync  payload/common.tar.gz $1:/home/ubuntu/payload
+	echo "Synced payload"
+    ssh $1 -- "mv /home/ubuntu/payload/$1.tar.gz /home/ubuntu/payload/local.tar.gz && tar xf /home/ubuntu/payload/local.tar.gz -C /home/ubuntu/payload && tar xf /home/ubuntu/payload/common.tar.gz -C /home/ubuntu/payload"
 }
 
 function install_perf_single
@@ -223,7 +244,7 @@ function unmount_tmpfs_single
 
 function mount_nvme_single
 {
-	ssh $1 -- 'diskname=$(lsblk | grep 372 | cut -f 1 -d " ") && sudo rm -rf /tmp/prism && sudo mkdir -m 777 /tmp/prism && sudo mkfs -F -t ext4 /dev/$diskname && sudo mount /dev/$diskname /tmp/prism && sudo chmod 777 /tmp/prism'
+	ssh $1 -- 'sudo rm -rf /tmp/prism && sudo mkdir -m 777 /tmp/prism && sudo mkfs -F -t ext4 /dev/nvme0n1 && sudo mount /dev/nvme0n1 /tmp/prism && sudo chmod 777 /tmp/prism'
 }
 
 function unmount_nvme_single
@@ -250,72 +271,15 @@ function join_by
 
 function add_traffic_shaping_single
 {
-	# the $2: latency in ms, $3: throughput in kbps
-	local common_ports='22 53 80 443'
-	local ports=`cat nodes.txt | grep $1 | cut -f 6-7 -d , | tr , ' '`
-	# calculate the bdp to determine the queue size
-	qlen=`expr $3 \* $2 / 1500 / 8`
-	# give some headroom to the queue size
-	qlen=`expr $qlen \* 2`
-
-	# deal with egress
-	# add the root qdisc to the egress network interface and default traffic to class 10
-	command="sudo tc qdisc add dev ens5 handle 10: root htb default 10 direct_qlen $qlen"
-	# add the class for traffic with immunity (will be filtered to this class below) 
-	command="$command && sudo tc class add dev ens5 parent 10: classid 10:1 htb rate 1000000kbit"
-	# add the class for the rest of the traffic (assigned to this class by default)
-	command="$command && sudo tc class add dev ens5 parent 10: classid 10:10 htb rate ${3}kbit"
-	# add netem qdisc under class 10:10 to emulate delay
-	command="$command && sudo tc qdisc add dev ens5 parent 10:10 handle 100: netem delay ${2}ms rate ${3}kbit limit $qlen"
-	# filter out traffic that we don't want to be impacted and put it under 10:1
-	for port in $ports; do
-		# packets from all API/visualization servers
-		command="$command && sudo tc filter add dev ens5 parent 10: protocol ip prio 1 u32 match ip sport $port 0xffff flowid 10:1"
-	done
-	for port in $common_ports; do
-		# normal, innocent traffic: incoming/outgoing SSH, DNS, HTTP(S)
-		command="$command && sudo tc filter add dev ens5 parent 10: protocol ip prio 1 u32 match ip sport $port 0xffff flowid 10:1"
-		command="$command && sudo tc filter add dev ens5 parent 10: protocol ip prio 1 u32 match ip dport $port 0xffff flowid 10:1"
-	done
-
-	# deal with ingress
-	# create an ifb device to which later we will install qdisc
-	command="$command && sudo modprobe ifb"
-	command="$command && sudo ifconfig ifb0 up"
-	# add the qdisc to the ingress interface and forward all traffic to ifb
-	command="$command && sudo tc qdisc add dev ens5 handle ffff: ingress"
-	command="$command && sudo tc filter add dev ens5 parent ffff: protocol all u32 match u32 0 0 action mirred egress redirect dev ifb0"
-	# install qdisc on the ifb device - now we can do w/ever we want on egress of ifb and it will apply to ingress
-	# add the root device, and default all traffic to class 10 (the class we will punish)
-	command="$command && sudo tc qdisc add dev ifb0 handle 10: root htb default 10 direct_qlen $qlen"
-	# add the class for traffic with immunity
-	command="$command && sudo tc class add dev ifb0 parent 10: classid 10:1 htb rate 1000000kbit"
-	# add the class that we will punish, all traffic has been sent by default to this class
-	command="$command && sudo tc class add dev ifb0 parent 10: classid 10:10 htb rate ${3}kbit"
-	# add netem qdisc under 10:10 to install rate limiter
-	command="$command && sudo tc qdisc add dev ifb0 parent 10:10 handle 100: netem rate ${3}kbit limit $qlen"
-	# filter out traffic that we don't want to be impacted
-	for port in $ports; do
-		# packets going to all API/visualization servers
-		command="$command && sudo tc filter add dev ifb0 parent 10: protocol ip prio 1 u32 match ip dport $port 0xffff flowid 10:1"
-	done
-	for port in $common_ports; do
-		# normal, innocent traffic: incoming/outgoing SSH, DNS, HTTP(S)
-		command="$command && sudo tc filter add dev ifb0 parent 10: protocol ip prio 1 u32 match ip sport $port 0xffff flowid 10:1"
-		command="$command && sudo tc filter add dev ifb0 parent 10: protocol ip prio 1 u32 match ip dport $port 0xffff flowid 10:1"
-	done
-	
-	ssh $1 -- "$command"
+	# the $2: latency, $3: throughput
+	local ports=`cat nodes.txt | grep $1 | cut -f 5 -d ,`
+	local port_list=`join_by ',' $ports`
+	ssh $1 -- "sudo /home/ubuntu/payload/binary/comcast --device=ens5 --latency=$2 --target-bw=$3 --target-port=$port_list"
 }
 
 function remove_traffic_shaping_single
 {
-	ssh $1 -- "sudo tc qdisc del dev ens5 root && sudo tc qdisc del dev ens5 ingress && sudo tc qdisc del dev ifb0 root"
-}
-
-function tune_tcp_single
-{
-	ssh $1 -- "sudo sysctl -w net.core.rmem_max=50331648 && sudo sysctl -w net.core.wmem_max=50331648 && sudo sysctl -w net.ipv4.tcp_wmem='10240 87380 50331648' && sudo sysctl -w net.ipv4.tcp_rmem='10240 87380 50331648'"
+	ssh $1 -- "sudo /home/ubuntu/payload/binary/comcast --device=ens5 --stop"
 }
 
 function execute_on_all
@@ -324,36 +288,21 @@ function execute_on_all
 	# ${@:2}: extra params of the function
 	local instances=`cat instances.txt`
 	local pids=""
-	echo "Executing $1"
-	tput sc
 	for instance in $instances ;
 	do
 		local id
 		local ip
 		local lan
 		IFS=',' read -r id ip lan <<< "$instance"
-		tput rc
-		tput el
-		echo -n "Executing $1 on $id"
+		echo "Executing $1 on $id"
 		$1_single $id ${@:2} &>log/${id}_${1}.log &
 		pids="$pids $!"
 	done
+	echo "Waiting for all jobs to finish"
 	for pid in $pids ;
 	do
-		tput rc
-		tput el
-		echo -n "Waiting for job $pid to finish"
-		if ! wait $pid; then
-			tput rc
-			tput el
-			tput setaf 1
-			echo "Task $pid failed"
-			tput sgr0
-			tput sc
-		fi
+		wait $pid
 	done
-	tput rc
-	tput el
 	tput setaf 2
 	echo "Finished"
 	tput sgr0
@@ -592,7 +541,7 @@ function show_demo
 	run_experiment
 	echo "Demo Started"
 	pkill grafana-rrd-server
-	~/go/bin/grafana-rrd-server -r data/ -s 1 &
+	#~/go/bin/grafana-rrd-server -r data/ -s 1 &
 	./telematics/telematics log -duration 7200 -grafana
 }
 
@@ -606,16 +555,12 @@ case "$1" in
 
 		  start-instances n     Start n EC2 instances
 		  stop-instances        Terminate EC2 instances
-		  count-instances       Count the running instances
 		  install-tools         Install tools
 		  fix-config            Fix SSH config
 		  mount-ramdisk         Mount RAM disk
 		  unmount-ramdisk       Unmount RAM disk
 		  mount-nvme            Mount NVME 
 		  unmount-nvme          Unmount NVME
-		  shape-traffic l b     Limit the throughput to b Kbps and add latency of l ms
-		  reset-traffic         Remove the traffic shaping filters
-		  tune-tcp              Set TCP parameters
 
 		Run Experiment
 
@@ -628,6 +573,8 @@ case "$1" in
 		  show-demo             Start the demo workflow
 		  stop-tx               Stop generating transactions
 		  stop-mine             Stop mining
+		  shape-traffic l b     Limit the throughput to b Kbps and add latency of l ms
+		  reset-traffic         Remove the traffic shaping filters
 
 		Collect Data
 		  
@@ -649,8 +596,6 @@ case "$1" in
 		start_instances $2 ;;
 	stop-instances)
 		stop_instances ;;
-	count-instances)
-		count_instances ;;
 	fix-config)
 		fix_ssh_config ;;
 	mount-ramdisk)
@@ -685,8 +630,6 @@ case "$1" in
 		execute_on_all add_traffic_shaping $2 $3 ;;
 	reset-traffic)
 		execute_on_all remove_traffic_shaping ;;
-	tune-tcp)
-		execute_on_all tune_tcp ;;
 	get-perf)
 		show_performance $2 ;;
 	show-vis)
