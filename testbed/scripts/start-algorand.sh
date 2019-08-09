@@ -10,6 +10,11 @@ mkdir -p /tmp/prism
 rm -rf /tmp/prism/node*
 cp -r /home/ubuntu/payload/algorand-nodedata/node* /tmp/prism
 
+export ALGOD_ASSEMBLYDEADLINE=$1
+export ALGOD_SMALLLAMBDA=$2
+export ALGOD_BIGLAMBDA=$3
+export ALGOD_BLOCKSIZE=$4
+
 echo "Launching Algorand nodes"
 for script in /home/ubuntu/payload/algorand-startup/*.sh; do
 	[ -f "$script" ] || continue
