@@ -316,7 +316,7 @@ function stop_prism_single
 
 function start_algorand_single
 {
-	ssh $1 -- "mkdir -p /home/ubuntu/log && bash /home/ubuntu/payload/scripts/start-algorand.sh $2 $3 $4 $5 &>/home/ubuntu/log/start.log"
+	ssh $1 -- "mkdir -p /home/ubuntu/log && bash /home/ubuntu/payload/scripts/start-algorand.sh $2 $3 $4 $5 $6 &>/home/ubuntu/log/start.log"
 }
 
 function stop_algorand_single
@@ -697,53 +697,53 @@ case "$1" in
 
 		Manage AWS EC2 Instances
 
-		  start-instances n      Start n EC2 instances
-		  stop-instances         Terminate EC2 instances
-		  count-instances        Count the running instances
-		  install-tools          Install tools
-		  fix-config             Fix SSH config
-		  mount-ramdisk          Mount RAM disk
-		  unmount-ramdisk        Unmount RAM disk
-		  mount-nvme             Mount NVME 
-		  unmount-nvme           Unmount NVME
-		  shape-traffic l b      Limit the throughput to b Kbps and add latency of l ms
-		  reset-traffic          Remove the traffic shaping filters
-		  tune-tcp               Set TCP parameters
+		  start-instances n          Start n EC2 instances
+		  stop-instances             Terminate EC2 instances
+		  count-instances            Count the running instances
+		  install-tools              Install tools
+		  fix-config                 Fix SSH config
+		  mount-ramdisk              Mount RAM disk
+		  unmount-ramdisk            Unmount RAM disk
+		  mount-nvme                 Mount NVME 
+		  unmount-nvme               Unmount NVME
+		  shape-traffic l b          Limit the throughput to b Kbps and add latency of l ms
+		  reset-traffic              Remove the traffic shaping filters
+		  tune-tcp                   Set TCP parameters
 
 		Run Experiment
 
-		  gen-payload topo       Generate scripts and configuration files
-		  build [nostrip]	 Build the Prism client binary
-		  sync-payload           Synchronize payload to remote servers
-		  start-prism            Start Prism nodes on each remote server
-		  stop-prism             Stop Prism nodes on each remote server
-		  run-exp                Run the experiment
-		  show-demo              Start the demo workflow
-		  stop-tx                Stop generating transactions
-		  stop-mine              Stop mining
+		  gen-payload topo           Generate scripts and configuration files
+		  build [nostrip]	     Build the Prism client binary
+		  sync-payload               Synchronize payload to remote servers
+		  start-prism                Start Prism nodes on each remote server
+		  stop-prism                 Stop Prism nodes on each remote server
+		  run-exp                    Run the experiment
+		  show-demo                  Start the demo workflow
+		  stop-tx                    Stop generating transactions
+		  stop-mine                  Stop mining
 
 		Run Algorand Experiment
 
-		  gen-algorand topo      Generate config and data folders for Algorand
-		  start-algorand d s b s Start Algorand nodes with deadline d, small/big lambda s/b, block size s
-		  stop-algorand          Stop Algorand nodes on each remote server
-		  start-algorand-tx r    Start Algorand transactions on each remote server at rate r txn/s
-		  stop-algorand-tx       Stop Algorand transactions on each remote server
+		  gen-algorand topo          Generate config and data folders for Algorand
+		  start-algorand d s b f s   Start Algorand nodes with deadline, small/big lambda, recovery freq, block size
+		  stop-algorand              Stop Algorand nodes on each remote server
+		  start-algorand-tx r        Start Algorand transactions on each remote server at rate r txn/s
+		  stop-algorand-tx           Stop Algorand transactions on each remote server
 
 		Collect Data
 		  
-		  get-perf               Get performance data
-		  show-vis               Open the visualization page for the given node
-		  profile node f d       Capture stack trace for node with frequency f and duration d
-		  flamegraph node        Generate and download flamegraph for node
-		  open-dashboard         Open the performance dashboard
+		  get-perf                   Get performance data
+		  show-vis                   Open the visualization page for the given node
+		  profile node f d           Capture stack trace for node with frequency f and duration d
+		  flamegraph node            Generate and download flamegraph for node
+		  open-dashboard             Open the performance dashboard
 
 		Connect to Testbed
 
-		  run-all cmd            Run command on all instances
-		  ssh i                  SSH to the i-th server (1-based index)
-		  scp i src dst          Copy file from remote
-		  read-log node          Read the log of the given node
+		  run-all cmd                Run command on all instances
+		  ssh i                      SSH to the i-th server (1-based index)
+		  scp i src dst              Copy file from remote
+		  read-log node              Read the log of the given node
 		EOF
 		;;
 	start-instances)
