@@ -11,6 +11,7 @@ log
 instances.txt
 nodes.txt
 experiment.txt
+config.txt
 payload
 
 # Created by https://www.gitignore.io/api/vim,macos,linux,python

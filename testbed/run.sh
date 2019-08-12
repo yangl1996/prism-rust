@@ -2,7 +2,7 @@
 
 declare -a regions=("eu-north-1" "ap-south-1" "eu-west-3" "eu-west-2" "eu-west-1" "ap-northeast-2" "ap-northeast-1" "me-south-1" "ca-central-1" "ap-east-1" "ap-southeast-1" "ap-southeast-2" "eu-central-1" "us-east-1" "us-east-2" "us-west-1" "us-west-2")
 
-declare -a launch_template_ids=("lt-074165339867aa834" "lt-0e85ca27c485a13ce" "lt-0b77f96fe8631b010" "lt-0228fc0f23033acf5" "lt-00f97677e33e94706" "lt-0e380a9ccc0c4276a" "lt-0bd3ab2ea92f9c1f1" "lt-0d75559e93ea6b22d" "lt-094dfaed17f258c8d" "lt-0837a4136e9862849" "lt-0a154de3c17fb82ef" "lt-04153cb112577a813" "lt-009f97b35d4f1de3d" "lt-0d9bcde49095f337d" "lt-0e50969fb1afb62f2" "lt-0366c997befb2eee8" "lt-0a7e1261dc0dca417")
+declare -a launch_template_ids=("lt-074165339867aa834" "lt-0e85ca27c485a13ce" "lt-0b77f96fe8631b010" "lt-0228fc0f23033acf5" "lt-00f97677e33e94706" "lt-0e380a9ccc0c4276a" "lt-0bd3ab2ea92f9c1f1" "lt-0d75559e93ea6b22d" "lt-094dfaed17f258c8d" "lt-0837a4136e9862849" "lt-0a154de3c17fb82ef" "lt-04153cb112577a813" "lt-009f97b35d4f1de3d" "lt-0d9bcde49095f337d" "lt-0e50969fb1afb62f2" "lt-07c210f12b766840c" "lt-0a7e1261dc0dca417")
 
 function start_instances
 {

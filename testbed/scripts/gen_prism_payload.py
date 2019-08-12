@@ -69,7 +69,7 @@ for name, node in nodes.items():
     for c in topo['connections']:
         if c['from'] == name:
             dst = c['to']
-            peers.append('-c {}:{}'.format(nodes[dst]['ip'], nodes[dst]['p2p_port']))
+            peers.append('-c {}:{}'.format(nodes[dst]['pubfacing_ip'], nodes[dst]['p2p_port']))
     peer_opt = ' '.join(peers)
     startup_str = template.format(
             node_name=name, ip=node['ip'], api_port=node['api_port'],
