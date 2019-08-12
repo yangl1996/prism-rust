@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 	"io/ioutil"
 	"net/http"
@@ -80,6 +81,13 @@ func block(args []string) {
 	fmt.Printf("Timestamp:     %v\n", block.Timestamp)
 }
 
+type perfSnapshot struct {
+	time int
+	totalTx int
+	round int
+	mempool int
+}
+
 func perf(args []string) {
 	perfCommand := flag.NewFlagSet("perf", flag.ExitOnError)
 	node := perfCommand.String("node", "", "Sets the name of the node to measure performance")
@@ -111,6 +119,25 @@ func perf(args []string) {
 	totalTxRe := regexp.MustCompile(`algod_ledger_transactions_total\{\} (\d+)`)
 	roundRe := regexp.MustCompile(`algod_ledger_round\{\} (\d+)`)
 	txPoolRe := regexp.MustCompile(`algod_tx_pool_count\{\} (\d+)`)
+
+	// start goroutine to carry out the experiment
+	expStateUpdate := make(chan bool)
+	var expStopAlarm <-chan time.Time
+	expStarted := false
+	expStopped := false
+	var expStartPerf perfSnapshot
+	var expStopPerf perfSnapshot
+	exec.Command("stty", "-F", "/dev/tty", "cbreak", "min", "1").Run()
+	exec.Command("stty", "-F", "/dev/tty", "-echo").Run()
+	go func() {
+		var b []byte = make([]byte, 1)
+		for {
+			os.Stdin.Read(b)
+			if string(b) == "x" {
+				expStateUpdate <- true
+			}
+		}
+	}()
 
 	// start querying metrics
 	client := &http.Client{}
@@ -148,14 +175,54 @@ func perf(args []string) {
 			continue
 		}
 		txPool, _ := strconv.Atoi(txPoolMatch[1])
+		duration := int(now.Sub(start).Seconds())
+
+		select {
+		case <-expStateUpdate:
+			expStarted = true
+			expStopped = false
+			expStartPerf = perfSnapshot {
+				time: duration,
+				totalTx: totalTx,
+				round: round,
+				mempool: txPool,
+			}
+			expStopAlarm = time.After(300 * time.Second)
+		case <-expStopAlarm:
+			expStarted = true
+			expStopped = true
+			expStopPerf = perfSnapshot {
+				time: duration,
+				totalTx: totalTx,
+				round: round,
+				mempool: txPool,
+			}
+		default:
+		}
 
 		tm.Clear()
 		tm.MoveCursor(1, 1)
-		duration := int(now.Sub(start).Seconds())
 		tm.Printf("Time since start - %v sec\n", duration)
 		tm.Printf("Total Tx         - %v\n", totalTx)
 		tm.Printf("Round            - %v\n", round)
 		tm.Printf("Memory Pool      - %v\n", txPool)
+		tm.Printf("\n")
+		if expStopped {
+			if expStarted {
+				dur := expStopPerf.time - expStartPerf.time
+				tm.Printf("Experiment Result\n")
+				tm.Printf("Time         %7v\n", dur)
+				tm.Printf("Blk Itvl     %7.7g\n", float64(dur) / float64(expStopPerf.round - expStartPerf.round))
+				tm.Printf("Thruput      %7.7g\n", float64(expStopPerf.totalTx - expStartPerf.totalTx) / float64(dur))
+				tm.Printf("Blk Size     %7.7g\n", float64(expStopPerf.totalTx - expStartPerf.totalTx) / float64(expStopPerf.round - expStartPerf.round))
+			}
+		} else {
+			if !expStarted {
+				tm.Printf("Hit x to start a recording\n")
+			} else {
+				tm.Printf("Experiment running. Remaining time: %v seconds\n", 300 - duration + expStartPerf.time)
+			}
+		}
 		tm.Flush()
 	}
 }
