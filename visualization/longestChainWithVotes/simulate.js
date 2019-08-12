@@ -82,6 +82,7 @@ let addVotingChains = () => {
     let linkGroup = chainsGroup.append('g')
                                .attr('id', 'links'+chain)
                                 .style('opacity', scale(chain))
+    drawVotingChain(chain) 
     chain++
     x+=votingChainScreenWidth/(numChainsToDisplay+1)
   }
@@ -93,18 +94,9 @@ let addVotingChains = () => {
     votingBlockId+=1
     chain++
   }
-  chain = 0
-  let interval = d3.interval(() => { 
-    chainsData[chain].drawn = true
-    drawVotingChain(chain) 
-    chain++ 
-    if(chain==numChainsToDisplay) interval.stop()
-  }, t)
-
   // Mine on voting chains
   mineVotingChains = d3.interval(() => {
     const randomChain = Math.floor(Math.random() * Math.floor(numChains))
-    if(!chainsData[randomChain].drawn) return
     const sourceNodeId = Math.floor(Math.random() * Math.floor(nodes.length))
     const parentId = chainsData[randomChain].blocks[chainsData[randomChain].blocks.length-1].blockId
     mineVotingBlock(randomChain, votingBlockId, sourceNodeId, parentId)
