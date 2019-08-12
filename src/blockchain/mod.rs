@@ -430,6 +430,7 @@ impl BlockChain {
         let proposer_ledger_order_cf = self.db.cf_handle(PROPOSER_LEDGER_ORDER_CF).unwrap();
         let proposer_ref_neighbor_cf = self.db.cf_handle(PROPOSER_REF_NEIGHBOR_CF).unwrap();
         let transaction_ref_neighbor_cf = self.db.cf_handle(TRANSACTION_REF_NEIGHBOR_CF).unwrap();
+        let parent_neighbor_cf = self.db.cf_handle(PARENT_NEIGHBOR_CF).unwrap();
 
         macro_rules! get_value {
             ($cf:expr, $key:expr) => {{
@@ -440,53 +441,6 @@ impl BlockChain {
             }};
         }
 
-        // apply the vote diff while tracking the votes of which proposer levels are affected
-        let mut wb = WriteBatch::default();
-        macro_rules! merge_value {
-            ($cf:expr, $key:expr, $value:expr) => {{
-                wb.merge_cf($cf, serialize(&$key).unwrap(), serialize(&$value).unwrap())?;
-            }};
-        }
-
-        let mut voter_ledger_tips = self.voter_ledger_tips.lock().unwrap();
-        let mut affected: BTreeSet<u64> = BTreeSet::new();
-
-        for chain_num in 0..NUM_VOTER_CHAINS {
-            // get the diff of votes on this voter chain
-            let from = voter_ledger_tips[chain_num as usize];
-            let voter_best = self.voter_best[chain_num as usize].lock().unwrap();
-            let to = voter_best.0;
-            drop(voter_best);
-            voter_ledger_tips[chain_num as usize] = to;
-
-            let (added, removed) = self.vote_diff(from, to)?;
-
-            // apply the vote diff on the proposer main chain vote cf
-            for vote in &removed {
-                merge_value!(
-                    proposer_node_vote_cf,
-                    vote.0,
-                    (false, chain_num as u16, vote.1)
-                );
-                let proposer_level: u64 = get_value!(proposer_node_level_cf, vote.0).unwrap();
-                affected.insert(proposer_level);
-            }
-
-            for vote in &added {
-                merge_value!(
-                    proposer_node_vote_cf,
-                    vote.0,
-                    (true, chain_num as u16, vote.1)
-                );
-                let proposer_level: u64 = get_value!(proposer_node_level_cf, vote.0).unwrap();
-                affected.insert(proposer_level);
-            }
-        }
-        drop(voter_ledger_tips);
-        // commit the votes into the database
-        self.db.write(wb)?;
-
-        // recompute the leader of each level that was affected
         let mut wb = WriteBatch::default();
         macro_rules! merge_value {
             ($cf:expr, $key:expr, $value:expr) => {{
@@ -503,7 +457,28 @@ impl BlockChain {
                 wb.delete_cf($cf, serialize(&$key).unwrap())?;
             }};
         }
+
         let mut change_begin: Option<u64> = None;
+
+        let proposer_best = self.proposer_best_level.lock().unwrap();
+        let proposer_best_level: u64 = *proposer_best;
+        drop(proposer_best);
+        if proposer_best_level >= KAPPA {
+            let mut level = proposer_best_level - KAPPA;
+            let proposer_blocks: Vec<H256> = get_value!(proposer_tree_level_cf, level).unwrap();
+            let mut new_leader = proposer_blocks[0];
+            let mut existing_leader: Option<H256> = get_value!(proposer_leader_sequence_cf, level);
+            if Some(new_leader) != existing_leader {
+                while Some(new_leader) != existing_leader {
+                    put_value!(proposer_leader_sequence_cf, level, new_leader);
+                    new_leader = get_value!(parent_neighbor_cf, new_leader).unwrap();
+                    level -= 1;
+                    existing_leader = get_value!(proposer_leader_sequence_cf, level);
+                }
+                change_begin = Some(level+1);
+            }
+        }
+        /*
         for level in &affected {
             let proposer_blocks: Vec<H256> =
                 get_value!(proposer_tree_level_cf, *level as u64).unwrap();
@@ -596,6 +571,7 @@ impl BlockChain {
                 };
             }
         }
+*/
         // commit the new leaders into the database
         self.db.write(wb)?;
 
