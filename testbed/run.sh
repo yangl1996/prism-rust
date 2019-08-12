@@ -791,7 +791,7 @@ case "$1" in
 	gen-algorand)
 		prepare_algorand_payload $2 ;;
 	start-algorand)
-		execute_on_all start_algorand $2 $3 $4 $5 ;;
+		execute_on_all start_algorand $2 $3 $4 $5 $6;;
 	stop-algorand)
 		execute_on_all stop_algorand ;;
 	start-algorand-tx)
