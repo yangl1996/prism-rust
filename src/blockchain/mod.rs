@@ -463,10 +463,15 @@ impl BlockChain {
         let proposer_best = self.proposer_best_level.lock().unwrap();
         let proposer_best_level: u64 = *proposer_best;
         drop(proposer_best);
+        // if level is more than parameter K, we may have a change_begin in leaders
         if proposer_best_level >= KAPPA {
-            let mut level = proposer_best_level - KAPPA;
-            let proposer_blocks: Vec<H256> = get_value!(proposer_tree_level_cf, level).unwrap();
+            let proposer_blocks: Vec<H256> = get_value!(proposer_tree_level_cf, proposer_best_level).unwrap();
             let mut new_leader = proposer_blocks[0];
+            // K deep from best proposer should be the ledger tip
+            for _ in 0..KAPPA {
+                new_leader = get_value!(parent_neighbor_cf, new_leader).unwrap();
+            }
+            let mut level = proposer_best_level - KAPPA;
             let mut existing_leader: Option<H256> = get_value!(proposer_leader_sequence_cf, level);
             if Some(new_leader) != existing_leader {
                 while Some(new_leader) != existing_leader {
