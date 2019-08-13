@@ -61,7 +61,7 @@ for name, node in nodes.items():
             "NetAddress": "{}:{}".format(node['ip'], node['p2p_port']),
             "NodeExporterListenAddress": "{}:{}".format(node['ip'], node['vis_port']),
             "DNSBootstrapID": "",
-            "TxPoolSize": 640000
+            "TxPoolSize": 320000
             }
     with open('payload/{}/algorand-nodedata/{}/config.json'.format(node['host'], name), 'w') as f:
         json.dump(config, f, sort_keys=True, indent=4)
