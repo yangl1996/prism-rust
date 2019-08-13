@@ -10,10 +10,10 @@ let drawLongestChain = () => {
            .attr('id', d => 'longestChainBlock'+d.id)
            .attr('class', 'longestChainBlock')
            .attr('transform', d => {
-               const node = d.sourceNodeId!==null ? nodes.find(node => node.nodeId===d.sourceNodeId) : undefined
-               const x = node ? projection([node.longitude, node.latitude])[0] - width/3 + worldMapShift: d.x-longestChainBlockSize/2 
-               const y = node ? projection([node.longitude, node.latitude])[1]+(height-0.6*height) : d.y
-               return `translate(${x}, ${y})`
+              const node = d.sourceNodeId!==null ? globalNodesData.find(node => node.nodeId===d.sourceNodeId) : undefined
+              const x = node ? node.x - width/3: d.x-longestChainBlockSize/2
+              const y = node ? node.y : d.y
+              return `translate(${x}, ${y})`
            })
 
     longestChainBlockEnter.append('rect')
@@ -102,7 +102,7 @@ let scrollLongestChain = () => {
   // Check if last block is below appropriate height
   let lowestBlock = longestChainBlocks[longestChainBlocks.length-1]
   let scrolled = false
-  while(lowestBlock.y-2*longestChainBlockSize>height-0.5*height){
+  while(lowestBlock.y-2*longestChainBlockSize>height-0.6*height){
     scrolled = true
   // Move proposer blocks by -2*longestChainBlockSize
   let voted = false

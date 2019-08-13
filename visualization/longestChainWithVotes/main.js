@@ -25,13 +25,15 @@ let svgTransform = d3.select('body').append('svg')
     .attr('height', height)
     .attr('id', 'svgTransform')
     .style('transform', M)
-
+let scale = 1.5
+if(height>1000)
+  scale = 1.8
 // World Map Screen
-let worldMapScreenWidth = 0.7*width, worldMapScreenHeight = 0.6*height
+let worldMapScreenWidth = 0.7*width, worldMapScreenHeight = 0.08*height
 let worldMapScreen = svgTransform.append('g')
               .attr('id', 'worldMap')
+              .attr('transform', `translate(-350, ${worldMapScreenHeight})scale(${scale})`)
 
-worldMapScreen.attr('transform', `translate(-400, 0)scale(1.5)`)
 
 const nodeRadius = 3
 let nodes = []
