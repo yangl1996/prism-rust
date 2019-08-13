@@ -78,13 +78,13 @@ const drawVotingChain = (idx, votes) => {
          .attr('x', d => {
            // Voting block's x coordinate is equivalent to chain's x coordinate
            d.x = chainsData[idx].x
-           return d.sourceNodeLocation ? d.sourceNodeLocation[0]-0.6*width + worldMapShift : d.x - votingBlockSize/2
+           return d.sourceNodeLocation ? d.sourceNodeLocation[0] - 0.6*width : d.x - votingBlockSize/2
           })
          .attr('y', d => {
            // Voting block's y coordinate is 2 below it's parent.
            // If parent does not exist, the block should appear at the top of the screen.
            d.y = d.parent ? d.parent.y+2*votingBlockSize : votingBlockSize/2
-           return d.sourceNodeLocation ? d.sourceNodeLocation[1]+(height-0.6*height) : d.y
+           return d.sourceNodeLocation ? d.sourceNodeLocation[1] : d.y
          })
          .transition()
          .duration(3*t)
