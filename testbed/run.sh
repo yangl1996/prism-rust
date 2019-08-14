@@ -184,6 +184,7 @@ function stop_instances
 	echo "Instances terminated"
 	tput sgr0
 	curl -s --form-string "token=$PUSHOVER_TOKEN" --form-string "user=$PUSHOVER_USER" --form-string "title=EC2 Instances Stopped" --form-string "message=EC2 instances launched at $(date -r instances.txt) were just terminated by user $(whoami)." https://api.pushover.net/1/messages.json &> /dev/null
+	pkill python3.7
 }
 
 function build_prism
@@ -595,6 +596,10 @@ function run_experiment
 
 function show_demo
 {
+	sed -i "s/host:[^,]*/host: 'ec2-54-183-248-97.us-west-1.compute.amazonaws.com'/g" ../visualization/prism/relay_server.js
+	sed -i "s/ws:\/\/[^:]*/ws:\/\/ec2-54-183-248-97.us-west-1.compute.amazonaws.com/g" ../visualization/prism/client.js
+	node ../visualization/prism/relay_server.js > /dev/null 2>&1 &
+	python3.7 -m http.server 5000 --directory ../visualization/prism > /dev/null 2>&1 &
 	run_experiment
 	echo "Demo Started"
 	pkill grafana-rrd-server
