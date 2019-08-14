@@ -124,9 +124,12 @@ func perf(args []string) {
 	expStateUpdate := make(chan bool)
 	var expStopAlarm <-chan time.Time
 	expStarted := false
+	expRunning := false
 	expStopped := false
+	expStartTime := 0
 	var expStartPerf perfSnapshot
 	var expStopPerf perfSnapshot
+	var lastSnapshot perfSnapshot
 	exec.Command("stty", "-F", "/dev/tty", "cbreak", "min", "1").Run()
 	exec.Command("stty", "-F", "/dev/tty", "-echo").Run()
 	go func() {
@@ -180,8 +183,10 @@ func perf(args []string) {
 		select {
 		case <-expStateUpdate:
 			expStarted = true
+			expRunning = false
 			expStopped = false
-			expStartPerf = perfSnapshot {
+			expStartTime = duration
+			lastSnapshot = perfSnapshot {
 				time: duration,
 				totalTx: totalTx,
 				round: round,
@@ -190,14 +195,41 @@ func perf(args []string) {
 			expStopAlarm = time.After(300 * time.Second)
 		case <-expStopAlarm:
 			expStarted = true
+			expRunning = false
 			expStopped = true
-			expStopPerf = perfSnapshot {
-				time: duration,
-				totalTx: totalTx,
-				round: round,
-				mempool: txPool,
-			}
 		default:
+		}
+
+		if expStarted && (!expStopped) {
+			if !expRunning {
+				// if the round just bumped
+				if lastSnapshot.round != round {
+					expRunning = true
+					expStartPerf = perfSnapshot {
+						time: lastSnapshot.time,
+						totalTx: lastSnapshot.totalTx,
+						round: lastSnapshot.round,
+						mempool: lastSnapshot.mempool,
+					}
+				}
+			} else {
+				// if the round just bumped
+				if lastSnapshot.round != round {
+					expStopPerf = perfSnapshot {
+						time: lastSnapshot.time,
+						totalTx: lastSnapshot.totalTx,
+						round: lastSnapshot.round,
+						mempool: lastSnapshot.mempool,
+					}
+				}
+			}
+		}
+
+		lastSnapshot = perfSnapshot {
+			time: duration,
+			totalTx: totalTx,
+			round: round,
+			mempool: txPool,
 		}
 
 		tm.Clear()
@@ -220,7 +252,7 @@ func perf(args []string) {
 			if !expStarted {
 				tm.Printf("Hit x to start a recording\n")
 			} else {
-				tm.Printf("Experiment running. Remaining time: %v seconds\n", 300 - duration + expStartPerf.time)
+				tm.Printf("Experiment running. Remaining time: %v seconds\n", 300 - duration + expStartTime)
 			}
 		}
 		tm.Flush()
