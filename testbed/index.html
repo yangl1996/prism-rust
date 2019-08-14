@@ -1,0 +1,16 @@
+<!doctype html>
+<html>
+<head>
+</head>
+<body>
+    <iframe id='visualization' src='http://ec2-54-183-248-97.us-west-1.compute.amazonaws.com:5000' width='100%' frameborder='0'></iframe>
+    <iframe id='sharding' src='http://ec2-54-183-248-97.us-west-1.compute.amazonaws.com:3000/dashboard/script/sharding.js?orgId=1&nodes=20&refresh=1s&from=1565728286897&to=1565728586897&kiosk' width='100%' frameborder='0'></iframe>
+    <iframe id='prism_sharding' src='http://ec2-54-183-248-97.us-west-1.compute.amazonaws.com:3000/dashboard/script/prism_sharding.js?orgId=1&nodes=20&refresh=1s&kiosk' width='100%' frameborder='0'></iframe>
+</body>
+<script>
+  var width = document.getElementById('visualization').clientWidth
+  document.getElementById('visualization').height = width/1.7
+  document.getElementById('prism_sharding').height = width/2
+  document.getElementById('sharding').height = width/2
+</script>
+</html>

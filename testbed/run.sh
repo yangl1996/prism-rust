@@ -602,6 +602,7 @@ function show_demo
 	python3.7 -m http.server 5000 --directory ../visualization/prism > /dev/null 2>&1 &
 	run_experiment
 	echo "Demo Started"
+	python3.7 -m http.server 3001 > /dev/null 2>&1 &
 	pkill grafana-rrd-server
 	#~/go/bin/grafana-rrd-server -r data/ -s 1 &
 	./telematics/telematics log -duration 7200 -grafana
