@@ -1,7 +1,7 @@
 use crate::crypto::hash::H256;
 
 // Network parameters
-pub const NETWORK_DELAY: f32 = 2.0; // the expected block propagation delay (in seconds)
+pub const NETWORK_DELAY: f32 = 3.5; // the expected block propagation delay (in seconds)
 
 // Design parameters
 pub const NUM_VOTER_CHAINS: u16 = 100 as u16; // more chains means better latency
