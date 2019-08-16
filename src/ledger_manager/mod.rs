@@ -13,9 +13,6 @@ use crossbeam::channel;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::thread;
-use std::collections::{HashSet, HashMap};
-use std::time::SystemTime;
-//use log::{info};
 
 pub struct LedgerManager {
     blockdb: Arc<BlockDatabase>,
@@ -204,8 +201,6 @@ fn update_transaction_sequence(
     chain: &BlockChain,
 ) -> (Vec<(Transaction, H256)>, Vec<(Transaction, H256)>) {
     let diff = chain.update_ledger().unwrap();
-//    let cur_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap();
-//    info!("Time Update Ledger: {}. Len {}", cur_time.as_millis(), diff.0.len());
     PERFORMANCE_COUNTER.record_deconfirm_transaction_blocks(diff.1.len());
 
     // gather the transaction diff
