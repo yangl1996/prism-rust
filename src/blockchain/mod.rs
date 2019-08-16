@@ -10,9 +10,9 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::mem;
 use std::sync::Mutex;
 use std::time;
-use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 use statrs::distribution::{Poisson, Discrete, Univariate};
 use std::cmp;
+use std::ops::Range;
 
 // Column family names for node/chain metadata
 const PROPOSER_NODE_LEVEL_CF: &str = "PROPOSER_NODE_LEVEL"; // hash to node level (u64)
@@ -452,7 +452,7 @@ impl BlockChain {
         }
 
         let mut voter_ledger_tips = self.voter_ledger_tips.lock().unwrap();
-        let mut affected: BTreeSet<u64> = BTreeSet::new();
+        let mut affected_range: Range<u64> = Range { start: std::u64::MAX, end: std::u64::MIN };
 
         for chain_num in 0..NUM_VOTER_CHAINS {
             // get the diff of votes on this voter chain
@@ -472,7 +472,12 @@ impl BlockChain {
                     (false, chain_num as u16, vote.1)
                 );
                 let proposer_level: u64 = get_value!(proposer_node_level_cf, vote.0).unwrap();
-                affected.insert(proposer_level);
+                if proposer_level < affected_range.start {
+                    affected_range.start = proposer_level;
+                }
+                if proposer_level >= affected_range.end {
+                    affected_range.end = proposer_level + 1;
+                }
             }
 
             for vote in &added {
@@ -482,7 +487,12 @@ impl BlockChain {
                     (true, chain_num as u16, vote.1)
                 );
                 let proposer_level: u64 = get_value!(proposer_node_level_cf, vote.0).unwrap();
-                affected.insert(proposer_level);
+                if proposer_level < affected_range.start {
+                    affected_range.start = proposer_level;
+                }
+                if proposer_level >= affected_range.end {
+                    affected_range.end = proposer_level + 1;
+                }
             }
         }
         drop(voter_ledger_tips);
@@ -507,29 +517,25 @@ impl BlockChain {
             }};
         }
 
-        // the affected values are always continous [a,b]
-        //adding levels from ledger_tip+1 (c) to affected to make it [c,b]
-        if !affected.is_empty()  {
-            let mut affected_iter = affected.iter();
-            let first_affected_level = *affected_iter.next().unwrap();
-            drop(affected_iter);
-            let proposer_ledger_tip = self.proposer_ledger_tip.lock().unwrap();
-            let proposer_ledger_tip: u64 = *proposer_ledger_tip;
-
-            for l in (proposer_ledger_tip+1)..first_affected_level {
-                affected.insert(l);
+        // we will recompute the leader starting from min. affected level or ledger tip + 1,
+        // whichever is smaller. so make min. affected level the smaller of the two
+        if affected_range.start < affected_range.end {
+            let proposer_ledger_tip_lock = self.proposer_ledger_tip.lock().unwrap();
+            let proposer_ledger_tip: u64 = *proposer_ledger_tip_lock;
+            drop(proposer_ledger_tip_lock);
+            if proposer_ledger_tip + 1 < affected_range.start {
+                affected_range.start = proposer_ledger_tip + 1;
             }
-            info!("Proposer ledger tip {:?}. Affected {:?}", proposer_ledger_tip, affected);
         }
 
-
+        // start actually recomputing the leaders
         let mut change_begin: Option<u64> = None;
 
-        for level in &affected {
+        for level in affected_range {
             let proposer_blocks: Vec<H256> =
-                get_value!(proposer_tree_level_cf, *level as u64).unwrap();
+                get_value!(proposer_tree_level_cf, level as u64).unwrap();
             let existing_leader: Option<H256> =
-                get_value!(proposer_leader_sequence_cf, *level as u64);
+                get_value!(proposer_leader_sequence_cf, level as u64);
             // compute the new leader of this level
             // we use the confirmation policy from https://arxiv.org/abs/1810.08092
             let new_leader: Option<H256> = {
@@ -662,11 +668,11 @@ impl BlockChain {
                 info!("Confirming block at level {}", level);
                 // mark it's the beginning of the change
                 if change_begin.is_none() {
-                    change_begin = Some(*level);
+                    change_begin = Some(level);
                 }
                 match new_leader {
-                    None => delete_value!(proposer_leader_sequence_cf, *level as u64),
-                    Some(new) => put_value!(proposer_leader_sequence_cf, *level as u64, new),
+                    None => delete_value!(proposer_leader_sequence_cf, level as u64),
+                    Some(new) => put_value!(proposer_leader_sequence_cf, level as u64, new),
                 };
             }
         }
