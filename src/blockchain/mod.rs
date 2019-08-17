@@ -541,104 +541,91 @@ impl BlockChain {
             let new_leader: Option<H256> = {
                 let mut new_leader: Option<H256> = None;
 
-                // TODO: consider whether to use reference here
-                let mut votes_with_depth: HashMap<&H256, Vec<(u16, u64)>> = HashMap::new(); //chain number and vote depth casted on the proposer block
+                // collect the depth of each vote on each proposer block
+                let mut votes_depth: HashMap<&H256, Vec<u64>> = HashMap::new(); // chain number and vote depth casted on the proposer block
                 let mut total_vote_count: u16 = 0;
                 let mut total_vote_depth: u64 = 0;
 
-                //for each proposer block on 'level' get votes along with their depth
-                for p_block in &proposer_blocks {
-                    let p_votes: Vec<(u16, u64)> = match get_value!(proposer_node_vote_cf, p_block)
+                for block in &proposer_blocks {
+                    let votes: Vec<(u16, u64)> = match get_value!(proposer_node_vote_cf, block)
                     {
                         None => vec![],
                         Some(d) => d,
                     };
-                    let mut p_votes_with_depth: Vec<(u16, u64)> = vec![];
-                    for (chain_num, vote_level) in &p_votes {
+                    let mut vote_depth: Vec<u64> = vec![];
+                    for (chain_num, vote_level) in &votes {
                         // TODO: cache the voter chain best levels
                         let voter_best = self.voter_best[*chain_num as usize].lock().unwrap();
-                        let voter_chain_length = voter_best.1;
+                        let this_depth = voter_best.1 - vote_level + 1;
                         drop(voter_best);
-                        let vote_depth = voter_chain_length - vote_level+1;
-                        total_vote_depth += vote_depth;
-                        p_votes_with_depth.push((*chain_num as u16, vote_depth));
+                        total_vote_depth += this_depth;
+                        total_vote_count += 1;
+                        vote_depth.push(this_depth);
                     }
-                    total_vote_count += p_votes_with_depth.len() as u16;
-                    votes_with_depth.insert(p_block, p_votes_with_depth);
+                    votes_depth.insert(block, vote_depth);
                 }
 
                 // For debugging purpose only. This is very important for security.
                 // TODO: remove this check in the future
                 if NUM_VOTER_CHAINS < total_vote_count {
-                    for p_block in &proposer_blocks {
-                        let votes: Vec<(u16, u64)> = match self
-                            .db
-                            .get_cf(proposer_node_vote_cf, serialize(&p_block).unwrap())?
-                        {
-                            None => vec![],
-                            Some(d) => deserialize(&d).unwrap(),
-                        };
-                        print!("block: {}, votes: {}; ", p_block, votes.len());
-                        for vote in votes.iter() {
-                            print!(" ({}, {}) ", vote.0, vote.1);
-                        }
-                    }
                     panic!("NUM_VOTER_CHAINS: {} total_votes:{}", NUM_VOTER_CHAINS, total_vote_count)
                 }
 
-
-                if total_vote_count > NUM_VOTER_CHAINS*3 / 5 { // no point in going further if half the votes are not cast
-                    //calculate average of depth of the votes
+                // no point in going further if less than 3/5 votes are cast
+                if total_vote_count > NUM_VOTER_CHAINS * 3 / 5 {
+                    // calculate average of depth of the votes
                     let avg_vote_depth = total_vote_depth as f32 / total_vote_count as f32;
-                    let adversary_expected_vote_depth = avg_vote_depth*2.0*ADVERSARY_MINING_POWER; //expected voter depth of an adversary
+                    // expected voter depth of an adversary
+                    // TODO: note that we are assuming the security to be 50% here (hence the *2.0
+                    // operation (which is actually "/50%").
+                    let adversary_expected_vote_depth = avg_vote_depth * 2.0 * ADVERSARY_MINING_POWER; 
                     let poisson = Poisson::new(adversary_expected_vote_depth as f64).unwrap();
 
-                    //for each block calculate the lower bound on the number of votes.
+                    // for each block calculate the lower bound on the number of votes
                     let mut votes_lcb: HashMap<&H256, f32> = HashMap::new();
                     let mut total_votes_lcb: f32 = 0.0;
                     let mut max_vote_lcb: f32 = 0.0;
 
-                    for p_block in &proposer_blocks {
-                        let p_votes = votes_with_depth.get(p_block).unwrap();
+                    for block in &proposer_blocks {
+                        let votes = votes_depth.get(block).unwrap();
 
-                        let mut p_votes_mean: f32 = 0.0; //mean E[X]
-                        let mut p_votes_variance: f32 = 0.0; //Var[X]
-                        let mut p_votes_lcb: f32 = 0.0;
-                        for (_, depth) in p_votes {
-                            let mut p: f32 = 1.0 - poisson.cdf( (*depth as f32 +1.0).into()) as f32; // probability that the adversary will remove this vote
+                        let mut block_votes_mean: f32 = 0.0; // mean E[X]
+                        let mut block_votes_variance: f32 = 0.0; // Var[X]
+                        let mut block_votes_lcb: f32 = 0.0;
+                        for depth in votes.iter() {
+                            // probability that the adversary will remove this vote
+                            let mut p: f32 = 1.0 - poisson.cdf((*depth as f32 + 1.0).into()) as f32; 
                             for k in 0..(*depth as u64) {
-                                let p1 = poisson.pmf(k) as f32; // probability that the adversary has mined k blocks
-                                let p2 = ((ADVERSARY_MINING_POWER)/(1.0-ADVERSARY_MINING_POWER)).powi((depth-k+1) as i32);// probability that the adversary will overtake 'depth-k' blocks
-//                                info!("Level {}. depth {}, k {}, p1 {}, p2 {}", level, depth, k, p1, p2);
+                                // probability that the adversary has mined k blocks
+                                let p1 = poisson.pmf(k) as f32; 
+                                // probability that the adversary will overtake 'depth-k' blocks
+                                let p2 = ((ADVERSARY_MINING_POWER)/(1.0-ADVERSARY_MINING_POWER)).powi((depth-k+1) as i32);
                                 p += p1*p2;
                             }
-//                            info!("Level {}. p = {}, adversary_expected_vote_depth {}, depth {} ", level, p, adversary_expected_vote_depth, depth);
-                            p_votes_mean += 1.0-p;
-                            p_votes_variance += p*(1.0-p);
+                            block_votes_mean += 1.0-p;
+                            block_votes_variance += p * (1.0-p);
                         }
-                        let tmp = p_votes_mean-(2.0*p_votes_variance*LOG_EPSILON).sqrt();//using gaussian approximation
+                        // using gaussian approximation
+                        let tmp = block_votes_mean - (2.0 * block_votes_variance * LOG_EPSILON).sqrt();
                         if tmp > 0.0 {
-                            p_votes_lcb += tmp;
+                            block_votes_lcb += tmp;
                         }
-//                        info!("{} block as {} votes and the lcb is {}", p_block, p_votes.len(), p_votes_lcb);
-                        votes_lcb.insert(p_block, p_votes_lcb);
-                        total_votes_lcb += p_votes_lcb;
+                        votes_lcb.insert(block, block_votes_lcb);
+                        total_votes_lcb += block_votes_lcb;
 
-                        if max_vote_lcb < p_votes_lcb {
-                            max_vote_lcb = p_votes_lcb;
-                            new_leader = Some(*p_block);
+                        if max_vote_lcb < block_votes_lcb {
+                            max_vote_lcb = block_votes_lcb;
+                            new_leader = Some(*block);
                         }
-                        //In case of a tie, choose block with lower hash.
-                        if max_vote_lcb == p_votes_lcb && new_leader.is_some() { //TODO: is_some required?
-                            if *p_block < new_leader.unwrap() {
-                                new_leader = Some(*p_block);
+                        // In case of a tie, choose block with lower hash.
+                        if max_vote_lcb == block_votes_lcb && new_leader.is_some() {
+                            // TODO: is_some required?
+                            if *block < new_leader.unwrap() {
+                                new_leader = Some(*block);
                             }
                         }
-//                        info!("Level {}. Votes: {:?}. Expected vote depth {}", level, p_votes, adversary_expected_vote_depth);
-                        info!("Level {}. Stats of votes on {} block: len: {}, mean {}, var {}, lcb {}. Expected vote depth {}", level, p_block, p_votes.len(), p_votes_mean, p_votes_variance, p_votes_lcb,adversary_expected_vote_depth);
                     }
-//                    info!("The votes are {:?}", votes_lcb);
-                    // check if the lcb_vote of new_leader is bigger then second best ucb votes
+                    // check if the lcb_vote of new_leader is bigger than second best ucb votes
                     let remaining_votes = NUM_VOTER_CHAINS as f32 - total_votes_lcb;
 
                     // if max_vote_lcb is lesser than the remaining_votes, then a private block could
