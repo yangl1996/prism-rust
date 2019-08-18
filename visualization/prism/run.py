@@ -9,7 +9,6 @@ def signal_handler(sig, frame):
     if DEMO_LOCATION=='apr-server':
         p = subprocess.run(['./run.sh', 'stop-instances'], input='1'.encode('utf-8'))
         print('Stopped prism')
-    p2.kill()
     for pid in os.popen('pgrep prism'):
         os.kill(int(pid), signal.SIGKILL)
 
@@ -49,8 +48,6 @@ if not MOCK:
             f.write(fixed_contents)
     p1 = subprocess.Popen(['node', 'relay_server.js'])
     time.sleep(2)
-p2 = subprocess.Popen(['python3', '-m', 'http.server', f'{VIS_PORT}'])
-webbrowser.open_new_tab(f'http://{URL}:{VIS_PORT}/prism.html')
 time.sleep(2)
 if not MOCK and DEMO_LOCATION=='local':
     os.chdir('../../testbed')

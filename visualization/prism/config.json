@@ -1,8 +1,8 @@
 {
   "host": "ec2-54-183-248-97.us-west-1.compute.amazonaws.com",
   "visualization port": 5000,
-  "num_nodes": 2,
-  "demo_location": "apr-server",
+  "num_nodes": 6,
+  "demo_location": "local",
   "mock": false,
   "topology": "randreg",
   "degree": 1

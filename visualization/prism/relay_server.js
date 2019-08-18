@@ -3,6 +3,7 @@ const WebSocket = require('ws')
 const wss = new WebSocket.Server({ host: 'ec2-54-183-248-97.us-west-1.compute.amazonaws.com', port: 8080 })
 let visSocket = null
 let prismSocket = null
+let lastTransactionBlock = Date.now()
 
 console.log('Waiting for incoming of visualization and prism')
 wss.on('connection', ws => {
@@ -16,8 +17,18 @@ wss.on('connection', ws => {
   }
   if(prismSocket!==null){
     prismSocket.on('message', message => {
-      if(visSocket!==null)
-        visSocket.send(`${message}`)
+      const data = JSON.parse(message)
+      if('TransactionBlock' in data){
+	if((Date.now()-lastTransactionBlock)/1000.0>0.5){
+	     lastTransactionBlock = Date.now()
+      	     if(visSocket!==null)
+        	visSocket.send(`${message}`)
+	}
+      }
+      else
+      	if(visSocket!==null)
+          visSocket.send(`${message}`)
+
     })
   }
 })

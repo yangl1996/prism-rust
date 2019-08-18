@@ -133,7 +133,7 @@ for (( i = 0; i < $num_nodes; i++ )); do
 		echo "Failed to start transaction generation for node $i"
 		exit 1
 	fi
-	url="localhost:${port}/miner/start?lambda=10000&lazy=false"
+	url="localhost:${port}/miner/start?lambda=1000&lazy=false"
 	curl "$url" &> /dev/null
 	if [ "$?" -ne 0 ]; then
 		echo "Failed to start mining for node $i"
