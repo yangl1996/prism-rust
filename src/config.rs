@@ -16,6 +16,7 @@ pub const CHAIN_MINING_RATE: f32 = 0.2 / NETWORK_DELAY; // mining rate of the pr
 
 pub const ADVERSARY_MINING_POWER: f32 = 0.3; // the adversary power we want to tolerate
 pub const LOG_EPSILON: f32 = 10.0; // -ln(1-confirmation_guarantee)
+pub const SECURITY_BOUND: f32 = 0.45;
 
 // Do not change from here
 

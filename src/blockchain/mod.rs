@@ -576,9 +576,7 @@ impl BlockChain {
                     // calculate average of depth of the votes
                     let avg_vote_depth = total_vote_depth as f32 / total_vote_count as f32;
                     // expected voter depth of an adversary
-                    // TODO: note that we are assuming the security to be 50% here (hence the *2.0
-                    // operation (which is actually "/50%").
-                    let adversary_expected_vote_depth = avg_vote_depth * 2.0 * ADVERSARY_MINING_POWER; 
+                    let adversary_expected_vote_depth = avg_vote_depth / SECURITY_BOUND * ADVERSARY_MINING_POWER; 
                     let poisson = Poisson::new(adversary_expected_vote_depth as f64).unwrap();
 
                     // for each block calculate the lower bound on the number of votes
