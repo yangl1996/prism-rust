@@ -19,7 +19,24 @@ function start_instances
 		esac
 	done
 	echo "Launching $1 AWS EC2 instances"
-	local instances=`aws ec2 run-instances --launch-template LaunchTemplateId=$LAUNCH_TEMPLATE --count $1 --query 'Instances[*].InstanceId' | jq -r '. | join(" ")'`
+	local instances=""
+	local remaining=$1
+	while [ "$remaining" -gt "0" ]
+	do
+		if [ "10" -gt "$remaining" ]; then
+			local thisbatch="$remaining"
+		else
+			local thisbatch="10"
+		fi
+		tput rc
+		tput el
+		echo -n "Remaining: $remaining, launching: $thisbatch"
+		instances="$instances $(aws ec2 run-instances --launch-template LaunchTemplateId=$LAUNCH_TEMPLATE --count $thisbatch --query 'Instances[*].InstanceId' | jq -r '. | join(" ")')"
+		remaining=`expr $remaining - $thisbatch`
+	done
+	tput rc
+	tput el
+	echo "Instances launched"
 	rm -f instances.txt
 	rm -f ~/.ssh/config.d/prism
 	echo "Querying public IPs and writing to SSH config"
