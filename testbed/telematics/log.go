@@ -97,8 +97,8 @@ func log(interval, duration uint, nodesFile, dataDir string, grafana bool) {
 		c.DS("voter_delay_mean", "COMPUTE", "voter_delay_sum,received_voter,/")
 		c.DS("tx_delay_mean", "COMPUTE", "tx_delay_sum,received_tx,/")
 		c.DS("txblk_cfm_mean", "COMPUTE", "txblk_cfm_sum,confirmed_tx_blk,/,1000,/")
-		c.DS("prop_fork", "COMPUTE", "processed_proposer,prop_chain_depth,-,prop_chain_depth,/")
-		c.DS("voter_fork", "COMPUTE", "processed_voter,voter_chains_depth,-,voter_chains_depth,/")
+		c.DS("prop_fork", "COMPUTE", "processed_proposer,prop_chain_depth,-,processed_proposer,/")
+		c.DS("voter_fork", "COMPUTE", "processed_voter,voter_chains_depth,-,processed_voter,/")
 		c.RRA("LAST", 0, 1, duration/interval)
 		err = c.Create(true)
 		if err != nil {
@@ -134,8 +134,8 @@ func log(interval, duration uint, nodesFile, dataDir string, grafana bool) {
 		cr.DS("voter_delay_mean", "COMPUTE", "voter_delay_sum,received_voter,/")
 		cr.DS("tx_delay_mean", "COMPUTE", "tx_delay_sum,received_tx,/")
 		cr.DS("txblk_cfm_mean", "COMPUTE", "txblk_cfm_sum,confirmed_tx_blk,/,1000,/")
-		cr.DS("prop_fork", "COMPUTE", "processed_proposer,prop_chain_depth,-,prop_chain_depth,/")
-		cr.DS("voter_fork", "COMPUTE", "processed_voter,voter_chains_depth,-,voter_chains_depth,/")
+		cr.DS("prop_fork", "COMPUTE", "processed_proposer,prop_chain_depth,-,processed_proposer,/")
+		cr.DS("voter_fork", "COMPUTE", "processed_voter,voter_chains_depth,-,processed_voter,/")
 		cr.RRA("LAST", 0, 1, duration/interval)
 		err = cr.Create(true)
 		if err != nil {
@@ -167,8 +167,8 @@ func log(interval, duration uint, nodesFile, dataDir string, grafana bool) {
 		cr.DS("voter_delay_mean", "COMPUTE", "voter_delay_sum,received_voter,/")
 		cr.DS("tx_delay_mean", "COMPUTE", "tx_delay_sum,received_tx,/")
 		cr.DS("txblk_cfm_mean", "COMPUTE", "txblk_cfm_sum,confirmed_tx_blk,/,1000,/")
-		cr.DS("prop_fork", "COMPUTE", "processed_proposer,prop_chain_depth,-,prop_chain_depth,/")
-		cr.DS("voter_fork", "COMPUTE", "processed_voter,voter_chains_depth,-,voter_chains_depth,/")
+		cr.DS("prop_fork", "COMPUTE", "processed_proposer,prop_chain_depth,-,processed_proposer,/")
+		cr.DS("voter_fork", "COMPUTE", "processed_voter,voter_chains_depth,-,processed_voter,/")
 		cr.RRA("LAST", 0, 1, duration/interval)
 		err = cr.Create(true)
 		if err != nil {
@@ -317,8 +317,8 @@ func log(interval, duration uint, nodesFile, dataDir string, grafana bool) {
 				tm.Printf("           Delay -       Voter    %8.3g  %8.3g\n", float64(cavg.Total_voter_block_delay)/float64(cavg.Received_voter_blocks), float64(cavg.Total_voter_block_delay-pavg.Total_voter_block_delay)/float64(cavg.Received_voter_blocks-pavg.Received_voter_blocks))
 				tm.Printf("           Delay - Transaction    %8.3g  %8.3g\n", float64(cavg.Total_transaction_block_delay)/float64(cavg.Received_transaction_blocks), float64(cavg.Total_transaction_block_delay-pavg.Total_transaction_block_delay)/float64(cavg.Received_transaction_blocks-pavg.Received_transaction_blocks))
 				tm.Printf("    Confirmation -       Block    %8.3g  %8.3g\n", float64(cavg.Total_transaction_block_confirmation_latency)/float64(cavg.Confirmed_transaction_blocks)/1000.0, float64(cavg.Total_transaction_block_confirmation_latency-pavg.Total_transaction_block_confirmation_latency)/float64(cavg.Confirmed_transaction_blocks-pavg.Confirmed_transaction_blocks)/1000.0)
-				tm.Printf("         Forking -    Proposer    %8.3g  %8.3g\n", float64(cavg.Processed_proposer_blocks - cavg.Proposer_main_chain_length)/float64(cavg.Proposer_main_chain_length), float64((cavg.Processed_proposer_blocks - cavg.Proposer_main_chain_length) - (pavg.Processed_proposer_blocks - pavg.Proposer_main_chain_length))/float64(cavg.Proposer_main_chain_length-pavg.Proposer_main_chain_length))
-				tm.Printf("         Forking -       Voter    %8.3g  %8.3g\n", float64(cavg.Processed_voter_blocks - cavg.Voter_main_chain_length_sum)/float64(cavg.Voter_main_chain_length_sum), float64((cavg.Processed_voter_blocks - cavg.Voter_main_chain_length_sum) - (pavg.Processed_voter_blocks - pavg.Voter_main_chain_length_sum))/float64(cavg.Voter_main_chain_length_sum-pavg.Voter_main_chain_length_sum))
+				tm.Printf("         Forking -    Proposer    %8.3g  %8.3g\n", float64(cavg.Processed_proposer_blocks - cavg.Proposer_main_chain_length)/float64(cavg.Processed_proposer_blocks), float64((cavg.Processed_proposer_blocks - cavg.Proposer_main_chain_length) - (pavg.Processed_proposer_blocks - pavg.Proposer_main_chain_length))/float64(cavg.Processed_proposer_blocks-pavg.Processed_proposer_blocks))
+				tm.Printf("         Forking -       Voter    %8.3g  %8.3g\n", float64(cavg.Processed_voter_blocks - cavg.Voter_main_chain_length_sum)/float64(cavg.Processed_voter_blocks), float64((cavg.Processed_voter_blocks - cavg.Voter_main_chain_length_sum) - (pavg.Processed_voter_blocks - pavg.Voter_main_chain_length_sum))/float64(cavg.Processed_voter_blocks-pavg.Processed_voter_blocks))
 				tm.Flush()
 				// log the aggregated value
 				if grafana {
