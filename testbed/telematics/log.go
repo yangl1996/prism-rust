@@ -40,6 +40,7 @@ type Snapshot struct {
 type expSnapshot struct {
 	time               int
 	confirmed_tx       int
+	confirmed_tx_blk   int
 	processed_voter    int
 	processed_proposer int
 	voter_len_sum      int
@@ -342,6 +343,7 @@ func log(interval, duration uint, nodesFile, dataDir string, grafana bool) {
 					lastSnapshot = expSnapshot{
 						time:               dur,
 						confirmed_tx:       curr["node_0"].Confirmed_transactions,
+						confirmed_tx_blk:   curr["node_0"].Confirmed_transaction_blocks,
 						processed_voter:    curr["node_0"].Processed_voter_blocks,
 						processed_proposer: curr["node_0"].Processed_proposer_blocks,
 						voter_len_sum:      curr["node_0"].Voter_main_chain_length_sum,
@@ -364,6 +366,7 @@ func log(interval, duration uint, nodesFile, dataDir string, grafana bool) {
 							expStartPerf = expSnapshot{
 								time:               dur,
 								confirmed_tx:       lastSnapshot.confirmed_tx,
+								confirmed_tx_blk:   lastSnapshot.confirmed_tx_blk,
 								processed_voter:    lastSnapshot.processed_voter,
 								processed_proposer: lastSnapshot.processed_proposer,
 								voter_len_sum:      lastSnapshot.voter_len_sum,
@@ -377,6 +380,7 @@ func log(interval, duration uint, nodesFile, dataDir string, grafana bool) {
 							expStopPerf = expSnapshot{
 								time:               dur,
 								confirmed_tx:       lastSnapshot.confirmed_tx,
+								confirmed_tx_blk:   lastSnapshot.confirmed_tx_blk,
 								processed_voter:    lastSnapshot.processed_voter,
 								processed_proposer: lastSnapshot.processed_proposer,
 								voter_len_sum:      lastSnapshot.voter_len_sum,
@@ -390,6 +394,7 @@ func log(interval, duration uint, nodesFile, dataDir string, grafana bool) {
 				lastSnapshot = expSnapshot{
 					time:               dur,
 					confirmed_tx:       curr["node_0"].Confirmed_transactions,
+					confirmed_tx_blk:   curr["node_0"].Confirmed_transaction_blocks,
 					processed_voter:    curr["node_0"].Processed_voter_blocks,
 					processed_proposer: curr["node_0"].Processed_proposer_blocks,
 					voter_len_sum:      curr["node_0"].Voter_main_chain_length_sum,
@@ -422,10 +427,10 @@ func log(interval, duration uint, nodesFile, dataDir string, grafana bool) {
 						expdur := expStopPerf.time - expStartPerf.time
 						tm.Printf("Experiment Result\n")
 						tm.Printf("Time         %7v\n", expdur)
-						tm.Printf("Cfm Ltcy     %7.7g\n", float64(expStopPerf.latency_sum-expStartPerf.latency_sum)/float64(expStopPerf.confirmed_tx-expStartPerf.confirmed_tx)/1000.0)
+						tm.Printf("Cfm Ltcy     %7.7g\n", float64(expStopPerf.latency_sum-expStartPerf.latency_sum)/float64(expStopPerf.confirmed_tx_blk-expStartPerf.confirmed_tx_blk)/1000.0)
 						tm.Printf("Thruput      %7.7g\n", float64(expStopPerf.confirmed_tx-expStartPerf.confirmed_tx)/float64(expdur))
-						tm.Printf("Prop Fork    %7.7g\n", float64(expStopPerf.processed_proposer-expStartPerf.processed_proposer)/float64(expStopPerf.proposer_len-expStartPerf.proposer_len))
-						tm.Printf("Vote Fork    %7.7g\n", float64(expStopPerf.processed_voter-expStartPerf.processed_voter)/float64(expStopPerf.voter_len_sum-expStartPerf.voter_len_sum))
+						tm.Printf("Prop Fork    %7.7g\n", float64(expStopPerf.processed_proposer-expStopPerf.proposer_len-expStartPerf.processed_proposer+expStartPerf.proposer_len)/float64(expStopPerf.processed_proposer-expStartPerf.processed_proposer))
+						tm.Printf("Vote Fork    %7.7g\n", float64(expStopPerf.processed_voter-expStopPerf.voter_len_sum-expStartPerf.processed_voter+expStartPerf.voter_len_sum)/float64(expStopPerf.processed_voter-expStartPerf.processed_voter))
 					}
 				} else {
 					if !expStarted {
