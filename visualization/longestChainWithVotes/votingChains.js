@@ -11,7 +11,7 @@ const scrollVotingChain = idx => {
     // Select all chains and links for that specific chain and scroll by 2*votingBlockSize
     let scrollingBlocks = chainsGroup.select('#chain'+idx).selectAll('rect')
     scrollingBlocks
-          .transition()
+          .transition('scrollVotingBlocksTransition'+Math.random().toString(36).substring(4))
           .duration(t)
           .attr('x', d => d.x - votingBlockSize/2)
           .attr('y', d => {
@@ -19,7 +19,7 @@ const scrollVotingChain = idx => {
             return d.y
           })
     let scrollingLinks = chainsGroup.select('#links'+idx).selectAll('.chainLink')
-          .transition()
+          .transition('scrollVotingLinksTransition'+Math.random().toString(36).substring(4))
           .duration(t)
           .attr('d', d => {
             if(!d.source) return
@@ -40,14 +40,11 @@ const scrollVotingChain = idx => {
         d.curve = `M${sourceX},${sourceY-2*votingBlockSize} Q${sourceX-50},${sourceY-50-2*votingBlockSize} ${targetX},${targetY}`
         return `M${sourceX},${sourceY} Q${sourceX-50},${sourceY-50} ${targetX},${targetY}`
        })
-      .transition('voteLinkScroll')
+      .transition('voteLinkScroll'+Math.random().toString(36).substring(4))
       .duration(t)
       .attr('d', d => {
         return d.curve
       }) 
-      .on('interrupt', d => {
-          d3.select('#'+d.id).attr('d', d.curve)
-       })
 
     // Remove out of screen voting links
     if(chainsData[idx].shouldShift){
@@ -74,6 +71,7 @@ const drawVotingChain = (idx, votes) => {
   let votingBlocksEnter = votingBlocks.enter().append('g')
                       .attr('class', 'votingBlock')
 
+  let didVote = false
   // Add new blocks
   votingBlocksEnter.append('rect')
          .attr('class', 'votingBlock')
@@ -108,12 +106,8 @@ const drawVotingChain = (idx, votes) => {
          })
         .on('end', (d, i) => {
           if(i==chainsData[idx].blocks.length-1){
+            castVotes(idx, votes)
             const didScroll = scrollVotingChain(idx)
-            if(didScroll){
-              d3.timeout(() => castVotes(idx, votes), t)
-            }
-            else
-              castVotes(idx, votes)
           }
         })
 

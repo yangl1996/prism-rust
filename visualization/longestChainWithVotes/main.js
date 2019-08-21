@@ -43,7 +43,7 @@ let globalNodesData = []
 const treeSize = width/3
 const renderLink = d3.linkVertical().x(d => d.x+(1.25-1)/2*longestChainBlockSize).y(d => d.y)
 const longestChainBlockSize = 20
-const finalizationThreshold = 0.46
+const finalizationThreshold = 0.43
 let layoutTree = d3.tree().size([treeSize, height-0.4*height])
 
 let longestChainScreenWidth = treeSize, longestChainScreenHeight = height

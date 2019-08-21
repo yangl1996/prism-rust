@@ -24,7 +24,7 @@ let confirmBlock = (longestChainBlock) => {
   voteGroup.selectAll('.voteLink')
            .filter(d => d.to===longestChainBlock.id)
            .style('stroke-opacity', 1.0)
-           .transition()
+           .transition('removeVotesTransition'+Math.random().toString(36).substring(4))
            .duration(t)
            .style('stroke-opacity', 0.0)
            .remove()
