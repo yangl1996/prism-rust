@@ -43,7 +43,7 @@ let drawLongestChain = () => {
                             didScroll = didScroll ? true : scrollLongestChain()
                             if(i==0 && !didScroll && longestChainVotes)
                               castVotes()
-                             if(longestChainBlocks.length - d.depth>6 && longestChainVotes && !d.finalized){
+                             if(longestChainBlocks.length - d.depth>6 && startForking && !d.finalized){
                                  let timeout = didScroll ? 4*t : 2*t
                                  d.finalized=true
                                  d3.timeout(() => {
@@ -114,7 +114,7 @@ let scrollLongestChain = () => {
             return `translate(${d.x-longestChainBlockSize/2}, ${d.y})`
           })
           .on('end', () => {
-            if(!voted && longestChainVotes){ 
+            if(!voted && startForking){ 
               voted = true
               d3.timeout(() => castVotes(), t)
             }
@@ -130,7 +130,6 @@ let scrollLongestChain = () => {
 }
 
 let shiftScreen = () => {
-  if(!longestChainVotes) return
   longestChainVotes = false
   voteGroup.selectAll('.voteLink').remove()
   modifyProtocol()

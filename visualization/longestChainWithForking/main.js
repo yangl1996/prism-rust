@@ -2,8 +2,8 @@ let body = document.getElementsByTagName('body')[0]
 
 let width = body.clientWidth,
     height = body.clientHeight
-let longestChainVotes = true
-console.log(width, height)
+let longestChainVotes = false
+let startForking= false
 
 let svg = d3.select('body').append('svg')
   .attr('id', 'untransformedSvg')
