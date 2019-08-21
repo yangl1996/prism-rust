@@ -1,7 +1,7 @@
 use crate::crypto::hash::H256;
 
 // Network parameters
-pub const NETWORK_DELAY: f32 = 3.5; // the expected block propagation delay (in seconds)
+pub const NETWORK_DELAY: f32 = 1.5; // the expected block propagation delay (in seconds)
 
 // Design parameters
 pub const NUM_VOTER_CHAINS: u16 = 100 as u16; // more chains means better latency
@@ -12,7 +12,7 @@ pub const PROPOSER_BLOCK_TX_REFS: u32 = (TX_MINING_RATE / CHAIN_MINING_RATE * 2.
 
 pub const AVG_TX_SIZE: u32 = 280; // average size of a transaction (in Bytes)
 pub const TX_MINING_RATE: f32 = TX_THROUGHPUT as f32 / TX_BLOCK_TRANSACTIONS as f32;
-pub const CHAIN_MINING_RATE: f32 = 0.2 / NETWORK_DELAY; // mining rate of the proposer chain and each voter chain in Blks/s
+pub const CHAIN_MINING_RATE: f32 = 0.1 / NETWORK_DELAY; // mining rate of the proposer chain and each voter chain in Blks/s
 
 pub const ADVERSARY_MINING_POWER: f32 = 0.3; // the adversary power we want to tolerate
 pub const LOG_EPSILON: f32 = 10.0; // -ln(1-confirmation_guarantee)
