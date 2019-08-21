@@ -37,12 +37,16 @@ let mineLowRate = d3.interval(() => {
 
   newBlock.sourceNodeId = sourceNodeId
   const prevRootY = root.y
+  const oldXVals = longestChainBlocks.map(b => b.x)
   layoutTree(root)
   root.y = prevRootY ? prevRootY : root.y
   longestChainBlocks.push(newBlock)
   for(let i=0; i<longestChainBlocks.length; i++)
-      if(longestChainBlocks[i].id!==0)
+      if(longestChainBlocks[i].id!==0){
         longestChainBlocks[i].y = longestChainBlocks[i].parent.y+2*longestChainBlockSize
+        if(i<oldXVals.length)
+          longestChainBlocks[i].x = oldXVals[i]
+      }
   links.push({source: newBlock,
               target: newBlock.parent, id: `${newBlock.id}-${newBlock.parent.id}`})
   pingNode(sourceNodeId)
@@ -67,15 +71,18 @@ let modifyProtocol = () => {
 
         newBlock.sourceNodeId = sourceNodeId
         const prevRootY = root.y
+        const oldXVals = longestChainBlocks.map(b => b.x)
         layoutTree(root)
         root.y = prevRootY ? prevRootY : root.y
-        newBlock.xShift = d3.randomUniform(-20, 20)()
+        newBlock.xShift = d3.randomUniform(-10, 10)()
         newBlock.yShift = d3.randomUniform(-10, 0)()
         longestChainBlocks.push(newBlock)
         for(let i=0; i<longestChainBlocks.length; i++){
             if(longestChainBlocks[i].id!==0){
               longestChainBlocks[i].y = longestChainBlocks[i].parent.y+2*longestChainBlockSize+longestChainBlocks[i].yShift
-              longestChainBlocks[i].x += longestChainBlocks[i].xShift
+            }
+            if(i<oldXVals.length){
+              longestChainBlocks[i].x = oldXVals[i]
             }
         }
         links.push({source: newBlock,

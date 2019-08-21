@@ -34,7 +34,7 @@ let drawLongestChain = () => {
     
     const enlargement = 20
     let didScroll = false
-    longestChainBlockEnter.merge(longestChainBlock).transition()
+    longestChainBlockEnter.merge(longestChainBlock).transition('addBlocksTransition'+Math.random().toString(36).substring(4))
                           .duration(t)
                           .attr('transform', d => {
                                return `translate(${d.x-longestChainBlockSize/2}, ${d.y})`
@@ -78,19 +78,20 @@ let drawLongestChain = () => {
     let link = longestChainLinksGroup.selectAll('.longestChainLink').data(links, d => `${d.source.id}-${d.target.id}`)
 
     
-    link.transition()
+    link.transition('oldLinkTransition'+Math.random().toString(36).substring(4))
         .duration(t)
-        .attr('d', d => d.source ? renderLink({source: d.source, target: {x: d.target.x, y: d.target.y+longestChainBlockSize}}) : null)
+        .attr('d', d => d.source && !didScroll ? renderLink({source: d.source, target: {x: d.target.x, y: d.target.y+longestChainBlockSize}}) : null)
 
     // Add new links
     link.enter().append('path')
         .attr('id', d => `${d.source.id}-${d.target.id}`)
         .attr('class', 'longestChainLink')
         .attr('d', d => d.source ? renderLink({source: d.source, target: d.source}) : null)
-        .transition()
+        .transition('linkTransition'+Math.random().toString(36).substring(4))
+        .delay(t)
         .duration(t)
         .attr('d', d => d.source ? renderLink({source: d.source, target: {x: d.target.x, y: d.target.y+longestChainBlockSize}}) : null)
-        .transition()
+        .transition('secondLinkTransition'+Math.random().toString(36).substring(4))
         .delay(1)
         .attr('marker-end', 'url(#longestChain-arrow)')
     // Remove extra links
@@ -107,7 +108,7 @@ let scrollLongestChain = () => {
   // Move proposer blocks by -2*longestChainBlockSize
   let voted = false
   longestChainBlocksGroup.selectAll('.longestChainBlock')
-          .transition()
+          .transition('scrollBlockTransition'+Math.random().toString(36).substring(4))
           .duration(t)
           .attr('transform', d => {
             d.y = d.y-2*longestChainBlockSize
@@ -120,7 +121,7 @@ let scrollLongestChain = () => {
             }
           })
   longestChainLinksGroup.selectAll('.longestChainLink')
-    .transition()
+    .transition('scrollLinkTransition'+Math.random().toString(36).substring(4))
     .duration(t)
     .attr('d', d => {
       return renderLink({source: d.source, target: {x: d.target.x, y: d.target.y+longestChainBlockSize}})
