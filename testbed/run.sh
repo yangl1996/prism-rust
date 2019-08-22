@@ -19,7 +19,24 @@ function start_instances
 		esac
 	done
 	echo "Launching $1 AWS EC2 instances"
-	local instances=`aws ec2 run-instances --launch-template LaunchTemplateId=$LAUNCH_TEMPLATE --count $1 --query 'Instances[*].InstanceId' | jq -r '. | join(" ")'`
+	local instances=""
+	local remaining=$1
+	while [ "$remaining" -gt "0" ]
+	do
+		if [ "10" -gt "$remaining" ]; then
+			local thisbatch="$remaining"
+		else
+			local thisbatch="10"
+		fi
+		tput rc
+		tput el
+		echo -n "Remaining: $remaining, launching: $thisbatch"
+		instances="$instances $(aws ec2 run-instances --launch-template LaunchTemplateId=$LAUNCH_TEMPLATE --count $thisbatch --query 'Instances[*].InstanceId' | jq -r '. | join(" ")')"
+		remaining=`expr $remaining - $thisbatch`
+	done
+	tput rc
+	tput el
+	echo "Instances launched"
 	rm -f instances.txt
 	rm -f ~/.ssh/config.d/prism
 	echo "Querying public IPs and writing to SSH config"
@@ -192,6 +209,79 @@ function prepare_payload
 	tput sgr0
 }
 
+function prepare_algorand_payload
+{
+	# $1: topology file to use
+	if [ $# -ne 1 ]; then
+		tput setaf 1
+		echo "Required: topology file"
+		tput sgr0
+		exit 1
+	fi
+	echo "Deleting existing files"
+	rm -rf payload
+	mkdir -p payload
+	mkdir -p payload/common/binary
+	mkdir -p payload/common/scripts
+
+	echo "Download binaries"
+	cd algorand
+	GOOS=linux GOARCH=amd64 go build
+	cd ..
+	scp algorand:~/go/bin/\{algod,algoh,algokey,carpenter,goal,kmd\} payload/common/binary/
+	cp algorand/algorand payload/common/binary
+	cp scripts/start-algorand.sh payload/common/scripts/start-algorand.sh
+	cp scripts/stop-algorand.sh payload/common/scripts/stop-algorand.sh
+	cp scripts/start-algorand-transaction.sh payload/common/scripts/start-algorand-transaction.sh
+	cp scripts/stop-algorand-transaction.sh payload/common/scripts/stop-algorand-transaction.sh
+
+
+	echo "Generate etcd config files for each EC2 instance"
+	local instances=`cat instances.txt`
+	local instance_ids=""
+	for instance in $instances ;
+	do
+		local id
+		local ip
+		local lan
+		IFS=',' read -r id ip lan <<< "$instance"
+		mkdir -p payload/$id
+		python3 scripts/gen_etcd_config.py $id $lan instances.txt
+	done
+
+	echo "Generating Algorand network template file"
+	size=`cat $1 | jq '.nodes | length'`
+	python3 scripts/gen_algorand_template.py $size > algorand_template.json
+
+	echo "Generating and copying Algorand network data"
+	scp algorand_template.json algorand:~
+	ssh algorand -- 'rm -rf ~/eval && ~/go/bin/goal network create -r ~/eval -n eval -t ~/algorand_template.json' &> /dev/null
+	rm -f algorand_template.json
+	scp -r algorand:~/eval payload/staging &> /dev/null
+
+	echo "Generating payload for each AWS EC2 instance"
+	python3 scripts/gen_algorand_payload.py instances.txt $1
+
+	echo "Compressing payload files"
+	local instances=`cat instances.txt`
+	local instance_ids=""
+	for instance in $instances ;
+	do
+		local id
+		IFS=',' read -r id _ <<< "$instance"
+		tar cvzf payload/$id.tar.gz -C payload/$id . &> /dev/null
+		rm -rf payload/$id
+	done
+	tar cvzf payload/common.tar.gz -C payload/common . &> /dev/null
+	rm -rf payload/common
+	rm -rf payload/staging
+	rm -rf payload/scripts
+
+	tput setaf 2
+	echo "Payload written"
+	tput sgr0
+}
+
 function sync_payload
 {
 	echo "Uploading payload to S3"
@@ -239,6 +329,26 @@ function start_prism_single
 function stop_prism_single
 {
 	ssh $1 -- 'bash /home/ubuntu/payload/scripts/stop-prism.sh &>/home/ubuntu/log/stop.log'
+}
+
+function start_algorand_single
+{
+	ssh $1 -- "mkdir -p /home/ubuntu/log && bash /home/ubuntu/payload/scripts/start-algorand.sh $2 $3 $4 $5 $6 &>/home/ubuntu/log/start.log"
+}
+
+function stop_algorand_single
+{
+	ssh $1 -- 'bash /home/ubuntu/payload/scripts/stop-algorand.sh &>/home/ubuntu/log/stop.log'
+}
+
+function start_algorand_transaction_single
+{
+	ssh $1 -- "bash /home/ubuntu/payload/scripts/start-algorand-transaction.sh $2 &>/home/ubuntu/log/start-tx.log"
+}
+
+function stop_algorand_transaction_single
+{
+	ssh $1 -- 'bash /home/ubuntu/payload/scripts/stop-algorand-transaction.sh &>/home/ubuntu/log/stop-tx.log'
 }
 
 function join_by
@@ -373,7 +483,7 @@ function start_transactions_single
 
 function start_mining_single
 {
-	curl -s "http://$3:$4/miner/start?lambda=60000&lazy=false"
+	curl -s "http://$3:$4/miner/start?lambda=300000&lazy=false"
 }
 
 function stop_transactions_single
@@ -604,45 +714,53 @@ case "$1" in
 
 		Manage AWS EC2 Instances
 
-		  start-instances n     Start n EC2 instances
-		  stop-instances        Terminate EC2 instances
-		  count-instances       Count the running instances
-		  install-tools         Install tools
-		  fix-config            Fix SSH config
-		  mount-ramdisk         Mount RAM disk
-		  unmount-ramdisk       Unmount RAM disk
-		  mount-nvme            Mount NVME 
-		  unmount-nvme          Unmount NVME
-		  shape-traffic l b     Limit the throughput to b Kbps and add latency of l ms
-		  reset-traffic         Remove the traffic shaping filters
-		  tune-tcp              Set TCP parameters
+		  start-instances n          Start n EC2 instances
+		  stop-instances             Terminate EC2 instances
+		  count-instances            Count the running instances
+		  install-tools              Install tools
+		  fix-config                 Fix SSH config
+		  mount-ramdisk              Mount RAM disk
+		  unmount-ramdisk            Unmount RAM disk
+		  mount-nvme                 Mount NVME 
+		  unmount-nvme               Unmount NVME
+		  shape-traffic l b          Limit the throughput to b Kbps and add latency of l ms
+		  reset-traffic              Remove the traffic shaping filters
+		  tune-tcp                   Set TCP parameters
 
 		Run Experiment
 
-		  gen-payload topo      Generate scripts and configuration files
-		  build [nostrip]	Build the Prism client binary
-		  sync-payload          Synchronize payload to remote servers
-		  start-prism           Start Prism nodes on each remote server
-		  stop-prism            Stop Prism nodes on each remote server
-		  run-exp               Run the experiment
-		  show-demo             Start the demo workflow
-		  stop-tx               Stop generating transactions
-		  stop-mine             Stop mining
+		  gen-payload topo           Generate scripts and configuration files
+		  build [nostrip]	     Build the Prism client binary
+		  sync-payload               Synchronize payload to remote servers
+		  start-prism                Start Prism nodes on each remote server
+		  stop-prism                 Stop Prism nodes on each remote server
+		  run-exp                    Run the experiment
+		  show-demo                  Start the demo workflow
+		  stop-tx                    Stop generating transactions
+		  stop-mine                  Stop mining
+
+		Run Algorand Experiment
+
+		  gen-algorand topo          Generate config and data folders for Algorand
+		  start-algorand d s b f s   Start Algorand nodes with deadline, small/big lambda, recovery freq, block size
+		  stop-algorand              Stop Algorand nodes on each remote server
+		  start-algorand-tx r        Start Algorand transactions on each remote server at rate r txn/s
+		  stop-algorand-tx           Stop Algorand transactions on each remote server
 
 		Collect Data
 		  
-		  get-perf              Get performance data
-		  show-vis              Open the visualization page for the given node
-		  profile node f d      Capture stack trace for node with frequency f and duration d
-		  flamegraph node       Generate and download flamegraph for node
-		  open-dashboard        Open the performance dashboard
+		  get-perf                   Get performance data
+		  show-vis                   Open the visualization page for the given node
+		  profile node f d           Capture stack trace for node with frequency f and duration d
+		  flamegraph node            Generate and download flamegraph for node
+		  open-dashboard             Open the performance dashboard
 
 		Connect to Testbed
 
-		  run-all cmd           Run command on all instances
-		  ssh i                 SSH to the i-th server (1-based index)
-		  scp i src dst         Copy file from remote
-		  read-log node         Read the log of the given node
+		  run-all cmd                Run command on all instances
+		  ssh i                      SSH to the i-th server (1-based index)
+		  scp i src dst              Copy file from remote
+		  read-log node              Read the log of the given node
 		EOF
 		;;
 	start-instances)
@@ -687,6 +805,16 @@ case "$1" in
 		execute_on_all remove_traffic_shaping ;;
 	tune-tcp)
 		execute_on_all tune_tcp ;;
+	gen-algorand)
+		prepare_algorand_payload $2 ;;
+	start-algorand)
+		execute_on_all start_algorand $2 $3 $4 $5 $6;;
+	stop-algorand)
+		execute_on_all stop_algorand ;;
+	start-algorand-tx)
+		execute_on_all start_algorand_transaction $2 ;;
+	stop-algorand-tx)
+		execute_on_all stop_algorand_transaction ;;
 	get-perf)
 		show_performance $2 ;;
 	show-vis)

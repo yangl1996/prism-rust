@@ -3,7 +3,7 @@
 ## Setting Up
 
 1. Install jq
-2. Install AWS CLI tool and configure the IAM Key and Region.
+2. Install AWS CLI tool and configure the IAM Key and Region
 3. Place the SSH key at `~/.ssh/prism.pem`
 4. Place this line `Include config.d/prism` at the beginning of `~/.ssh/config`
 5. Execute `mkdir -p ~/.ssh/config.d`
@@ -39,3 +39,8 @@ nodes.txt records the Scorex nodes that are started, in the following format:
 <Node Name>,<EC2 ID>,<Public IP>,<VPC IP>,<API IP>,<P2P IP>
 ```
 
+## Algorand Experiment Flow
+
+To run the additional Algorand experiments, start a local Ubuntu 18.04 VM with Algorand installed
+and is accessible by `ssh algorand`. The Algorand binaries should live at ~/go/bin (the default
+path for Golang binaries).

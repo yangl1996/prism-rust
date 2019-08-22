@@ -8,32 +8,44 @@ import (
 	"github.com/ziutek/rrd"
 	"net/http"
 	"os"
+	"os/exec"
 	"path"
 	"strings"
 	"time"
 )
 
 type Snapshot struct {
-	Generated_transactions         int
-	Confirmed_transactions         int
-	Deconfirmed_transactions       int
-	Incoming_message_queue         int
-	Mined_proposer_blocks          int
-	Mined_voter_blocks             int
-	Mined_transaction_blocks       int
-	Total_proposer_block_delay     int
-	Total_voter_block_delay        int
-	Total_transaction_block_delay  int
-	Received_proposer_blocks       int
-	Received_voter_blocks          int
-	Received_transaction_blocks    int
-	Confirmed_transaction_blocks   int
-	Deconfirmed_transaction_blocks int
+	Generated_transactions                       int
+	Confirmed_transactions                       int
+	Deconfirmed_transactions                     int
+	Incoming_message_queue                       int
+	Mined_proposer_blocks                        int
+	Mined_voter_blocks                           int
+	Mined_transaction_blocks                     int
+	Total_proposer_block_delay                   int
+	Total_voter_block_delay                      int
+	Total_transaction_block_delay                int
+	Received_proposer_blocks                     int
+	Received_voter_blocks                        int
+	Received_transaction_blocks                  int
+	Confirmed_transaction_blocks                 int
+	Deconfirmed_transaction_blocks               int
 	Total_transaction_block_confirmation_latency int
-	Proposer_main_chain_length     int
-	Voter_main_chain_length_sum    int
-	Processed_proposer_blocks      int
-	Processed_voter_blocks         int
+	Proposer_main_chain_length                   int
+	Voter_main_chain_length_sum                  int
+	Processed_proposer_blocks                    int
+	Processed_voter_blocks                       int
+}
+
+type expSnapshot struct {
+	time               int
+	confirmed_tx       int
+	confirmed_tx_blk   int
+	processed_voter    int
+	processed_proposer int
+	voter_len_sum      int
+	proposer_len       int
+	latency_sum        int
 }
 
 type Report struct {
@@ -97,8 +109,8 @@ func log(interval, duration uint, nodesFile, dataDir string, grafana bool) {
 		c.DS("voter_delay_mean", "COMPUTE", "voter_delay_sum,received_voter,/")
 		c.DS("tx_delay_mean", "COMPUTE", "tx_delay_sum,received_tx,/")
 		c.DS("txblk_cfm_mean", "COMPUTE", "txblk_cfm_sum,confirmed_tx_blk,/,1000,/")
-		c.DS("prop_fork", "COMPUTE", "processed_proposer,prop_chain_depth,-,prop_chain_depth,/")
-		c.DS("voter_fork", "COMPUTE", "processed_voter,voter_chains_depth,-,voter_chains_depth,/")
+		c.DS("prop_fork", "COMPUTE", "processed_proposer,prop_chain_depth,-,processed_proposer,/")
+		c.DS("voter_fork", "COMPUTE", "processed_voter,voter_chains_depth,-,processed_voter,/")
 		c.RRA("LAST", 0, 1, duration/interval)
 		err = c.Create(true)
 		if err != nil {
@@ -134,8 +146,8 @@ func log(interval, duration uint, nodesFile, dataDir string, grafana bool) {
 		cr.DS("voter_delay_mean", "COMPUTE", "voter_delay_sum,received_voter,/")
 		cr.DS("tx_delay_mean", "COMPUTE", "tx_delay_sum,received_tx,/")
 		cr.DS("txblk_cfm_mean", "COMPUTE", "txblk_cfm_sum,confirmed_tx_blk,/,1000,/")
-		cr.DS("prop_fork", "COMPUTE", "processed_proposer,prop_chain_depth,-,prop_chain_depth,/")
-		cr.DS("voter_fork", "COMPUTE", "processed_voter,voter_chains_depth,-,voter_chains_depth,/")
+		cr.DS("prop_fork", "COMPUTE", "processed_proposer,prop_chain_depth,-,processed_proposer,/")
+		cr.DS("voter_fork", "COMPUTE", "processed_voter,voter_chains_depth,-,processed_voter,/")
 		cr.RRA("LAST", 0, 1, duration/interval)
 		err = cr.Create(true)
 		if err != nil {
@@ -167,8 +179,8 @@ func log(interval, duration uint, nodesFile, dataDir string, grafana bool) {
 		cr.DS("voter_delay_mean", "COMPUTE", "voter_delay_sum,received_voter,/")
 		cr.DS("tx_delay_mean", "COMPUTE", "tx_delay_sum,received_tx,/")
 		cr.DS("txblk_cfm_mean", "COMPUTE", "txblk_cfm_sum,confirmed_tx_blk,/,1000,/")
-		cr.DS("prop_fork", "COMPUTE", "processed_proposer,prop_chain_depth,-,prop_chain_depth,/")
-		cr.DS("voter_fork", "COMPUTE", "processed_voter,voter_chains_depth,-,voter_chains_depth,/")
+		cr.DS("prop_fork", "COMPUTE", "processed_proposer,prop_chain_depth,-,processed_proposer,/")
+		cr.DS("voter_fork", "COMPUTE", "processed_voter,voter_chains_depth,-,processed_voter,/")
 		cr.RRA("LAST", 0, 1, duration/interval)
 		err = cr.Create(true)
 		if err != nil {
@@ -182,6 +194,28 @@ func log(interval, duration uint, nodesFile, dataDir string, grafana bool) {
 	for k, v := range nodes {
 		monitor(k, v, interval, c)
 	}
+
+	// start goroutine to carry out the experiment
+	expStateUpdate := make(chan bool)
+	var expStopAlarm <-chan time.Time
+	expStarted := false
+	expRunning := false
+	expStopped := false
+	expStartTime := 0
+	var expStartPerf expSnapshot
+	var expStopPerf expSnapshot
+	var lastSnapshot expSnapshot
+	exec.Command("stty", "-F", "/dev/tty", "cbreak").Run()
+	exec.Command("stty", "-F", "/dev/tty", "-echo").Run()
+	go func() {
+		var b []byte = make([]byte, 1)
+		for {
+			os.Stdin.Read(b)
+			if string(b) == "x" {
+				expStateUpdate <- true
+			}
+		}
+	}()
 
 	// start displaying data and logging aggregated value
 	var avgUpdater *rrd.Updater
@@ -232,26 +266,26 @@ func log(interval, duration uint, nodesFile, dataDir string, grafana bool) {
 					ctot.Processed_voter_blocks += v.Processed_voter_blocks
 				}
 				cavg := Snapshot{
-					Generated_transactions:         ctot.Generated_transactions,
-					Confirmed_transactions:         ctot.Confirmed_transactions / len(curr),
-					Deconfirmed_transactions:       ctot.Deconfirmed_transactions / len(curr),
-					Incoming_message_queue:         ctot.Incoming_message_queue / len(curr),
-					Mined_proposer_blocks:          ctot.Mined_proposer_blocks,
-					Mined_voter_blocks:             ctot.Mined_voter_blocks,
-					Mined_transaction_blocks:       ctot.Mined_transaction_blocks,
-					Total_proposer_block_delay:     ctot.Total_proposer_block_delay,
-					Total_voter_block_delay:        ctot.Total_voter_block_delay,
-					Total_transaction_block_delay:  ctot.Total_transaction_block_delay,
-					Received_proposer_blocks:       ctot.Received_proposer_blocks,
-					Received_voter_blocks:          ctot.Received_voter_blocks,
-					Received_transaction_blocks:    ctot.Received_transaction_blocks,
-					Confirmed_transaction_blocks:   ctot.Confirmed_transaction_blocks / len(curr),
-					Deconfirmed_transaction_blocks: ctot.Deconfirmed_transaction_blocks / len(curr),
+					Generated_transactions:                       ctot.Generated_transactions,
+					Confirmed_transactions:                       ctot.Confirmed_transactions / len(curr),
+					Deconfirmed_transactions:                     ctot.Deconfirmed_transactions / len(curr),
+					Incoming_message_queue:                       ctot.Incoming_message_queue / len(curr),
+					Mined_proposer_blocks:                        ctot.Mined_proposer_blocks,
+					Mined_voter_blocks:                           ctot.Mined_voter_blocks,
+					Mined_transaction_blocks:                     ctot.Mined_transaction_blocks,
+					Total_proposer_block_delay:                   ctot.Total_proposer_block_delay,
+					Total_voter_block_delay:                      ctot.Total_voter_block_delay,
+					Total_transaction_block_delay:                ctot.Total_transaction_block_delay,
+					Received_proposer_blocks:                     ctot.Received_proposer_blocks,
+					Received_voter_blocks:                        ctot.Received_voter_blocks,
+					Received_transaction_blocks:                  ctot.Received_transaction_blocks,
+					Confirmed_transaction_blocks:                 ctot.Confirmed_transaction_blocks / len(curr),
+					Deconfirmed_transaction_blocks:               ctot.Deconfirmed_transaction_blocks / len(curr),
 					Total_transaction_block_confirmation_latency: ctot.Total_transaction_block_confirmation_latency / len(curr),
-					Proposer_main_chain_length: ctot.Proposer_main_chain_length,
-					Voter_main_chain_length_sum: ctot.Voter_main_chain_length_sum,
-					Processed_proposer_blocks: ctot.Processed_proposer_blocks,
-					Processed_voter_blocks: ctot.Processed_voter_blocks,
+					Proposer_main_chain_length:                   ctot.Proposer_main_chain_length,
+					Voter_main_chain_length_sum:                  ctot.Voter_main_chain_length_sum,
+					Processed_proposer_blocks:                    ctot.Processed_proposer_blocks,
+					Processed_voter_blocks:                       ctot.Processed_voter_blocks,
 				}
 				ptot := Snapshot{}
 				for _, v := range prev {
@@ -277,31 +311,100 @@ func log(interval, duration uint, nodesFile, dataDir string, grafana bool) {
 					ptot.Processed_voter_blocks += v.Processed_voter_blocks
 				}
 				pavg := Snapshot{
-					Generated_transactions:         ptot.Generated_transactions,
-					Confirmed_transactions:         ptot.Confirmed_transactions / len(prev),
-					Deconfirmed_transactions:       ptot.Deconfirmed_transactions / len(prev),
-					Incoming_message_queue:         ptot.Incoming_message_queue / len(prev),
-					Mined_proposer_blocks:          ptot.Mined_proposer_blocks,
-					Mined_voter_blocks:             ptot.Mined_voter_blocks,
-					Mined_transaction_blocks:       ptot.Mined_transaction_blocks,
-					Total_proposer_block_delay:     ptot.Total_proposer_block_delay,
-					Total_voter_block_delay:        ptot.Total_voter_block_delay,
-					Total_transaction_block_delay:  ptot.Total_transaction_block_delay,
-					Received_proposer_blocks:       ptot.Received_proposer_blocks,
-					Received_voter_blocks:          ptot.Received_voter_blocks,
-					Received_transaction_blocks:    ptot.Received_transaction_blocks,
-					Confirmed_transaction_blocks:   ptot.Confirmed_transaction_blocks / len(prev),
-					Deconfirmed_transaction_blocks: ptot.Deconfirmed_transaction_blocks / len(prev),
+					Generated_transactions:                       ptot.Generated_transactions,
+					Confirmed_transactions:                       ptot.Confirmed_transactions / len(prev),
+					Deconfirmed_transactions:                     ptot.Deconfirmed_transactions / len(prev),
+					Incoming_message_queue:                       ptot.Incoming_message_queue / len(prev),
+					Mined_proposer_blocks:                        ptot.Mined_proposer_blocks,
+					Mined_voter_blocks:                           ptot.Mined_voter_blocks,
+					Mined_transaction_blocks:                     ptot.Mined_transaction_blocks,
+					Total_proposer_block_delay:                   ptot.Total_proposer_block_delay,
+					Total_voter_block_delay:                      ptot.Total_voter_block_delay,
+					Total_transaction_block_delay:                ptot.Total_transaction_block_delay,
+					Received_proposer_blocks:                     ptot.Received_proposer_blocks,
+					Received_voter_blocks:                        ptot.Received_voter_blocks,
+					Received_transaction_blocks:                  ptot.Received_transaction_blocks,
+					Confirmed_transaction_blocks:                 ptot.Confirmed_transaction_blocks / len(prev),
+					Deconfirmed_transaction_blocks:               ptot.Deconfirmed_transaction_blocks / len(prev),
 					Total_transaction_block_confirmation_latency: ptot.Total_transaction_block_confirmation_latency / len(prev),
-					Proposer_main_chain_length: ptot.Proposer_main_chain_length,
-					Voter_main_chain_length_sum: ptot.Voter_main_chain_length_sum,
-					Processed_proposer_blocks: ptot.Processed_proposer_blocks,
-					Processed_voter_blocks: ptot.Processed_voter_blocks,
+					Proposer_main_chain_length:                   ptot.Proposer_main_chain_length,
+					Voter_main_chain_length_sum:                  ptot.Voter_main_chain_length_sum,
+					Processed_proposer_blocks:                    ptot.Processed_proposer_blocks,
+					Processed_voter_blocks:                       ptot.Processed_voter_blocks,
 				}
+				dur := int(now.Sub(start).Seconds())
+				// deal with the experiment
+				select {
+				case <-expStateUpdate:
+					expStarted = true
+					expRunning = false
+					expStopped = false
+					expStartTime = dur
+					lastSnapshot = expSnapshot{
+						time:               dur,
+						confirmed_tx:       curr["node_0"].Confirmed_transactions,
+						confirmed_tx_blk:   curr["node_0"].Confirmed_transaction_blocks,
+						processed_voter:    curr["node_0"].Processed_voter_blocks,
+						processed_proposer: curr["node_0"].Processed_proposer_blocks,
+						voter_len_sum:      curr["node_0"].Voter_main_chain_length_sum,
+						proposer_len:       curr["node_0"].Proposer_main_chain_length,
+						latency_sum:        curr["node_0"].Total_transaction_block_confirmation_latency,
+					}
+					expStopAlarm = time.After(300 * time.Second)
+				case <-expStopAlarm:
+					expStarted = true
+					expRunning = false
+					expStopped = true
+				default:
+				}
+
+				if expStarted && (!expStopped) {
+					if !expRunning {
+						// if the round just bumped
+						if lastSnapshot.confirmed_tx != curr["node_0"].Confirmed_transactions {
+							expRunning = true
+							expStartPerf = expSnapshot{
+								time:               dur,
+								confirmed_tx:       lastSnapshot.confirmed_tx,
+								confirmed_tx_blk:   lastSnapshot.confirmed_tx_blk,
+								processed_voter:    lastSnapshot.processed_voter,
+								processed_proposer: lastSnapshot.processed_proposer,
+								voter_len_sum:      lastSnapshot.voter_len_sum,
+								proposer_len:       lastSnapshot.proposer_len,
+								latency_sum:        lastSnapshot.latency_sum,
+							}
+						}
+					} else {
+						// if the round just bumped
+						if lastSnapshot.confirmed_tx != curr["node_0"].Confirmed_transactions {
+							expStopPerf = expSnapshot{
+								time:               dur,
+								confirmed_tx:       lastSnapshot.confirmed_tx,
+								confirmed_tx_blk:   lastSnapshot.confirmed_tx_blk,
+								processed_voter:    lastSnapshot.processed_voter,
+								processed_proposer: lastSnapshot.processed_proposer,
+								voter_len_sum:      lastSnapshot.voter_len_sum,
+								proposer_len:       lastSnapshot.proposer_len,
+								latency_sum:        lastSnapshot.latency_sum,
+							}
+						}
+					}
+				}
+
+				lastSnapshot = expSnapshot{
+					time:               dur,
+					confirmed_tx:       curr["node_0"].Confirmed_transactions,
+					confirmed_tx_blk:   curr["node_0"].Confirmed_transaction_blocks,
+					processed_voter:    curr["node_0"].Processed_voter_blocks,
+					processed_proposer: curr["node_0"].Processed_proposer_blocks,
+					voter_len_sum:      curr["node_0"].Voter_main_chain_length_sum,
+					proposer_len:       curr["node_0"].Proposer_main_chain_length,
+					latency_sum:        curr["node_0"].Total_transaction_block_confirmation_latency,
+				}
+
 				// display the values
 				tm.Clear()
 				tm.MoveCursor(1, 1)
-				dur := int(now.Sub(start).Seconds())
 				tm.Printf("Experiment duration - %v sec\n", dur)
 				tm.Printf("                                  %8v  %8v\n", "Overall", "Window")
 				tm.Printf("        Generated Transactions    %8v  %8v\n", cavg.Generated_transactions/dur, (cavg.Generated_transactions-pavg.Generated_transactions)/int(interval))
@@ -317,8 +420,25 @@ func log(interval, duration uint, nodesFile, dataDir string, grafana bool) {
 				tm.Printf("           Delay -       Voter    %8.3g  %8.3g\n", float64(cavg.Total_voter_block_delay)/float64(cavg.Received_voter_blocks), float64(cavg.Total_voter_block_delay-pavg.Total_voter_block_delay)/float64(cavg.Received_voter_blocks-pavg.Received_voter_blocks))
 				tm.Printf("           Delay - Transaction    %8.3g  %8.3g\n", float64(cavg.Total_transaction_block_delay)/float64(cavg.Received_transaction_blocks), float64(cavg.Total_transaction_block_delay-pavg.Total_transaction_block_delay)/float64(cavg.Received_transaction_blocks-pavg.Received_transaction_blocks))
 				tm.Printf("    Confirmation -       Block    %8.3g  %8.3g\n", float64(cavg.Total_transaction_block_confirmation_latency)/float64(cavg.Confirmed_transaction_blocks)/1000.0, float64(cavg.Total_transaction_block_confirmation_latency-pavg.Total_transaction_block_confirmation_latency)/float64(cavg.Confirmed_transaction_blocks-pavg.Confirmed_transaction_blocks)/1000.0)
-				tm.Printf("         Forking -    Proposer    %8.3g  %8.3g\n", float64(cavg.Processed_proposer_blocks - cavg.Proposer_main_chain_length)/float64(cavg.Proposer_main_chain_length), float64((cavg.Processed_proposer_blocks - cavg.Proposer_main_chain_length) - (pavg.Processed_proposer_blocks - pavg.Proposer_main_chain_length))/float64(cavg.Proposer_main_chain_length-pavg.Proposer_main_chain_length))
-				tm.Printf("         Forking -       Voter    %8.3g  %8.3g\n", float64(cavg.Processed_voter_blocks - cavg.Voter_main_chain_length_sum)/float64(cavg.Voter_main_chain_length_sum), float64((cavg.Processed_voter_blocks - cavg.Voter_main_chain_length_sum) - (pavg.Processed_voter_blocks - pavg.Voter_main_chain_length_sum))/float64(cavg.Voter_main_chain_length_sum-pavg.Voter_main_chain_length_sum))
+				tm.Printf("         Forking -    Proposer    %8.3g  %8.3g\n", float64(cavg.Processed_proposer_blocks-cavg.Proposer_main_chain_length)/float64(cavg.Processed_proposer_blocks), float64((cavg.Processed_proposer_blocks-cavg.Proposer_main_chain_length)-(pavg.Processed_proposer_blocks-pavg.Proposer_main_chain_length))/float64(cavg.Processed_proposer_blocks-pavg.Processed_proposer_blocks))
+				tm.Printf("         Forking -       Voter    %8.3g  %8.3g\n", float64(cavg.Processed_voter_blocks-cavg.Voter_main_chain_length_sum)/float64(cavg.Processed_voter_blocks), float64((cavg.Processed_voter_blocks-cavg.Voter_main_chain_length_sum)-(pavg.Processed_voter_blocks-pavg.Voter_main_chain_length_sum))/float64(cavg.Processed_voter_blocks-pavg.Processed_voter_blocks))
+				if expStopped {
+					if expStarted {
+						expdur := expStopPerf.time - expStartPerf.time
+						tm.Printf("Experiment Result\n")
+						tm.Printf("Time         %7v\n", expdur)
+						tm.Printf("Cfm Ltcy     %7.7g\n", float64(expStopPerf.latency_sum-expStartPerf.latency_sum)/float64(expStopPerf.confirmed_tx_blk-expStartPerf.confirmed_tx_blk)/1000.0)
+						tm.Printf("Thruput      %7.7g\n", float64(expStopPerf.confirmed_tx-expStartPerf.confirmed_tx)/float64(expdur))
+						tm.Printf("Prop Fork    %7.7g\n", float64(expStopPerf.processed_proposer-expStopPerf.proposer_len-expStartPerf.processed_proposer+expStartPerf.proposer_len)/float64(expStopPerf.processed_proposer-expStartPerf.processed_proposer))
+						tm.Printf("Vote Fork    %7.7g\n", float64(expStopPerf.processed_voter-expStopPerf.voter_len_sum-expStartPerf.processed_voter+expStartPerf.voter_len_sum)/float64(expStopPerf.processed_voter-expStartPerf.processed_voter))
+					}
+				} else {
+					if !expStarted {
+						tm.Printf("Hit x to start a recording\n")
+					} else {
+						tm.Printf("Experiment running. Remaining time: %v seconds\n", 300-dur+expStartTime)
+					}
+				}
 				tm.Flush()
 				// log the aggregated value
 				if grafana {
