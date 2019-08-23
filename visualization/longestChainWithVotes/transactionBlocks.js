@@ -1,8 +1,8 @@
 // Forces for transaction pool
 let simulation = d3.forceSimulation(transactionBlocks)
     .force('collide', d3.forceCollide().radius(5*transactionBlockSize/8).iterations(10).strength(0.05))
-    .force('x', d3.forceX(transactionScreenWidth/4).strength(0.15))
-    .force('y', d3.forceY(transactionScreenHeight*0.2).strength(0.15))
+    .force('x', d3.forceX(transactionScreenWidth/4).strength(0.18))
+    .force('y', d3.forceY(transactionScreenHeight*0.2).strength(0.18))
     .alphaTarget(0.1)
     .on('tick', ticked)
 
