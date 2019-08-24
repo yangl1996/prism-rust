@@ -576,7 +576,7 @@ impl BlockChain {
                     // calculate average of depth of the votes
                     let avg_vote_depth = total_vote_depth as f32 / total_vote_count as f32;
                     // expected voter depth of an adversary
-                    let adversary_expected_vote_depth = avg_vote_depth / SECURITY_BOUND * ADVERSARY_MINING_POWER; 
+                    let adversary_expected_vote_depth = avg_vote_depth / (1.0-ALPHA) / (1.0-ADVERSARY_MINING_POWER) * ADVERSARY_MINING_POWER;
                     let poisson = Poisson::new(adversary_expected_vote_depth as f64).unwrap();
 
                     // for each block calculate the lower bound on the number of votes
@@ -631,6 +631,7 @@ impl BlockChain {
                     if max_vote_lcb <= remaining_votes || new_leader.is_none() {
                         new_leader = None;
                     } else {
+                        /*
                         for p_block in &proposer_blocks {
                             // if the below condition is true, then final votes on p_block could overtake new_leader
                             if max_vote_lcb < votes_lcb.get(p_block).unwrap() + remaining_votes && *p_block != new_leader.unwrap() {
@@ -643,6 +644,7 @@ impl BlockChain {
                                 break;
                             }
                         }
+                        */
                     }
                 }
 
