@@ -631,7 +631,6 @@ impl BlockChain {
                     if max_vote_lcb <= remaining_votes || new_leader.is_none() {
                         new_leader = None;
                     } else {
-                        /*
                         for p_block in &proposer_blocks {
                             // if the below condition is true, then final votes on p_block could overtake new_leader
                             if max_vote_lcb < votes_lcb.get(p_block).unwrap() + remaining_votes && *p_block != new_leader.unwrap() {
@@ -644,7 +643,6 @@ impl BlockChain {
                                 break;
                             }
                         }
-                        */
                     }
                 }
 
@@ -887,13 +885,14 @@ impl BlockChain {
         // get the first block we heard on each proposer level
         let mut list: Vec<H256> = vec![];
         for level in first_vote_level + 1..=last_vote_level {
-            let blocks: Vec<H256> = deserialize(
+            let mut blocks: Vec<H256> = deserialize(
                 &self
                     .db
                     .get_cf(proposer_tree_level_cf, serialize(&(level as u64)).unwrap())?
                     .unwrap(),
             )
             .unwrap();
+            blocks.sort_unstable();
             list.push(blocks[0]); //Note: the last vote in list could be other proposer that at the same level of proposer_parent
         }
         return Ok(list);
