@@ -2,20 +2,14 @@ use crate::crypto::hash::H256;
 
 // Longest chain k parameter
 pub const KAPPA: u64 = 6;
+pub const CHAIN_MINING_RATE: f32 = 0.6; // mining rate of the proposer chain and each voter chain in Blks/s
+pub const TX_BLOCK_TRANSACTIONS: u32 = 230;
 
-// Network parameters
-pub const NETWORK_DELAY: f32 = 2.0; // the expected block propagation delay (in seconds)
+pub const TX_MINING_RATE: f32 = CHAIN_MINING_RATE;
 
 // Design parameters
 pub const NUM_VOTER_CHAINS: u16 = 0; // more chains means better latency
-pub const TX_BLOCK_SIZE: u32 = 64000; // the maximum size of a transaction block (in Bytes)
-pub const TX_THROUGHPUT: u32 = 700; // the transaction throughput we want to support (in Tx/s)
-pub const TX_BLOCK_TRANSACTIONS: u32 = TX_BLOCK_SIZE / AVG_TX_SIZE;
-pub const PROPOSER_BLOCK_TX_REFS: u32 = (TX_MINING_RATE / CHAIN_MINING_RATE * 2.0) as u32;
-
-pub const AVG_TX_SIZE: u32 = 280; // average size of a transaction (in Bytes)
-pub const TX_MINING_RATE: f32 = TX_THROUGHPUT as f32 / TX_BLOCK_TRANSACTIONS as f32;
-pub const CHAIN_MINING_RATE: f32 = 0.2 / NETWORK_DELAY; // mining rate of the proposer chain and each voter chain in Blks/s
+pub const PROPOSER_BLOCK_TX_REFS: u32 = 1 as u32;
 
 // Do not change from here
 
