@@ -1,11 +1,11 @@
 use crate::crypto::hash::H256;
 
 // Longest chain k parameter
-pub const KAPPA: u64 = 6;
+pub const KAPPA: u64 = 38;
 pub const CHAIN_MINING_RATE: f32 = 0.6; // mining rate of the proposer chain and each voter chain in Blks/s
 pub const TX_BLOCK_TRANSACTIONS: u32 = 100000;
 
-pub const TX_MINING_RATE: f32 = CHAIN_MINING_RATE;
+pub const TX_MINING_RATE: f32 = 0;
 
 // Design parameters
 pub const NUM_VOTER_CHAINS: u16 = 0; // more chains means better latency
