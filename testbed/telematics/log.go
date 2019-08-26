@@ -431,6 +431,7 @@ func log(interval, duration uint, nodesFile, dataDir string, grafana bool) {
 						tm.Printf("Thruput      %7.7g\n", float64(expStopPerf.confirmed_tx-expStartPerf.confirmed_tx)/float64(expdur))
 						tm.Printf("Prop Fork    %7.7g\n", float64(expStopPerf.processed_proposer-expStopPerf.proposer_len-expStartPerf.processed_proposer+expStartPerf.proposer_len)/float64(expStopPerf.processed_proposer-expStartPerf.processed_proposer))
 						tm.Printf("Vote Fork    %7.7g\n", float64(expStopPerf.processed_voter-expStopPerf.voter_len_sum-expStartPerf.processed_voter+expStartPerf.voter_len_sum)/float64(expStopPerf.processed_voter-expStartPerf.processed_voter))
+						tm.Printf("Prop Mine    %7.7g\n", float64(expStopPerf.processed_proposer-expStartPerf.processed_proposer) / float64(expdur))
 					}
 				} else {
 					if !expStarted {
