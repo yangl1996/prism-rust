@@ -22,7 +22,7 @@ pub fn new_validated_block(
 
     // if this block is a transaction, remove transactions from mempool
     match &block.content {
-        Content::Transaction(content) => {
+        Content::Proposer(content) => {
             let mut mempool = mempool.lock().unwrap();
             for tx in &content.transactions {
                 mempool.remove_by_hash(&tx.hash());

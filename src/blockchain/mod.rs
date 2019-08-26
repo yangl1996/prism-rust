@@ -662,12 +662,10 @@ impl BlockChain {
             let mut removed_transaction_blocks: Vec<H256> = vec![];
             let mut added_transaction_blocks: Vec<H256> = vec![];
             for block in &removed {
-                let t: Vec<H256> = get_value!(transaction_ref_neighbor_cf, block).unwrap();
-                removed_transaction_blocks.extend(&t);
+                removed_transaction_blocks.push(*block);
             }
             for block in &added {
-                let t: Vec<H256> = get_value!(transaction_ref_neighbor_cf, block).unwrap();
-                added_transaction_blocks.extend(&t);
+                added_transaction_blocks.push(*block);
             }
             return Ok((added_transaction_blocks, removed_transaction_blocks));
         } else {

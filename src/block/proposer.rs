@@ -1,6 +1,7 @@
 use super::Block;
 use super::Content as BlockContent;
 use crate::config::*;
+use crate::transaction::Transaction;
 use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::merkle::MerkleTree;
 use crate::experiment::performance_counter::PayloadSize;
@@ -12,16 +13,18 @@ pub struct Content {
     pub transaction_refs: Vec<H256>,
     /// List of proposer blocks referred by this proposer block.
     pub proposer_refs: Vec<H256>,
+    pub transactions: Vec<Transaction>,
     // TODO: coinbase transaction, and maybe refer to voter blocks to include their coinbase
     // transactions.
 }
 
 impl Content {
     /// Create new proposer block content.
-    pub fn new(transaction_refs: Vec<H256>, proposer_refs: Vec<H256>) -> Self {
+    pub fn new(transaction_refs: Vec<H256>, proposer_refs: Vec<H256>, transactions: Vec<Transaction>) -> Self {
         Self {
             transaction_refs,
             proposer_refs,
+            transactions,
         }
     }
 }
@@ -49,6 +52,7 @@ pub fn genesis() -> Block {
     let content = Content {
         transaction_refs: vec![],
         proposer_refs: vec![],
+        transactions: vec![],
     };
     let all_zero: [u8; 32] = [0; 32];
     // TODO: this will not pass validation.

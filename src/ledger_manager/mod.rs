@@ -210,7 +210,7 @@ fn update_transaction_sequence(
         let block = blockdb.get(&hash).unwrap().unwrap();
         PERFORMANCE_COUNTER.record_confirm_transaction_block(&block);
         let content = match block.content {
-            Content::Transaction(data) => data,
+            Content::Proposer(data) => data,
             _ => unreachable!(),
         };
         let mut transactions = content
@@ -227,7 +227,7 @@ fn update_transaction_sequence(
     for hash in diff.1 {
         let block = blockdb.get(&hash).unwrap().unwrap();
         let content = match block.content {
-            Content::Transaction(data) => data,
+            Content::Proposer(data) => data,
             _ => unreachable!(),
         };
         let mut transactions = content

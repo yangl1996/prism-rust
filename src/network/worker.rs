@@ -293,11 +293,13 @@ impl Context {
                             &self.chain,
                             &self.server,
                         );
-                        context_update_sig.push(match &block.content {
-                            Content::Proposer(_) => ContextUpdateSignal::NewProposerBlock,
-                            Content::Voter(c) => ContextUpdateSignal::NewVoterBlock(c.chain_number),
-                            Content::Transaction(_) => ContextUpdateSignal::NewTransactionBlock,
-                        });
+                        match &block.content {
+                            Content::Proposer(_) => {
+                                context_update_sig.push(ContextUpdateSignal::NewProposerBlock);
+                                context_update_sig.push(ContextUpdateSignal::NewTransactionBlock);
+                            }
+                            _ => unreachable!()
+                        }
                         let mut buffer = self.buffer.lock().unwrap();
                         let mut resolved_by_current = buffer.satisfy(block.hash());
                         drop(buffer);

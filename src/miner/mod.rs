@@ -89,6 +89,7 @@ pub fn new(
     let proposer_content = proposer::Content {
         transaction_refs: vec![],
         proposer_refs: vec![],
+        transactions: vec![],
     };
     contents.push(Content::Proposer(proposer_content));
 
@@ -195,9 +196,6 @@ impl Context {
         }
 
         let mut rng = rand::thread_rng();
-        let mut stage = 0;  // 0 for just produced a proposer block, 1 for just produced a transaction block
-        let mut tx_hash: H256 = H256::default();
-        let mut prop_hash: H256 = H256::default();
 
         // main mining loop
         loop {
@@ -401,25 +399,18 @@ impl Context {
             self.header.nonce = rng.gen();
             self.header.timestamp = get_time();
 
-            // if current stage is 0, we should produce a transaction block. otherwise produce a
-            // proposer block
             let header_hash = self.header.hash();
-
-            let mined_block: Block = if stage == 0 {
-                // produce a transaction block
-                stage = 1;
-                tx_hash = header_hash;
-                Block::from_header(self.header, self.contents[TRANSACTION_INDEX as usize].clone(), vec![])
-            }
-            else if stage == 1 {
-                // produce a proposer block
-                stage = 0;
-                prop_hash = header_hash;
-                Block::from_header(self.header, self.contents[PROPOSER_INDEX as usize].clone(), vec![])
-            }
-            else {
-                unreachable!();
+            let mut content = match &self.contents[PROPOSER_INDEX as usize] {
+                Content::Proposer(d) => d.clone(),
+                _ => unreachable!(),
             };
+            let mut transactions = match &self.contents[TRANSACTION_INDEX as usize] {
+                Content::Transaction(d) => d.transactions.clone(),
+                _ => unreachable!(),
+            };
+            content.transactions = transactions;
+            let content = Content::Proposer(content);
+            let mined_block: Block = Block::from_header(self.header, content, vec![]);
 
             PERFORMANCE_COUNTER.record_mine_block(&mined_block);
             self.blockdb.insert(&mined_block).unwrap();
@@ -431,10 +422,9 @@ impl Context {
                 &self.server,
             );
             // only broadcast after the proposer block is also mined
-            if stage == 0 {
-                self.server
-                    .broadcast(Message::NewBlockHashes(vec![tx_hash, prop_hash]));
-            }
+            self.server
+                .broadcast(Message::NewBlockHashes(vec![header_hash]));
+
             // if we are stepping, pause the miner loop
             if let OperatingState::Step = self.operating_state {
                 self.operating_state = OperatingState::Paused;
@@ -442,18 +432,17 @@ impl Context {
 
             // after we mined this block, we update the context based on this block
             match &mined_block.content {
-                Content::Proposer(_) => self
-                    .context_update_tx
-                    .send(ContextUpdateSignal::NewProposerBlock)
-                    .unwrap(),
-                Content::Voter(content) => self
-                    .context_update_tx
-                    .send(ContextUpdateSignal::NewVoterBlock(content.chain_number))
-                    .unwrap(),
-                Content::Transaction(_) => self
-                    .context_update_tx
-                    .send(ContextUpdateSignal::NewTransactionBlock)
-                    .unwrap(),
+                Content::Proposer(_) => {
+                    self
+                        .context_update_tx
+                        .send(ContextUpdateSignal::NewProposerBlock)
+                        .unwrap();
+                    self
+                        .context_update_tx
+                        .send(ContextUpdateSignal::NewTransactionBlock)
+                        .unwrap();
+                }
+                _ => unreachable!()
             }
 
             if let OperatingState::Run(i, _) = self.operating_state {
@@ -461,11 +450,7 @@ impl Context {
                     let interval_dist = rand::distributions::Exp::new(1.0 / (i as f64));
                     let interval = interval_dist.sample(&mut rng);
                     let interval = time::Duration::from_micros(interval as u64);
-                    if stage != 1 {
-                        // if we are at stage 1, immediately produce a proposer block, so don't
-                        // sleep
-                        thread::sleep(interval);
-                    }
+                    thread::sleep(interval);
                 }
             }
         }

@@ -133,6 +133,7 @@ pub mod tests {
         let content = Content::Proposer(proposer::Content {
             transaction_refs,
             proposer_refs,
+            transactions: vec![]
         });
         let content_hash = content.hash();
         Block::new(

@@ -167,6 +167,21 @@ pub fn check_content_semantic(
             if !proposer_block::check_ref_proposer_level(&parent, &content, blockchain) {
                 return BlockResult::WrongProposerRef;
             }
+            // check each transaction
+            for transaction in content.transactions.iter() {
+                if !transaction::check_non_empty(&transaction) {
+                    return BlockResult::EmptyTransaction;
+                }
+                if !transaction::check_non_zero(&transaction) {
+                    return BlockResult::ZeroValue;
+                }
+                if !transaction::check_sufficient_input(&transaction) {
+                    return BlockResult::InsufficientInput;
+                }
+            }
+            if !transaction::check_signature_batch(&content.transactions) {
+                return BlockResult::WrongSignature;
+            }
             return BlockResult::Pass;
         }
         Content::Voter(content) => {
