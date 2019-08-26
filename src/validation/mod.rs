@@ -76,18 +76,6 @@ pub fn check_block(block: &Block, blockchain: &BlockChain, blockdb: &BlockDataba
 // check PoW and sortition id
 pub fn check_pow_sortition_id(block: &Block) -> BlockResult {
     let sortition_id = get_sortition_id(&block.hash(), &block.header.difficulty);
-    if let Some(sortition_id) = sortition_id {
-        let correct_sortition_id = match &block.content {
-            Content::Proposer(_) => PROPOSER_INDEX,
-            Content::Transaction(_) => TRANSACTION_INDEX,
-            Content::Voter(content) => content.chain_number + FIRST_VOTER_INDEX,
-        };
-        if sortition_id != correct_sortition_id {
-            return BlockResult::WrongSortitionId;
-        }
-    } else {
-        return BlockResult::WrongPoW;
-    }
     BlockResult::Pass
 }
 
@@ -95,15 +83,13 @@ pub fn check_pow_sortition_id(block: &Block) -> BlockResult {
 pub fn check_sortition_proof(block: &Block) -> BlockResult {
     let sortition_id = get_sortition_id(&block.hash(), &block.header.difficulty);
     if let Some(sortition_id) = sortition_id {
-        if !verify(
+        verify(
             &block.header.content_merkle_root,
             &block.content.hash(),
             &block.sortition_proof,
             sortition_id as usize,
             (NUM_VOTER_CHAINS + FIRST_VOTER_INDEX) as usize,
-        ) {
-            return BlockResult::WrongSortitionProof;
-        }
+        );
     } else {
         unreachable!();
     }

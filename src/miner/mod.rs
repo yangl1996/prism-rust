@@ -221,6 +221,15 @@ impl Context {
                 return;
             }
 
+            if let OperatingState::Run(i, _) = self.operating_state {
+                if i != 0 {
+                    let interval_dist = rand::distributions::Exp::new(1.0 / (i as f64));
+                    let interval = interval_dist.sample(&mut rng);
+                    let interval = time::Duration::from_micros(interval as u64);
+                    thread::sleep(interval);
+                }
+            }
+
             // check whether there is new content through context update channel
             let mut new_transaction_block: bool = false;
             let mut new_voter_block: BTreeSet<u16> = BTreeSet::new();
@@ -443,15 +452,6 @@ impl Context {
                         .unwrap();
                 }
                 _ => unreachable!()
-            }
-
-            if let OperatingState::Run(i, _) = self.operating_state {
-                if i != 0 {
-                    let interval_dist = rand::distributions::Exp::new(1.0 / (i as f64));
-                    let interval = interval_dist.sample(&mut rng);
-                    let interval = time::Duration::from_micros(interval as u64);
-                    thread::sleep(interval);
-                }
             }
         }
     }
