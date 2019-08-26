@@ -195,6 +195,9 @@ impl Context {
         }
 
         let mut rng = rand::thread_rng();
+        let mut stage = 0;  // 0 for just produced a proposer block, 1 for just produced a transaction block
+        let mut tx_hash: H256 = H256::default();
+        let mut prop_hash: H256 = H256::default();
 
         // main mining loop
         loop {
@@ -398,86 +401,59 @@ impl Context {
             self.header.nonce = rng.gen();
             self.header.timestamp = get_time();
 
-            // Check if we successfully mined a block
+            // if current stage is 0, we should produce a transaction block. otherwise produce a
+            // proposer block
             let header_hash = self.header.hash();
-            if header_hash < self.header.difficulty {
-                // Create a block
-                let mined_block: Block = self.produce_block(header_hash);
-                //if the mined block is an empty tx block, we ignore it, and go straight to next mining loop
-                let skip: bool = {
-                    if let OperatingState::Run(_, lazy) = self.operating_state {
-                        if lazy {
-                            let empty = {
-                                match &mined_block.content {
-                                    Content::Transaction(content) => {
-                                        if content.transactions.is_empty() {
-                                            true
-                                        } else {
-                                            false
-                                        }
-                                    }
-                                    Content::Voter(content) => {
-                                        if content.votes.is_empty() {
-                                            true
-                                        } else {
-                                            false
-                                        }
-                                    }
-                                    Content::Proposer(content) => {
-                                        if content.transaction_refs.is_empty()
-                                            && content.proposer_refs.is_empty()
-                                        {
-                                            true
-                                        } else {
-                                            false
-                                        }
-                                    }
-                                }
-                            };
-                            empty
-                        } else {
-                            false
-                        }
-                    } else {
-                        false
-                    }
-                };
 
-                if !skip {
-                    PERFORMANCE_COUNTER.record_mine_block(&mined_block);
-                    self.blockdb.insert(&mined_block).unwrap();
-                    new_validated_block(
-                        &mined_block,
-                        &self.mempool,
-                        &self.blockdb,
-                        &self.blockchain,
-                        &self.server,
-                    );
-                    // broadcast after adding the new block to the blockchain, in case a peer mines
-                    // a block immediately after we broadcast, leaving us non time to insert into
-                    // the blockchain
-                    self.server
-                        .broadcast(Message::NewBlockHashes(vec![header_hash]));
-                    // if we are stepping, pause the miner loop
-                    if let OperatingState::Step = self.operating_state {
-                        self.operating_state = OperatingState::Paused;
-                    }
-                }
-                // after we mined this block, we update the context based on this block
-                match &mined_block.content {
-                    Content::Proposer(_) => self
-                        .context_update_tx
-                        .send(ContextUpdateSignal::NewProposerBlock)
-                        .unwrap(),
-                    Content::Voter(content) => self
-                        .context_update_tx
-                        .send(ContextUpdateSignal::NewVoterBlock(content.chain_number))
-                        .unwrap(),
-                    Content::Transaction(_) => self
-                        .context_update_tx
-                        .send(ContextUpdateSignal::NewTransactionBlock)
-                        .unwrap(),
-                }
+            let mined_block: Block = if stage == 0 {
+                // produce a transaction block
+                stage = 1;
+                tx_hash = header_hash;
+                Block::from_header(self.header, self.contents[TRANSACTION_INDEX as usize].clone(), vec![])
+            }
+            else if stage == 1 {
+                // produce a proposer block
+                stage = 0;
+                prop_hash = header_hash;
+                Block::from_header(self.header, self.contents[PROPOSER_INDEX as usize].clone(), vec![])
+            }
+            else {
+                unreachable!();
+            };
+
+            PERFORMANCE_COUNTER.record_mine_block(&mined_block);
+            self.blockdb.insert(&mined_block).unwrap();
+            new_validated_block(
+                &mined_block,
+                &self.mempool,
+                &self.blockdb,
+                &self.blockchain,
+                &self.server,
+            );
+            // only broadcast after the proposer block is also mined
+            if stage == 0 {
+                self.server
+                    .broadcast(Message::NewBlockHashes(vec![tx_hash, prop_hash]));
+            }
+            // if we are stepping, pause the miner loop
+            if let OperatingState::Step = self.operating_state {
+                self.operating_state = OperatingState::Paused;
+            }
+
+            // after we mined this block, we update the context based on this block
+            match &mined_block.content {
+                Content::Proposer(_) => self
+                    .context_update_tx
+                    .send(ContextUpdateSignal::NewProposerBlock)
+                    .unwrap(),
+                Content::Voter(content) => self
+                    .context_update_tx
+                    .send(ContextUpdateSignal::NewVoterBlock(content.chain_number))
+                    .unwrap(),
+                Content::Transaction(_) => self
+                    .context_update_tx
+                    .send(ContextUpdateSignal::NewTransactionBlock)
+                    .unwrap(),
             }
 
             if let OperatingState::Run(i, _) = self.operating_state {
@@ -485,7 +461,11 @@ impl Context {
                     let interval_dist = rand::distributions::Exp::new(1.0 / (i as f64));
                     let interval = interval_dist.sample(&mut rng);
                     let interval = time::Duration::from_micros(interval as u64);
-                    thread::sleep(interval);
+                    if stage != 1 {
+                        // if we are at stage 1, immediately produce a proposer block, so don't
+                        // sleep
+                        thread::sleep(interval);
+                    }
                 }
             }
         }

@@ -62,15 +62,6 @@ impl std::fmt::Display for BlockResult {
 pub fn check_block(block: &Block, blockchain: &BlockChain, blockdb: &BlockDatabase) -> BlockResult {
     // TODO: Check difficulty. Where should we get the current difficulty ranges?
 
-    match check_pow_sortition_id(block) {
-        // if PoW and sortition id passes, we check other rules
-        BlockResult::Pass => {}
-        x => return x,
-    };
-    match check_sortition_proof(block) {
-        BlockResult::Pass => {}
-        x => return x,
-    };
     match check_data_availability(block, blockchain, blockdb) {
         BlockResult::Pass => {}
         x => return x,
