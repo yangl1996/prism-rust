@@ -478,7 +478,7 @@ function start_transactions_single
 {
 	curl -s "http://$3:$4/transaction-generator/set-arrival-distribution?interval=100&distribution=uniform"
 	curl -s "http://$3:$4/transaction-generator/set-value-distribution?min=100&max=100&distribution=uniform"
-	curl -s "http://$3:$4/transaction-generator/start?throttle=100000"
+	curl -s "http://$3:$4/transaction-generator/start?throttle=200000"
 }
 
 function start_mining_single
