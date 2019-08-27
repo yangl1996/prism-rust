@@ -2,7 +2,7 @@ use crate::crypto::hash::H256;
 
 // Longest chain k parameter
 pub const KAPPA: u64 = 28;
-pub const TX_BLOCK_TRANSACTIONS: u32 = 60000;
+pub const TX_BLOCK_TRANSACTIONS: u32 = 10;
 
 // Do not change from here
 pub const TX_MINING_RATE: f32 = 0.0;
