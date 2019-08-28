@@ -428,6 +428,16 @@ function tune_tcp_single
 	ssh $1 -- "sudo sysctl -w net.core.rmem_max=50331648 && sudo sysctl -w net.core.wmem_max=50331648 && sudo sysctl -w net.ipv4.tcp_wmem='10240 87380 50331648' && sudo sysctl -w net.ipv4.tcp_rmem='10240 87380 50331648'"
 }
 
+function enable_cpu_cores_single
+{
+	cores=`seq $2 1 15`
+	tee_list=""
+	for core_id in $cores ; do
+		tee_list="$tee_list /sys/devices/system/cpu/cpu$core_id/online"
+	done
+	ssh $1 -- "echo 1 | sudo tee /sys/devices/system/cpu/cpu*/online && echo 0 | sudo tee $tee_list"
+}
+
 function execute_on_all
 {
 	# $1: execute function '$1_single'
@@ -726,6 +736,7 @@ case "$1" in
 		  shape-traffic l b          Limit the throughput to b Kbps and add latency of l ms
 		  reset-traffic              Remove the traffic shaping filters
 		  tune-tcp                   Set TCP parameters
+		  cores-on n                 Turn n CPU cores on
 
 		Run Experiment
 
@@ -805,6 +816,8 @@ case "$1" in
 		execute_on_all remove_traffic_shaping ;;
 	tune-tcp)
 		execute_on_all tune_tcp ;;
+	cores-on)
+		execute_on_all enable_cpu_cores $2 ;;
 	gen-algorand)
 		prepare_algorand_payload $2 ;;
 	start-algorand)
