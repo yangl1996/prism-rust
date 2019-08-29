@@ -66,9 +66,12 @@ function start_instances
 		echo "    UserKnownHostsFile=/dev/null" >> ~/.ssh/config.d/prism
 		echo "" >> ~/.ssh/config.d/prism
 	done
+	echo "SSH config written, waiting for instances to initialize"
+	aws ec2 wait instance-running --instance-ids $instances
 	tput setaf 2
-	echo "Instance started, SSH config written"
+	echo "Instances started"
 	tput sgr0
+	curl -s --form-string "token=$PUSHOVER_TOKEN" --form-string "user=$PUSHOVER_USER" --form-string "title=EC2 Instances Launched" --form-string "message=$1 EC2 instances were just launched by user $(whoami)." https://api.pushover.net/1/messages.json &> /dev/null
 }
 
 function fix_ssh_config
@@ -119,6 +122,13 @@ function stop_instances
 	tput setaf 2
 	echo "Instances terminated"
 	tput sgr0
+	curl -s --form-string "token=$PUSHOVER_TOKEN" --form-string "user=$PUSHOVER_USER" --form-string "title=EC2 Instances Stopped" --form-string "message=EC2 instances launched at $(date -r instances.txt) were just terminated by user $(whoami)." https://api.pushover.net/1/messages.json &> /dev/null
+}
+
+function count_instances
+{
+	result=`aws ec2 describe-instances --query 'Reservations[*].Instances[*].[InstanceId][][]' --filters Name=instance-state-name,Values=running Name=tag-key,Values=prism --output text`
+	echo "$(echo $result | wc -w | tr -d ' ')"
 }
 
 function build_prism
@@ -284,12 +294,13 @@ function sync_payload
 
 function get_payload_single
 {
+	#ssh $1 -- "rm -f /home/ubuntu/*.tar.gz && rm -rf /home/ubuntu/payload && wget https://prism-binary.s3.amazonaws.com/payload/$1.tar.gz -O local.tar.gz && wget https://prism-binary.s3.amazonaws.com/payload/common.tar.gz && mkdir -p /home/ubuntu/payload && tar xf local.tar.gz -C /home/ubuntu/payload && tar xf common.tar.gz -C /home/ubuntu/payload"
 	ssh $1 -- "rm -f /home/ubuntu/*.tar.gz && rm -rf /home/ubuntu/payload && mkdir -p /home/ubuntu/payload"
 	echo "Deleted payload"
 	rsync  payload/$1.tar.gz $1:/home/ubuntu/payload
 	rsync  payload/common.tar.gz $1:/home/ubuntu/payload
 	echo "Synced payload"
-    ssh $1 -- "mv /home/ubuntu/payload/$1.tar.gz /home/ubuntu/payload/local.tar.gz && tar xf /home/ubuntu/payload/local.tar.gz -C /home/ubuntu/payload && tar xf /home/ubuntu/payload/common.tar.gz -C /home/ubuntu/payload"
+	ssh $1 -- "mv /home/ubuntu/payload/$1.tar.gz /home/ubuntu/payload/local.tar.gz && tar xf /home/ubuntu/payload/local.tar.gz -C /home/ubuntu/payload && tar xf /home/ubuntu/payload/common.tar.gz -C /home/ubuntu/payload"
 }
 
 function install_perf_single
@@ -309,7 +320,7 @@ function unmount_tmpfs_single
 
 function mount_nvme_single
 {
-	ssh $1 -- 'sudo rm -rf /tmp/prism && sudo mkdir -m 777 /tmp/prism && sudo mkfs -F -t ext4 /dev/nvme0n1 && sudo mount /dev/nvme0n1 /tmp/prism && sudo chmod 777 /tmp/prism'
+	ssh $1 -- 'diskname=$(lsblk | grep 372 | cut -f 1 -d " ") && sudo rm -rf /tmp/prism && sudo mkdir -m 777 /tmp/prism && sudo mkfs -F -t ext4 /dev/$diskname && sudo mount /dev/$diskname /tmp/prism && sudo chmod 777 /tmp/prism'
 }
 
 function unmount_nvme_single
@@ -440,21 +451,36 @@ function execute_on_all
 	# ${@:2}: extra params of the function
 	local instances=`cat instances.txt`
 	local pids=""
+	echo "Executing $1"
+	tput sc
 	for instance in $instances ;
 	do
 		local id
 		local ip
 		local lan
 		IFS=',' read -r id ip lan <<< "$instance"
-		echo "Executing $1 on $id"
+		tput rc
+		tput el
+		echo -n "Executing $1 on $id"
 		$1_single $id ${@:2} &>log/${id}_${1}.log &
 		pids="$pids $!"
 	done
-	echo "Waiting for all jobs to finish"
 	for pid in $pids ;
 	do
-		wait $pid
+		tput rc
+		tput el
+		echo -n "Waiting for job $pid to finish"
+		if ! wait $pid; then
+			tput rc
+			tput el
+			tput setaf 1
+			echo "Task $pid failed"
+			tput sgr0
+			tput sc
+		fi
 	done
+	tput rc
+	tput el
 	tput setaf 2
 	echo "Finished"
 	tput sgr0
@@ -690,11 +716,10 @@ function run_experiment
 
 function show_demo
 {
-	run_experiment
-	echo "Demo Started"
+	#run_experiment
+	#echo "Demo Started"
 	#pkill grafana-rrd-server
 	#~/go/bin/grafana-rrd-server -r data/ -s 1 &
-	#./telematics/telematics log -duration 7200 -grafana
 	./telematics/telematics log -duration 7200
 }
 
@@ -760,6 +785,8 @@ case "$1" in
 		start_instances $2 ;;
 	stop-instances)
 		stop_instances ;;
+	count-instances)
+		count_instances ;;
 	fix-config)
 		fix_ssh_config ;;
 	mount-ramdisk)
@@ -831,3 +858,4 @@ case "$1" in
 		echo "Unrecognized subcommand '$1'"
 		tput sgr0 ;;
 esac
+

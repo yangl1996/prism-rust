@@ -1,6 +1,6 @@
 #!/bin/bash
 
-LAUNCH_TEMPLATE=lt-0d789704710d85427
+LAUNCH_TEMPLATE=lt-02226ebae5fbef5f3
 
 function start_instances
 {
@@ -19,24 +19,7 @@ function start_instances
 		esac
 	done
 	echo "Launching $1 AWS EC2 instances"
-	local instances=""
-	local remaining=$1
-	while [ "$remaining" -gt "0" ]
-	do
-		if [ "10" -gt "$remaining" ]; then
-			local thisbatch="$remaining"
-		else
-			local thisbatch="10"
-		fi
-		tput rc
-		tput el
-		echo -n "Remaining: $remaining, launching: $thisbatch"
-		instances="$instances $(aws ec2 run-instances --launch-template LaunchTemplateId=$LAUNCH_TEMPLATE --count $thisbatch --query 'Instances[*].InstanceId' | jq -r '. | join(" ")')"
-		remaining=`expr $remaining - $thisbatch`
-	done
-	tput rc
-	tput el
-	echo "Instances launched"
+	local instances=`aws ec2 run-instances --launch-template LaunchTemplateId=$LAUNCH_TEMPLATE --count $1 --query 'Instances[*].InstanceId' | jq -r '. | join(" ")'`
 	rm -f instances.txt
 	rm -f ~/.ssh/config.d/prism
 	echo "Querying public IPs and writing to SSH config"
@@ -66,9 +49,12 @@ function start_instances
 		echo "    UserKnownHostsFile=/dev/null" >> ~/.ssh/config.d/prism
 		echo "" >> ~/.ssh/config.d/prism
 	done
+	echo "SSH config written, waiting for instances to initialize"
+	aws ec2 wait instance-running --instance-ids $instances
 	tput setaf 2
-	echo "Instance started, SSH config written"
+	echo "Instances started"
 	tput sgr0
+	curl -s --form-string "token=$PUSHOVER_TOKEN" --form-string "user=$PUSHOVER_USER" --form-string "title=EC2 Instances Launched" --form-string "message=$1 EC2 instances were just launched by user $(whoami)." https://api.pushover.net/1/messages.json &> /dev/null
 }
 
 function fix_ssh_config
@@ -119,6 +105,13 @@ function stop_instances
 	tput setaf 2
 	echo "Instances terminated"
 	tput sgr0
+	curl -s --form-string "token=$PUSHOVER_TOKEN" --form-string "user=$PUSHOVER_USER" --form-string "title=EC2 Instances Stopped" --form-string "message=EC2 instances launched at $(date -r instances.txt) were just terminated by user $(whoami)." https://api.pushover.net/1/messages.json &> /dev/null
+}
+
+function count_instances
+{
+	result=`aws ec2 describe-instances --query 'Reservations[*].Instances[*].[InstanceId][][]' --filters Name=instance-state-name,Values=running Name=tag-key,Values=prism --output text`
+	echo "$(echo $result | wc -w | tr -d ' ')"
 }
 
 function build_prism
@@ -161,71 +154,9 @@ function prepare_payload
 	mkdir -p payload/common/scripts
 
 	echo "Download binaries"
-	#scp prism:~/prism/target/release/prism-copy payload/common/binary/prism
-	cp ../target/release/prism payload/common/binary/prism
+	scp prism:~/prism/target/release/prism-copy payload/common/binary/prism
 	cp scripts/start-prism.sh payload/common/scripts/start-prism.sh
 	cp scripts/stop-prism.sh payload/common/scripts/stop-prism.sh
-
-	echo "Generate etcd config files for each EC2 instance"
-	local instances=`cat instances.txt`
-	local instance_ids=""
-	for instance in $instances ;
-	do
-		local id
-		local ip
-		local lan
-		IFS=',' read -r id ip lan <<< "$instance"
-		mkdir -p payload/$id
-		python3.7 scripts/gen_etcd_config.py $id $lan instances.txt
-	done
-
-	echo "Generate prism config files and keypairs for each node"
-	python3.7 scripts/gen_prism_payload.py instances.txt $1
-
-	echo "Compressing payload files"
-	local instances=`cat instances.txt`
-	local instance_ids=""
-	for instance in $instances ;
-	do
-		local id
-		IFS=',' read -r id _ <<< "$instance"
-		tar cvzf payload/$id.tar.gz -C payload/$id . &> /dev/null
-		rm -rf payload/$id
-	done
-	tar cvzf payload/common.tar.gz -C payload/common . &> /dev/null
-	rm -rf payload/common
-
-	tput setaf 2
-	echo "Payload written"
-	tput sgr0
-}
-
-function prepare_algorand_payload
-{
-	# $1: topology file to use
-	if [ $# -ne 1 ]; then
-		tput setaf 1
-		echo "Required: topology file"
-		tput sgr0
-		exit 1
-	fi
-	echo "Deleting existing files"
-	rm -rf payload
-	mkdir -p payload
-	mkdir -p payload/common/binary
-	mkdir -p payload/common/scripts
-
-	echo "Download binaries"
-	cd algorand
-	GOOS=linux GOARCH=amd64 go build
-	cd ..
-	scp algorand:~/go/bin/\{algod,algoh,algokey,carpenter,goal,kmd\} payload/common/binary/
-	cp algorand/algorand payload/common/binary
-	cp scripts/start-algorand.sh payload/common/scripts/start-algorand.sh
-	cp scripts/stop-algorand.sh payload/common/scripts/stop-algorand.sh
-	cp scripts/start-algorand-transaction.sh payload/common/scripts/start-algorand-transaction.sh
-	cp scripts/stop-algorand-transaction.sh payload/common/scripts/stop-algorand-transaction.sh
-
 
 	echo "Generate etcd config files for each EC2 instance"
 	local instances=`cat instances.txt`
@@ -240,18 +171,8 @@ function prepare_algorand_payload
 		python3 scripts/gen_etcd_config.py $id $lan instances.txt
 	done
 
-	echo "Generating Algorand network template file"
-	size=`cat $1 | jq '.nodes | length'`
-	python3 scripts/gen_algorand_template.py $size > algorand_template.json
-
-	echo "Generating and copying Algorand network data"
-	scp algorand_template.json algorand:~
-	ssh algorand -- 'rm -rf ~/eval && ~/go/bin/goal network create -r ~/eval -n eval -t ~/algorand_template.json' &> /dev/null
-	rm -f algorand_template.json
-	scp -r algorand:~/eval payload/staging &> /dev/null
-
-	echo "Generating payload for each AWS EC2 instance"
-	python3 scripts/gen_algorand_payload.py instances.txt $1
+	echo "Generate prism config files and keypairs for each node"
+	python3 scripts/gen_prism_payload.py instances.txt $1
 
 	echo "Compressing payload files"
 	local instances=`cat instances.txt`
@@ -265,8 +186,6 @@ function prepare_algorand_payload
 	done
 	tar cvzf payload/common.tar.gz -C payload/common . &> /dev/null
 	rm -rf payload/common
-	rm -rf payload/staging
-	rm -rf payload/scripts
 
 	tput setaf 2
 	echo "Payload written"
@@ -275,26 +194,21 @@ function prepare_algorand_payload
 
 function sync_payload
 {
-	#echo "Uploading payload to S3"
-	#aws s3 rm --quiet --recursive s3://prism-binary/payload
-	#aws s3 sync --quiet payload s3://prism-binary/payload
+	echo "Uploading payload to S3"
+	aws s3 rm --quiet --recursive s3://prism-binary/payload
+	aws s3 sync --quiet payload s3://prism-binary/payload
 	echo "Downloading payload on each instance"
 	execute_on_all get_payload
 }
 
 function get_payload_single
 {
-	ssh $1 -- "rm -f /home/ubuntu/*.tar.gz && rm -rf /home/ubuntu/payload && mkdir -p /home/ubuntu/payload"
-	echo "Deleted payload"
-	rsync  payload/$1.tar.gz $1:/home/ubuntu/payload
-	rsync  payload/common.tar.gz $1:/home/ubuntu/payload
-	echo "Synced payload"
-    ssh $1 -- "mv /home/ubuntu/payload/$1.tar.gz /home/ubuntu/payload/local.tar.gz && tar xf /home/ubuntu/payload/local.tar.gz -C /home/ubuntu/payload && tar xf /home/ubuntu/payload/common.tar.gz -C /home/ubuntu/payload"
+	ssh $1 -- "rm -f /home/ubuntu/*.tar.gz && rm -rf /home/ubuntu/payload && wget https://prism-binary.s3.amazonaws.com/payload/$1.tar.gz -O local.tar.gz && wget https://prism-binary.s3.amazonaws.com/payload/common.tar.gz && mkdir -p /home/ubuntu/payload && tar xf local.tar.gz -C /home/ubuntu/payload && tar xf common.tar.gz -C /home/ubuntu/payload"
 }
 
 function install_perf_single
 {
-	ssh $1 -- 'rm -f rustfilt && rm -rf inferno && sudo apt-get update -y && sudo apt-get install linux-tools-aws linux-tools-4.15.0-1043-aws binutils -y && wget https://github.com/yangl1996/rustfilt/releases/download/1/rustfilt && wget https://github.com/yangl1996/inferno/releases/download/bin/linux64.tar.gz && mkdir -p inferno && tar xf linux64.tar.gz -C inferno && chmod +x rustfilt && chmod +x inferno/* && sudo apt-get install -y c++filt && echo export PATH=$PATH:/home/ubuntu:/home/ubuntu/inferno >> /home/ubuntu/.profile'
+	ssh $1 -- 'rm -f rustfilt && rm -rf inferno && sudo apt-get update -y && sudo apt-get install linux-tools-aws linux-tools-4.15.0-1032-aws binutils -y && wget https://github.com/yangl1996/rustfilt/releases/download/1/rustfilt && wget https://github.com/yangl1996/inferno/releases/download/bin/linux64.tar.gz && mkdir -p inferno && tar xf linux64.tar.gz -C inferno && chmod +x rustfilt && chmod +x inferno/* && sudo apt-get install -y c++filt && echo export PATH=$PATH:/home/ubuntu:/home/ubuntu/inferno >> /home/ubuntu/.profile'
 }
 
 function mount_tmpfs_single
@@ -309,7 +223,7 @@ function unmount_tmpfs_single
 
 function mount_nvme_single
 {
-	ssh $1 -- 'sudo rm -rf /tmp/prism && sudo mkdir -m 777 /tmp/prism && sudo mkfs -F -t ext4 /dev/nvme0n1 && sudo mount /dev/nvme0n1 /tmp/prism && sudo chmod 777 /tmp/prism'
+	ssh $1 -- 'diskname=$(lsblk | grep 372 | cut -f 1 -d " ") && sudo rm -rf /tmp/prism && sudo mkdir -m 777 /tmp/prism && sudo mkfs -F -t ext4 /dev/$diskname && sudo mount /dev/$diskname /tmp/prism && sudo chmod 777 /tmp/prism'
 }
 
 function unmount_nvme_single
@@ -325,26 +239,6 @@ function start_prism_single
 function stop_prism_single
 {
 	ssh $1 -- 'bash /home/ubuntu/payload/scripts/stop-prism.sh &>/home/ubuntu/log/stop.log'
-}
-
-function start_algorand_single
-{
-	ssh $1 -- "mkdir -p /home/ubuntu/log && bash /home/ubuntu/payload/scripts/start-algorand.sh $2 $3 $4 $5 $6 &>/home/ubuntu/log/start.log"
-}
-
-function stop_algorand_single
-{
-	ssh $1 -- 'bash /home/ubuntu/payload/scripts/stop-algorand.sh &>/home/ubuntu/log/stop.log'
-}
-
-function start_algorand_transaction_single
-{
-	ssh $1 -- "bash /home/ubuntu/payload/scripts/start-algorand-transaction.sh $2 &>/home/ubuntu/log/start-tx.log"
-}
-
-function stop_algorand_transaction_single
-{
-	ssh $1 -- 'bash /home/ubuntu/payload/scripts/stop-algorand-transaction.sh &>/home/ubuntu/log/stop-tx.log'
 }
 
 function join_by
@@ -424,37 +318,42 @@ function tune_tcp_single
 	ssh $1 -- "sudo sysctl -w net.core.rmem_max=50331648 && sudo sysctl -w net.core.wmem_max=50331648 && sudo sysctl -w net.ipv4.tcp_wmem='10240 87380 50331648' && sudo sysctl -w net.ipv4.tcp_rmem='10240 87380 50331648'"
 }
 
-function enable_cpu_cores_single
-{
-	cores=`seq $2 1 15`
-	tee_list=""
-	for core_id in $cores ; do
-		tee_list="$tee_list /sys/devices/system/cpu/cpu$core_id/online"
-	done
-	ssh $1 -- "echo 1 | sudo tee /sys/devices/system/cpu/cpu*/online && echo 0 | sudo tee $tee_list"
-}
-
 function execute_on_all
 {
 	# $1: execute function '$1_single'
 	# ${@:2}: extra params of the function
 	local instances=`cat instances.txt`
 	local pids=""
+	echo "Executing $1"
+	tput sc
 	for instance in $instances ;
 	do
 		local id
 		local ip
 		local lan
 		IFS=',' read -r id ip lan <<< "$instance"
-		echo "Executing $1 on $id"
+		tput rc
+		tput el
+		echo -n "Executing $1 on $id"
 		$1_single $id ${@:2} &>log/${id}_${1}.log &
 		pids="$pids $!"
 	done
-	echo "Waiting for all jobs to finish"
 	for pid in $pids ;
 	do
-		wait $pid
+		tput rc
+		tput el
+		echo -n "Waiting for job $pid to finish"
+		if ! wait $pid; then
+			tput rc
+			tput el
+			tput setaf 1
+			echo "Task $pid failed"
+			tput sgr0
+			tput sc
+		fi
 	done
+	tput rc
+	tput el
 	tput setaf 2
 	echo "Finished"
 	tput sgr0
@@ -474,7 +373,7 @@ function start_transactions_single
 
 function start_mining_single
 {
-	curl -s "http://$3:$4/miner/start?lambda=532000&lazy=false"
+	curl -s "http://$3:$4/miner/start?lambda=60000&lazy=false"
 }
 
 function stop_transactions_single
@@ -692,10 +591,9 @@ function show_demo
 {
 	run_experiment
 	echo "Demo Started"
-	#pkill grafana-rrd-server
-	#~/go/bin/grafana-rrd-server -r data/ -s 1 &
-	#./telematics/telematics log -duration 7200 -grafana
-	./telematics/telematics log -duration 7200
+	pkill grafana-rrd-server
+	~/go/bin/grafana-rrd-server -r data/ -s 1 &
+	./telematics/telematics log -duration 7200 -grafana
 }
 
 mkdir -p log
@@ -706,60 +604,53 @@ case "$1" in
 
 		Manage AWS EC2 Instances
 
-		  start-instances n          Start n EC2 instances
-		  stop-instances             Terminate EC2 instances
-		  count-instances            Count the running instances
-		  install-tools              Install tools
-		  fix-config                 Fix SSH config
-		  mount-ramdisk              Mount RAM disk
-		  unmount-ramdisk            Unmount RAM disk
-		  mount-nvme                 Mount NVME 
-		  unmount-nvme               Unmount NVME
-		  shape-traffic l b          Limit the throughput to b Kbps and add latency of l ms
-		  reset-traffic              Remove the traffic shaping filters
-		  tune-tcp                   Set TCP parameters
-		  cores-on n                 Turn n CPU cores on
+		  start-instances n     Start n EC2 instances
+		  stop-instances        Terminate EC2 instances
+		  count-instances       Count the running instances
+		  install-tools         Install tools
+		  fix-config            Fix SSH config
+		  mount-ramdisk         Mount RAM disk
+		  unmount-ramdisk       Unmount RAM disk
+		  mount-nvme            Mount NVME 
+		  unmount-nvme          Unmount NVME
+		  shape-traffic l b     Limit the throughput to b Kbps and add latency of l ms
+		  reset-traffic         Remove the traffic shaping filters
+		  tune-tcp              Set TCP parameters
 
 		Run Experiment
 
-		  gen-payload topo           Generate scripts and configuration files
-		  build [nostrip]	     Build the Prism client binary
-		  sync-payload               Synchronize payload to remote servers
-		  start-prism                Start Prism nodes on each remote server
-		  stop-prism                 Stop Prism nodes on each remote server
-		  run-exp                    Run the experiment
-		  show-demo                  Start the demo workflow
-		  stop-tx                    Stop generating transactions
-		  stop-mine                  Stop mining
-
-		Run Algorand Experiment
-
-		  gen-algorand topo          Generate config and data folders for Algorand
-		  start-algorand d s b f s   Start Algorand nodes with deadline, small/big lambda, recovery freq, block size
-		  stop-algorand              Stop Algorand nodes on each remote server
-		  start-algorand-tx r        Start Algorand transactions on each remote server at rate r txn/s
-		  stop-algorand-tx           Stop Algorand transactions on each remote server
+		  gen-payload topo      Generate scripts and configuration files
+		  build [nostrip]	Build the Prism client binary
+		  sync-payload          Synchronize payload to remote servers
+		  start-prism           Start Prism nodes on each remote server
+		  stop-prism            Stop Prism nodes on each remote server
+		  run-exp               Run the experiment
+		  show-demo             Start the demo workflow
+		  stop-tx               Stop generating transactions
+		  stop-mine             Stop mining
 
 		Collect Data
 		  
-		  get-perf                   Get performance data
-		  show-vis                   Open the visualization page for the given node
-		  profile node f d           Capture stack trace for node with frequency f and duration d
-		  flamegraph node            Generate and download flamegraph for node
-		  open-dashboard             Open the performance dashboard
+		  get-perf              Get performance data
+		  show-vis              Open the visualization page for the given node
+		  profile node f d      Capture stack trace for node with frequency f and duration d
+		  flamegraph node       Generate and download flamegraph for node
+		  open-dashboard        Open the performance dashboard
 
 		Connect to Testbed
 
-		  run-all cmd                Run command on all instances
-		  ssh i                      SSH to the i-th server (1-based index)
-		  scp i src dst              Copy file from remote
-		  read-log node              Read the log of the given node
+		  run-all cmd           Run command on all instances
+		  ssh i                 SSH to the i-th server (1-based index)
+		  scp i src dst         Copy file from remote
+		  read-log node         Read the log of the given node
 		EOF
 		;;
 	start-instances)
 		start_instances $2 ;;
 	stop-instances)
 		stop_instances ;;
+	count-instances)
+		count_instances ;;
 	fix-config)
 		fix_ssh_config ;;
 	mount-ramdisk)
@@ -796,18 +687,6 @@ case "$1" in
 		execute_on_all remove_traffic_shaping ;;
 	tune-tcp)
 		execute_on_all tune_tcp ;;
-	cores-on)
-		execute_on_all enable_cpu_cores $2 ;;
-	gen-algorand)
-		prepare_algorand_payload $2 ;;
-	start-algorand)
-		execute_on_all start_algorand $2 $3 $4 $5 $6;;
-	stop-algorand)
-		execute_on_all stop_algorand ;;
-	start-algorand-tx)
-		execute_on_all start_algorand_transaction $2 ;;
-	stop-algorand-tx)
-		execute_on_all stop_algorand_transaction ;;
 	get-perf)
 		show_performance $2 ;;
 	show-vis)
