@@ -937,8 +937,7 @@ impl BlockChain {
         return Ok(list);
     }
 
-    /// Get the list of unvoted proposer blocks that a voter chain should vote for, given the tip
-    /// of the particular voter chain.
+    /// Get the list of unvoted proposer blocks that have the SECOND most votes. This is for adversary
     pub fn unvoted_proposer_balance_attack(&self, tip: &H256, proposer_parent: &H256) -> Result<Vec<H256>> {
         let voter_node_voted_level_cf = self.db.cf_handle(VOTER_NODE_VOTED_LEVEL_CF).unwrap();
         let proposer_node_level_cf = self.db.cf_handle(PROPOSER_NODE_LEVEL_CF).unwrap();
@@ -1017,6 +1016,7 @@ impl BlockChain {
         }
         return Ok(list);
     }
+
     /// Get the level of the proposer block
     pub fn proposer_level(&self, hash: &H256) -> Result<u64> {
         let proposer_node_level_cf = self.db.cf_handle(PROPOSER_NODE_LEVEL_CF).unwrap();

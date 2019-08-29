@@ -329,13 +329,10 @@ impl Context {
                 if new_proposer_block {
                     if let Content::Proposer(c) = &mut self.contents[PROPOSER_INDEX as usize] {
                         // CENSORSHIP won't update
-                        if self.adversary & TRANSACTION_CENSORSHIP_ATTACK == 0 {
+                        if self.adversary & PROPOSER_CENSORSHIP_ATTACK == 0 {
                             let mut refs = self.blockchain.unreferred_transactions();
                             refs.truncate(PROPOSER_BLOCK_TX_REFS as usize);
                             c.transaction_refs = refs;
-                        }
-                        // CENSORSHIP won't update
-                        if self.adversary & PROPOSER_CENSORSHIP_ATTACK == 0 {
                             c.proposer_refs = self.blockchain.unreferred_proposers();
                             let parent = self.header.parent;
                             c.proposer_refs.retain(|&x| x != parent);

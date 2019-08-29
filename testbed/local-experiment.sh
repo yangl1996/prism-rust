@@ -61,8 +61,10 @@ function kill_prism() {
 }
 
 
-binary_path=${PRISM_BINARY-../target/debug/prism}
+binary_path=${PRISM_BINARY-../target/release/prism}
 num_nodes=$1
+
+tmp_path="/home/geruiw2/Documents/tmp"
 
 # generate keypairs and addresses
 for (( i = 0 ; i < $num_nodes ; i++ )); do
@@ -88,7 +90,7 @@ for (( i = 0; i < $num_nodes; i++ )); do
 	p2p=`expr $p2p_port + $i`
 	api=`expr $api_port + $i`
 	vis=`expr $vis_port + $i`
-	command="$binary_path --p2p 127.0.0.1:${p2p} --api 127.0.0.1:${api} --visual 127.0.0.1:${vis} --blockdb /tmp/prism-${i}-blockdb.rocksdb --blockchaindb /tmp/prism-${i}-blockchaindb.rocksdb --utxodb /tmp/prism-${i}-utxodb.rocksdb --walletdb /tmp/prism-${i}-wallet.rocksdb -vv --load-key ${i}.pkcs8 --adversary 3"
+	command="$binary_path --p2p 127.0.0.1:${p2p} --api 127.0.0.1:${api} --visual 127.0.0.1:${vis} --blockdb ${tmp_path}/prism-${i}-blockdb.rocksdb --blockchaindb ${tmp_path}/prism-${i}-blockchaindb.rocksdb --utxodb ${tmp_path}/prism-${i}-utxodb.rocksdb --walletdb ${tmp_path}/prism-${i}-wallet.rocksdb -vv --load-key ${i}.pkcs8 --adversary $(( ( ${i} == 0 ) * 7 ))"
 
 	for (( j = 0; j < $i; j++ )); do
 		peer_port=`expr $p2p_port + $j`
