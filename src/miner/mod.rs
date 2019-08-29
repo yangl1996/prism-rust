@@ -298,17 +298,17 @@ impl Context {
                 self.header.parent = self.blockchain.best_proposer().unwrap();
             }
 
-            // CENSORSHIP won't update
-            if self.adversary & CENSORSHIP_ATTACK == 0 {
-                // update the best proposer and the proposer/transaction refs. Note that if the best
-                // proposer block is updated, we will update the proposer/transaction refs. But we also
-                // need to make sure that the best proposer is still the best at the end of this
-                // process. Otherwise, we risk having voter/transaction blocks that have a parent
-                // deeper than ours
-                // sadly, we still may have race condition where the best proposer is updated, but the
-                // blocks it refers to have not been removed from unreferred_{proposer, transaction}.
-                // but this is pretty much the only race condition that we still have.
-                loop {
+            // update the best proposer and the proposer/transaction refs. Note that if the best
+            // proposer block is updated, we will update the proposer/transaction refs. But we also
+            // need to make sure that the best proposer is still the best at the end of this
+            // process. Otherwise, we risk having voter/transaction blocks that have a parent
+            // deeper than ours
+            // sadly, we still may have race condition where the best proposer is updated, but the
+            // blocks it refers to have not been removed from unreferred_{proposer, transaction}.
+            // but this is pretty much the only race condition that we still have.
+            loop {
+                // CENSORSHIP won't update
+                if self.adversary & CENSORSHIP_ATTACK == 0 {
                     // first refresh the transaction and proposer refs if there has been a new proposer
                     // block
                     if new_proposer_block {
@@ -324,16 +324,16 @@ impl Context {
                             unreachable!();
                         }
                     }
+                }
 
-                    // then check whether our proposer parent is really the best
-                    let best_proposer = self.blockchain.best_proposer().unwrap();
-                    if self.header.parent == best_proposer {
-                        break;
-                    } else {
-                        new_proposer_block = true;
-                        self.header.parent = best_proposer;
-                        continue;
-                    }
+                // then check whether our proposer parent is really the best
+                let best_proposer = self.blockchain.best_proposer().unwrap();
+                if self.header.parent == best_proposer {
+                    break;
+                } else {
+                    new_proposer_block = true;
+                    self.header.parent = best_proposer;
+                    continue;
                 }
             }
 
