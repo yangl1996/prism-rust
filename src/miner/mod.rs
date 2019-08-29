@@ -163,7 +163,17 @@ impl Handle {
 
 impl Context {
     pub fn start(mut self) {
-        info!("Miner honesty is set to {}", self.adversary);
+        match self.adversary {
+            HONEST => info!("Miner is honest"),
+            x => {
+                if x & CENSORSHIP_ATTACK != 0 {
+                    info!("Miner has censorship attack");
+                }
+                if x & BALANCE_ATTACK != 0 {
+                    info!("Miner has balance attack");
+                }
+            }
+        };
         thread::Builder::new()
             .name("miner".to_string())
             .spawn(move || {
@@ -326,6 +336,7 @@ impl Context {
                     }
                 }
 
+                //break;/* TODO: delete this line, problem in unvoted_proposer_balance_attack
                 // then check whether our proposer parent is really the best
                 let best_proposer = self.blockchain.best_proposer().unwrap();
                 if self.header.parent == best_proposer {
@@ -335,6 +346,7 @@ impl Context {
                     self.header.parent = best_proposer;
                     continue;
                 }
+                //*/
             }
 
             // update the votes
@@ -347,10 +359,17 @@ impl Context {
                         unreachable!();
                     };
                     if let Content::Voter(c) = &mut self.contents[chain_id] {
-                        c.votes = self
+                        c.votes = if self.adversary & BALANCE_ATTACK == 0 {
+                            self
                             .blockchain
                             .unvoted_proposer(&voter_parent, &self.header.parent)
-                            .unwrap();
+                            .unwrap()
+                        } else {
+                            self
+                            .blockchain
+                            .unvoted_proposer_balance_attack(&voter_parent, &self.header.parent)
+                            .unwrap()
+                        };
                         touched_content.insert(chain_id as u16);
                     } else {
                         unreachable!();
@@ -365,10 +384,17 @@ impl Context {
                         unreachable!();
                     };
                     if let Content::Voter(c) = &mut self.contents[chain_id] {
-                        c.votes = self
+                        c.votes = if self.adversary & BALANCE_ATTACK == 0 {
+                            self
                             .blockchain
                             .unvoted_proposer(&voter_parent, &self.header.parent)
-                            .unwrap();
+                            .unwrap()
+                        } else {
+                            self
+                            .blockchain
+                            .unvoted_proposer_balance_attack(&voter_parent, &self.header.parent)
+                            .unwrap()
+                        };
                         touched_content.insert(chain_id as u16);
                     } else {
                         unreachable!();
@@ -392,10 +418,13 @@ impl Context {
                         .update(chain_id, &self.contents[chain_id]);
                 }
                 if new_transaction_block {
-                    self.content_merkle_tree.update(
-                        TRANSACTION_INDEX as usize,
-                        &self.contents[TRANSACTION_INDEX as usize],
-                    );
+                    // CENSORSHIP won't update
+                    if self.adversary & CENSORSHIP_ATTACK == 0 {
+                        self.content_merkle_tree.update(
+                            TRANSACTION_INDEX as usize,
+                            &self.contents[TRANSACTION_INDEX as usize],
+                            );
+                    }
                     if touched_content.contains(&PROPOSER_INDEX) {
                         self.content_merkle_tree.update(
                             PROPOSER_INDEX as usize,

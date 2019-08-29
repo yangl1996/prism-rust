@@ -4,7 +4,7 @@ use crate::crypto::hash::H256;
 pub const NETWORK_DELAY: f32 = 1.4; // the expected block propagation delay (in seconds)
 
 // Design parameters
-pub const NUM_VOTER_CHAINS: u16 = 100 as u16; // more chains means better latency
+pub const NUM_VOTER_CHAINS: u16 = 10 as u16; // more chains means better latency
 pub const TX_BLOCK_SIZE: u32 = 64000; // the maximum size of a transaction block (in Bytes)
 pub const TX_THROUGHPUT: u32 = 1000; // the transaction throughput we want to support (in Tx/s)
 pub const TX_BLOCK_TRANSACTIONS: u32 = TX_BLOCK_SIZE / AVG_TX_SIZE;
