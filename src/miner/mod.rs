@@ -28,6 +28,10 @@ use std::thread;
 
 use rand::Rng;
 
+const HONEST: u8 = 0;
+const CENSORSHIP_ATTACK: u8 = 1;
+const BALANCE_ATTACK: u8 = 2;
+
 enum ControlSignal {
     Start(u64, bool), // the number controls the lambda of interval between block generation
     Step,
@@ -67,6 +71,9 @@ pub struct Context {
     header: Header,
     contents: Vec<Content>,
     content_merkle_tree: MerkleTree,
+    // bit array for adversarial behavior, e.g. 0 for honest behavior, 3 (b11) for two adversarial
+    // behavior
+    adversary: u8,
 }
 
 #[derive(Clone)]
@@ -82,6 +89,7 @@ pub fn new(
     ctx_update_source: Receiver<ContextUpdateSignal>,
     ctx_update_tx: &Sender<ContextUpdateSignal>,
     server: &ServerHandle,
+    adversary: u8,
 ) -> (Context, Handle) {
     let (signal_chan_sender, signal_chan_receiver) = unbounded();
     let mut contents: Vec<Content> = vec![];
@@ -127,6 +135,7 @@ pub fn new(
         },
         contents: contents,
         content_merkle_tree: content_merkle_tree,
+        adversary,
     };
 
     let handle = Handle {
@@ -154,6 +163,7 @@ impl Handle {
 
 impl Context {
     pub fn start(mut self) {
+        info!("Miner honesty is set to {}", self.adversary);
         thread::Builder::new()
             .name("miner".to_string())
             .spawn(move || {
@@ -248,35 +258,38 @@ impl Context {
                 }
             }
 
-            // update transaction block content
-            if new_transaction_block {
-                let mempool = self.mempool.lock().unwrap();
-                let transactions = mempool.get_transactions(TX_BLOCK_TRANSACTIONS);
-                drop(mempool);
-                let chain_id: usize = TRANSACTION_INDEX as usize;
-                if let Content::Transaction(c) = &mut self.contents[TRANSACTION_INDEX as usize] {
-                    c.transactions = transactions;
-                    touched_content.insert(TRANSACTION_INDEX);
-                } else {
-                    unreachable!();
-                }
-            }
-
-            // append transaction references
-            // FIXME: we are now refreshing the whole tree
-            // note that if there are new proposer blocks, we will need to refresh tx refs in the
-            // next step. In that case, don't bother doing it here.
-            if new_transaction_block && !new_proposer_block {
-                if let Content::Proposer(c) = &mut self.contents[PROPOSER_INDEX as usize] {
-                    // only update the references if we are not running out of quota
-                    if c.transaction_refs.len() < PROPOSER_BLOCK_TX_REFS as usize {
-                        let mut refs = self.blockchain.unreferred_transactions();
-                        refs.truncate(PROPOSER_BLOCK_TX_REFS as usize);
-                        c.transaction_refs = refs;
-                        touched_content.insert(PROPOSER_INDEX);
+            // CENSORSHIP won't update
+            if self.adversary & CENSORSHIP_ATTACK == 0 {
+                // update transaction block content
+                if new_transaction_block {
+                    let mempool = self.mempool.lock().unwrap();
+                    let transactions = mempool.get_transactions(TX_BLOCK_TRANSACTIONS);
+                    drop(mempool);
+                    let chain_id: usize = TRANSACTION_INDEX as usize;
+                    if let Content::Transaction(c) = &mut self.contents[TRANSACTION_INDEX as usize] {
+                        c.transactions = transactions;
+                        touched_content.insert(TRANSACTION_INDEX);
+                    } else {
+                        unreachable!();
                     }
-                } else {
-                    unreachable!();
+                }
+
+                // append transaction references
+                // FIXME: we are now refreshing the whole tree
+                // note that if there are new proposer blocks, we will need to refresh tx refs in the
+                // next step. In that case, don't bother doing it here.
+                if new_transaction_block && !new_proposer_block {
+                    if let Content::Proposer(c) = &mut self.contents[PROPOSER_INDEX as usize] {
+                        // only update the references if we are not running out of quota
+                        if c.transaction_refs.len() < PROPOSER_BLOCK_TX_REFS as usize {
+                            let mut refs = self.blockchain.unreferred_transactions();
+                            refs.truncate(PROPOSER_BLOCK_TX_REFS as usize);
+                            c.transaction_refs = refs;
+                            touched_content.insert(PROPOSER_INDEX);
+                        }
+                    } else {
+                        unreachable!();
+                    }
                 }
             }
 
@@ -285,39 +298,42 @@ impl Context {
                 self.header.parent = self.blockchain.best_proposer().unwrap();
             }
 
-            // update the best proposer and the proposer/transaction refs. Note that if the best
-            // proposer block is updated, we will update the proposer/transaction refs. But we also
-            // need to make sure that the best proposer is still the best at the end of this
-            // process. Otherwise, we risk having voter/transaction blocks that have a parent
-            // deeper than ours
-            // sadly, we still may have race condition where the best proposer is updated, but the
-            // blocks it refers to have not been removed from unreferred_{proposer, transaction}.
-            // but this is pretty much the only race condition that we still have.
-            loop {
-                // first refresh the transaction and proposer refs if there has been a new proposer
-                // block
-                if new_proposer_block {
-                    if let Content::Proposer(c) = &mut self.contents[PROPOSER_INDEX as usize] {
-                        let mut refs = self.blockchain.unreferred_transactions();
-                        refs.truncate(PROPOSER_BLOCK_TX_REFS as usize);
-                        c.transaction_refs = refs;
-                        c.proposer_refs = self.blockchain.unreferred_proposers();
-                        let parent = self.header.parent;
-                        c.proposer_refs.retain(|&x|x != parent);
-                        touched_content.insert(PROPOSER_INDEX);
-                    } else {
-                        unreachable!();
+            // CENSORSHIP won't update
+            if self.adversary & CENSORSHIP_ATTACK == 0 {
+                // update the best proposer and the proposer/transaction refs. Note that if the best
+                // proposer block is updated, we will update the proposer/transaction refs. But we also
+                // need to make sure that the best proposer is still the best at the end of this
+                // process. Otherwise, we risk having voter/transaction blocks that have a parent
+                // deeper than ours
+                // sadly, we still may have race condition where the best proposer is updated, but the
+                // blocks it refers to have not been removed from unreferred_{proposer, transaction}.
+                // but this is pretty much the only race condition that we still have.
+                loop {
+                    // first refresh the transaction and proposer refs if there has been a new proposer
+                    // block
+                    if new_proposer_block {
+                        if let Content::Proposer(c) = &mut self.contents[PROPOSER_INDEX as usize] {
+                            let mut refs = self.blockchain.unreferred_transactions();
+                            refs.truncate(PROPOSER_BLOCK_TX_REFS as usize);
+                            c.transaction_refs = refs;
+                            c.proposer_refs = self.blockchain.unreferred_proposers();
+                            let parent = self.header.parent;
+                            c.proposer_refs.retain(|&x|x != parent);
+                            touched_content.insert(PROPOSER_INDEX);
+                        } else {
+                            unreachable!();
+                        }
                     }
-                }
 
-                // then check whether our proposer parent is really the best
-                let best_proposer = self.blockchain.best_proposer().unwrap();
-                if self.header.parent == best_proposer {
-                    break;
-                } else {
-                    new_proposer_block = true;
-                    self.header.parent = best_proposer;
-                    continue;
+                    // then check whether our proposer parent is really the best
+                    let best_proposer = self.blockchain.best_proposer().unwrap();
+                    if self.header.parent == best_proposer {
+                        break;
+                    } else {
+                        new_proposer_block = true;
+                        self.header.parent = best_proposer;
+                        continue;
+                    }
                 }
             }
 

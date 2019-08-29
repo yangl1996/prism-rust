@@ -45,6 +45,7 @@ fn main() {
      (@arg init_fund_value: --("fund-value") [INT] default_value("100") "Sets the value of each initial fund coin")
      (@arg load_key_path: --("load-key") ... [PATH] "Loads a key pair into the wallet from the given address")
      (@arg mempool_size: --("mempool-size") ... [SIZE] default_value("500000") "Sets the size limit of the memory pool")
+     (@arg adversary: --adversary [INT] default_value("0") "Sets the adversarial behavior of miner")
      (@subcommand keygen =>
       (about: "Generates Prism wallet key pair")
       (@arg display_address: --addr "Prints the address of the key pair to STDERR")
@@ -181,6 +182,15 @@ fn main() {
     worker_ctx.start();
 
     // start the miner
+    let adversary = matches
+        .value_of("adversary")
+        .unwrap()
+        .parse::<u8>()
+        .unwrap_or_else(|e| {
+            error!("Error parsing value of initial fund coins: {}", e);
+            process::exit(1);
+        });
+
     let (miner_ctx, miner) = miner::new(
         &mempool,
         &blockchain,
@@ -188,6 +198,7 @@ fn main() {
         ctx_rx,
         &ctx_tx_miner,
         &server,
+        adversary,
     );
     miner_ctx.start();
 
