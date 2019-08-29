@@ -621,7 +621,7 @@ impl BlockChain {
                             block_votes_variance += p * (1.0-p);
                         }
                         // using gaussian approximation
-                        let tmp = block_votes_mean - (2.0 * block_votes_variance * LOG_EPSILON).sqrt();
+                        let tmp = block_votes_mean - (block_votes_variance).sqrt() * (*QUANTILE_EPSILON);
                         if tmp > 0.0 {
                             block_votes_lcb += tmp;
                         }
@@ -651,6 +651,7 @@ impl BlockChain {
                         for p_block in &proposer_blocks {
                             // if the below condition is true, then final votes on p_block could overtake new_leader
                             if max_vote_lcb < votes_lcb.get(p_block).unwrap() + remaining_votes && *p_block != new_leader.unwrap() {
+                                println!("Candidate: {:?}, lb={}, second ub={}", new_leader, max_vote_lcb, votes_lcb.get(p_block).unwrap() + remaining_votes);
                                 new_leader = None;
                                 break;
                             }
