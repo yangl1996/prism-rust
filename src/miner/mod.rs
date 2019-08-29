@@ -29,8 +29,9 @@ use std::thread;
 use rand::Rng;
 
 const HONEST: u8 = 0;
-const CENSORSHIP_ATTACK: u8 = 1;
-const BALANCE_ATTACK: u8 = 2;
+const TRANSACTION_CENSORSHIP_ATTACK: u8 = 1;
+const PROPOSER_CENSORSHIP_ATTACK: u8 = 2;
+const BALANCE_ATTACK: u8 = 4;
 
 enum ControlSignal {
     Start(u64, bool), // the number controls the lambda of interval between block generation
@@ -166,8 +167,11 @@ impl Context {
         match self.adversary {
             HONEST => info!("Miner is honest"),
             x => {
-                if x & CENSORSHIP_ATTACK != 0 {
-                    info!("Miner has censorship attack");
+                if x & TRANSACTION_CENSORSHIP_ATTACK != 0 {
+                    info!("Miner has transaction censorship attack");
+                }
+                if x & PROPOSER_CENSORSHIP_ATTACK != 0 {
+                    info!("Miner has proposer censorship attack");
                 }
                 if x & BALANCE_ATTACK != 0 {
                     info!("Miner has balance attack");
@@ -269,7 +273,7 @@ impl Context {
             }
 
             // CENSORSHIP won't update
-            if self.adversary & CENSORSHIP_ATTACK == 0 {
+            if self.adversary & TRANSACTION_CENSORSHIP_ATTACK == 0 {
                 // update transaction block content
                 if new_transaction_block {
                     let mempool = self.mempool.lock().unwrap();
@@ -283,7 +287,10 @@ impl Context {
                         unreachable!();
                     }
                 }
+            }
 
+            // CENSORSHIP won't update
+            if self.adversary & PROPOSER_CENSORSHIP_ATTACK == 0 {
                 // append transaction references
                 // FIXME: we are now refreshing the whole tree
                 // note that if there are new proposer blocks, we will need to refresh tx refs in the
@@ -317,26 +324,28 @@ impl Context {
             // blocks it refers to have not been removed from unreferred_{proposer, transaction}.
             // but this is pretty much the only race condition that we still have.
             loop {
-                // CENSORSHIP won't update
-                if self.adversary & CENSORSHIP_ATTACK == 0 {
-                    // first refresh the transaction and proposer refs if there has been a new proposer
-                    // block
-                    if new_proposer_block {
-                        if let Content::Proposer(c) = &mut self.contents[PROPOSER_INDEX as usize] {
+                // first refresh the transaction and proposer refs if there has been a new proposer
+                // block
+                if new_proposer_block {
+                    if let Content::Proposer(c) = &mut self.contents[PROPOSER_INDEX as usize] {
+                        // CENSORSHIP won't update
+                        if self.adversary & TRANSACTION_CENSORSHIP_ATTACK == 0 {
                             let mut refs = self.blockchain.unreferred_transactions();
                             refs.truncate(PROPOSER_BLOCK_TX_REFS as usize);
                             c.transaction_refs = refs;
+                        }
+                        // CENSORSHIP won't update
+                        if self.adversary & PROPOSER_CENSORSHIP_ATTACK == 0 {
                             c.proposer_refs = self.blockchain.unreferred_proposers();
                             let parent = self.header.parent;
-                            c.proposer_refs.retain(|&x|x != parent);
-                            touched_content.insert(PROPOSER_INDEX);
-                        } else {
-                            unreachable!();
+                            c.proposer_refs.retain(|&x| x != parent);
                         }
+                        touched_content.insert(PROPOSER_INDEX);
+                    } else {
+                        unreachable!();
                     }
                 }
 
-                //break;/* TODO: delete this line, problem in unvoted_proposer_balance_attack
                 // then check whether our proposer parent is really the best
                 let best_proposer = self.blockchain.best_proposer().unwrap();
                 if self.header.parent == best_proposer {
@@ -346,7 +355,6 @@ impl Context {
                     self.header.parent = best_proposer;
                     continue;
                 }
-                //*/
             }
 
             // update the votes
@@ -419,17 +427,19 @@ impl Context {
                 }
                 if new_transaction_block {
                     // CENSORSHIP won't update
-                    if self.adversary & CENSORSHIP_ATTACK == 0 {
+                    if self.adversary & TRANSACTION_CENSORSHIP_ATTACK == 0 {
                         self.content_merkle_tree.update(
                             TRANSACTION_INDEX as usize,
                             &self.contents[TRANSACTION_INDEX as usize],
                             );
                     }
-                    if touched_content.contains(&PROPOSER_INDEX) {
-                        self.content_merkle_tree.update(
-                            PROPOSER_INDEX as usize,
-                            &self.contents[PROPOSER_INDEX as usize],
-                        );
+                    if self.adversary & PROPOSER_CENSORSHIP_ATTACK == 0 {
+                        if touched_content.contains(&PROPOSER_INDEX) {
+                            self.content_merkle_tree.update(
+                                PROPOSER_INDEX as usize,
+                                &self.contents[PROPOSER_INDEX as usize],
+                            );
+                        }
                     }
                 }
             }
