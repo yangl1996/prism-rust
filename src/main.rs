@@ -45,7 +45,7 @@ fn main() {
      (@arg init_fund_value: --("fund-value") [INT] default_value("100") "Sets the value of each initial fund coin")
      (@arg load_key_path: --("load-key") ... [PATH] "Loads a key pair into the wallet from the given address")
      (@arg mempool_size: --("mempool-size") ... [SIZE] default_value("500000") "Sets the size limit of the memory pool")
-     (@arg adversary: --adversary [INT] default_value("0") "Sets the adversarial behavior of miner, 0 honest, 1 censor transaction, 2 censor transaction ref, 4 balance votes, 7 all")
+     (@arg adversary: --adversary [INT] default_value("0") "Sets the adversarial behavior of miner, 0 honest, 1 censor transaction, 2 censor ref in proposer, 4 balance votes, 7 all")
      (@subcommand keygen =>
       (about: "Generates Prism wallet key pair")
       (@arg display_address: --addr "Prints the address of the key pair to STDERR")
