@@ -488,7 +488,7 @@ function start_transactions_single
 {
 	curl -s "http://$3:$4/transaction-generator/set-arrival-distribution?interval=100&distribution=uniform"
 	curl -s "http://$3:$4/transaction-generator/set-value-distribution?min=100&max=100&distribution=uniform"
-	curl -s "http://$3:$4/transaction-generator/start?throttle=8000"
+	curl -s "http://$3:$4/transaction-generator/start?throttle=2000"
 }
 
 function start_mining_single
@@ -716,6 +716,30 @@ function show_demo
 	./telematics/telematics log -duration 7200 -grafana
 }
 
+function set_tx_rate
+{
+	local nodes=`cat nodes.txt`
+	local num_nodes=`cat nodes.txt | wc -l`
+	local txrate=$1
+	if [ "$1" -lt "$num_nodes" ]; then
+		txrate=$num_nodes
+	fi
+	local itv=`expr 1000000 / \( $txrate / $num_nodes \)`
+	local pids=''
+	for node in $nodes; do
+		local name
+		local host
+		local pubip
+		local apiport
+		IFS=',' read -r name host pubip _ _ apiport _ <<< "$node"
+		curl -s "http://$pubip:$apiport/transaction-generator/set-arrival-distribution?interval=$itv&distribution=uniform" &> /dev/null &
+		pids="$pids $!"
+	done
+	for pid in $pids; do
+		wait $pid
+	done
+}
+
 mkdir -p log
 case "$1" in
 	help)
@@ -749,6 +773,7 @@ case "$1" in
 		  show-demo                  Start the demo workflow
 		  stop-tx                    Stop generating transactions
 		  stop-mine                  Stop mining
+		  tx-rate r                  Set transaction throughput to r
 
 		Run Algorand Experiment
 
@@ -808,6 +833,8 @@ case "$1" in
 		show_demo ;;
 	stop-tx)
 		query_api stop_transactions 0 ;;
+	tx-rate)
+		set_tx_rate $2 ;;
 	stop-mine)
 		query_api stop_mining 0 ;;
 	shape-traffic)
