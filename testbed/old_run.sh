@@ -1,6 +1,6 @@
 #!/bin/bash
 
-LAUNCH_TEMPLATE=lt-0d789704710d85427
+LAUNCH_TEMPLATE=lt-02226ebae5fbef5f3
 
 function start_instances
 {
@@ -49,9 +49,12 @@ function start_instances
 		echo "    UserKnownHostsFile=/dev/null" >> ~/.ssh/config.d/prism
 		echo "" >> ~/.ssh/config.d/prism
 	done
+	echo "SSH config written, waiting for instances to initialize"
+	aws ec2 wait instance-running --instance-ids $instances
 	tput setaf 2
-	echo "Instance started, SSH config written"
+	echo "Instances started"
 	tput sgr0
+	curl -s --form-string "token=$PUSHOVER_TOKEN" --form-string "user=$PUSHOVER_USER" --form-string "title=EC2 Instances Launched" --form-string "message=$1 EC2 instances were just launched by user $(whoami)." https://api.pushover.net/1/messages.json &> /dev/null
 }
 
 function fix_ssh_config
@@ -102,6 +105,13 @@ function stop_instances
 	tput setaf 2
 	echo "Instances terminated"
 	tput sgr0
+	curl -s --form-string "token=$PUSHOVER_TOKEN" --form-string "user=$PUSHOVER_USER" --form-string "title=EC2 Instances Stopped" --form-string "message=EC2 instances launched at $(date -r instances.txt) were just terminated by user $(whoami)." https://api.pushover.net/1/messages.json &> /dev/null
+}
+
+function count_instances
+{
+	result=`aws ec2 describe-instances --query 'Reservations[*].Instances[*].[InstanceId][][]' --filters Name=instance-state-name,Values=running Name=tag-key,Values=prism --output text`
+	echo "$(echo $result | wc -w | tr -d ' ')"
 }
 
 function build_prism
@@ -144,8 +154,7 @@ function prepare_payload
 	mkdir -p payload/common/scripts
 
 	echo "Download binaries"
-	#scp prism:~/prism/target/release/prism-copy payload/common/binary/prism
-	cp ../target/release/prism payload/common/binary/prism
+	scp prism:~/prism/target/release/prism-copy payload/common/binary/prism
 	cp scripts/start-prism.sh payload/common/scripts/start-prism.sh
 	cp scripts/stop-prism.sh payload/common/scripts/stop-prism.sh
 
@@ -159,11 +168,11 @@ function prepare_payload
 		local lan
 		IFS=',' read -r id ip lan <<< "$instance"
 		mkdir -p payload/$id
-		python3.7 scripts/gen_etcd_config.py $id $lan instances.txt
+		python3 scripts/gen_etcd_config.py $id $lan instances.txt
 	done
 
 	echo "Generate prism config files and keypairs for each node"
-	python3.7 scripts/gen_prism_payload.py instances.txt $1
+	python3 scripts/gen_prism_payload.py instances.txt $1
 
 	echo "Compressing payload files"
 	local instances=`cat instances.txt`
@@ -185,26 +194,21 @@ function prepare_payload
 
 function sync_payload
 {
-	#echo "Uploading payload to S3"
-	#aws s3 rm --quiet --recursive s3://prism-binary/payload
-	#aws s3 sync --quiet payload s3://prism-binary/payload
+	echo "Uploading payload to S3"
+	aws s3 rm --quiet --recursive s3://prism-binary/payload
+	aws s3 sync --quiet payload s3://prism-binary/payload
 	echo "Downloading payload on each instance"
 	execute_on_all get_payload
 }
 
 function get_payload_single
 {
-	ssh $1 -- "rm -f /home/ubuntu/*.tar.gz && rm -rf /home/ubuntu/payload && mkdir -p /home/ubuntu/payload"
-	echo "Deleted payload"
-	rsync  payload/$1.tar.gz $1:/home/ubuntu/payload
-	rsync  payload/common.tar.gz $1:/home/ubuntu/payload
-	echo "Synced payload"
-    ssh $1 -- "mv /home/ubuntu/payload/$1.tar.gz /home/ubuntu/payload/local.tar.gz && tar xf /home/ubuntu/payload/local.tar.gz -C /home/ubuntu/payload && tar xf /home/ubuntu/payload/common.tar.gz -C /home/ubuntu/payload"
+	ssh $1 -- "rm -f /home/ubuntu/*.tar.gz && rm -rf /home/ubuntu/payload && wget https://prism-binary.s3.amazonaws.com/payload/$1.tar.gz -O local.tar.gz && wget https://prism-binary.s3.amazonaws.com/payload/common.tar.gz && mkdir -p /home/ubuntu/payload && tar xf local.tar.gz -C /home/ubuntu/payload && tar xf common.tar.gz -C /home/ubuntu/payload"
 }
 
 function install_perf_single
 {
-	ssh $1 -- 'rm -f rustfilt && rm -rf inferno && sudo apt-get update -y && sudo apt-get install linux-tools-aws linux-tools-4.15.0-1043-aws binutils -y && wget https://github.com/yangl1996/rustfilt/releases/download/1/rustfilt && wget https://github.com/yangl1996/inferno/releases/download/bin/linux64.tar.gz && mkdir -p inferno && tar xf linux64.tar.gz -C inferno && chmod +x rustfilt && chmod +x inferno/* && sudo apt-get install -y c++filt && echo export PATH=$PATH:/home/ubuntu:/home/ubuntu/inferno >> /home/ubuntu/.profile'
+	ssh $1 -- 'rm -f rustfilt && rm -rf inferno && sudo apt-get update -y && sudo apt-get install linux-tools-aws linux-tools-4.15.0-1032-aws binutils -y && wget https://github.com/yangl1996/rustfilt/releases/download/1/rustfilt && wget https://github.com/yangl1996/inferno/releases/download/bin/linux64.tar.gz && mkdir -p inferno && tar xf linux64.tar.gz -C inferno && chmod +x rustfilt && chmod +x inferno/* && sudo apt-get install -y c++filt && echo export PATH=$PATH:/home/ubuntu:/home/ubuntu/inferno >> /home/ubuntu/.profile'
 }
 
 function mount_tmpfs_single
@@ -219,7 +223,7 @@ function unmount_tmpfs_single
 
 function mount_nvme_single
 {
-	ssh $1 -- 'sudo rm -rf /tmp/prism && sudo mkdir -m 777 /tmp/prism && sudo mkfs -F -t ext4 /dev/nvme0n1 && sudo mount /dev/nvme0n1 /tmp/prism && sudo chmod 777 /tmp/prism'
+	ssh $1 -- 'diskname=$(lsblk | grep 372 | cut -f 1 -d " ") && sudo rm -rf /tmp/prism && sudo mkdir -m 777 /tmp/prism && sudo mkfs -F -t ext4 /dev/$diskname && sudo mount /dev/$diskname /tmp/prism && sudo chmod 777 /tmp/prism'
 }
 
 function unmount_nvme_single
@@ -237,27 +241,119 @@ function stop_prism_single
 	ssh $1 -- 'bash /home/ubuntu/payload/scripts/stop-prism.sh &>/home/ubuntu/log/stop.log'
 }
 
+function join_by
+{
+	local IFS="$1"
+	shift
+	echo "$*"
+}
+
+function add_traffic_shaping_single
+{
+	# the $2: latency in ms, $3: throughput in kbps
+	local common_ports='22 53 80 443'
+	local ports=`cat nodes.txt | grep $1 | cut -f 6-7 -d , | tr , ' '`
+	# calculate the bdp to determine the queue size
+	qlen=`expr $3 \* $2 / 1500 / 8`
+	# give some headroom to the queue size
+	qlen=`expr $qlen \* 2`
+
+	# deal with egress
+	# add the root qdisc to the egress network interface and default traffic to class 10
+	command="sudo tc qdisc add dev ens5 handle 10: root htb default 10 direct_qlen $qlen"
+	# add the class for traffic with immunity (will be filtered to this class below) 
+	command="$command && sudo tc class add dev ens5 parent 10: classid 10:1 htb rate 1000000kbit"
+	# add the class for the rest of the traffic (assigned to this class by default)
+	command="$command && sudo tc class add dev ens5 parent 10: classid 10:10 htb rate ${3}kbit"
+	# add netem qdisc under class 10:10 to emulate delay
+	command="$command && sudo tc qdisc add dev ens5 parent 10:10 handle 100: netem delay ${2}ms rate ${3}kbit limit $qlen"
+	# filter out traffic that we don't want to be impacted and put it under 10:1
+	for port in $ports; do
+		# packets from all API/visualization servers
+		command="$command && sudo tc filter add dev ens5 parent 10: protocol ip prio 1 u32 match ip sport $port 0xffff flowid 10:1"
+	done
+	for port in $common_ports; do
+		# normal, innocent traffic: incoming/outgoing SSH, DNS, HTTP(S)
+		command="$command && sudo tc filter add dev ens5 parent 10: protocol ip prio 1 u32 match ip sport $port 0xffff flowid 10:1"
+		command="$command && sudo tc filter add dev ens5 parent 10: protocol ip prio 1 u32 match ip dport $port 0xffff flowid 10:1"
+	done
+
+	# deal with ingress
+	# create an ifb device to which later we will install qdisc
+	command="$command && sudo modprobe ifb"
+	command="$command && sudo ifconfig ifb0 up"
+	# add the qdisc to the ingress interface and forward all traffic to ifb
+	command="$command && sudo tc qdisc add dev ens5 handle ffff: ingress"
+	command="$command && sudo tc filter add dev ens5 parent ffff: protocol all u32 match u32 0 0 action mirred egress redirect dev ifb0"
+	# install qdisc on the ifb device - now we can do w/ever we want on egress of ifb and it will apply to ingress
+	# add the root device, and default all traffic to class 10 (the class we will punish)
+	command="$command && sudo tc qdisc add dev ifb0 handle 10: root htb default 10 direct_qlen $qlen"
+	# add the class for traffic with immunity
+	command="$command && sudo tc class add dev ifb0 parent 10: classid 10:1 htb rate 1000000kbit"
+	# add the class that we will punish, all traffic has been sent by default to this class
+	command="$command && sudo tc class add dev ifb0 parent 10: classid 10:10 htb rate ${3}kbit"
+	# add netem qdisc under 10:10 to install rate limiter
+	command="$command && sudo tc qdisc add dev ifb0 parent 10:10 handle 100: netem rate ${3}kbit limit $qlen"
+	# filter out traffic that we don't want to be impacted
+	for port in $ports; do
+		# packets going to all API/visualization servers
+		command="$command && sudo tc filter add dev ifb0 parent 10: protocol ip prio 1 u32 match ip dport $port 0xffff flowid 10:1"
+	done
+	for port in $common_ports; do
+		# normal, innocent traffic: incoming/outgoing SSH, DNS, HTTP(S)
+		command="$command && sudo tc filter add dev ifb0 parent 10: protocol ip prio 1 u32 match ip sport $port 0xffff flowid 10:1"
+		command="$command && sudo tc filter add dev ifb0 parent 10: protocol ip prio 1 u32 match ip dport $port 0xffff flowid 10:1"
+	done
+	
+	ssh $1 -- "$command"
+}
+
+function remove_traffic_shaping_single
+{
+	ssh $1 -- "sudo tc qdisc del dev ens5 root && sudo tc qdisc del dev ens5 ingress && sudo tc qdisc del dev ifb0 root"
+}
+
+function tune_tcp_single
+{
+	ssh $1 -- "sudo sysctl -w net.core.rmem_max=50331648 && sudo sysctl -w net.core.wmem_max=50331648 && sudo sysctl -w net.ipv4.tcp_wmem='10240 87380 50331648' && sudo sysctl -w net.ipv4.tcp_rmem='10240 87380 50331648'"
+}
+
 function execute_on_all
 {
 	# $1: execute function '$1_single'
 	# ${@:2}: extra params of the function
 	local instances=`cat instances.txt`
 	local pids=""
+	echo "Executing $1"
+	tput sc
 	for instance in $instances ;
 	do
 		local id
 		local ip
 		local lan
 		IFS=',' read -r id ip lan <<< "$instance"
-		echo "Executing $1 on $id"
+		tput rc
+		tput el
+		echo -n "Executing $1 on $id"
 		$1_single $id ${@:2} &>log/${id}_${1}.log &
 		pids="$pids $!"
 	done
-	echo "Waiting for all jobs to finish"
 	for pid in $pids ;
 	do
-		wait $pid
+		tput rc
+		tput el
+		echo -n "Waiting for job $pid to finish"
+		if ! wait $pid; then
+			tput rc
+			tput el
+			tput setaf 1
+			echo "Task $pid failed"
+			tput sgr0
+			tput sc
+		fi
 	done
+	tput rc
+	tput el
 	tput setaf 2
 	echo "Finished"
 	tput sgr0
@@ -277,7 +373,7 @@ function start_transactions_single
 
 function start_mining_single
 {
-	curl -s "http://$3:$4/miner/start?lambda=100000&lazy=false"
+	curl -s "http://$3:$4/miner/start?lambda=60000&lazy=false"
 }
 
 function stop_transactions_single
@@ -495,10 +591,9 @@ function show_demo
 {
 	run_experiment
 	echo "Demo Started"
-	#pkill grafana-rrd-server
-	#~/go/bin/grafana-rrd-server -r data/ -s 1 &
-	#./telematics/telematics log -duration 7200 -grafana
-	./telematics/telematics log -duration 7200
+	pkill grafana-rrd-server
+	~/go/bin/grafana-rrd-server -r data/ -s 1 &
+	./telematics/telematics log -duration 7200 -grafana
 }
 
 mkdir -p log
@@ -511,12 +606,16 @@ case "$1" in
 
 		  start-instances n     Start n EC2 instances
 		  stop-instances        Terminate EC2 instances
+		  count-instances       Count the running instances
 		  install-tools         Install tools
 		  fix-config            Fix SSH config
 		  mount-ramdisk         Mount RAM disk
 		  unmount-ramdisk       Unmount RAM disk
 		  mount-nvme            Mount NVME 
 		  unmount-nvme          Unmount NVME
+		  shape-traffic l b     Limit the throughput to b Kbps and add latency of l ms
+		  reset-traffic         Remove the traffic shaping filters
+		  tune-tcp              Set TCP parameters
 
 		Run Experiment
 
@@ -550,6 +649,8 @@ case "$1" in
 		start_instances $2 ;;
 	stop-instances)
 		stop_instances ;;
+	count-instances)
+		count_instances ;;
 	fix-config)
 		fix_ssh_config ;;
 	mount-ramdisk)
@@ -580,6 +681,12 @@ case "$1" in
 		query_api stop_transactions 0 ;;
 	stop-mine)
 		query_api stop_mining 0 ;;
+	shape-traffic)
+		execute_on_all add_traffic_shaping $2 $3 ;;
+	reset-traffic)
+		execute_on_all remove_traffic_shaping ;;
+	tune-tcp)
+		execute_on_all tune_tcp ;;
 	get-perf)
 		show_performance $2 ;;
 	show-vis)

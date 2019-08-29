@@ -50,7 +50,7 @@ for node in topo['nodes']:
 
 # generate wallet keypair for each node
 fund_addrs = []
-prism_bin = "../target/debug/prism"
+prism_bin = "../target/release/prism"
 for name, node in nodes.items():
     result = subprocess.run([prism_bin, "keygen", "--addr"], capture_output=True, text=True)
     keypair = result.stdout
