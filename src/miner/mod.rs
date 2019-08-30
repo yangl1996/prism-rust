@@ -341,21 +341,23 @@ impl Context {
                     }
                 }
             } else {
-                for voter_chain in new_voter_block.iter() {
-                    let chain_id: usize = (FIRST_VOTER_INDEX + voter_chain) as usize;
-                    let voter_parent = if let Content::Voter(c) = &self.contents[chain_id] {
-                        c.voter_parent
-                    } else {
-                        unreachable!();
-                    };
-                    if let Content::Voter(c) = &mut self.contents[chain_id] {
-                        c.votes = self
-                            .blockchain
-                            .unvoted_proposer(&voter_parent, &self.header.parent)
-                            .unwrap();
-                        touched_content.insert(chain_id as u16);
-                    } else {
-                        unreachable!();
+                if !new_voter_block.is_empty() {
+                    for voter_chain in 0..NUM_VOTER_CHAINS {
+                        let chain_id: usize = (FIRST_VOTER_INDEX + voter_chain) as usize;
+                        let voter_parent = if let Content::Voter(c) = &self.contents[chain_id] {
+                            c.voter_parent
+                        } else {
+                            unreachable!();
+                        };
+                        if let Content::Voter(c) = &mut self.contents[chain_id] {
+                            c.votes = self
+                                .blockchain
+                                .unvoted_proposer(&voter_parent, &self.header.parent)
+                                .unwrap();
+                            touched_content.insert(chain_id as u16);
+                        } else {
+                            unreachable!();
+                        }
                     }
                 }
             }
@@ -364,6 +366,10 @@ impl Context {
             self.header.difficulty = self.get_difficulty(&self.header.parent);
 
             // update or rebuild the merkle tree according to what we did in the last stage
+            /*
+            // This is the logic we have been using. However, since we now scan through all voter
+            // chains for potential vote changes (we now vote for the block with the most votes),
+            // here we just reconstruct the whole merkle tree for simplicity.
             if new_proposer_block {
                 // if there has been a new proposer block, simply rebuild the merkle tree
                 self.content_merkle_tree = MerkleTree::new(&self.contents);
@@ -388,9 +394,14 @@ impl Context {
                     }
                 }
             }
+            */
 
             // update merkle root if anything happened in the last stage
             if new_proposer_block || !new_voter_block.is_empty() || new_transaction_block {
+                // FIXME: see the commented out section above. this line refreshes the whole merkle
+                // tree and should be removed if we decided to individually refresh the merkle tree
+                // in the previous step.
+                self.content_merkle_tree = MerkleTree::new(&self.contents);
                 self.header.content_merkle_root = self.content_merkle_tree.root();
             }
 
