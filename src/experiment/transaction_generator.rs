@@ -103,7 +103,9 @@ impl TransactionGenerator {
             // TODO: make it flexible
             let addr = self.wallet.addresses().unwrap()[0];
             let mut prev_coin = None;
+            let mut tx_gen_start: time::Instant = time::Instant::now();
             loop {
+                tx_gen_start = time::Instant::now();
                 // check the current state and try to receive control message
                 match self.state {
                     State::Continuous(_) | State::Step(_) => match self.control_chan.try_recv() {
@@ -168,6 +170,15 @@ impl TransactionGenerator {
                     ArrivalDistribution::Uniform(d) => d.interval,
                 };
                 let interval = time::Duration::from_micros(interval);
+                let time_spent = time::Instant::now().duration_since(tx_gen_start);
+                let interval = {
+                    if interval > time_spent {
+                        interval - time_spent
+                    }
+                    else {
+                        time::Duration::new(0, 0)
+                    }
+                };
                 thread::sleep(interval);
             }
         });
