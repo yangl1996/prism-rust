@@ -6,7 +6,7 @@ pub const NETWORK_DELAY: f32 = 1.4; // the expected block propagation delay (in 
 // Design parameters
 pub const NUM_VOTER_CHAINS: u16 = 1000 as u16; // more chains means better latency
 pub const TX_BLOCK_SIZE: u32 = 64000; // the maximum size of a transaction block (in Bytes)
-pub const TX_THROUGHPUT: u32 = 70000; // the transaction throughput we want to support (in Tx/s)
+pub const TX_THROUGHPUT: u32 = 80000; // the transaction throughput we want to support (in Tx/s)
 pub const TX_BLOCK_TRANSACTIONS: u32 = TX_BLOCK_SIZE / AVG_TX_SIZE;
 pub const PROPOSER_BLOCK_TX_REFS: u32 = (TX_MINING_RATE / CHAIN_MINING_RATE * 2.0) as u32;
 
