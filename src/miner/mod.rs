@@ -195,9 +195,12 @@ impl Context {
         }
 
         let mut rng = rand::thread_rng();
+        let mut block_start = time::Instant::now();
 
         // main mining loop
         loop {
+            block_start = time::Instant::now();
+
             // check and react to control signals
             match self.operating_state {
                 OperatingState::Paused => {
@@ -492,7 +495,10 @@ impl Context {
                     let interval_dist = rand::distributions::Exp::new(1.0 / (i as f64));
                     let interval = interval_dist.sample(&mut rng);
                     let interval = time::Duration::from_micros(interval as u64);
-                    thread::sleep(interval);
+                    let time_spent = time::Instant::now().duration_since(block_start);
+                    if interval > time_spent {
+                        thread::sleep(interval - time_spent);
+                    }
                 }
             }
         }
