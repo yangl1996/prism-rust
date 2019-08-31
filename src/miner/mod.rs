@@ -236,13 +236,18 @@ impl Context {
 
             // handle context updates
             let mut touched_content: BTreeSet<u16> = BTreeSet::new();
+            let mut voter_shift = false;
             // update voter parents
             for voter_chain in new_voter_block.iter() {
                 let chain_id: usize = (FIRST_VOTER_INDEX + voter_chain) as usize;
                 let voter_parent = self.blockchain.best_voter(*voter_chain as usize);
                 if let Content::Voter(c) = &mut self.contents[chain_id] {
-                    c.voter_parent = voter_parent;
-                    touched_content.insert(chain_id as u16);
+                    if &voter_parent != &c.voter_parent {
+                        c.voter_parent = voter_parent;
+                        // mark that we have shifted a vote
+                        voter_shift = true;
+                        touched_content.insert(chain_id as u16);
+                    }
                 } else {
                     unreachable!();
                 }
@@ -366,11 +371,7 @@ impl Context {
             self.header.difficulty = self.get_difficulty(&self.header.parent);
 
             // update or rebuild the merkle tree according to what we did in the last stage
-            /*
-            // This is the logic we have been using. However, since we now scan through all voter
-            // chains for potential vote changes (we now vote for the block with the most votes),
-            // here we just reconstruct the whole merkle tree for simplicity.
-            if new_proposer_block {
+            if new_proposer_block || voter_shift {
                 // if there has been a new proposer block, simply rebuild the merkle tree
                 self.content_merkle_tree = MerkleTree::new(&self.contents);
             } else {
@@ -394,14 +395,9 @@ impl Context {
                     }
                 }
             }
-            */
 
             // update merkle root if anything happened in the last stage
             if new_proposer_block || !new_voter_block.is_empty() || new_transaction_block {
-                // FIXME: see the commented out section above. this line refreshes the whole merkle
-                // tree and should be removed if we decided to individually refresh the merkle tree
-                // in the previous step.
-                self.content_merkle_tree = MerkleTree::new(&self.contents);
                 self.header.content_merkle_root = self.content_merkle_tree.root();
             }
 
