@@ -4,7 +4,7 @@ import json
 import subprocess
 
 template = """
-/home/ubuntu/payload/binary/prism --p2p {ip}:{p2p_port} --api {ip}:{api_port} --visual {ip}:{vis_port} --blockdb /tmp/prism/{node_name}-blockdb.rocksdb --blockchaindb /tmp/prism/{node_name}-blockchaindb.rocksdb --utxodb /tmp/prism/{node_name}-utxodb.rocksdb --walletdb /tmp/prism/{node_name}-wallet.rocksdb -vv --load-key /home/ubuntu/payload/prism-payload/{node_name}.pkcs8 {peer_opt} {fund_opt} --fund-coins=400000 --mempool-size=50000
+/home/ubuntu/payload/binary/prism --p2p {ip}:{p2p_port} --api {ip}:{api_port} --visual {ip}:{vis_port} --blockdb /tmp/prism/{node_name}-blockdb.rocksdb --blockchaindb /tmp/prism/{node_name}-blockchaindb.rocksdb --utxodb /tmp/prism/{node_name}-utxodb.rocksdb --walletdb /tmp/prism/{node_name}-wallet.rocksdb -vv --load-key /home/ubuntu/payload/prism-payload/{node_name}.pkcs8 {peer_opt} {fund_opt} --fund-coins=100000 --mempool-size=50000
 """
 
 instances_file = sys.argv[1]

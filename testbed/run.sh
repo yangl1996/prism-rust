@@ -493,7 +493,7 @@ function start_transactions_single
 
 function start_mining_single
 {
-	curl -s "http://$3:$4/miner/start?lambda=247492&lazy=false"
+	curl -s "http://$3:$4/miner/start?lambda=222173&lazy=false"
 }
 
 function stop_transactions_single
