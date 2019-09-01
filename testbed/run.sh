@@ -488,12 +488,12 @@ function start_transactions_single
 {
 	curl -s "http://$3:$4/transaction-generator/set-arrival-distribution?interval=100&distribution=uniform"
 	curl -s "http://$3:$4/transaction-generator/set-value-distribution?min=100&max=100&distribution=uniform"
-	curl -s "http://$3:$4/transaction-generator/start?throttle=2000"
+	curl -s "http://$3:$4/transaction-generator/start?throttle=10000"
 }
 
 function start_mining_single
 {
-	curl -s "http://$3:$4/miner/start?lambda=221000&lazy=false"
+	curl -s "http://$3:$4/miner/start?lambda=112926&lazy=false"
 }
 
 function stop_transactions_single
