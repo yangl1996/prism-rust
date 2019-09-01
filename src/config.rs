@@ -12,10 +12,10 @@ pub const PROPOSER_BLOCK_TX_REFS: u32 = (TX_MINING_RATE / PROPOSER_CHAIN_MINING_
 
 pub const AVG_TX_SIZE: u32 = 280; // average size of a transaction (in Bytes)
 pub const TX_MINING_RATE: f32 = TX_THROUGHPUT as f32 / TX_BLOCK_TRANSACTIONS as f32;
-pub const VOTER_CHAIN_MINING_RATE: f32 = 0.081; // mining rate of the proposer chain and each voter chain in Blks/s
-pub const PROPOSER_CHAIN_MINING_RATE: f32 = 0.081;
+pub const VOTER_CHAIN_MINING_RATE: f32 = 0.054; // mining rate of the proposer chain and each voter chain in Blks/s
+pub const PROPOSER_CHAIN_MINING_RATE: f32 = 0.054;
 
-pub const ADVERSARY_MINING_POWER: f32 = 0.42; // the adversary power we want to tolerate
+pub const ADVERSARY_MINING_POWER: f32 = 0.44; // the adversary power we want to tolerate
 pub const LOG_EPSILON: f32 = 20.0; // -ln(1-confirmation_guarantee)
 pub const ALPHA: f32 = (VOTER_CHAIN_MINING_RATE * NETWORK_DELAY) / (1.0 + VOTER_CHAIN_MINING_RATE * NETWORK_DELAY); // alpha = orphan blocks / total blocks
 
