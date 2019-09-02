@@ -740,6 +740,25 @@ function set_tx_rate
 	done
 }
 
+function copy_log
+{
+	rm -rf nodelog
+	mkdir -p nodelog
+	local nodes=`cat nodes.txt`
+	local num_nodes=`cat nodes.txt | wc -l`
+	local pids=''
+	for node in $nodes; do
+		local name
+		local host
+		IFS=',' read -r name host _ _ _ _ _ <<< "$node"
+		(ssh $host -- "cat log/$name.log | gzip > nodelog.gzip" && scp $host:~/nodelog.gzip nodelog/$name.gzip) &> /dev/null &
+		pids="$pids $!"
+	done
+	for pid in $pids; do
+		wait $pid
+	done
+}
+
 mkdir -p log
 case "$1" in
 	help)
@@ -790,6 +809,7 @@ case "$1" in
 		  profile node f d           Capture stack trace for node with frequency f and duration d
 		  flamegraph node            Generate and download flamegraph for node
 		  open-dashboard             Open the performance dashboard
+		  copy-log                   Copy node log to nodelog/
 
 		Connect to Testbed
 
@@ -873,6 +893,8 @@ case "$1" in
 		scp_from_server $2 $3 $4 ;;
 	read-log)
 		read_log $2 ;;
+	copy-log)
+		copy_log ;;
 	*)
 		tput setaf 1
 		echo "Unrecognized subcommand '$1'"
