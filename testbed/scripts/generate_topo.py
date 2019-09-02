@@ -21,6 +21,8 @@ else:
     print("Unrecognized topology")
     sys.exit(1)
 
+sys.stderr.write(str(nx.algorithms.distance_measures.diameter(graph)))
+
 for node in graph.nodes():
     name = "node_" + str(node)
     nodes.append(name)
