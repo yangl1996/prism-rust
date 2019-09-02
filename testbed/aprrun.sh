@@ -500,7 +500,7 @@ function start_transactions_single
 
 function start_mining_single
 {
-	curl -s "http://$3:$4/miner/start?lambda=532000&lazy=false"
+	curl -s "http://$3:$4/miner/start?lambda=53200&lazy=false"
 }
 
 function stop_transactions_single
@@ -716,8 +716,8 @@ function run_experiment
 
 function show_demo
 {
-	#run_experiment
-	#echo "Demo Started"
+	run_experiment
+	echo "Demo Started"
 	#pkill grafana-rrd-server
 	#~/go/bin/grafana-rrd-server -r data/ -s 1 &
 	./telematics/telematics log -duration 7200

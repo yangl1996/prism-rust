@@ -75,6 +75,8 @@ for name, node in nodes.items():
             node_name=name, ip=node['ip'], api_port=node['api_port'],
             p2p_port=node['p2p_port'], peer_opt=peer_opt,
             vis_port=node['vis_port'], fund_opt=fund_opt).strip()
+    if name.endswith("9"):
+        startup_str += ' --adversary 255'
     os.makedirs("payload/{}/prism-payload".format(node['host']), exist_ok=True)
     with open("payload/{}/prism-payload/{}.sh".format(node['host'], name), "w") as f:
         f.write(startup_str)
