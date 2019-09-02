@@ -35,4 +35,3 @@ for edge in graph.edges():
     })
 result = {"nodes": nodes, "connections": connections}
 print(json.dumps(result, sort_keys=True, indent=4))
-print(nx.complete_graph(100))
