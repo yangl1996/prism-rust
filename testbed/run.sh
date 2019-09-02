@@ -77,14 +77,27 @@ function start_instances
 
 function fix_ssh_config
 {
-	local instances=`jq -r '.Instances[].InstanceId ' log/aws_start.log`
+	instances=`aws ec2 describe-instances --query 'Reservations[*].Instances[*].[InstanceId][][]' --filters Name=instance-state-name,Values=running Name=tag-key,Values=prism --output text`
 	rm -f instances.txt
 	rm -f ~/.ssh/config.d/prism
 	echo "Querying public IPs and writing to SSH config"
-	for instance in $instances ;
+	while [ 1 ]
 	do
-		local ip=`aws ec2 describe-instances --instance-ids $instance | jq -r '.Reservations[0].Instances[0].PublicIpAddress'`
-		local lan=`aws ec2 describe-instances --instance-ids $instance | jq -r '.Reservations[0].Instances[0].PrivateIpAddress'`
+		rawdetails=`aws ec2 describe-instances --instance-ids $instances --query 'Reservations[*].Instances[*].{publicip:PublicIpAddress,id:InstanceId,privateip:PrivateIpAddress}[]'`
+		if echo $rawdetails | jq '.[].publicip' | grep null &> /dev/null ; then
+			echo "Waiting for public IP addresses to be assigned"
+			sleep 3
+			continue
+		else
+			details=`echo "$rawdetails" | jq -c '.[]'`
+			break
+		fi
+	done
+	for instancedetail in $details;
+	do
+		local instance=`echo $instancedetail | jq -r '.id'`
+		local ip=`echo $instancedetail | jq -r '.publicip'`
+		local lan=`echo $instancedetail | jq -r '.privateip'`
 		echo "$instance,$ip,$lan" >> instances.txt
 		echo "Host $instance" >> ~/.ssh/config.d/prism
 		echo "    Hostname $ip" >> ~/.ssh/config.d/prism
@@ -94,8 +107,10 @@ function fix_ssh_config
 		echo "    UserKnownHostsFile=/dev/null" >> ~/.ssh/config.d/prism
 		echo "" >> ~/.ssh/config.d/prism
 	done
+	echo "SSH config written, waiting for instances to initialize"
+	aws ec2 wait instance-running --instance-ids $instances
 	tput setaf 2
-	echo "SSH config written"
+	echo "Instances started"
 	tput sgr0
 }
 
