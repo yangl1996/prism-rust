@@ -21,12 +21,13 @@ function start_instances
 	echo "Launching $1 AWS EC2 instances"
 	local instances=""
 	local remaining=$1
+	batchsize="100"
 	while [ "$remaining" -gt "0" ]
 	do
-		if [ "10" -gt "$remaining" ]; then
+		if [ "$batchsize" -gt "$remaining" ]; then
 			local thisbatch="$remaining"
 		else
-			local thisbatch="10"
+			local thisbatch="$batchsize"
 		fi
 		tput rc
 		tput el
@@ -493,7 +494,7 @@ function start_transactions_single
 
 function start_mining_single
 {
-	curl -s "http://$3:$4/miner/start?lambda=222173&lazy=false"
+	curl -s "http://$3:$4/miner/start?lambda=2221729&lazy=false"
 }
 
 function stop_transactions_single
