@@ -1,6 +1,7 @@
 #!/bin/bash
 
-LAUNCH_TEMPLATE=lt-02226ebae5fbef5f3
+#LAUNCH_TEMPLATE=lt-02226ebae5fbef5f3	# Ohio
+LAUNCH_TEMPLATE=lt-09d74bbb3e4da1ff9	# N. Virginia
 
 function start_instances
 {
