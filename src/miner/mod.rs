@@ -31,7 +31,9 @@ use rand::Rng;
 const HONEST: u8 = 0;
 const TRANSACTION_CENSORSHIP_ATTACK: u8 = 1;
 const PROPOSER_CENSORSHIP_ATTACK: u8 = 2;
-const BALANCE_ATTACK: u8 = 4;
+const VOTER_CENSORSHIP_ATTACK: u8 = 4;
+
+const BALANCE_ATTACK: u8 = 8;
 
 enum ControlSignal {
     Start(u64, bool), // the number controls the lambda of interval between block generation
@@ -172,6 +174,9 @@ impl Context {
                 }
                 if x & PROPOSER_CENSORSHIP_ATTACK != 0 {
                     info!("Miner has proposer censorship attack");
+                }
+                if x & VOTER_CENSORSHIP_ATTACK != 0 {
+                    info!("Miner has voter censorship attack");
                 }
                 if x & BALANCE_ATTACK != 0 {
                     info!("Miner has balance attack");
@@ -362,34 +367,10 @@ impl Context {
                 }
             }
 
-            // update the votes
-            if new_proposer_block {
-                for voter_chain in 0..NUM_VOTER_CHAINS {
-                    let chain_id: usize = (FIRST_VOTER_INDEX + voter_chain) as usize;
-                    let voter_parent = if let Content::Voter(c) = &self.contents[chain_id] {
-                        c.voter_parent
-                    } else {
-                        unreachable!();
-                    };
-                    if let Content::Voter(c) = &mut self.contents[chain_id] {
-                        c.votes = if self.adversary & BALANCE_ATTACK == 0 {
-                            self
-                            .blockchain
-                            .unvoted_proposer(&voter_parent, &self.header.parent)
-                            .unwrap()
-                        } else {
-                            self
-                            .blockchain
-                            .unvoted_proposer_balance_attack(&voter_parent, &self.header.parent)
-                            .unwrap()
-                        };
-                        touched_content.insert(chain_id as u16);
-                    } else {
-                        unreachable!();
-                    }
-                }
-            } else {
-                if !new_voter_block.is_empty() {
+            // CENSORSHIP won't update
+            if self.adversary & VOTER_CENSORSHIP_ATTACK == 0 {
+                // update the votes
+                if new_proposer_block {
                     for voter_chain in 0..NUM_VOTER_CHAINS {
                         let chain_id: usize = (FIRST_VOTER_INDEX + voter_chain) as usize;
                         let voter_parent = if let Content::Voter(c) = &self.contents[chain_id] {
@@ -414,6 +395,33 @@ impl Context {
                             unreachable!();
                         }
                     }
+                } else {
+                    if !new_voter_block.is_empty() {
+                        for voter_chain in 0..NUM_VOTER_CHAINS {
+                            let chain_id: usize = (FIRST_VOTER_INDEX + voter_chain) as usize;
+                            let voter_parent = if let Content::Voter(c) = &self.contents[chain_id] {
+                                c.voter_parent
+                            } else {
+                                unreachable!();
+                            };
+                            if let Content::Voter(c) = &mut self.contents[chain_id] {
+                                c.votes = if self.adversary & BALANCE_ATTACK == 0 {
+                                    self
+                                        .blockchain
+                                        .unvoted_proposer(&voter_parent, &self.header.parent)
+                                        .unwrap()
+                                } else {
+                                    self
+                                        .blockchain
+                                        .unvoted_proposer_balance_attack(&voter_parent, &self.header.parent)
+                                        .unwrap()
+                                };
+                                touched_content.insert(chain_id as u16);
+                            } else {
+                                unreachable!();
+                            }
+                        }
+                    }
                 }
             }
 
@@ -427,10 +435,13 @@ impl Context {
             } else {
                 // if there has not been a new proposer block, update individual entries
                 // TODO: add batch updating to merkle tree
-                for voter_chain in new_voter_block.iter() {
-                    let chain_id = (FIRST_VOTER_INDEX + voter_chain) as usize;
-                    self.content_merkle_tree
-                        .update(chain_id, &self.contents[chain_id]);
+                // CENSORSHIP won't update
+                if self.adversary & VOTER_CENSORSHIP_ATTACK == 0 {
+                    for voter_chain in new_voter_block.iter() {
+                        let chain_id = (FIRST_VOTER_INDEX + voter_chain) as usize;
+                        self.content_merkle_tree
+                            .update(chain_id, &self.contents[chain_id]);
+                    }
                 }
                 if new_transaction_block {
                     // CENSORSHIP won't update
