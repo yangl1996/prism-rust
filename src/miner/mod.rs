@@ -367,10 +367,37 @@ impl Context {
                 }
             }
 
-            // CENSORSHIP won't update
-            if self.adversary & VOTER_CENSORSHIP_ATTACK == 0 {
-                // update the votes
-                if new_proposer_block {
+            // update the votes
+            if new_proposer_block {
+                for voter_chain in 0..NUM_VOTER_CHAINS {
+                    let chain_id: usize = (FIRST_VOTER_INDEX + voter_chain) as usize;
+                    let voter_parent = if let Content::Voter(c) = &self.contents[chain_id] {
+                        c.voter_parent
+                    } else {
+                        unreachable!();
+                    };
+                    if let Content::Voter(c) = &mut self.contents[chain_id] {
+                        c.votes = if self.adversary & BALANCE_ATTACK == 0 {
+                            self
+                                .blockchain
+                                .unvoted_proposer(&voter_parent, &self.header.parent)
+                                .unwrap()
+                        } else if self.adversary & VOTER_CENSORSHIP_ATTACK == 0 {
+                            // CENSORSHIP has empty votes
+                            vec![]
+                        } else {
+                            self
+                                .blockchain
+                                .unvoted_proposer_balance_attack(&voter_parent, &self.header.parent)
+                                .unwrap()
+                        };
+                        touched_content.insert(chain_id as u16);
+                    } else {
+                        unreachable!();
+                    }
+                }
+            } else {
+                if !new_voter_block.is_empty() {
                     for voter_chain in 0..NUM_VOTER_CHAINS {
                         let chain_id: usize = (FIRST_VOTER_INDEX + voter_chain) as usize;
                         let voter_parent = if let Content::Voter(c) = &self.contents[chain_id] {
@@ -384,6 +411,9 @@ impl Context {
                                     .blockchain
                                     .unvoted_proposer(&voter_parent, &self.header.parent)
                                     .unwrap()
+                            } else if self.adversary & VOTER_CENSORSHIP_ATTACK == 0 {
+                                // CENSORSHIP has empty votes
+                                vec![]
                             } else {
                                 self
                                     .blockchain
@@ -395,35 +425,9 @@ impl Context {
                             unreachable!();
                         }
                     }
-                } else {
-                    if !new_voter_block.is_empty() {
-                        for voter_chain in 0..NUM_VOTER_CHAINS {
-                            let chain_id: usize = (FIRST_VOTER_INDEX + voter_chain) as usize;
-                            let voter_parent = if let Content::Voter(c) = &self.contents[chain_id] {
-                                c.voter_parent
-                            } else {
-                                unreachable!();
-                            };
-                            if let Content::Voter(c) = &mut self.contents[chain_id] {
-                                c.votes = if self.adversary & BALANCE_ATTACK == 0 {
-                                    self
-                                        .blockchain
-                                        .unvoted_proposer(&voter_parent, &self.header.parent)
-                                        .unwrap()
-                                } else {
-                                    self
-                                        .blockchain
-                                        .unvoted_proposer_balance_attack(&voter_parent, &self.header.parent)
-                                        .unwrap()
-                                };
-                                touched_content.insert(chain_id as u16);
-                            } else {
-                                unreachable!();
-                            }
-                        }
-                    }
                 }
             }
+
 
             // update the difficulty
             self.header.difficulty = self.get_difficulty(&self.header.parent);
