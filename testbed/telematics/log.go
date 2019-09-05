@@ -39,6 +39,7 @@ type Snapshot struct {
 
 type expSnapshot struct {
 	time               int
+	generated_tx       int
 	confirmed_tx       int
 	confirmed_tx_blk   int
 	processed_voter    int
@@ -342,6 +343,7 @@ func log(interval, duration uint, nodesFile, dataDir string, grafana bool) {
 					expStartTime = dur
 					lastSnapshot = expSnapshot{
 						time:               dur,
+						generated_tx:      curr["node_9"].Generated_transactions,
 						confirmed_tx:       curr["node_0"].Confirmed_transactions,
 						confirmed_tx_blk:   curr["node_0"].Confirmed_transaction_blocks,
 						processed_voter:    curr["node_0"].Processed_voter_blocks,
@@ -350,7 +352,7 @@ func log(interval, duration uint, nodesFile, dataDir string, grafana bool) {
 						proposer_len:       curr["node_0"].Proposer_main_chain_length,
 						latency_sum:        curr["node_0"].Total_transaction_block_confirmation_latency,
 					}
-					expStopAlarm = time.After(300 * time.Second)
+					expStopAlarm = time.After(600 * time.Second)
 				case <-expStopAlarm:
 					expStarted = true
 					expRunning = false
@@ -365,6 +367,7 @@ func log(interval, duration uint, nodesFile, dataDir string, grafana bool) {
 							expRunning = true
 							expStartPerf = expSnapshot{
 								time:               dur,
+								generated_tx:      lastSnapshot.generated_tx,
 								confirmed_tx:       lastSnapshot.confirmed_tx,
 								confirmed_tx_blk:   lastSnapshot.confirmed_tx_blk,
 								processed_voter:    lastSnapshot.processed_voter,
@@ -379,6 +382,7 @@ func log(interval, duration uint, nodesFile, dataDir string, grafana bool) {
 						if lastSnapshot.confirmed_tx != curr["node_0"].Confirmed_transactions {
 							expStopPerf = expSnapshot{
 								time:               dur,
+								generated_tx:      lastSnapshot.generated_tx,
 								confirmed_tx:       lastSnapshot.confirmed_tx,
 								confirmed_tx_blk:   lastSnapshot.confirmed_tx_blk,
 								processed_voter:    lastSnapshot.processed_voter,
@@ -393,6 +397,7 @@ func log(interval, duration uint, nodesFile, dataDir string, grafana bool) {
 
 				lastSnapshot = expSnapshot{
 					time:               dur,
+					generated_tx:       curr["node_0"].Generated_transactions,
 					confirmed_tx:       curr["node_0"].Confirmed_transactions,
 					confirmed_tx_blk:   curr["node_0"].Confirmed_transaction_blocks,
 					processed_voter:    curr["node_0"].Processed_voter_blocks,
@@ -431,12 +436,13 @@ func log(interval, duration uint, nodesFile, dataDir string, grafana bool) {
 						tm.Printf("Thruput      %7.7g\n", float64(expStopPerf.confirmed_tx-expStartPerf.confirmed_tx)/float64(expdur))
 						tm.Printf("Prop Fork    %7.7g\n", float64(expStopPerf.processed_proposer-expStopPerf.proposer_len-expStartPerf.processed_proposer+expStartPerf.proposer_len)/float64(expStopPerf.processed_proposer-expStartPerf.processed_proposer))
 						tm.Printf("Vote Fork    %7.7g\n", float64(expStopPerf.processed_voter-expStopPerf.voter_len_sum-expStartPerf.processed_voter+expStartPerf.voter_len_sum)/float64(expStopPerf.processed_voter-expStartPerf.processed_voter))
+						tm.Printf("Generation   %7.7g\n", float64(expStopPerf.generated_tx-expStartPerf.generated_tx)/float64(expdur))
 					}
 				} else {
 					if !expStarted {
 						tm.Printf("Hit x to start a recording\n")
 					} else {
-						tm.Printf("Experiment running. Remaining time: %v seconds\n", 300-dur+expStartTime)
+						tm.Printf("Experiment running. Remaining time: %v seconds\n", 600-dur+expStartTime)
 					}
 				}
 				tm.Flush()

@@ -1,6 +1,7 @@
 #!/bin/bash
 
-LAUNCH_TEMPLATE=lt-0d789704710d85427
+#LAUNCH_TEMPLATE=lt-02226ebae5fbef5f3	# Ohio
+LAUNCH_TEMPLATE=lt-09d74bbb3e4da1ff9	# N. Virginia
 
 function start_instances
 {
@@ -21,12 +22,13 @@ function start_instances
 	echo "Launching $1 AWS EC2 instances"
 	local instances=""
 	local remaining=$1
+	batchsize="100"
 	while [ "$remaining" -gt "0" ]
 	do
-		if [ "10" -gt "$remaining" ]; then
+		if [ "$batchsize" -gt "$remaining" ]; then
 			local thisbatch="$remaining"
 		else
-			local thisbatch="10"
+			local thisbatch="$batchsize"
 		fi
 		tput rc
 		tput el
@@ -66,21 +68,37 @@ function start_instances
 		echo "    UserKnownHostsFile=/dev/null" >> ~/.ssh/config.d/prism
 		echo "" >> ~/.ssh/config.d/prism
 	done
+	echo "SSH config written, waiting for instances to initialize"
+	aws ec2 wait instance-running --instance-ids $instances
 	tput setaf 2
-	echo "Instance started, SSH config written"
+	echo "Instances started"
 	tput sgr0
+	#curl -s --form-string "token=$PUSHOVER_TOKEN" --form-string "user=$PUSHOVER_USER" --form-string "title=EC2 Instances Launched" --form-string "message=$1 EC2 instances were just launched by user $(whoami)." https://api.pushover.net/1/messages.json &> /dev/null
 }
 
 function fix_ssh_config
 {
-	local instances=`jq -r '.Instances[].InstanceId ' log/aws_start.log`
+	instances=`aws ec2 describe-instances --query 'Reservations[*].Instances[*].[InstanceId][][]' --filters Name=instance-state-name,Values=running Name=tag-key,Values=prism --output text`
 	rm -f instances.txt
 	rm -f ~/.ssh/config.d/prism
 	echo "Querying public IPs and writing to SSH config"
-	for instance in $instances ;
+	while [ 1 ]
 	do
-		local ip=`aws ec2 describe-instances --instance-ids $instance | jq -r '.Reservations[0].Instances[0].PublicIpAddress'`
-		local lan=`aws ec2 describe-instances --instance-ids $instance | jq -r '.Reservations[0].Instances[0].PrivateIpAddress'`
+		rawdetails=`aws ec2 describe-instances --instance-ids $instances --query 'Reservations[*].Instances[*].{publicip:PublicIpAddress,id:InstanceId,privateip:PrivateIpAddress}[]'`
+		if echo $rawdetails | jq '.[].publicip' | grep null &> /dev/null ; then
+			echo "Waiting for public IP addresses to be assigned"
+			sleep 3
+			continue
+		else
+			details=`echo "$rawdetails" | jq -c '.[]'`
+			break
+		fi
+	done
+	for instancedetail in $details;
+	do
+		local instance=`echo $instancedetail | jq -r '.id'`
+		local ip=`echo $instancedetail | jq -r '.publicip'`
+		local lan=`echo $instancedetail | jq -r '.privateip'`
 		echo "$instance,$ip,$lan" >> instances.txt
 		echo "Host $instance" >> ~/.ssh/config.d/prism
 		echo "    Hostname $ip" >> ~/.ssh/config.d/prism
@@ -90,8 +108,10 @@ function fix_ssh_config
 		echo "    UserKnownHostsFile=/dev/null" >> ~/.ssh/config.d/prism
 		echo "" >> ~/.ssh/config.d/prism
 	done
+	echo "SSH config written, waiting for instances to initialize"
+	aws ec2 wait instance-running --instance-ids $instances
 	tput setaf 2
-	echo "SSH config written"
+	echo "Instances started"
 	tput sgr0
 }
 
@@ -119,6 +139,13 @@ function stop_instances
 	tput setaf 2
 	echo "Instances terminated"
 	tput sgr0
+	#curl -s --form-string "token=$PUSHOVER_TOKEN" --form-string "user=$PUSHOVER_USER" --form-string "title=EC2 Instances Stopped" --form-string "message=EC2 instances launched at $(date -r instances.txt) were just terminated by user $(whoami)." https://api.pushover.net/1/messages.json &> /dev/null
+}
+
+function count_instances
+{
+	result=`aws ec2 describe-instances --query 'Reservations[*].Instances[*].[InstanceId][][]' --filters Name=instance-state-name,Values=running Name=tag-key,Values=prism --output text`
+	echo "$(echo $result | wc -w | tr -d ' ')"
 }
 
 function build_prism
@@ -161,8 +188,7 @@ function prepare_payload
 	mkdir -p payload/common/scripts
 
 	echo "Download binaries"
-	#scp prism:~/prism/target/release/prism-copy payload/common/binary/prism
-	cp ../target/release/prism payload/common/binary/prism
+	scp prism:~/prism/target/release/prism-copy payload/common/binary/prism
 	cp scripts/start-prism.sh payload/common/scripts/start-prism.sh
 	cp scripts/stop-prism.sh payload/common/scripts/stop-prism.sh
 
@@ -176,11 +202,11 @@ function prepare_payload
 		local lan
 		IFS=',' read -r id ip lan <<< "$instance"
 		mkdir -p payload/$id
-		python3.7 scripts/gen_etcd_config.py $id $lan instances.txt
+		python3 scripts/gen_etcd_config.py $id $lan instances.txt
 	done
 
 	echo "Generate prism config files and keypairs for each node"
-	python3.7 scripts/gen_prism_payload.py instances.txt $1
+	python3 scripts/gen_prism_payload.py instances.txt $1
 
 	echo "Compressing payload files"
 	local instances=`cat instances.txt`
@@ -275,26 +301,21 @@ function prepare_algorand_payload
 
 function sync_payload
 {
-	#echo "Uploading payload to S3"
-	#aws s3 rm --quiet --recursive s3://prism-binary/payload
-	#aws s3 sync --quiet payload s3://prism-binary/payload
+	echo "Uploading payload to S3"
+	aws s3 rm --quiet --recursive s3://prism-binary/payload
+	aws s3 sync --quiet payload s3://prism-binary/payload
 	echo "Downloading payload on each instance"
 	execute_on_all get_payload
 }
 
 function get_payload_single
 {
-	ssh $1 -- "rm -f /home/ubuntu/*.tar.gz && rm -rf /home/ubuntu/payload && mkdir -p /home/ubuntu/payload"
-	echo "Deleted payload"
-	rsync  payload/$1.tar.gz $1:/home/ubuntu/payload
-	rsync  payload/common.tar.gz $1:/home/ubuntu/payload
-	echo "Synced payload"
-    ssh $1 -- "mv /home/ubuntu/payload/$1.tar.gz /home/ubuntu/payload/local.tar.gz && tar xf /home/ubuntu/payload/local.tar.gz -C /home/ubuntu/payload && tar xf /home/ubuntu/payload/common.tar.gz -C /home/ubuntu/payload"
+	ssh $1 -- "rm -f /home/ubuntu/*.tar.gz && rm -rf /home/ubuntu/payload && wget https://prism-binary.s3.amazonaws.com/payload/$1.tar.gz -O local.tar.gz && wget https://prism-binary.s3.amazonaws.com/payload/common.tar.gz && mkdir -p /home/ubuntu/payload && tar xf local.tar.gz -C /home/ubuntu/payload && tar xf common.tar.gz -C /home/ubuntu/payload"
 }
 
 function install_perf_single
 {
-	ssh $1 -- 'rm -f rustfilt && rm -rf inferno && sudo apt-get update -y && sudo apt-get install linux-tools-aws linux-tools-4.15.0-1043-aws binutils -y && wget https://github.com/yangl1996/rustfilt/releases/download/1/rustfilt && wget https://github.com/yangl1996/inferno/releases/download/bin/linux64.tar.gz && mkdir -p inferno && tar xf linux64.tar.gz -C inferno && chmod +x rustfilt && chmod +x inferno/* && sudo apt-get install -y c++filt && echo export PATH=$PATH:/home/ubuntu:/home/ubuntu/inferno >> /home/ubuntu/.profile'
+	ssh $1 -- 'rm -f rustfilt && rm -rf inferno && sudo apt-get update -y && sudo apt-get install linux-tools-aws linux-tools-4.15.0-1032-aws binutils -y && wget https://github.com/yangl1996/rustfilt/releases/download/1/rustfilt && wget https://github.com/yangl1996/inferno/releases/download/bin/linux64.tar.gz && mkdir -p inferno && tar xf linux64.tar.gz -C inferno && chmod +x rustfilt && chmod +x inferno/* && sudo apt-get install -y c++filt && echo export PATH=$PATH:/home/ubuntu:/home/ubuntu/inferno >> /home/ubuntu/.profile'
 }
 
 function mount_tmpfs_single
@@ -309,7 +330,7 @@ function unmount_tmpfs_single
 
 function mount_nvme_single
 {
-	ssh $1 -- 'sudo rm -rf /tmp/prism && sudo mkdir -m 777 /tmp/prism && sudo mkfs -F -t ext4 /dev/nvme0n1 && sudo mount /dev/nvme0n1 /tmp/prism && sudo chmod 777 /tmp/prism'
+	ssh $1 -- 'diskname=$(lsblk | grep 372 | cut -f 1 -d " ") && sudo rm -rf /tmp/prism && sudo mkdir -m 777 /tmp/prism && sudo mkfs -F -t ext4 /dev/$diskname && sudo mount /dev/$diskname /tmp/prism && sudo chmod 777 /tmp/prism'
 }
 
 function unmount_nvme_single
@@ -440,21 +461,36 @@ function execute_on_all
 	# ${@:2}: extra params of the function
 	local instances=`cat instances.txt`
 	local pids=""
+	echo "Executing $1"
+	tput sc
 	for instance in $instances ;
 	do
 		local id
 		local ip
 		local lan
 		IFS=',' read -r id ip lan <<< "$instance"
-		echo "Executing $1 on $id"
+		tput rc
+		tput el
+		echo -n "Executing $1 on $id"
 		$1_single $id ${@:2} &>log/${id}_${1}.log &
 		pids="$pids $!"
 	done
-	echo "Waiting for all jobs to finish"
 	for pid in $pids ;
 	do
-		wait $pid
+		tput rc
+		tput el
+		echo -n "Waiting for job $pid to finish"
+		if ! wait $pid; then
+			tput rc
+			tput el
+			tput setaf 1
+			echo "Task $pid failed"
+			tput sgr0
+			tput sc
+		fi
 	done
+	tput rc
+	tput el
 	tput setaf 2
 	echo "Finished"
 	tput sgr0
@@ -469,12 +505,12 @@ function start_transactions_single
 {
 	curl -s "http://$3:$4/transaction-generator/set-arrival-distribution?interval=100&distribution=uniform"
 	curl -s "http://$3:$4/transaction-generator/set-value-distribution?min=100&max=100&distribution=uniform"
-	curl -s "http://$3:$4/transaction-generator/start?throttle=8000"
+	curl -s "http://$3:$4/transaction-generator/start?throttle=10000"
 }
 
 function start_mining_single
 {
-	curl -s "http://$3:$4/miner/start?lambda=532000&lazy=false"
+	curl -s "http://$3:$4/miner/start?lambda=666519&lazy=false"
 }
 
 function stop_transactions_single
@@ -692,10 +728,52 @@ function show_demo
 {
 	run_experiment
 	echo "Demo Started"
-	#pkill grafana-rrd-server
-	#~/go/bin/grafana-rrd-server -r data/ -s 1 &
-	#./telematics/telematics log -duration 7200 -grafana
-	./telematics/telematics log -duration 7200
+	pkill grafana-rrd-server
+	~/go/bin/grafana-rrd-server -r data/ -s 1 &
+	./telematics/telematics log -duration 7200 -grafana
+}
+
+function set_tx_rate
+{
+	local nodes=`cat nodes.txt`
+	local num_nodes=`cat nodes.txt | wc -l`
+	local txrate=$1
+	if [ "$1" -lt "$num_nodes" ]; then
+		txrate=$num_nodes
+	fi
+	local itv=`expr 1000000 / \( $txrate / $num_nodes \)`
+	local pids=''
+	for node in $nodes; do
+		local name
+		local host
+		local pubip
+		local apiport
+		IFS=',' read -r name host pubip _ _ apiport _ <<< "$node"
+		curl -s "http://$pubip:$apiport/transaction-generator/set-arrival-distribution?interval=$itv&distribution=uniform" &> /dev/null &
+		pids="$pids $!"
+	done
+	for pid in $pids; do
+		wait $pid
+	done
+}
+
+function copy_log
+{
+	rm -rf nodelog
+	mkdir -p nodelog
+	local nodes=`cat nodes.txt`
+	local num_nodes=`cat nodes.txt | wc -l`
+	local pids=''
+	for node in $nodes; do
+		local name
+		local host
+		IFS=',' read -r name host _ _ _ _ _ <<< "$node"
+		(ssh $host -- "cat log/$name.log | gzip > nodelog.gzip" && scp $host:~/nodelog.gzip nodelog/$name.gzip) &> /dev/null &
+		pids="$pids $!"
+	done
+	for pid in $pids; do
+		wait $pid
+	done
 }
 
 mkdir -p log
@@ -731,6 +809,7 @@ case "$1" in
 		  show-demo                  Start the demo workflow
 		  stop-tx                    Stop generating transactions
 		  stop-mine                  Stop mining
+		  tx-rate r                  Set transaction throughput to r
 
 		Run Algorand Experiment
 
@@ -747,6 +826,7 @@ case "$1" in
 		  profile node f d           Capture stack trace for node with frequency f and duration d
 		  flamegraph node            Generate and download flamegraph for node
 		  open-dashboard             Open the performance dashboard
+		  copy-log                   Copy node log to nodelog/
 
 		Connect to Testbed
 
@@ -760,6 +840,8 @@ case "$1" in
 		start_instances $2 ;;
 	stop-instances)
 		stop_instances ;;
+	count-instances)
+		count_instances ;;
 	fix-config)
 		fix_ssh_config ;;
 	mount-ramdisk)
@@ -788,6 +870,8 @@ case "$1" in
 		show_demo ;;
 	stop-tx)
 		query_api stop_transactions 0 ;;
+	tx-rate)
+		set_tx_rate $2 ;;
 	stop-mine)
 		query_api stop_mining 0 ;;
 	shape-traffic)
@@ -826,6 +910,8 @@ case "$1" in
 		scp_from_server $2 $3 $4 ;;
 	read-log)
 		read_log $2 ;;
+	copy-log)
+		copy_log ;;
 	*)
 		tput setaf 1
 		echo "Unrecognized subcommand '$1'"

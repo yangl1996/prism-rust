@@ -219,9 +219,12 @@ impl Context {
         }
 
         let mut rng = rand::thread_rng();
+        let mut block_start = time::Instant::now();
 
         // main mining loop
         loop {
+            block_start = time::Instant::now();
+
             // check and react to control signals
             match self.operating_state {
                 OperatingState::Paused => {
@@ -260,13 +263,18 @@ impl Context {
 
             // handle context updates
             let mut touched_content: BTreeSet<u16> = BTreeSet::new();
+            let mut voter_shift = false;
             // update voter parents
             for voter_chain in new_voter_block.iter() {
                 let chain_id: usize = (FIRST_VOTER_INDEX + voter_chain) as usize;
                 let voter_parent = self.blockchain.best_voter(*voter_chain as usize);
                 if let Content::Voter(c) = &mut self.contents[chain_id] {
-                    c.voter_parent = voter_parent;
-                    touched_content.insert(chain_id as u16);
+                    if &voter_parent != &c.voter_parent {
+                        c.voter_parent = voter_parent;
+                        // mark that we have shifted a vote
+                        voter_shift = true;
+                        touched_content.insert(chain_id as u16);
+                    }
                 } else {
                     unreachable!();
                 }
@@ -381,28 +389,30 @@ impl Context {
                     }
                 }
             } else {
-                for voter_chain in new_voter_block.iter() {
-                    let chain_id: usize = (FIRST_VOTER_INDEX + voter_chain) as usize;
-                    let voter_parent = if let Content::Voter(c) = &self.contents[chain_id] {
-                        c.voter_parent
-                    } else {
-                        unreachable!();
-                    };
-                    if let Content::Voter(c) = &mut self.contents[chain_id] {
-                        c.votes = if self.adversary & BALANCE_ATTACK == 0 {
-                            self
-                            .blockchain
-                            .unvoted_proposer(&voter_parent, &self.header.parent)
-                            .unwrap()
+                if !new_voter_block.is_empty() {
+                    for voter_chain in 0..NUM_VOTER_CHAINS {
+                        let chain_id: usize = (FIRST_VOTER_INDEX + voter_chain) as usize;
+                        let voter_parent = if let Content::Voter(c) = &self.contents[chain_id] {
+                            c.voter_parent
                         } else {
-                            self
-                            .blockchain
-                            .unvoted_proposer_balance_attack(&voter_parent, &self.header.parent)
-                            .unwrap()
+                            unreachable!();
                         };
-                        touched_content.insert(chain_id as u16);
-                    } else {
-                        unreachable!();
+                        if let Content::Voter(c) = &mut self.contents[chain_id] {
+                            c.votes = if self.adversary & BALANCE_ATTACK == 0 {
+                                self
+                                    .blockchain
+                                    .unvoted_proposer(&voter_parent, &self.header.parent)
+                                    .unwrap()
+                            } else {
+                                self
+                                    .blockchain
+                                    .unvoted_proposer_balance_attack(&voter_parent, &self.header.parent)
+                                    .unwrap()
+                            };
+                            touched_content.insert(chain_id as u16);
+                        } else {
+                            unreachable!();
+                        }
                     }
                 }
             }
@@ -411,7 +421,7 @@ impl Context {
             self.header.difficulty = self.get_difficulty(&self.header.parent);
 
             // update or rebuild the merkle tree according to what we did in the last stage
-            if new_proposer_block {
+            if new_proposer_block || voter_shift {
                 // if there has been a new proposer block, simply rebuild the merkle tree
                 self.content_merkle_tree = MerkleTree::new(&self.contents);
             } else {
@@ -537,7 +547,10 @@ impl Context {
                     let interval_dist = rand::distributions::Exp::new(1.0 / (i as f64));
                     let interval = interval_dist.sample(&mut rng);
                     let interval = time::Duration::from_micros(interval as u64);
-                    thread::sleep(interval);
+                    let time_spent = time::Instant::now().duration_since(block_start);
+                    if interval > time_spent {
+                        thread::sleep(interval - time_spent);
+                    }
                 }
             }
         }
