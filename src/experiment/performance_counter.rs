@@ -5,7 +5,7 @@ use crate::transaction::Transaction;
 use crate::wallet::WalletError;
 use std::sync::atomic::{AtomicIsize, AtomicUsize, Ordering};
 use std::time::SystemTime;
-
+use log::trace;
 lazy_static! {
     pub static ref PERFORMANCE_COUNTER: Counter = { Counter::new() };
 }
@@ -153,7 +153,7 @@ impl Counter {
         };
         match b.content {
             BlockContent::Transaction(_) => {
-                println!("Received Transaction Block Delay = {} ms", delay);
+                trace!("Received Transaction Block Delay = {} ms", delay);
                 self.total_transaction_block_delay
                     .fetch_add(delay as usize, Ordering::Relaxed);
                 self.total_transaction_block_squared_delay
@@ -162,7 +162,7 @@ impl Counter {
                     .fetch_add(1, Ordering::Relaxed);
             }
             BlockContent::Proposer(_) => {
-                println!("Received Proposer Block Delay = {} ms", delay);
+                trace!("Received Proposer Block Delay = {} ms", delay);
                 self.total_proposer_block_delay
                     .fetch_add(delay as usize, Ordering::Relaxed);
                 self.total_proposer_block_squared_delay
@@ -171,7 +171,7 @@ impl Counter {
                     .fetch_add(1, Ordering::Relaxed);
             }
             BlockContent::Voter(_) => {
-                println!("Received Voter Block Delay = {} ms", delay);
+                trace!("Received Voter Block Delay = {} ms", delay);
                 self.total_voter_block_delay
                     .fetch_add(delay as usize, Ordering::Relaxed);
                 self.total_voter_block_squared_delay
