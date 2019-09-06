@@ -44,6 +44,9 @@ function kill_prism() {
 		mined_proposer=`echo $result | jq .[$'"mined_proposer_blocks"']`
 		mined_voter=`echo $result | jq .[$'"mined_voter_blocks"']`
 		mined_transaction=`echo $result | jq .[$'"mined_transaction_blocks"']`
+		confirmed_blocks=`echo $result | jq .[$'"confirmed_transaction_blocks"']`
+		total_latency=`echo $result | jq .[$'"total_transaction_block_confirmation_latency"']`
+		echo "Node $i Latency: $(expr $total_latency / $confirmed_blocks) ms"
         mined=`expr $mined_proposer + $mined_voter + $mined_transaction`
 		echo "Node $i Mined blocks: $(expr $mined / $elapsed) blk/s"
 		echo "Node $i Transaction Confirmation: $(expr $confirmed / $elapsed) Tx/s"
@@ -64,7 +67,7 @@ function kill_prism() {
 binary_path=${PRISM_BINARY-../target/release/prism}
 num_nodes=$1
 
-tmp_path="/home/geruiw2/Documents/tmp"
+tmp_path="/data/gerui/tmp"
 
 # generate keypairs and addresses
 for (( i = 0 ; i < $num_nodes ; i++ )); do
@@ -90,7 +93,7 @@ for (( i = 0; i < $num_nodes; i++ )); do
 	p2p=`expr $p2p_port + $i`
 	api=`expr $api_port + $i`
 	vis=`expr $vis_port + $i`
-	command="$binary_path --p2p 127.0.0.1:${p2p} --api 127.0.0.1:${api} --visual 127.0.0.1:${vis} --blockdb ${tmp_path}/prism-${i}-blockdb.rocksdb --blockchaindb ${tmp_path}/prism-${i}-blockchaindb.rocksdb --utxodb ${tmp_path}/prism-${i}-utxodb.rocksdb --walletdb ${tmp_path}/prism-${i}-wallet.rocksdb -vv --load-key ${i}.pkcs8 --adversary $(( ( ${i} == 0 ) * 0 ))"
+	command="$binary_path --p2p 127.0.0.1:${p2p} --api 127.0.0.1:${api} --visual 127.0.0.1:${vis} --blockdb ${tmp_path}/prism-${i}-blockdb.rocksdb --blockchaindb ${tmp_path}/prism-${i}-blockchaindb.rocksdb --utxodb ${tmp_path}/prism-${i}-utxodb.rocksdb --walletdb ${tmp_path}/prism-${i}-wallet.rocksdb -vv --load-key ${i}.pkcs8 --adversary $(( ( ${i} <= 1 ) * 255 ))"
 
 	for (( j = 0; j < $i; j++ )); do
 		peer_port=`expr $p2p_port + $j`
