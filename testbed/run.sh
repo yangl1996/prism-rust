@@ -1,7 +1,7 @@
 #!/bin/bash
 
-#LAUNCH_TEMPLATE=lt-02226ebae5fbef5f3	# Ohio
-LAUNCH_TEMPLATE=lt-09d74bbb3e4da1ff9	# N. Virginia
+LAUNCH_TEMPLATE=lt-02226ebae5fbef5f3	# Ohio
+#LAUNCH_TEMPLATE=lt-09d74bbb3e4da1ff9	# N. Virginia
 
 function start_instances
 {
@@ -510,7 +510,7 @@ function start_transactions_single
 
 function start_mining_single
 {
-	curl -s "http://$3:$4/miner/start?lambda=666519&lazy=false"
+	curl -s "http://$3:$4/miner/start?lambda=222173&lazy=false"
 }
 
 function stop_transactions_single
