@@ -31,7 +31,7 @@ use rand::Rng;
 const HONEST: u8 = 0;
 const TRANSACTION_CENSORSHIP_ATTACK: u8 = 1;
 const PROPOSER_CENSORSHIP_ATTACK: u8 = 2;
-const VOTER_CENSORSHIP_ATTACK: u8 = 4;
+//const VOTER_CENSORSHIP_ATTACK: u8 = 4;
 
 const BALANCE_ATTACK: u8 = 8;
 
@@ -175,9 +175,10 @@ impl Context {
                 if x & PROPOSER_CENSORSHIP_ATTACK != 0 {
                     info!("Miner has proposer censorship attack");
                 }
+                /*
                 if x & VOTER_CENSORSHIP_ATTACK != 0 {
                     info!("Miner has voter censorship attack");
-                }
+                }*/
                 if x & BALANCE_ATTACK != 0 {
                     info!("Miner has balance attack");
                 }
@@ -382,9 +383,6 @@ impl Context {
                                 .blockchain
                                 .unvoted_proposer(&voter_parent, &self.header.parent)
                                 .unwrap()
-                        } else if self.adversary & VOTER_CENSORSHIP_ATTACK == 0 {
-                            // CENSORSHIP has empty votes
-                            vec![]
                         } else {
                             self
                                 .blockchain
@@ -411,9 +409,6 @@ impl Context {
                                     .blockchain
                                     .unvoted_proposer(&voter_parent, &self.header.parent)
                                     .unwrap()
-                            } else if self.adversary & VOTER_CENSORSHIP_ATTACK == 0 {
-                                // CENSORSHIP has empty votes
-                                vec![]
                             } else {
                                 self
                                     .blockchain
@@ -439,13 +434,10 @@ impl Context {
             } else {
                 // if there has not been a new proposer block, update individual entries
                 // TODO: add batch updating to merkle tree
-                // CENSORSHIP won't update
-                if self.adversary & VOTER_CENSORSHIP_ATTACK == 0 {
-                    for voter_chain in new_voter_block.iter() {
-                        let chain_id = (FIRST_VOTER_INDEX + voter_chain) as usize;
-                        self.content_merkle_tree
-                            .update(chain_id, &self.contents[chain_id]);
-                    }
+                for voter_chain in new_voter_block.iter() {
+                    let chain_id = (FIRST_VOTER_INDEX + voter_chain) as usize;
+                    self.content_merkle_tree
+                        .update(chain_id, &self.contents[chain_id]);
                 }
                 if new_transaction_block {
                     // CENSORSHIP won't update
