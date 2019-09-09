@@ -8,7 +8,7 @@ pub const NUM_VOTER_CHAINS: u16 = 1000 as u16; // more chains means better laten
 pub const TX_BLOCK_SIZE: u32 = 64000; // the maximum size of a transaction block (in Bytes)
 pub const TX_THROUGHPUT: u32 = 80000; // the transaction throughput we want to support (in Tx/s)
 pub const TX_BLOCK_TRANSACTIONS: u32 = TX_BLOCK_SIZE / AVG_TX_SIZE;
-pub const PROPOSER_BLOCK_TX_REFS: u32 = (TX_MINING_RATE / PROPOSER_CHAIN_MINING_RATE * 2.0) as u32;
+pub const PROPOSER_BLOCK_TX_REFS: u32 = (TX_MINING_RATE / PROPOSER_CHAIN_MINING_RATE * 10.0) as u32;
 
 pub const AVG_TX_SIZE: u32 = 280; // average size of a transaction (in Bytes)
 pub const TX_MINING_RATE: f32 = TX_THROUGHPUT as f32 / TX_BLOCK_TRANSACTIONS as f32;
