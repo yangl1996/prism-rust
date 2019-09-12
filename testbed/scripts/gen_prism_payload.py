@@ -4,7 +4,7 @@ import json
 import subprocess
 
 template = """
-/home/ubuntu/payload/binary/prism --p2p {ip}:{p2p_port} --api {ip}:{api_port} --visual {ip}:{vis_port} --blockdb /tmp/prism/{node_name}-blockdb.rocksdb --blockchaindb /tmp/prism/{node_name}-blockchaindb.rocksdb --utxodb /tmp/prism/{node_name}-utxodb.rocksdb --walletdb /tmp/prism/{node_name}-wallet.rocksdb -vv --load-key /home/ubuntu/payload/prism-payload/{node_name}.pkcs8 {peer_opt} {fund_opt} --fund-coins=100000 --mempool-size=50000
+/home/ubuntu/payload/binary/prism --p2p {ip}:{p2p_port} --api {ip}:{api_port} --visual {ip}:{vis_port} --blockdb /tmp/prism/{node_name}-blockdb.rocksdb --blockchaindb /tmp/prism/{node_name}-blockchaindb.rocksdb --utxodb /tmp/prism/{node_name}-utxodb.rocksdb --walletdb /tmp/prism/{node_name}-wallet.rocksdb -vv --load-key /home/ubuntu/payload/prism-payload/{node_name}.pkcs8 {peer_opt} {fund_opt} --fund-coins=250000 --mempool-size=50000
 """
 
 instances_file = sys.argv[1]
@@ -75,9 +75,9 @@ for name, node in nodes.items():
             node_name=name, ip=node['ip'], api_port=node['api_port'],
             p2p_port=node['p2p_port'], peer_opt=peer_opt,
             vis_port=node['vis_port'], fund_opt=fund_opt).strip()
-    if name[-1] == "9" and (name[-2] in ['1', '3', '5', '7', '9']):
+    #if name[-1] == "9" and (name[-2] in ['1', '3', '5', '7', '9']):
     #if name[-1] in ['9', '8']:
-    #if name[-1] in ['9'] or (name[-1] == '7' and (name[-2] in ['1', '3', '5', '7', '9'])):
+    if name[-1] in ['9', '8'] or (name[-1] == '7' and (name[-2] in ['1', '3', '5', '7', '9'])):
         print("Putting " + name + " as attacker")
         startup_str += ' --adversary 8'
     os.makedirs("payload/{}/prism-payload".format(node['host']), exist_ok=True)
