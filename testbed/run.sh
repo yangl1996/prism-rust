@@ -1,6 +1,7 @@
 #!/bin/bash
 
-LAUNCH_TEMPLATE=lt-02226ebae5fbef5f3
+#LAUNCH_TEMPLATE=lt-02226ebae5fbef5f3	# Ohio
+LAUNCH_TEMPLATE=lt-09d74bbb3e4da1ff9	# N. Virginia
 
 function start_instances
 {
@@ -21,12 +22,13 @@ function start_instances
 	echo "Launching $1 AWS EC2 instances"
 	local instances=""
 	local remaining=$1
+	batchsize="100"
 	while [ "$remaining" -gt "0" ]
 	do
-		if [ "10" -gt "$remaining" ]; then
+		if [ "$batchsize" -gt "$remaining" ]; then
 			local thisbatch="$remaining"
 		else
-			local thisbatch="10"
+			local thisbatch="$batchsize"
 		fi
 		tput rc
 		tput el
@@ -71,19 +73,32 @@ function start_instances
 	tput setaf 2
 	echo "Instances started"
 	tput sgr0
-	curl -s --form-string "token=$PUSHOVER_TOKEN" --form-string "user=$PUSHOVER_USER" --form-string "title=EC2 Instances Launched" --form-string "message=$1 EC2 instances were just launched by user $(whoami)." https://api.pushover.net/1/messages.json &> /dev/null
+	#curl -s --form-string "token=$PUSHOVER_TOKEN" --form-string "user=$PUSHOVER_USER" --form-string "title=EC2 Instances Launched" --form-string "message=$1 EC2 instances were just launched by user $(whoami)." https://api.pushover.net/1/messages.json &> /dev/null
 }
 
 function fix_ssh_config
 {
-	local instances=`jq -r '.Instances[].InstanceId ' log/aws_start.log`
+	instances=`aws ec2 describe-instances --query 'Reservations[*].Instances[*].[InstanceId][][]' --filters Name=instance-state-name,Values=running Name=tag-key,Values=prism --output text`
 	rm -f instances.txt
 	rm -f ~/.ssh/config.d/prism
 	echo "Querying public IPs and writing to SSH config"
-	for instance in $instances ;
+	while [ 1 ]
 	do
-		local ip=`aws ec2 describe-instances --instance-ids $instance | jq -r '.Reservations[0].Instances[0].PublicIpAddress'`
-		local lan=`aws ec2 describe-instances --instance-ids $instance | jq -r '.Reservations[0].Instances[0].PrivateIpAddress'`
+		rawdetails=`aws ec2 describe-instances --instance-ids $instances --query 'Reservations[*].Instances[*].{publicip:PublicIpAddress,id:InstanceId,privateip:PrivateIpAddress}[]'`
+		if echo $rawdetails | jq '.[].publicip' | grep null &> /dev/null ; then
+			echo "Waiting for public IP addresses to be assigned"
+			sleep 3
+			continue
+		else
+			details=`echo "$rawdetails" | jq -c '.[]'`
+			break
+		fi
+	done
+	for instancedetail in $details;
+	do
+		local instance=`echo $instancedetail | jq -r '.id'`
+		local ip=`echo $instancedetail | jq -r '.publicip'`
+		local lan=`echo $instancedetail | jq -r '.privateip'`
 		echo "$instance,$ip,$lan" >> instances.txt
 		echo "Host $instance" >> ~/.ssh/config.d/prism
 		echo "    Hostname $ip" >> ~/.ssh/config.d/prism
@@ -93,8 +108,10 @@ function fix_ssh_config
 		echo "    UserKnownHostsFile=/dev/null" >> ~/.ssh/config.d/prism
 		echo "" >> ~/.ssh/config.d/prism
 	done
+	echo "SSH config written, waiting for instances to initialize"
+	aws ec2 wait instance-running --instance-ids $instances
 	tput setaf 2
-	echo "SSH config written"
+	echo "Instances started"
 	tput sgr0
 }
 
@@ -122,7 +139,7 @@ function stop_instances
 	tput setaf 2
 	echo "Instances terminated"
 	tput sgr0
-	curl -s --form-string "token=$PUSHOVER_TOKEN" --form-string "user=$PUSHOVER_USER" --form-string "title=EC2 Instances Stopped" --form-string "message=EC2 instances launched at $(date -r instances.txt) were just terminated by user $(whoami)." https://api.pushover.net/1/messages.json &> /dev/null
+	#curl -s --form-string "token=$PUSHOVER_TOKEN" --form-string "user=$PUSHOVER_USER" --form-string "title=EC2 Instances Stopped" --form-string "message=EC2 instances launched at $(date -r instances.txt) were just terminated by user $(whoami)." https://api.pushover.net/1/messages.json &> /dev/null
 }
 
 function count_instances
@@ -488,12 +505,12 @@ function start_transactions_single
 {
 	curl -s "http://$3:$4/transaction-generator/set-arrival-distribution?interval=100&distribution=uniform"
 	curl -s "http://$3:$4/transaction-generator/set-value-distribution?min=100&max=100&distribution=uniform"
-	curl -s "http://$3:$4/transaction-generator/start?throttle=8000"
+	curl -s "http://$3:$4/transaction-generator/start?throttle=10000"
 }
 
 function start_mining_single
 {
-	curl -s "http://$3:$4/miner/start?lambda=258000&lazy=false"
+	curl -s "http://$3:$4/miner/start?lambda=666519&lazy=false"
 }
 
 function stop_transactions_single
@@ -716,6 +733,49 @@ function show_demo
 	./telematics/telematics log -duration 7200 -grafana
 }
 
+function set_tx_rate
+{
+	local nodes=`cat nodes.txt`
+	local num_nodes=`cat nodes.txt | wc -l`
+	local txrate=$1
+	if [ "$1" -lt "$num_nodes" ]; then
+		txrate=$num_nodes
+	fi
+	local itv=`expr 1000000 / \( $txrate / $num_nodes \)`
+	local pids=''
+	for node in $nodes; do
+		local name
+		local host
+		local pubip
+		local apiport
+		IFS=',' read -r name host pubip _ _ apiport _ <<< "$node"
+		curl -s "http://$pubip:$apiport/transaction-generator/set-arrival-distribution?interval=$itv&distribution=uniform" &> /dev/null &
+		pids="$pids $!"
+	done
+	for pid in $pids; do
+		wait $pid
+	done
+}
+
+function copy_log
+{
+	rm -rf nodelog
+	mkdir -p nodelog
+	local nodes=`cat nodes.txt`
+	local num_nodes=`cat nodes.txt | wc -l`
+	local pids=''
+	for node in $nodes; do
+		local name
+		local host
+		IFS=',' read -r name host _ _ _ _ _ <<< "$node"
+		(ssh $host -- "cat log/$name.log | gzip > nodelog.gzip" && scp $host:~/nodelog.gzip nodelog/$name.gzip) &> /dev/null &
+		pids="$pids $!"
+	done
+	for pid in $pids; do
+		wait $pid
+	done
+}
+
 mkdir -p log
 case "$1" in
 	help)
@@ -749,6 +809,7 @@ case "$1" in
 		  show-demo                  Start the demo workflow
 		  stop-tx                    Stop generating transactions
 		  stop-mine                  Stop mining
+		  tx-rate r                  Set transaction throughput to r
 
 		Run Algorand Experiment
 
@@ -765,6 +826,7 @@ case "$1" in
 		  profile node f d           Capture stack trace for node with frequency f and duration d
 		  flamegraph node            Generate and download flamegraph for node
 		  open-dashboard             Open the performance dashboard
+		  copy-log                   Copy node log to nodelog/
 
 		Connect to Testbed
 
@@ -808,6 +870,8 @@ case "$1" in
 		show_demo ;;
 	stop-tx)
 		query_api stop_transactions 0 ;;
+	tx-rate)
+		set_tx_rate $2 ;;
 	stop-mine)
 		query_api stop_mining 0 ;;
 	shape-traffic)
@@ -846,6 +910,8 @@ case "$1" in
 		scp_from_server $2 $3 $4 ;;
 	read-log)
 		read_log $2 ;;
+	copy-log)
+		copy_log ;;
 	*)
 		tput setaf 1
 		echo "Unrecognized subcommand '$1'"

@@ -21,6 +21,8 @@ else:
     print("Unrecognized topology")
     sys.exit(1)
 
+sys.stderr.write(str(nx.algorithms.distance_measures.diameter(graph)))
+
 for node in graph.nodes():
     name = "node_" + str(node)
     nodes.append(name)
@@ -33,4 +35,3 @@ for edge in graph.edges():
     })
 result = {"nodes": nodes, "connections": connections}
 print(json.dumps(result, sort_keys=True, indent=4))
-print(nx.complete_graph(100))

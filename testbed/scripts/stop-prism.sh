@@ -2,7 +2,7 @@
 
 echo "Killing Prism processes"
 
-pkill prism
+pkill -9 prism
 wait $!
 
 # pids=`cat /home/ubuntu/log/prism.pid`
