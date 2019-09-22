@@ -90,56 +90,6 @@ pub struct Authorization {
     pub signature: Vec<u8>,
 }
 
-#[cfg(any(test, feature = "test-utilities"))]
+#[cfg(any(test))]
 pub mod tests {
-    use super::*;
-    use crate::crypto::hash::tests::generate_random_hash;
-    use rand::{Rng, RngCore};
-
-    pub fn generate_random_coinid() -> CoinId {
-        let mut rng = rand::thread_rng();
-        CoinId {
-            hash: generate_random_hash(),
-            index: rng.next_u32(),
-        }
-    }
-
-    pub fn generate_random_input() -> Input {
-        let mut rng = rand::thread_rng();
-        Input {
-            coin: generate_random_coinid(),
-            value: rng.gen_range(1, 100),
-            owner: generate_random_hash(),
-        }
-    }
-
-    pub fn generate_random_output() -> Output {
-        let mut rng = rand::thread_rng();
-        Output {
-            value: rng.gen_range(1, 100),
-            recipient: generate_random_hash(),
-        }
-    }
-
-    /*
-    pub fn generate_random_transaction() -> Transaction {
-        let mut rng = rand::thread_rng();
-        let unsigned = Transaction {
-            input: (0..rng.gen_range(1,5)).map(|_|generate_random_input()).collect(),
-            output: (0..rng.gen_range(1,5)).map(|_|generate_random_output()).collect(),
-            authorization: vec![],
-            hash: RefCell::new(None),
-        };
-        let mut authorization = vec![];
-        let keypair = KeyPair::random();
-        authorization.push(Authorization {
-            pubkey: keypair.public_key(),
-            signature: unsigned.sign(&keypair),
-        });
-        Transaction {
-            authorization,
-            ..unsigned
-        }
-    }
-    */
 }
