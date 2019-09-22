@@ -1,8 +1,8 @@
 use crate::crypto::hash::Hashable;
 use crate::crypto::hash::H256;
 use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
-use crate::transaction::{CoinId, Input, Output, Transaction, Address};
-use bincode::{serialize, deserialize};
+use crate::transaction::{Address, CoinId, Input, Output, Transaction};
+use bincode::{deserialize, serialize};
 use rocksdb::*;
 use std::collections::HashSet;
 
@@ -99,12 +99,16 @@ impl UtxoDatabase {
                         return Ok((vec![], vec![]));
                     }
                 }
-                None => return Ok((vec![], vec![]))
+                None => return Ok((vec![], vec![])),
             }
             removed_coins.push(input.coin);
             batch.delete(&id_ser)?;
         }
-        let signed_users: HashSet<Address> = t.authorization.iter().map(|x| ring::digest::digest(&ring::digest::SHA256, &x.pubkey).into()).collect();
+        let signed_users: HashSet<Address> = t
+            .authorization
+            .iter()
+            .map(|x| ring::digest::digest(&ring::digest::SHA256, &x.pubkey).into())
+            .collect();
         if signed_users != owners {
             return Ok((vec![], vec![]));
         }
@@ -196,5 +200,4 @@ mod test {
     use crate::transaction::Input;
     use bincode::deserialize;
     use std::cell::RefCell;
-
 }

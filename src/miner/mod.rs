@@ -311,7 +311,7 @@ impl Context {
                         c.transaction_refs = refs;
                         c.proposer_refs = self.blockchain.unreferred_proposers();
                         let parent = self.header.parent;
-                        c.proposer_refs.retain(|&x|x != parent);
+                        c.proposer_refs.retain(|&x| x != parent);
                         touched_content.insert(PROPOSER_INDEX);
                     } else {
                         unreachable!();

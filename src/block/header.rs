@@ -116,5 +116,4 @@ pub mod tests {
             (&hex!("1d6e0f5f11248d070c6b15d103ead72a8802279c600a60b40b38510b582aacbf")).into(); // Calculated on Mar 15, 2019
         return header_hash_should_be;
     }
-
 }

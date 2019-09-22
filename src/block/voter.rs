@@ -70,5 +70,4 @@ pub fn genesis(chain_num: u16) -> Block {
 }
 
 #[cfg(test)]
-pub mod test {
-}
+pub mod test {}

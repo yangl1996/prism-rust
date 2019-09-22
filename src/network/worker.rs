@@ -34,8 +34,8 @@ pub struct Context {
     context_update_chan: channel::Sender<ContextUpdateSignal>,
     server: ServerHandle,
     buffer: Arc<Mutex<BlockBuffer>>,
-    recent_blocks: Arc<Mutex<HashSet<H256>>>,   // blocks that we have received but not yet inserted
-    requested_blocks: Arc<Mutex<HashSet<H256>>>,    // blocks that we have requested but not yet received
+    recent_blocks: Arc<Mutex<HashSet<H256>>>, // blocks that we have received but not yet inserted
+    requested_blocks: Arc<Mutex<HashSet<H256>>>, // blocks that we have requested but not yet received
 }
 
 pub fn new(

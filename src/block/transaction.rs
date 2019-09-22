@@ -35,5 +35,4 @@ impl Hashable for Content {
 }
 
 #[cfg(test)]
-pub mod tests {
-}
+pub mod tests {}

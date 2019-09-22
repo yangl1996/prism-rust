@@ -6,13 +6,13 @@ use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 use bincode::{deserialize, serialize};
 use log::{debug, info, trace};
 use rocksdb::{ColumnFamilyDescriptor, Options, WriteBatch, DB};
+use statrs::distribution::{Discrete, Poisson, Univariate};
+use std::cmp;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::mem;
+use std::ops::Range;
 use std::sync::Mutex;
 use std::time;
-use statrs::distribution::{Poisson, Discrete, Univariate};
-use std::cmp;
-use std::ops::Range;
 
 // Column family names for node/chain metadata
 const PROPOSER_NODE_LEVEL_CF: &str = "PROPOSER_NODE_LEVEL"; // hash to node level (u64)
@@ -93,7 +93,8 @@ impl BlockChain {
 
         let mut proposer_vote_count_option = Options::default();
         proposer_vote_count_option.set_merge_operator("add to u64", u64_plus_merge, None);
-        let proposer_vote_count_cf = ColumnFamilyDescriptor::new(PROPOSER_VOTE_COUNT_CF, proposer_vote_count_option);
+        let proposer_vote_count_cf =
+            ColumnFamilyDescriptor::new(PROPOSER_VOTE_COUNT_CF, proposer_vote_count_option);
 
         let mut voter_parent_neighbor_option = Options::default();
         voter_parent_neighbor_option.set_merge_operator(
@@ -290,7 +291,13 @@ impl BlockChain {
 
         macro_rules! get_value {
             ($cf:expr, $key:expr) => {{
-                deserialize(&self.db.get_pinned_cf($cf, serialize(&$key).unwrap())?.unwrap()).unwrap()
+                deserialize(
+                    &self
+                        .db
+                        .get_pinned_cf($cf, serialize(&$key).unwrap())?
+                        .unwrap(),
+                )
+                .unwrap()
             }};
         }
 
@@ -469,7 +476,10 @@ impl BlockChain {
         }
 
         let mut voter_ledger_tips = self.voter_ledger_tips.lock().unwrap();
-        let mut affected_range: Range<u64> = Range { start: std::u64::MAX, end: std::u64::MIN };
+        let mut affected_range: Range<u64> = Range {
+            start: std::u64::MAX,
+            end: std::u64::MIN,
+        };
 
         for chain_num in 0..NUM_VOTER_CHAINS {
             // get the diff of votes on this voter chain
@@ -564,8 +574,7 @@ impl BlockChain {
                 let mut total_vote_depth: u64 = 0;
 
                 for block in &proposer_blocks {
-                    let votes: Vec<(u16, u64)> = match get_value!(proposer_node_vote_cf, block)
-                    {
+                    let votes: Vec<(u16, u64)> = match get_value!(proposer_node_vote_cf, block) {
                         None => vec![],
                         Some(d) => d,
                     };
@@ -585,7 +594,10 @@ impl BlockChain {
                 // For debugging purpose only. This is very important for security.
                 // TODO: remove this check in the future
                 if NUM_VOTER_CHAINS < total_vote_count {
-                    panic!("NUM_VOTER_CHAINS: {} total_votes:{}", NUM_VOTER_CHAINS, total_vote_count)
+                    panic!(
+                        "NUM_VOTER_CHAINS: {} total_votes:{}",
+                        NUM_VOTER_CHAINS, total_vote_count
+                    )
                 }
 
                 // no point in going further if less than 3/5 votes are cast
@@ -593,7 +605,9 @@ impl BlockChain {
                     // calculate average of depth of the votes
                     let avg_vote_depth = total_vote_depth as f32 / total_vote_count as f32;
                     // expected voter depth of an adversary
-                    let adversary_expected_vote_depth = avg_vote_depth / (1.0-ALPHA) / (1.0-ADVERSARY_MINING_POWER) * ADVERSARY_MINING_POWER;
+                    let adversary_expected_vote_depth =
+                        avg_vote_depth / (1.0 - ALPHA) / (1.0 - ADVERSARY_MINING_POWER)
+                            * ADVERSARY_MINING_POWER;
                     let poisson = Poisson::new(adversary_expected_vote_depth as f64).unwrap();
 
                     // for each block calculate the lower bound on the number of votes
@@ -609,19 +623,22 @@ impl BlockChain {
                         let mut block_votes_lcb: f32 = 0.0;
                         for depth in votes.iter() {
                             // probability that the adversary will remove this vote
-                            let mut p: f32 = 1.0 - poisson.cdf((*depth as f32 + 1.0).into()) as f32; 
+                            let mut p: f32 = 1.0 - poisson.cdf((*depth as f32 + 1.0).into()) as f32;
                             for k in 0..(*depth as u64) {
                                 // probability that the adversary has mined k blocks
-                                let p1 = poisson.pmf(k) as f32; 
+                                let p1 = poisson.pmf(k) as f32;
                                 // probability that the adversary will overtake 'depth-k' blocks
-                                let p2 = ((ADVERSARY_MINING_POWER)/(1.0-ADVERSARY_MINING_POWER)).powi((depth-k+1) as i32);
-                                p += p1*p2;
+                                let p2 = ((ADVERSARY_MINING_POWER)
+                                    / (1.0 - ADVERSARY_MINING_POWER))
+                                    .powi((depth - k + 1) as i32);
+                                p += p1 * p2;
                             }
-                            block_votes_mean += 1.0-p;
-                            block_votes_variance += p * (1.0-p);
+                            block_votes_mean += 1.0 - p;
+                            block_votes_variance += p * (1.0 - p);
                         }
                         // using gaussian approximation
-                        let tmp = block_votes_mean - (block_votes_variance).sqrt() * (*QUANTILE_EPSILON);
+                        let tmp =
+                            block_votes_mean - (block_votes_variance).sqrt() * (*QUANTILE_EPSILON);
                         if tmp > 0.0 {
                             block_votes_lcb += tmp;
                         }
@@ -650,13 +667,22 @@ impl BlockChain {
                     } else {
                         for p_block in &proposer_blocks {
                             // if the below condition is true, then final votes on p_block could overtake new_leader
-                            if max_vote_lcb < votes_lcb.get(p_block).unwrap() + remaining_votes && *p_block != new_leader.unwrap() {
-                                println!("Candidate: {:?}, lb={}, second ub={}", new_leader, max_vote_lcb, votes_lcb.get(p_block).unwrap() + remaining_votes);
+                            if max_vote_lcb < votes_lcb.get(p_block).unwrap() + remaining_votes
+                                && *p_block != new_leader.unwrap()
+                            {
+                                println!(
+                                    "Candidate: {:?}, lb={}, second ub={}",
+                                    new_leader,
+                                    max_vote_lcb,
+                                    votes_lcb.get(p_block).unwrap() + remaining_votes
+                                );
                                 new_leader = None;
                                 break;
                             }
                             //In case of a tie, choose block with lower hash.
-                            if max_vote_lcb == votes_lcb.get(p_block).unwrap() + remaining_votes && *p_block < new_leader.unwrap() {
+                            if max_vote_lcb == votes_lcb.get(p_block).unwrap() + remaining_votes
+                                && *p_block < new_leader.unwrap()
+                            {
                                 new_leader = None;
                                 break;
                             }
@@ -787,7 +813,13 @@ impl BlockChain {
 
         macro_rules! get_value {
             ($cf:expr, $key:expr) => {{
-                deserialize(&self.db.get_pinned_cf($cf, serialize(&$key).unwrap())?.unwrap()).unwrap()
+                deserialize(
+                    &self
+                        .db
+                        .get_pinned_cf($cf, serialize(&$key).unwrap())?
+                        .unwrap(),
+                )
+                .unwrap()
             }};
         }
 
@@ -916,11 +948,12 @@ impl BlockChain {
             // the current best proposer block to vote for
             let mut best_vote: Option<(H256, u64)> = None;
             for block_hash in &blocks {
-                let vote_count: u64 = match &self.db.get_pinned_cf(proposer_vote_count_cf, serialize(&block_hash).unwrap())? {
-                    Some(d) => {
-                        deserialize(d).unwrap()
-                    }
-                    None => 0
+                let vote_count: u64 = match &self
+                    .db
+                    .get_pinned_cf(proposer_vote_count_cf, serialize(&block_hash).unwrap())?
+                {
+                    Some(d) => deserialize(d).unwrap(),
+                    None => 0,
                 };
                 match best_vote {
                     Some((_, num_votes)) => {

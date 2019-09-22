@@ -238,5 +238,4 @@ impl Wallet {
 }
 
 #[cfg(test)]
-pub mod tests {
-}
+pub mod tests {}

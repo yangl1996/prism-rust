@@ -6,10 +6,10 @@ use crate::crypto::hash::{Hashable, H256};
 use crate::transaction::{CoinId, Input, Output, Transaction};
 use crate::utxodb::UtxoDatabase;
 use crate::wallet::Wallet;
+use bincode::serialize;
+use rocksdb::*;
 use std::sync::{Arc, Mutex};
 use std::thread;
-use rocksdb::*;
-use bincode::serialize;
 
 pub fn ico(
     recipients: &[H256], // addresses of all the ico recipients
@@ -38,7 +38,7 @@ pub fn ico(
             write_opt.disable_wal(true);
             let output = Output {
                 value: value,
-                recipient: recipient.1
+                recipient: recipient.1,
             };
             let output_raw = serialize(&output).unwrap();
             for i in 0..num_coins {
@@ -48,9 +48,12 @@ pub fn ico(
                 tx_hash_raw[16..32].copy_from_slice(&tx_uid);
                 let coinid = CoinId {
                     hash: tx_hash_raw.into(),
-                    index: 0
+                    index: 0,
                 };
-                utxodb.db.put_opt(serialize(&coinid).unwrap(), output_raw.clone(), &write_opt).unwrap();
+                utxodb
+                    .db
+                    .put_opt(serialize(&coinid).unwrap(), output_raw.clone(), &write_opt)
+                    .unwrap();
                 wallet.apply_diff(&[(coinid, output)], &[]).unwrap();
             }
         });

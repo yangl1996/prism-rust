@@ -17,7 +17,8 @@ pub const PROPOSER_CHAIN_MINING_RATE: f32 = 0.100;
 
 pub const ADVERSARY_MINING_POWER: f32 = 0.40; // the adversary power we want to tolerate
 pub const LOG_EPSILON: f32 = 20.0; // -ln(1-confirmation_guarantee)
-pub const ALPHA: f32 = (VOTER_CHAIN_MINING_RATE * NETWORK_DELAY) / (1.0 + VOTER_CHAIN_MINING_RATE * NETWORK_DELAY); // alpha = orphan blocks / total blocks
+pub const ALPHA: f32 =
+    (VOTER_CHAIN_MINING_RATE * NETWORK_DELAY) / (1.0 + VOTER_CHAIN_MINING_RATE * NETWORK_DELAY); // alpha = orphan blocks / total blocks
 
 // Do not change from here
 

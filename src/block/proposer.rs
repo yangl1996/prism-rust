@@ -65,5 +65,4 @@ pub fn genesis() -> Block {
 }
 
 #[cfg(test)]
-pub mod tests {
-}
+pub mod tests {}

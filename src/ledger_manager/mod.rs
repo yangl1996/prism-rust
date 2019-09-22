@@ -6,7 +6,7 @@ use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 use crate::miner::memory_pool::MemoryPool;
 use crate::network::message;
 use crate::network::server::Handle as ServerHandle;
-use crate::transaction::{Input, Transaction, Output, CoinId};
+use crate::transaction::{CoinId, Input, Output, Transaction};
 use crate::utxodb::UtxoDatabase;
 use crate::wallet::Wallet;
 use crossbeam::channel;

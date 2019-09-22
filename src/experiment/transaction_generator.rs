@@ -174,8 +174,7 @@ impl TransactionGenerator {
                 let interval = {
                     if interval > time_spent {
                         interval - time_spent
-                    }
-                    else {
+                    } else {
                         time::Duration::new(0, 0)
                     }
                 };

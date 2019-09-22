@@ -91,5 +91,4 @@ pub struct Authorization {
 }
 
 #[cfg(any(test))]
-pub mod tests {
-}
+pub mod tests {}
