@@ -68,69 +68,6 @@ pub mod tests {
         assert_eq!(header.hash(), header_hash_should_be);
     }
 
-    /// Any changes to the header should change the hash value.
-    #[test]
-    fn fake_parent() {
-        let mut header = sample_header();
-        let header_hash_should_be = sample_header_hash_should_be();
-        let fake_parent_hash: H256 =
-            (&hex!("0102010201020102010201020102010291790343908920102010201020102454")).into();
-        header.parent = fake_parent_hash;
-        assert_ne!(header.hash(), header_hash_should_be);
-    }
-
-    #[test]
-    fn fake_timestamp() {
-        let mut header = sample_header();
-        let header_hash_should_be = sample_header_hash_should_be();
-        let fake_timestamp: u128 = 73948732;
-        header.timestamp = fake_timestamp;
-        assert_ne!(header.hash(), header_hash_should_be);
-    }
-
-    #[test]
-    fn fake_nonce() {
-        let mut header = sample_header();
-        let header_hash_should_be = sample_header_hash_should_be();
-        let fake_nonce: u32 = 209830934;
-        header.nonce = fake_nonce;
-        assert_ne!(header.hash(), header_hash_should_be);
-    }
-
-    #[test]
-    fn fake_content_root() {
-        let mut header = sample_header();
-        let header_hash_should_be = sample_header_hash_should_be();
-        let fake_content_root: H256 =
-            (&hex!("beefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeef")).into();
-        header.content_merkle_root = fake_content_root;
-        assert_ne!(header.hash(), header_hash_should_be);
-    }
-
-    #[test]
-    fn fake_extra_content() {
-        let mut header = sample_header();
-        let header_hash_should_be = sample_header_hash_should_be();
-        let fake_extra_content: [u8; 32] = [
-            1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 1,
-        ];
-        header.extra_content = fake_extra_content;
-        assert_ne!(header.hash(), header_hash_should_be);
-    }
-
-    #[test]
-    fn fake_difficulty() {
-        let mut header = sample_header();
-        let header_hash_should_be = sample_header_hash_should_be();
-        let fake_difficulty: [u8; 32] = [
-            1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 1,
-        ];
-        header.difficulty = (&fake_difficulty).into();
-        assert_ne!(header.hash(), header_hash_should_be);
-    }
-
     #[macro_export]
     macro_rules! gen_hashed_data {
         () => {{
