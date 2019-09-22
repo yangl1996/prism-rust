@@ -1,12 +1,12 @@
-use crate::block::{Block, Content};
+use crate::block::{Content};
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
 use crate::crypto::hash::{Hashable, H256};
 use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
-use crate::miner::memory_pool::MemoryPool;
-use crate::network::message;
-use crate::network::server::Handle as ServerHandle;
-use crate::transaction::{CoinId, Input, Output, Transaction};
+
+
+
+use crate::transaction::{CoinId, Output, Transaction};
 use crate::utxodb::UtxoDatabase;
 use crate::wallet::Wallet;
 use crossbeam::channel;
@@ -47,7 +47,7 @@ impl LedgerManager {
         });
 
         // start thread that dispatches jobs to utxo manager
-        let utxodb = Arc::clone(&self.utxodb);
+        let _utxodb = Arc::clone(&self.utxodb);
         // Scoreboard notes the transaction ID of the coins that is being looked up, may be added,
         // or may be deleted. Before dispatching a transaction, we first check whether the input
         // and output are used by transactions being processed. If no, we will dispatch this
@@ -173,7 +173,7 @@ struct UtxoManager {
 
 impl UtxoManager {
     fn start(self, num_workers: usize) {
-        for i in 0..num_workers {
+        for _i in 0..num_workers {
             let cloned = self.clone();
             thread::spawn(move || {
                 cloned.worker_loop();

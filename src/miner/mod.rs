@@ -261,7 +261,7 @@ impl Context {
                 let mempool = self.mempool.lock().unwrap();
                 let transactions = mempool.get_transactions(TX_BLOCK_TRANSACTIONS);
                 drop(mempool);
-                let chain_id: usize = TRANSACTION_INDEX as usize;
+                let _chain_id: usize = TRANSACTION_INDEX as usize;
                 if let Content::Transaction(c) = &mut self.contents[TRANSACTION_INDEX as usize] {
                     c.transactions = transactions;
                     touched_content.insert(TRANSACTION_INDEX);
@@ -552,17 +552,17 @@ fn get_time() -> u128 {
 
 #[cfg(test)]
 mod tests {
-    use super::memory_pool::MemoryPool;
-    use super::{Context, OperatingState};
-    use crate::block::tests::{proposer_block, transaction_block, voter_block};
-    use crate::block::{proposer, transaction, voter, Content};
-    use crate::blockchain::BlockChain;
-    use crate::blockdb::BlockDatabase;
-    use crate::config;
-    use crate::crypto::hash::{Hashable, H256};
-    use crate::crypto::merkle::MerkleTree;
-    use crate::network::server;
-    use crate::transaction::tests as tx_generator;
-    use crate::validation::{check_block, BlockResult};
-    use std::sync::{Arc, Mutex};
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
 }

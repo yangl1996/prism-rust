@@ -50,8 +50,8 @@ pub struct Dump {
 
 pub fn dump_ledger(
     blockchain: &BlockChain,
-    blockdb: &BlockDatabase,
-    utxodb: &UtxoDatabase,
+    _blockdb: &BlockDatabase,
+    _utxodb: &UtxoDatabase,
     limit: u64,
 ) -> String {
     let ledger = match blockchain.proposer_transaction_in_ledger(limit) {

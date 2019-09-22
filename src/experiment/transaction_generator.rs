@@ -2,10 +2,10 @@ use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 use crate::handler::new_transaction;
 use crate::miner::memory_pool::MemoryPool;
 use crate::network::server::Handle as ServerHandle;
-use crate::transaction;
+
 use crate::wallet::Wallet;
 use crossbeam::channel;
-use log::{debug, error, info, trace};
+use log::{info, trace};
 use rand::Rng;
 use std::sync::{Arc, Mutex};
 use std::thread;

@@ -7,7 +7,7 @@ use crate::crypto::hash::H256;
 pub fn get_missing_references(
     content: &Content,
     blockchain: &BlockChain,
-    blockdb: &BlockDatabase,
+    _blockdb: &BlockDatabase,
 ) -> Vec<H256> {
     let mut missing_blocks: Vec<H256> = vec![];
 

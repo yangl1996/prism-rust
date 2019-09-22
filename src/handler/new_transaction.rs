@@ -1,13 +1,13 @@
 use crate::crypto::hash::Hashable;
 use crate::miner::memory_pool::MemoryPool;
-use crate::network::message::Message;
+
 use crate::network::server::Handle;
 use crate::transaction::Transaction;
 use std::sync::Mutex;
 
 /// Handler for new transaction
 // We may want to add the result of memory pool check
-pub fn new_transaction(transaction: Transaction, mempool: &Mutex<MemoryPool>, server: &Handle) {
+pub fn new_transaction(transaction: Transaction, mempool: &Mutex<MemoryPool>, _server: &Handle) {
     let mut mempool = mempool.lock().unwrap();
     // memory pool check
     if !mempool.contains(&transaction.hash()) && !mempool.is_double_spend(&transaction.input) {

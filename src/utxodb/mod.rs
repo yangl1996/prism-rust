@@ -1,7 +1,7 @@
-use crate::crypto::hash::Hashable;
+
 use crate::crypto::hash::H256;
 use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
-use crate::transaction::{Address, CoinId, Input, Output, Transaction};
+use crate::transaction::{Address, CoinId, Output, Transaction};
 use bincode::{deserialize, serialize};
 use rocksdb::*;
 use std::collections::HashSet;
@@ -17,7 +17,7 @@ impl UtxoDatabase {
         let mut opts = Options::default();
         opts.set_prefix_extractor(SliceTransform::create_fixed_prefix(32));
         opts.set_allow_concurrent_memtable_write(false);
-        let mut memtable_opts = MemtableFactory::HashSkipList {
+        let memtable_opts = MemtableFactory::HashSkipList {
             bucket_count: 1 << 20,
             height: 8,
             branching_factor: 4,
@@ -149,7 +149,7 @@ impl UtxoDatabase {
 
         // check whether the outputs of this transaction are there. if so, this transaction was
         // valid when it was originally added
-        for (idx, out) in t.output.iter().enumerate() {
+        for (idx, _out) in t.output.iter().enumerate() {
             let id = CoinId {
                 hash: hash,
                 index: idx as u32,
@@ -195,9 +195,9 @@ impl UtxoDatabase {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use crate::crypto::hash::H256;
-    use crate::transaction::Input;
-    use bincode::deserialize;
-    use std::cell::RefCell;
+    
+    
+    
+    
+    
 }

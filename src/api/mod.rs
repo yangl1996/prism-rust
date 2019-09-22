@@ -6,7 +6,7 @@ use crate::miner::Handle as MinerHandle;
 use crate::network::server::Handle as ServerHandle;
 use crate::utxodb::UtxoDatabase;
 use crate::wallet::Wallet;
-use crossbeam::channel;
+
 use log::info;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -74,9 +74,9 @@ impl Server {
         wallet: &Arc<Wallet>,
         blockchain: &Arc<BlockChain>,
         utxodb: &Arc<UtxoDatabase>,
-        server: &ServerHandle,
+        _server: &ServerHandle,
         miner: &MinerHandle,
-        mempool: &Arc<Mutex<MemoryPool>>,
+        _mempool: &Arc<Mutex<MemoryPool>>,
         txgen_control_chan: crossbeam::Sender<transaction_generator::ControlSignal>,
     ) {
         let handle = HTTPServer::http(&addr).unwrap();

@@ -42,7 +42,7 @@ impl BlockBuffer {
                 let dependent = HashSet::new();
                 self.dependent.insert(*dep_hash, dependent);
             }
-            let mut dependent = self.dependent.get_mut(&dep_hash).unwrap();
+            let dependent = self.dependent.get_mut(&dep_hash).unwrap();
             dependent.insert(hash);
         }
         self.dependency.insert(hash, dependency);
@@ -55,7 +55,7 @@ impl BlockBuffer {
         // get what blocks are blocked by the block being satisfied
         if let Some(dependents) = self.dependent.remove(&hash) {
             for node in &dependents {
-                let mut dependency = self.dependency.get_mut(&node).unwrap();
+                let dependency = self.dependency.get_mut(&node).unwrap();
                 dependency.remove(&hash);
                 if dependency.is_empty() {
                     self.dependency.remove(&node).unwrap();

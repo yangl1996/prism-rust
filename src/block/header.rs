@@ -50,15 +50,15 @@ impl Hashable for Header {
 #[cfg(test)]
 pub mod tests {
     use super::super::header::Header;
-    use super::super::proposer::Content as ProposerContent;
-    use super::super::transaction::Content as tx_Content;
-    use super::super::voter::Content as voter_Content;
-    use super::super::{Block, Content};
-    use std::cell::RefCell;
+    
+    
+    
+    
+    
 
     use crate::crypto::hash::{Hashable, H256};
-    use crate::crypto::merkle::MerkleTree;
-    use crate::transaction::{Authorization, CoinId, Input, Output, Transaction};
+    
+    
 
     ///The hash should match
     #[test]

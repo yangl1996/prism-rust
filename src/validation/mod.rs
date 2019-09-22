@@ -167,7 +167,7 @@ pub fn check_data_availability(
 pub fn check_content_semantic(
     block: &Block,
     blockchain: &BlockChain,
-    blockdb: &BlockDatabase,
+    _blockdb: &BlockDatabase,
 ) -> BlockResult {
     let parent = block.header.parent;
     match &block.content {

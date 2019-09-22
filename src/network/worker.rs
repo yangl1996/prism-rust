@@ -1,5 +1,5 @@
 use super::buffer::BlockBuffer;
-use super::message::{self, Message};
+use super::message::{Message};
 use super::peer;
 use crate::block::{Block, Content};
 use crate::blockchain::BlockChain;
@@ -15,10 +15,10 @@ use crate::utxodb::UtxoDatabase;
 use crate::validation::{self, BlockResult};
 use crate::wallet::Wallet;
 use crossbeam::channel;
-use log::{debug, info, warn};
+use log::{debug, warn};
 use std::collections::HashSet;
-use std::collections::VecDeque;
-use std::iter::FromIterator;
+
+
 use std::sync::{Arc, Mutex};
 use std::thread;
 

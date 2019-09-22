@@ -1,8 +1,8 @@
-use std::cell::RefCell;
+
 pub mod performance_counter;
 pub mod transaction_generator;
 
-use crate::crypto::hash::{Hashable, H256};
+use crate::crypto::hash::{H256};
 use crate::transaction::{CoinId, Input, Output, Transaction};
 use crate::utxodb::UtxoDatabase;
 use crate::wallet::Wallet;

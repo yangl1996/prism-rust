@@ -192,7 +192,7 @@ impl BlockDatabase {
             let hash_serialized = self
                 .db
                 .get_cf(block_arrival_order_cf, &count.to_ne_bytes())?;
-            let hash: H256 = match hash_serialized {
+            let _hash: H256 = match hash_serialized {
                 Some(v) => {
                     let bytes: [u8; 32] = (&v[0..32]).try_into().unwrap();
                     return Ok(bytes.into());

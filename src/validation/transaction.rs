@@ -1,9 +1,9 @@
-use crate::crypto::hash::Hashable;
-use crate::transaction::{Address, CoinId, Transaction};
-use crate::utxodb::UtxoDatabase;
+
+use crate::transaction::{Address, Transaction};
+
 use ed25519_dalek::PublicKey;
 use ed25519_dalek::Signature;
-use std::cell::RefCell;
+
 
 /// Checks that input and output are non-empty
 pub fn check_non_empty(transaction: &Transaction) -> bool {
@@ -53,7 +53,7 @@ pub fn check_signature_batch(transactions: &[Transaction]) -> bool {
     let mut signatures: Vec<Signature> = vec![];
     let mut public_keys: Vec<PublicKey> = vec![];
 
-    for (idx, tx) in transactions.iter().enumerate() {
+    for (_idx, tx) in transactions.iter().enumerate() {
         let raw_inputs = bincode::serialize(&tx.input).unwrap();
         let raw_outputs = bincode::serialize(&tx.output).unwrap();
         let raw = [&raw_inputs[..], &raw_outputs[..]].concat();

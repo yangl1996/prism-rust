@@ -1,12 +1,12 @@
-use crate::crypto::hash::Hashable;
+
 use crate::transaction::{Address, Authorization, CoinId, Input, Output, Transaction};
-use bincode::{deserialize, serialize};
-use ed25519_dalek::{Keypair, Signature};
+use bincode::{serialize};
+use ed25519_dalek::{Keypair};
 use rand::rngs::OsRng;
-use rand::Rng;
+
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::convert::TryInto;
+
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 use std::{error, fmt};
@@ -84,7 +84,7 @@ impl Wallet {
 
     /// Generate a new key pair
     pub fn generate_keypair(&self) -> Result<Address> {
-        let cf = self.db.cf_handle(KEYPAIR_CF).unwrap();
+        let _cf = self.db.cf_handle(KEYPAIR_CF).unwrap();
         let mut csprng: OsRng = OsRng::new().unwrap();
         let keypair: Keypair = Keypair::generate(&mut csprng);
         return self.load_keypair(keypair);

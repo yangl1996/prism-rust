@@ -1,6 +1,6 @@
 use crate::block::Block;
 use crate::block::Content as BlockContent;
-use crate::config::*;
+
 use crate::transaction::Transaction;
 use crate::wallet::WalletError;
 use std::sync::atomic::{AtomicIsize, AtomicUsize, Ordering};

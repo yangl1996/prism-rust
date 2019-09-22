@@ -7,12 +7,12 @@ use bincode::{deserialize, serialize};
 use log::{debug, info, trace};
 use rocksdb::{ColumnFamilyDescriptor, Options, WriteBatch, DB};
 use statrs::distribution::{Discrete, Poisson, Univariate};
-use std::cmp;
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
-use std::mem;
+
+use std::collections::{BTreeMap, HashMap, HashSet};
+
 use std::ops::Range;
 use std::sync::Mutex;
-use std::time;
+
 
 // Column family names for node/chain metadata
 const PROPOSER_NODE_LEVEL_CF: &str = "PROPOSER_NODE_LEVEL"; // hash to node level (u64)
@@ -434,7 +434,7 @@ impl BlockChain {
                 }
                 drop(voter_best);
             }
-            Content::Transaction(content) => {
+            Content::Transaction(_content) => {
                 // mark itself as unreferred
                 // Note that this could happen before committing to db, because no module will try
                 // to access transaction content based on pointers in unreferred_transactions.

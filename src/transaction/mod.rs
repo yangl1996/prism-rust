@@ -1,10 +1,10 @@
 use crate::crypto::hash::{Hashable, H256};
 use crate::experiment::performance_counter::PayloadSize;
 use bincode::serialize;
-use ed25519_dalek::PublicKey;
-use ed25519_dalek::Signature;
+
+
 use std::cell::RefCell;
-use std::hash::{Hash, Hasher};
+use std::hash::{Hash};
 
 /// A unique identifier of a transaction output, a.k.a. a coin.
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq, Hash)]

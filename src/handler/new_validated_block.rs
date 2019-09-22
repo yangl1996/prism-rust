@@ -4,19 +4,19 @@ use crate::blockdb::BlockDatabase;
 use crate::crypto::hash::Hashable;
 use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 use crate::miner::memory_pool::MemoryPool;
-use crate::network::message;
+
 use crate::network::server::Handle as ServerHandle;
-use crate::transaction::Transaction;
-use crate::utxodb::UtxoDatabase;
-use crate::wallet::Wallet;
+
+
+
 use std::sync::Mutex;
 
 pub fn new_validated_block(
     block: &Block,
     mempool: &Mutex<MemoryPool>,
-    blockdb: &BlockDatabase,
+    _blockdb: &BlockDatabase,
     chain: &BlockChain,
-    server: &ServerHandle,
+    _server: &ServerHandle,
 ) {
     PERFORMANCE_COUNTER.record_process_block(&block);
 
