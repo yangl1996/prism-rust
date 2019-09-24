@@ -33,6 +33,7 @@ url = "1.7"
 base64 = "0.10"
 crossbeam = "0.7"
 statrs = "0.11"
+tokio = "0.2.0-alpha.5"
 
 [dependencies.ed25519-dalek]
 version = "1.0.0-pre.1"
