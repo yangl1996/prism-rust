@@ -7,10 +7,6 @@ edition = "2018"
 [profile.release]
 debug = true
 
-[features]
-default = ["test-utilities"]
-test-utilities = []
-
 [dependencies]
 ring = "0.14"
 byteorder = "1.3"

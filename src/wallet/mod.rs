@@ -239,45 +239,4 @@ impl Wallet {
 
 #[cfg(test)]
 pub mod tests {
-    use super::Wallet;
-    use crate::crypto::hash::H256;
-    use crate::transaction::tests::generate_random_coinid;
-    use crate::transaction::{CoinId, Input};
-
-    #[test]
-    fn wallet() {
-        let w = Wallet::new(std::path::Path::new("/tmp/walletdb_test.rocksdb")).unwrap();
-        assert_eq!(w.balance().unwrap(), 0);
-        assert_eq!(w.addresses().unwrap().len(), 0);
-        let addr = w.generate_keypair().unwrap();
-        assert_eq!(w.addresses().unwrap(), vec![addr]);
-        assert!(w.create_transaction(H256::default(), 1, None).is_err());
-        // give the test address 10 x 10 coins
-        let mut ico: Vec<Input> = vec![];
-        for _ in 0..10 {
-            ico.push(Input {
-                value: 10,
-                owner: addr,
-                coin: generate_random_coinid(),
-            });
-        }
-        w.apply_diff(&ico, &[]).unwrap();
-        assert_eq!(w.balance().unwrap(), 100);
-
-        // generate transactions
-        let tx = w.create_transaction(H256::default(), 19, None).unwrap();
-        assert_eq!(tx.input.len(), 2);
-        assert_eq!(tx.input[0].value, 10);
-        assert_eq!(tx.input[1].value, 10);
-        assert_eq!(tx.output.len(), 2);
-        assert_eq!(tx.output[0].recipient, H256::default());
-        assert_eq!(tx.output[0].value, 19);
-        assert_eq!(tx.output[1].recipient, addr);
-        assert_eq!(tx.output[1].value, 1);
-
-        // remove coins
-        w.apply_diff(&[], &ico).unwrap();
-        assert_eq!(w.balance().unwrap(), 0);
-    }
-
 }
