@@ -6,7 +6,7 @@ Rust implementation of the Prism consensus protocol.
 
 ## Paper
 
-__Prism: Scaling Bitcoin by 10,000x__ [\[full text\]](https://arxiv.org/submit/2858718/view)
+__Prism: Scaling Bitcoin by 10,000x__ [\[full text\]](https://github.com/yangl1996/prism-rust/arxiv-build.pdf)
 
 _[Lei Yang](http://leiy.me) (MIT CSAIL), [Vivek Bagaria](https://www.linkedin.com/in/vivek-bagaria-7a833637/) [📧](mailto:vbagaria@stanford.edu) (Stanford University), [Gerui Wang](https://www.linkedin.com/in/gerui-wang-495736a3/) (UIUC) [📧](mailto:geruiw2@illinois.edu), [Mohammad Alizadeh](http://people.csail.mit.edu/alizadeh/) (MIT CSAIL), [David Tse](https://tselab.stanford.edu/people/principal-investigator/david-tse/) (Stanford University), [Giulia Fanti](https://www.andrew.cmu.edu/user/gfanti/) (CMU), [Pramod Viswanath](http://pramodv.ece.illinois.edu) (UIUC)_
 
