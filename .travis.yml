@@ -1,4 +1,6 @@
 language: rust
+rust:
+        - nightly
 script:
-        - cargo test --verbose --features test-utilities
+        - cargo test --verbose
 cache: cargo
