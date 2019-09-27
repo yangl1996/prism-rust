@@ -1,15 +1,41 @@
 # Prism Distributed Testbed
 
+This directory holds the scripts for running experiments and reproducing the results in the paper.
+
 ## Setting Up
 
-1. Install jq
-2. Install AWS CLI tool and configure the IAM Key and Region
-3. Place the SSH key at `~/.ssh/prism.pem`
-4. Place this line `Include config.d/prism` at the beginning of `~/.ssh/config`
-5. Execute `mkdir -p ~/.ssh/config.d`
-6. Start a local Ubuntu 18.04 VM that has Rust toolchain, `clang`, `build-essential` installed,
+### Set Up AWS Account
+
+1. Configure an IAM role with the following permissions
+    - DescribeInstances
+    - DescribeInstanceStatus
+    - CreateTags
+    - RunInstances
+    - TerminateInstances
+2. Create an EC2 key pair
+3. Create an EC2 security group that allows all traffic to go in/out
+4. Create an EC2 Launch Template with the following configurations
+    - AMI: Ubuntu 18.04
+    - Instance type: `c5d.4xlarge`
+    - Key pair: the one just created
+    - Network type: VPC
+    - Security Groups: the one just created
+    - Storage (Volumes): 32 GiB `gp2` volume, delete on termination
+    - Instance tags: Key=prism, Value=distributed-testing, tag instance
+5. Create a S3 bucket with name `prism-binary` and set it to be publicly accessible
+
+### Install Dependencies
+
+1. Modify `run.sh` to use the Launch Tempate ID of the one just created
+2. Place the SSH key just created at `~/.ssh/prism.pem`
+3. Place this line `Include config.d/prism` at the beginning of `~/.ssh/config`
+4. Execute `mkdir -p ~/.ssh/config.d`
+5. Install `jq` and Golang
+6. Install AWS CLI tool and configure the IAM Key to be the one just created, and Region to be the closest one
+7. Start a local Ubuntu 18.04 VM that has Rust toolchain, `clang`, `build-essential` installed,
    is accessible by `ssh prism`, and can read the Github repository (preferably through SSH
-   agent forwarding). We currently target Rust nightly.
+   agent forwarding), so that it can compile the binary
+8. Build the telematics tool by `cd telematics && go build`
 
 ## Usage
 
@@ -18,15 +44,19 @@ Run `./run.sh help` to view a list of available commands.
 ## Experiment Flow
 
 1. `cd` to `testbed/`
-2. Run `python3 scripts/generate_topo.py <NUM NODES> clique > clique.json`
+2. Run `python3 scripts/generate_topo.py <NUM NODES> randreg <DEGREE> > randreg.json`
 3. Run `./run.sh build` to build the Prism binary
-4. Run `./run.sh gen-payload clique.json` to generate the payload
-5. Run `./run.sh sync-payload` to synchronize the payload to remote machines
-6. Run `./run.sh run-exp <DURATION>` to run the experiment
+4. Run `./run.sh start-instances 100` to start 100 instances
+5. Run `./run.sh tune-tcp`, `./run.sh shape-traffic 120 400000`, `./run.sh mount-nvme` to configure the servers
+4. Run `./run.sh gen-payload randreg.json` to generate the payload
+5. Run `./run.sh sync-payload` to push the test files to remote servers
+6. Run `./run.sh run-exp` to run the experiment
+7. Run `telematics/telematics log` to monitor the performance
+8. To stop the instances, run `./run.sh stop-instances`
 
 ## Log Files
 
-instances.txt records the EC2 instances that are started in the following
+`instances.txt` records the EC2 instances that are started in the following
 format:
 
 ```
