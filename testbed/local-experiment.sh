@@ -61,7 +61,7 @@ function kill_prism() {
 }
 
 
-binary_path=${PRISM_BINARY-../target/release/prism}
+binary_path=${PRISM_BINARY-../target/debug/prism}
 num_nodes=$1
 
 # generate keypairs and addresses
@@ -88,7 +88,7 @@ for (( i = 0; i < $num_nodes; i++ )); do
 	p2p=`expr $p2p_port + $i`
 	api=`expr $api_port + $i`
 	vis=`expr $vis_port + $i`
-	command="$binary_path --p2p 127.0.0.1:${p2p} --api 127.0.0.1:${api} --visual 127.0.0.1:${vis} --blockdb /tmp/prism-${i}-blockdb.rocksdb --blockchaindb /tmp/prism-${i}-blockchaindb.rocksdb --utxodb /tmp/prism-${i}-utxodb.rocksdb --walletdb /tmp/prism-${i}-wallet.rocksdb -vv --load-key ${i}.pkcs8"
+	command="$binary_path --p2p 127.0.0.1:${p2p} --api 127.0.0.1:${api} --visual 127.0.0.1:${vis} --blockdb /tmp/prism-${i}-blockdb.rocksdb --blockchaindb /tmp/prism-${i}-blockchaindb.rocksdb --utxodb /tmp/prism-${i}-utxodb.rocksdb --walletdb /tmp/prism-${i}-wallet.rocksdb -vv --load-key ${i}.pkcs8 --fund-coins=1000"
 
 	for (( j = 0; j < $i; j++ )); do
 		peer_port=`expr $p2p_port + $j`
@@ -134,11 +134,6 @@ done
 
 start_time=`date +%s`
 echo "Running experiment, ^C to stop"
-
-if [ $1 -ne 1 ]; then
-    echo "You can run the following command to compare two nodes' blockchain:"
-    echo "python3 compare_blockchain.py localhost:$vis_port/blockchain.json?limit=10000?fork=true localhost:`expr $vis_port + 1`/blockchain.json?limit=10000?fork=true"
-fi
 
 for pid in $pids; do
 	wait $pid
