@@ -4,6 +4,7 @@ use mio;
 use mio_extras::channel;
 use std::io::{Read, Write};
 use std::sync::mpsc;
+use log::trace;
 
 enum DecodeState {
     Length,
@@ -31,9 +32,11 @@ impl ReadContext {
             .read(&mut self.buffer[self.read_length..self.msg_length]);
         match bytes_read {
             Ok(0) => {
+                trace!("Detected socket EOF");
                 return Ok(ReadResult::EOF);
             }
             Ok(size) => {
+                trace!("Read {} bytes from socket", size);
                 // we got some data, move the cursor
                 self.read_length += size;
                 if self.read_length == self.msg_length {
@@ -48,6 +51,7 @@ impl ReadContext {
                             if self.buffer.len() < self.msg_length {
                                 self.buffer.resize(self.msg_length, 0);
                             }
+                            trace!("Received message length={}", message_length);
                             return Ok(ReadResult::Continue);
                         }
                         DecodeState::Payload => {
@@ -55,6 +59,7 @@ impl ReadContext {
                             self.state = DecodeState::Length;
                             self.read_length = 0;
                             self.msg_length = std::mem::size_of::<u32>();
+                            trace!("Received full message");
                             return Ok(ReadResult::Message(new_payload));
                         }
                     }
