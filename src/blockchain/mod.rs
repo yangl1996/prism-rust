@@ -47,6 +47,7 @@ pub struct BlockChain {
     unconfirmed_proposers: Mutex<HashSet<H256>>,
     proposer_ledger_tip: Mutex<u64>,
     voter_ledger_tips: Mutex<Vec<H256>>,
+    config: BlockchainConfig,
 }
 
 // Functions to edit the blockchain
@@ -54,7 +55,7 @@ impl BlockChain {
     /// Open the blockchain database at the given path, and create missing column families.
     /// This function also populates the metadata fields with default values, and those
     /// fields must be initialized later.
-    fn open<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
+    fn open<P: AsRef<std::path::Path>>(path: P, config: BlockchainConfig) -> Result<Self> {
         let proposer_node_level_cf =
             ColumnFamilyDescriptor::new(PROPOSER_NODE_LEVEL_CF, Options::default());
         let voter_node_level_cf =
@@ -146,7 +147,7 @@ impl BlockChain {
         opts.create_missing_column_families(true);
         let db = DB::open_cf_descriptors(&opts, path, cfs)?;
         let mut voter_best: Vec<Mutex<(H256, u64)>> = vec![];
-        for _ in 0..NUM_VOTER_CHAINS {
+        for _ in 0..config.voter_chains {
             voter_best.push(Mutex::new((H256::default(), 0)));
         }
 
@@ -158,16 +159,17 @@ impl BlockChain {
             unreferred_proposers: Mutex::new(HashSet::new()),
             unconfirmed_proposers: Mutex::new(HashSet::new()),
             proposer_ledger_tip: Mutex::new(0),
-            voter_ledger_tips: Mutex::new(vec![H256::default(); NUM_VOTER_CHAINS as usize]),
+            voter_ledger_tips: Mutex::new(vec![H256::default(); config.voter_chains as usize]),
+            config: config,
         };
 
         return Ok(blockchain_db);
     }
 
     /// Destroy the existing database at the given path, create a new one, and initialize the content.
-    pub fn new<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
+    pub fn new<P: AsRef<std::path::Path>>(path: P, config: BlockchainConfig) -> Result<Self> {
         DB::destroy(&Options::default(), &path)?;
-        let db = Self::open(&path)?;
+        let db = Self::open(&path, config)?;
         // get cf handles
         let proposer_node_level_cf = db.db.cf_handle(PROPOSER_NODE_LEVEL_CF).unwrap();
         let voter_node_level_cf = db.db.cf_handle(VOTER_NODE_LEVEL_CF).unwrap();
@@ -189,23 +191,23 @@ impl BlockChain {
         // proposer genesis block
         wb.put_cf(
             proposer_node_level_cf,
-            serialize(&(*PROPOSER_GENESIS_HASH)).unwrap(),
+            serialize(&db.config.proposer_genesis).unwrap(),
             serialize(&(0 as u64)).unwrap(),
         )?;
         wb.merge_cf(
             proposer_tree_level_cf,
             serialize(&(0 as u64)).unwrap(),
-            serialize(&(*PROPOSER_GENESIS_HASH)).unwrap(),
+            serialize(&db.config.proposer_genesis).unwrap(),
         )?;
         let mut unreferred_proposers = db.unreferred_proposers.lock().unwrap();
-        unreferred_proposers.insert(*PROPOSER_GENESIS_HASH);
+        unreferred_proposers.insert(db.config.proposer_genesis);
         drop(unreferred_proposers);
         wb.put_cf(
             proposer_leader_sequence_cf,
             serialize(&(0 as u64)).unwrap(),
-            serialize(&(*PROPOSER_GENESIS_HASH)).unwrap(),
+            serialize(&db.config.proposer_genesis).unwrap(),
         )?;
-        let proposer_genesis_ledger: Vec<H256> = vec![*PROPOSER_GENESIS_HASH];
+        let proposer_genesis_ledger: Vec<H256> = vec![db.config.proposer_genesis];
         wb.put_cf(
             proposer_ledger_order_cf,
             serialize(&(0 as u64)).unwrap(),
@@ -213,57 +215,57 @@ impl BlockChain {
         )?;
         wb.put_cf(
             proposer_ref_neighbor_cf,
-            serialize(&(*PROPOSER_GENESIS_HASH)).unwrap(),
+            serialize(&db.config.proposer_genesis).unwrap(),
             serialize(&Vec::<H256>::new()).unwrap(),
         )?;
         wb.put_cf(
             transaction_ref_neighbor_cf,
-            serialize(&(*PROPOSER_GENESIS_HASH)).unwrap(),
+            serialize(&db.config.proposer_genesis).unwrap(),
             serialize(&Vec::<H256>::new()).unwrap(),
         )?;
 
         // voter genesis blocks
         let mut voter_ledger_tips = db.voter_ledger_tips.lock().unwrap();
-        for chain_num in 0..NUM_VOTER_CHAINS {
+        for chain_num in 0..db.config.voter_chains {
             wb.put_cf(
                 parent_neighbor_cf,
-                serialize(&VOTER_GENESIS_HASHES[chain_num as usize]).unwrap(),
-                serialize(&(*PROPOSER_GENESIS_HASH)).unwrap(),
+                serialize(&db.config.voter_genesis[chain_num as usize]).unwrap(),
+                serialize(&db.config.proposer_genesis).unwrap(),
             )?;
             wb.merge_cf(
                 vote_neighbor_cf,
-                serialize(&VOTER_GENESIS_HASHES[chain_num as usize]).unwrap(),
-                serialize(&(*PROPOSER_GENESIS_HASH)).unwrap(),
+                serialize(&db.config.voter_genesis[chain_num as usize]).unwrap(),
+                serialize(&db.config.proposer_genesis).unwrap(),
             )?;
             wb.merge_cf(
                 proposer_vote_count_cf,
-                serialize(&(*PROPOSER_GENESIS_HASH)).unwrap(),
+                serialize(&db.config.proposer_genesis).unwrap(),
                 serialize(&(1 as u64)).unwrap(),
             )?;
             wb.merge_cf(
                 proposer_node_vote_cf,
-                serialize(&(*PROPOSER_GENESIS_HASH)).unwrap(),
+                serialize(&db.config.proposer_genesis).unwrap(),
                 serialize(&(true, chain_num as u16, 0 as u64)).unwrap(),
             )?;
             wb.put_cf(
                 voter_node_level_cf,
-                serialize(&VOTER_GENESIS_HASHES[chain_num as usize]).unwrap(),
+                serialize(&db.config.voter_genesis[chain_num as usize]).unwrap(),
                 serialize(&(0 as u64)).unwrap(),
             )?;
             wb.put_cf(
                 voter_node_voted_level_cf,
-                serialize(&VOTER_GENESIS_HASHES[chain_num as usize]).unwrap(),
+                serialize(&db.config.voter_genesis[chain_num as usize]).unwrap(),
                 serialize(&(0 as u64)).unwrap(),
             )?;
             wb.put_cf(
                 voter_node_chain_cf,
-                serialize(&VOTER_GENESIS_HASHES[chain_num as usize]).unwrap(),
+                serialize(&db.config.voter_genesis[chain_num as usize]).unwrap(),
                 serialize(&(chain_num as u16)).unwrap(),
             )?;
             let mut voter_best = db.voter_best[chain_num as usize].lock().unwrap();
-            voter_best.0 = VOTER_GENESIS_HASHES[chain_num as usize];
+            voter_best.0 = db.config.voter_genesis[chain_num as usize];
             drop(voter_best);
-            voter_ledger_tips[chain_num as usize] = VOTER_GENESIS_HASHES[chain_num as usize];
+            voter_ledger_tips[chain_num as usize] = db.config.voter_genesis[chain_num as usize];
         }
         drop(voter_ledger_tips);
         db.db.write(wb)?;
@@ -481,7 +483,7 @@ impl BlockChain {
             end: std::u64::MIN,
         };
 
-        for chain_num in 0..NUM_VOTER_CHAINS {
+        for chain_num in 0..self.config.voter_chains {
             // get the diff of votes on this voter chain
             let from = voter_ledger_tips[chain_num as usize];
             let voter_best = self.voter_best[chain_num as usize].lock().unwrap();
@@ -593,15 +595,15 @@ impl BlockChain {
 
                 // For debugging purpose only. This is very important for security.
                 // TODO: remove this check in the future
-                if NUM_VOTER_CHAINS < total_vote_count {
+                if self.config.voter_chains < total_vote_count {
                     panic!(
-                        "NUM_VOTER_CHAINS: {} total_votes:{}",
-                        NUM_VOTER_CHAINS, total_vote_count
+                        "self.config.voter_chains: {} total_votes:{}",
+                        self.config.voter_chains, total_vote_count
                     )
                 }
 
                 // no point in going further if less than 3/5 votes are cast
-                if total_vote_count > NUM_VOTER_CHAINS * 3 / 5 {
+                if total_vote_count > self.config.voter_chains * 3 / 5 {
                     // calculate average of depth of the votes
                     let avg_vote_depth = total_vote_depth as f32 / total_vote_count as f32;
                     // expected voter depth of an adversary
@@ -658,7 +660,7 @@ impl BlockChain {
                         }
                     }
                     // check if the lcb_vote of new_leader is bigger than second best ucb votes
-                    let remaining_votes = NUM_VOTER_CHAINS as f32 - total_votes_lcb;
+                    let remaining_votes = self.config.voter_chains as f32 - total_votes_lcb;
 
                     // if max_vote_lcb is lesser than the remaining_votes, then a private block could
                     // get the remaining votes and become the leader block

@@ -22,7 +22,7 @@ pub struct BlockDatabase {
 
 impl BlockDatabase {
     /// Open the database at the given path, and create a new one if missing.
-    fn open<P: AsRef<std::path::Path>>(path: P) -> Result<Self, rocksdb::Error> {
+    fn open<P: AsRef<std::path::Path>>(path: P, config: BlockchainConfig) -> Result<Self, rocksdb::Error> {
         let mut opts = Options::default();
         opts.set_prefix_extractor(SliceTransform::create_fixed_prefix(32));
         opts.optimize_for_point_lookup(512);
@@ -45,9 +45,9 @@ impl BlockDatabase {
     }
 
     /// Create a new database at the given path, and initialize the content.
-    pub fn new<P: AsRef<std::path::Path>>(path: P) -> Result<Self, rocksdb::Error> {
+    pub fn new<P: AsRef<std::path::Path>>(path: P, config: BlockchainConfig) -> Result<Self, rocksdb::Error> {
         DB::destroy(&Options::default(), &path)?;
-        let db = Self::open(&path)?;
+        let db = Self::open(&path, config.clone())?;
 
         let block_cf = db.db.cf_handle(BLOCK_CF).unwrap();
         let block_arrival_order_cf = db.db.cf_handle(BLOCK_ARRIVAL_ORDER_CF).unwrap();
@@ -57,36 +57,36 @@ impl BlockDatabase {
         // insert proposer genesis block
         db.db.put_cf(
             block_cf,
-            &(*PROPOSER_GENESIS_HASH),
+            &config.proposer_genesis,
             &serialize(&proposer_genesis()).unwrap(),
         )?;
         db.db.put_cf(
             block_arrival_order_cf,
             &counter.to_ne_bytes(),
-            &(*PROPOSER_GENESIS_HASH),
+            &config.proposer_genesis,
         )?;
         db.db.put_cf(
             block_sequence_number_cf,
-            &(*PROPOSER_GENESIS_HASH),
+            &config.proposer_genesis,
             &counter.to_ne_bytes(),
         )?;
         counter += 1;
 
         // insert voter genesis blocks
-        for i in 0..NUM_VOTER_CHAINS {
+        for i in 0..config.voter_chains {
             db.db.put_cf(
                 block_cf,
-                &VOTER_GENESIS_HASHES[i as usize],
+                &config.voter_genesis[i as usize],
                 &serialize(&voter_genesis(i as u16)).unwrap(),
             )?;
             db.db.put_cf(
                 block_arrival_order_cf,
                 &counter.to_ne_bytes(),
-                &VOTER_GENESIS_HASHES[i as usize],
+                &config.voter_genesis[i as usize],
             )?;
             db.db.put_cf(
                 block_sequence_number_cf,
-                &VOTER_GENESIS_HASHES[i as usize],
+                &config.voter_genesis[i as usize],
                 &counter.to_ne_bytes(),
             )?;
             counter += 1;
@@ -97,8 +97,8 @@ impl BlockDatabase {
     }
 
     /// Load database from a given path
-    pub fn load<P: AsRef<std::path::Path>>(path: P) -> Result<Self, rocksdb::Error> {
-        let db = Self::open(&path)?;
+    pub fn load<P: AsRef<std::path::Path>>(path: P, config: BlockchainConfig) -> Result<Self, rocksdb::Error> {
+        let db = Self::open(&path, config)?;
         return Ok(db);
     }
 

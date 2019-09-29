@@ -25,6 +25,7 @@ use std::process;
 use std::sync::Arc;
 use std::thread;
 use std::time;
+use prism::config::BlockchainConfig;
 
 fn main() {
     // parse command line arguments
@@ -80,6 +81,9 @@ fn main() {
     let verbosity = matches.occurrences_of("verbose") as usize;
     stderrlog::new().verbosity(verbosity).init().unwrap();
 
+    // init config struct
+    let config = BlockchainConfig::new(1000, 64000, 80000, 0.1, 0.1);
+
     // init mempool
     let mempool_size = matches
         .value_of("mempool_size")
@@ -94,7 +98,7 @@ fn main() {
     debug!("Initialized mempool, maximum size set to {}", mempool_size);
 
     // init block database
-    let blockdb = BlockDatabase::new(&matches.value_of("block_db").unwrap()).unwrap();
+    let blockdb = BlockDatabase::new(&matches.value_of("block_db").unwrap(), config.clone()).unwrap();
     let blockdb = Arc::new(blockdb);
     debug!("Initialized block database");
 
@@ -104,7 +108,7 @@ fn main() {
     debug!("Initialized UTXO database");
 
     // init blockchain database
-    let blockchain = BlockChain::new(&matches.value_of("blockchain_db").unwrap()).unwrap();
+    let blockchain = BlockChain::new(&matches.value_of("blockchain_db").unwrap(), config.clone()).unwrap();
     let blockchain = Arc::new(blockchain);
     debug!("Initialized blockchain database");
 
@@ -210,6 +214,7 @@ fn main() {
         &mempool,
         ctx_tx,
         &server,
+        config.clone()
     );
     worker_ctx.start();
 
@@ -221,6 +226,7 @@ fn main() {
         ctx_rx,
         &ctx_tx_miner,
         &server,
+        config.clone(),
     );
     miner_ctx.start();
 

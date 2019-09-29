@@ -52,7 +52,7 @@ pub fn genesis(chain_num: u16) -> Block {
     let all_zero: [u8; 32] = [0; 32];
     let content = Content {
         chain_number: chain_num,
-        voter_parent: VOTER_GENESIS_HASHES[chain_num as usize],
+        voter_parent: all_zero.into(),
         votes: vec![],
     };
     // TODO: this block will definitely not pass validation. We depend on the fact that genesis

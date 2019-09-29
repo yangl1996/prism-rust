@@ -12,7 +12,6 @@ use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 use crate::handler::new_validated_block;
 use crate::network::message::Message;
 use crate::network::server::Handle as ServerHandle;
-use crate::validation::get_sortition_id;
 
 use log::info;
 
@@ -67,6 +66,7 @@ pub struct Context {
     header: Header,
     contents: Vec<Content>,
     content_merkle_tree: MerkleTree,
+    config: BlockchainConfig,
 }
 
 #[derive(Clone)]
@@ -82,6 +82,7 @@ pub fn new(
     ctx_update_source: Receiver<ContextUpdateSignal>,
     ctx_update_tx: &Sender<ContextUpdateSignal>,
     server: &ServerHandle,
+    config: BlockchainConfig,
 ) -> (Context, Handle) {
     let (signal_chan_sender, signal_chan_receiver) = unbounded();
     let mut contents: Vec<Content> = vec![];
@@ -97,10 +98,10 @@ pub fn new(
     };
     contents.push(Content::Transaction(transaction_content));
 
-    for voter_idx in 0..NUM_VOTER_CHAINS {
+    for voter_idx in 0..config.voter_chains {
         let content = voter::Content {
             chain_number: voter_idx as u16,
-            voter_parent: VOTER_GENESIS_HASHES[voter_idx as usize],
+            voter_parent: config.voter_genesis[voter_idx as usize],
             votes: vec![],
         };
         contents.push(Content::Voter(content));
@@ -118,7 +119,7 @@ pub fn new(
         operating_state: OperatingState::Paused,
         server: server.clone(),
         header: Header {
-            parent: *PROPOSER_GENESIS_HASH,
+            parent: config.proposer_genesis,
             timestamp: get_time(),
             nonce: 0,
             content_merkle_root: H256::default(),
@@ -127,6 +128,7 @@ pub fn new(
         },
         contents: contents,
         content_merkle_tree: content_merkle_tree,
+        config: config,
     };
 
     let handle = Handle {
@@ -189,7 +191,7 @@ impl Context {
             .send(ContextUpdateSignal::NewProposerBlock);
         self.context_update_tx
             .send(ContextUpdateSignal::NewTransactionBlock);
-        for voter_chain in 0..NUM_VOTER_CHAINS {
+        for voter_chain in 0..self.config.voter_chains {
             self.context_update_tx
                 .send(ContextUpdateSignal::NewVoterBlock(voter_chain as u16));
         }
@@ -259,7 +261,7 @@ impl Context {
             // update transaction block content
             if new_transaction_block {
                 let mempool = self.mempool.lock().unwrap();
-                let transactions = mempool.get_transactions(TX_BLOCK_TRANSACTIONS);
+                let transactions = mempool.get_transactions(self.config.tx_txs);
                 drop(mempool);
                 let _chain_id: usize = TRANSACTION_INDEX as usize;
                 if let Content::Transaction(c) = &mut self.contents[TRANSACTION_INDEX as usize] {
@@ -277,9 +279,9 @@ impl Context {
             if new_transaction_block && !new_proposer_block {
                 if let Content::Proposer(c) = &mut self.contents[PROPOSER_INDEX as usize] {
                     // only update the references if we are not running out of quota
-                    if c.transaction_refs.len() < PROPOSER_BLOCK_TX_REFS as usize {
+                    if c.transaction_refs.len() < self.config.proposer_tx_refs as usize {
                         let mut refs = self.blockchain.unreferred_transactions();
-                        refs.truncate(PROPOSER_BLOCK_TX_REFS as usize);
+                        refs.truncate(self.config.proposer_tx_refs as usize);
                         c.transaction_refs = refs;
                         touched_content.insert(PROPOSER_INDEX);
                     }
@@ -307,7 +309,7 @@ impl Context {
                 if new_proposer_block {
                     if let Content::Proposer(c) = &mut self.contents[PROPOSER_INDEX as usize] {
                         let mut refs = self.blockchain.unreferred_transactions();
-                        refs.truncate(PROPOSER_BLOCK_TX_REFS as usize);
+                        refs.truncate(self.config.proposer_tx_refs as usize);
                         c.transaction_refs = refs;
                         c.proposer_refs = self.blockchain.unreferred_proposers();
                         let parent = self.header.parent;
@@ -331,7 +333,7 @@ impl Context {
 
             // update the votes
             if new_proposer_block {
-                for voter_chain in 0..NUM_VOTER_CHAINS {
+                for voter_chain in 0..self.config.voter_chains {
                     let chain_id: usize = (FIRST_VOTER_INDEX + voter_chain) as usize;
                     let voter_parent = if let Content::Voter(c) = &self.contents[chain_id] {
                         c.voter_parent
@@ -350,7 +352,7 @@ impl Context {
                 }
             } else {
                 if !new_voter_block.is_empty() {
-                    for voter_chain in 0..NUM_VOTER_CHAINS {
+                    for voter_chain in 0..self.config.voter_chains {
                         let chain_id: usize = (FIRST_VOTER_INDEX + voter_chain) as usize;
                         let voter_parent = if let Content::Voter(c) = &self.contents[chain_id] {
                             c.voter_parent
@@ -507,7 +509,7 @@ impl Context {
     /// Given a valid header, sortition its hash and create the block
     fn produce_block(&self, header_hash: H256) -> Block {
         // Get sortition ID
-        let sortition_id = get_sortition_id(&header_hash, &self.header.difficulty)
+        let sortition_id = self.config.sortition_hash(&header_hash, &self.header.difficulty)
             .expect("Block Hash should <= Difficulty");
         // Create a block
         // get the merkle proof

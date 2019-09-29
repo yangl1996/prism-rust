@@ -50,6 +50,12 @@ impl std::convert::AsRef<[u8]> for H256 {
     }
 }
 
+impl std::convert::AsRef<[u8; 32]> for H256 {
+    fn as_ref(&self) -> &[u8; 32] {
+        return &self.0;
+    }
+}
+
 impl std::convert::From<&[u8; 32]> for H256 {
     fn from(input: &[u8; 32]) -> H256 {
         let mut buffer: [u8; 32] = [0; 32];

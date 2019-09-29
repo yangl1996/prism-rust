@@ -58,33 +58,9 @@ impl std::fmt::Display for BlockResult {
     }
 }
 
-/// Validate a block.
-pub fn check_block(block: &Block, blockchain: &BlockChain, blockdb: &BlockDatabase) -> BlockResult {
-    // TODO: Check difficulty. Where should we get the current difficulty ranges?
-
-    match check_pow_sortition_id(block) {
-        // if PoW and sortition id passes, we check other rules
-        BlockResult::Pass => {}
-        x => return x,
-    };
-    match check_sortition_proof(block) {
-        BlockResult::Pass => {}
-        x => return x,
-    };
-    match check_data_availability(block, blockchain, blockdb) {
-        BlockResult::Pass => {}
-        x => return x,
-    };
-    match check_content_semantic(block, blockchain, blockdb) {
-        BlockResult::Pass => {}
-        x => return x,
-    };
-    BlockResult::Pass
-}
-
 // check PoW and sortition id
-pub fn check_pow_sortition_id(block: &Block) -> BlockResult {
-    let sortition_id = get_sortition_id(&block.hash(), &block.header.difficulty);
+pub fn check_pow_sortition_id(block: &Block, config: &BlockchainConfig) -> BlockResult {
+    let sortition_id = config.sortition_hash(&block.hash(), &block.header.difficulty);
     if let Some(sortition_id) = sortition_id {
         let correct_sortition_id = match &block.content {
             Content::Proposer(_) => PROPOSER_INDEX,
@@ -101,15 +77,15 @@ pub fn check_pow_sortition_id(block: &Block) -> BlockResult {
 }
 
 /// check sortition proof
-pub fn check_sortition_proof(block: &Block) -> BlockResult {
-    let sortition_id = get_sortition_id(&block.hash(), &block.header.difficulty);
+pub fn check_sortition_proof(block: &Block, config: &BlockchainConfig) -> BlockResult {
+    let sortition_id = config.sortition_hash(&block.hash(), &block.header.difficulty);
     if let Some(sortition_id) = sortition_id {
         if !verify(
             &block.header.content_merkle_root,
             &block.content.hash(),
             &block.sortition_proof,
             sortition_id as usize,
-            (NUM_VOTER_CHAINS + FIRST_VOTER_INDEX) as usize,
+            (config.voter_chains + FIRST_VOTER_INDEX) as usize,
         ) {
             return BlockResult::WrongSortitionProof;
         }
@@ -238,35 +214,6 @@ fn check_transaction_block_exists(hash: H256, blockchain: &BlockChain) -> bool {
     };
 
     return in_chain;
-}
-
-/// Calculate which chain should we attach the new block to
-pub fn get_sortition_id(hash: &H256, difficulty: &H256) -> Option<u16> {
-    let hash: [u8; 32] = hash.into();
-    let big_hash = U256::from_big_endian(&hash);
-    let difficulty: [u8; 32] = difficulty.into();
-    let big_difficulty = U256::from_big_endian(&difficulty);
-    let total_mining_range: U256 = TOTAL_MINING_RANGE.into();
-    let big_proposer_range: U256 = PROPOSER_MINING_RANGE.into();
-    let big_transaction_range: U256 = TRANSACTION_MINING_RANGE.into();
-
-    if big_hash < big_difficulty / total_mining_range * big_proposer_range {
-        // proposer block
-        Some(PROPOSER_INDEX)
-    } else if big_hash
-        < big_difficulty / total_mining_range * (big_transaction_range + big_proposer_range)
-    {
-        // transaction block
-        Some(TRANSACTION_INDEX)
-    } else if big_hash < big_difficulty {
-        // voter index, figure out which voter tree we are in
-        let voter_id =
-            (big_hash - big_transaction_range - big_proposer_range) % NUM_VOTER_CHAINS.into();
-        Some(voter_id.as_u32() as u16 + FIRST_VOTER_INDEX)
-    } else {
-        // Didn't pass PoW
-        None
-    }
 }
 
 #[cfg(test)]

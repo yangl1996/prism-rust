@@ -17,6 +17,7 @@ use crate::wallet::Wallet;
 use crossbeam::channel;
 use log::{debug, warn};
 use std::collections::HashSet;
+use crate::config::*;
 
 
 use std::sync::{Arc, Mutex};
@@ -36,6 +37,7 @@ pub struct Context {
     buffer: Arc<Mutex<BlockBuffer>>,
     recent_blocks: Arc<Mutex<HashSet<H256>>>, // blocks that we have received but not yet inserted
     requested_blocks: Arc<Mutex<HashSet<H256>>>, // blocks that we have requested but not yet received
+    config: BlockchainConfig,
 }
 
 pub fn new(
@@ -48,6 +50,7 @@ pub fn new(
     mempool: &Arc<Mutex<MemoryPool>>,
     ctx_update_sink: channel::Sender<ContextUpdateSignal>,
     server: &ServerHandle,
+    config: BlockchainConfig
 ) -> Context {
     let ctx = Context {
         msg_chan: msg_src,
@@ -62,6 +65,7 @@ pub fn new(
         buffer: Arc::new(Mutex::new(BlockBuffer::new())),
         recent_blocks: Arc::new(Mutex::new(HashSet::new())),
         requested_blocks: Arc::new(Mutex::new(HashSet::new())),
+        config: config,
     };
     return ctx;
 }
@@ -178,7 +182,7 @@ impl Context {
 
                         // check POW here. If POW does not pass, discard the block at this
                         // stage
-                        let pow_check = validation::check_pow_sortition_id(&block);
+                        let pow_check = validation::check_pow_sortition_id(&block, &self.config);
                         match pow_check {
                             BlockResult::Pass => {}
                             _ => continue,
@@ -259,7 +263,7 @@ impl Context {
                         }
 
                         // check sortition proof and content semantics
-                        let sortition_proof = validation::check_sortition_proof(&block);
+                        let sortition_proof = validation::check_sortition_proof(&block, &self.config);
                         match sortition_proof {
                             BlockResult::Pass => {}
                             _ => {
