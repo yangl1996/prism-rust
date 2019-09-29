@@ -3,7 +3,7 @@ extern crate clap;
 
 use crossbeam::channel;
 use ed25519_dalek::Keypair;
-use log::{error, info};
+use log::{error, info, debug};
 use prism::api::Server as ApiServer;
 use prism::blockchain::BlockChain;
 use prism::blockdb::BlockDatabase;
@@ -34,17 +34,20 @@ fn main() {
      (@arg verbose: -v ... "Increases the verbosity of logging")
      (@arg peer_addr: --p2p [ADDR] default_value("127.0.0.1:6000") "Sets the IP address and the port of the P2P server")
      (@arg api_addr: --api [ADDR] default_value("127.0.0.1:7000") "Sets the IP address and the port of the API server")
-     (@arg visualization: --visual [ADDR] "Enables the visualization server at the given address and port")
-     (@arg known_peer: -c --connect ... [PEER] "Sets the peers to connect to")
-     (@arg block_db: --blockdb [PATH] default_value("/tmp/prism-blocks.rocksdb") "Sets the path of the block database")
-     (@arg utxo_db: --utxodb [PATH] default_value("/tmp/prism-utxo.rocksdb") "Sets the path of the UTXO database")
-     (@arg blockchain_db: --blockchaindb [PATH] default_value("/tmp/prism-blockchain.rocksdb") "Sets the path of the blockchain database")
-     (@arg wallet_db: --walletdb [PATH] default_value("/tmp/prism-wallet.rocksdb") "Sets the path of the wallet")
-     (@arg init_fund_addr: --("fund-addr") ... [HASH] "Endows the given address an initial fund")
-     (@arg init_fund_coins: --("fund-coins") [INT] default_value("50000") "Sets the number of coins of the initial fund for each peer")
-     (@arg init_fund_value: --("fund-value") [INT] default_value("100") "Sets the value of each initial fund coin")
-     (@arg load_key_path: --("load-key") ... [PATH] "Loads a key pair into the wallet from the given address")
-     (@arg mempool_size: --("mempool-size") ... [SIZE] default_value("500000") "Sets the size limit of the memory pool")
+     (@arg visualization: --visual [ADDR] "Enables the visualization server and sets its address and port")
+     (@arg known_peer: -c --connect ... [PEER] "Sets the peers to connect to at start")
+     (@arg block_db: --blockdb [PATH] default_value("/tmp/prism-blocks.rocksdb") "Sets the path to the block database")
+     (@arg utxo_db: --utxodb [PATH] default_value("/tmp/prism-utxo.rocksdb") "Sets the path to the UTXO database")
+     (@arg blockchain_db: --blockchaindb [PATH] default_value("/tmp/prism-blockchain.rocksdb") "Sets the path to the blockchain database")
+     (@arg wallet_db: --walletdb [PATH] default_value("/tmp/prism-wallet.rocksdb") "Sets the path to the wallet database")
+     (@arg init_fund_addr: --("fund-addr") ... [ADDR] "Endows the given address an initial fund in the genesis block")
+     (@arg init_fund_coins: --("fund-coins") [INT] default_value("50000") "Sets the number of initial coins for each address")
+     (@arg init_fund_value: --("fund-value") [INT] default_value("100") "Sets the value of each initial coin")
+     (@arg load_key_path: --("load-key") ... [PATH] "Loads a key pair into the wallet from the given path")
+     (@arg mempool_size: --("mempool-size") [INT] default_value("500000") "Sets the maximum number of transactions for the memory pool")
+     (@arg execution_workers: --("execution-workers") [INT] default_value("8") "Sets the number of worker threads for transaction execution")
+     (@arg execution_buffer: --("execution-buffer") [INT] default_value("3") "Sets the size of the buffer between pipeline stages in transaction execution")
+     (@arg p2p_workers: --("p2p-workers") [INT] default_value("16") "Sets the number of worker threads for P2P server")
      (@subcommand keygen =>
       (about: "Generates Prism wallet key pair")
       (@arg display_address: --addr "Prints the address of the key pair to STDERR")
@@ -88,22 +91,27 @@ fn main() {
         });
     let mempool = MemoryPool::new(mempool_size);
     let mempool = Arc::new(std::sync::Mutex::new(mempool));
+    debug!("Initialized mempool, maximum size set to {}", mempool_size);
 
     // init block database
     let blockdb = BlockDatabase::new(&matches.value_of("block_db").unwrap()).unwrap();
     let blockdb = Arc::new(blockdb);
+    debug!("Initialized block database");
 
     // init utxo database
     let utxodb = UtxoDatabase::new(&matches.value_of("utxo_db").unwrap()).unwrap();
     let utxodb = Arc::new(utxodb);
+    debug!("Initialized UTXO database");
 
     // init blockchain database
     let blockchain = BlockChain::new(&matches.value_of("blockchain_db").unwrap()).unwrap();
     let blockchain = Arc::new(blockchain);
+    debug!("Initialized blockchain database");
 
     // init wallet database
     let wallet = Wallet::new(&matches.value_of("wallet_db").unwrap()).unwrap();
     let wallet = Arc::new(wallet);
+    debug!("Initialized wallet");
 
     // load wallet keys
     if let Some(wallet_keys) = matches.values_of("load_key_path") {
@@ -134,8 +142,25 @@ fn main() {
     }
 
     // start thread to update ledger
+    let tx_workers = matches
+        .value_of("execution_workers")
+        .unwrap()
+        .parse::<usize>()
+        .unwrap_or_else(|e| {
+            error!("Error parsing transaction execution workers: {}", e);
+            process::exit(1);
+        });
+    let tx_buffer = matches
+        .value_of("execution_buffer")
+        .unwrap()
+        .parse::<usize>()
+        .unwrap_or_else(|e| {
+            error!("Error parsing transaction execution buffer size: {}", e);
+            process::exit(1);
+        });
     let ledger_manager = LedgerManager::new(&blockdb, &blockchain, &utxodb, &wallet);
-    ledger_manager.start(3, 8);
+    ledger_manager.start(tx_buffer, tx_workers);
+    debug!("Initialized ledger manager with buffer size {} and {} workers", tx_buffer, tx_workers);
 
     // parse p2p server address
     let p2p_addr = matches
@@ -167,8 +192,16 @@ fn main() {
     server_ctx.start().unwrap();
 
     // start the worker
+    let p2p_workers = matches
+        .value_of("p2p_workers")
+        .unwrap()
+        .parse::<usize>()
+        .unwrap_or_else(|e| {
+            error!("Error parsing P2P workers: {}", e);
+            process::exit(1);
+        });
     let worker_ctx = worker::new(
-        16,
+        p2p_workers,
         msg_rx,
         &blockchain,
         &blockdb,
