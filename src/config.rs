@@ -122,12 +122,8 @@ impl BlockchainConfig {
 }
 
 // Security parameters
-pub const NETWORK_DELAY: f32 = 1.4; // the expected block propagation delay (in seconds)
 pub const ADVERSARY_MINING_POWER: f32 = 0.40; // the adversary power we want to tolerate
 pub const LOG_EPSILON: f32 = 20.0; // -ln(1-confirmation_guarantee)
-pub const ALPHA: f32 = 0.1;
-// FIXME
-//(VOTER_CHAIN_MINING_RATE * NETWORK_DELAY) / (1.0 + VOTER_CHAIN_MINING_RATE * NETWORK_DELAY); // alpha = orphan blocks / total blocks
 
 lazy_static! {
     pub static ref QUANTILE_EPSILON: f32 =
