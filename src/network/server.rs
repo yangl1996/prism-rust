@@ -8,7 +8,6 @@ use mio_extras::channel;
 use std::sync::mpsc;
 use std::thread;
 
-
 const MAX_INCOMING_CLIENT: usize = 256;
 const MAX_EVENT: usize = 1024;
 
@@ -48,7 +47,6 @@ impl Context {
         thread::spawn(move || {
             self.listen().unwrap_or_else(|e| {
                 error!("P2P server error: {}", e);
-                
             });
         });
         Ok(())

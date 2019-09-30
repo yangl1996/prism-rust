@@ -73,10 +73,7 @@ impl MerkleTree {
             }
         }
 
-        MerkleTree {
-            data_size,
-            nodes,
-        }
+        MerkleTree { data_size, nodes }
     }
 
     pub fn root(&self) -> H256 {

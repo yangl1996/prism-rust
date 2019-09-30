@@ -351,24 +351,24 @@ impl Context {
                     }
                 }
             } else if !new_voter_block.is_empty() {
-    for voter_chain in 0..self.config.voter_chains {
-        let chain_id: usize = (FIRST_VOTER_INDEX + voter_chain) as usize;
-        let voter_parent = if let Content::Voter(c) = &self.contents[chain_id] {
-            c.voter_parent
-        } else {
-            unreachable!();
-        };
-        if let Content::Voter(c) = &mut self.contents[chain_id] {
-            c.votes = self
-                .blockchain
-                .unvoted_proposer(&voter_parent, &self.header.parent)
-                .unwrap();
-            touched_content.insert(chain_id as u16);
-        } else {
-            unreachable!();
-        }
-    }
-}
+                for voter_chain in 0..self.config.voter_chains {
+                    let chain_id: usize = (FIRST_VOTER_INDEX + voter_chain) as usize;
+                    let voter_parent = if let Content::Voter(c) = &self.contents[chain_id] {
+                        c.voter_parent
+                    } else {
+                        unreachable!();
+                    };
+                    if let Content::Voter(c) = &mut self.contents[chain_id] {
+                        c.votes = self
+                            .blockchain
+                            .unvoted_proposer(&voter_parent, &self.header.parent)
+                            .unwrap();
+                        touched_content.insert(chain_id as u16);
+                    } else {
+                        unreachable!();
+                    }
+                }
+            }
 
             // update the difficulty
             self.header.difficulty = self.get_difficulty(&self.header.parent);
@@ -422,9 +422,7 @@ impl Context {
                                     Content::Transaction(content) => {
                                         content.transactions.is_empty()
                                     }
-                                    Content::Voter(content) => {
-                                        content.votes.is_empty()
-                                    }
+                                    Content::Voter(content) => content.votes.is_empty(),
                                     Content::Proposer(content) => {
                                         content.transaction_refs.is_empty()
                                             && content.proposer_refs.is_empty()
@@ -516,12 +514,8 @@ impl Context {
         // Get the header of the block corresponding to block_hash
         match self.blockdb.get(block_hash).unwrap() {
             // extract difficulty
-            Some(b) => {
-                b.header.difficulty
-            }
-            None => {
-                *DEFAULT_DIFFICULTY
-            }
+            Some(b) => b.header.difficulty,
+            None => *DEFAULT_DIFFICULTY,
         }
     }
 }

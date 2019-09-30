@@ -291,9 +291,7 @@ impl Server {
                                         }
                                     };
                                     transaction_generator::ArrivalDistribution::Uniform(
-                                        transaction_generator::UniformArrival {
-                                            interval,
-                                        },
+                                        transaction_generator::UniformArrival { interval },
                                     )
                                 }
                                 d => {

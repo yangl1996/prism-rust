@@ -67,9 +67,7 @@ impl ReadContext {
                     Ok(ReadResult::Continue)
                 }
             }
-            Err(e) => {
-                Err(e)
-            }
+            Err(e) => Err(e),
         }
     }
 }
@@ -222,6 +220,5 @@ impl Handle {
         // TODO: return result
         let buffer = bincode::serialize(&msg).unwrap();
         self.write_queue.send(buffer);
-        
     }
 }

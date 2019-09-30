@@ -28,8 +28,7 @@ impl Content {
 
 impl PayloadSize for Content {
     fn size(&self) -> usize {
-        std::mem::size_of::<H256>()
-            * (self.transaction_refs.len() + self.proposer_refs.len())
+        std::mem::size_of::<H256>() * (self.transaction_refs.len() + self.proposer_refs.len())
     }
 }
 

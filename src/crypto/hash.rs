@@ -95,9 +95,7 @@ impl Ord for H256 {
         let higher = self_higher.cmp(&other_higher);
         match higher {
             std::cmp::Ordering::Equal => self_lower.cmp(&other_lower),
-            _ => {
-                higher
-            }
+            _ => higher,
         }
     }
 }

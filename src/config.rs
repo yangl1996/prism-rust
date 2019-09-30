@@ -87,8 +87,10 @@ impl BlockchainConfig {
         let tx_width: u64 =
             SORTITION_PRECISION - proposer_width - voter_width * u64::from(voter_chains);
         let log_epsilon_confirm = log_epsilon * DECONFIRM_HEADROOM;
-        let quantile_confirm: f32 =
-            (2.0 * log_epsilon_confirm - (2.0 * log_epsilon_confirm).ln() - (2.0 * 3.141_692_6 as f32).ln()).sqrt();
+        let quantile_confirm: f32 = (2.0 * log_epsilon_confirm
+            - (2.0 * log_epsilon_confirm).ln()
+            - (2.0 * 3.141_692_6 as f32).ln())
+        .sqrt();
         let quantile_deconfirm: f32 =
             (2.0 * log_epsilon - (2.0 * log_epsilon).ln() - (2.0 * 3.141_692_6 as f32).ln()).sqrt();
         Self {

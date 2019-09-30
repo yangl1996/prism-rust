@@ -153,7 +153,7 @@ fn main() {
         proposer_mining_rate,
         voter_mining_rate,
         adv_ratio,
-        log_epsilon
+        log_epsilon,
     );
     info!(
         "Proposer block mining rate set to {} blks/s",

@@ -356,7 +356,11 @@ impl BlockChain {
                 // set current block level and chain number
                 put_value!(voter_node_level_cf, block_hash, self_level as u64);
                 put_value!(voter_node_chain_cf, block_hash, self_chain as u16);
-                merge_value!(voter_tree_level_count_cf, (self_chain as u16, self_level as u64), 1 as u64);
+                merge_value!(
+                    voter_tree_level_count_cf,
+                    (self_chain as u16, self_level as u64),
+                    1 as u64
+                );
                 // add voting blocks for the proposer
                 for proposer_hash in &content.votes {
                     merge_value!(proposer_vote_count_cf, proposer_hash, 1 as u64);
@@ -522,7 +526,10 @@ impl BlockChain {
 
             if new_leader != existing_leader {
                 match new_leader {
-                    Some(hash) => info!("New proposer leader selected for level {}: {:.8}", level, hash),
+                    Some(hash) => info!(
+                        "New proposer leader selected for level {}: {:.8}",
+                        level, hash
+                    ),
                     None => warn!("Proposer leader deconfirmed for level {}", level),
                 }
                 // mark it's the beginning of the change
@@ -645,8 +652,7 @@ impl BlockChain {
                 }
             }};
         }
-        let proposer_blocks: Vec<H256> =
-            get_value!(proposer_tree_level_cf, level as u64).unwrap();
+        let proposer_blocks: Vec<H256> = get_value!(proposer_tree_level_cf, level as u64).unwrap();
         // compute the new leader of this level
         // we use the confirmation policy from https://arxiv.org/abs/1810.08092
         let mut new_leader: Option<H256> = None;
@@ -670,7 +676,9 @@ impl BlockChain {
                 let voter_best = self.voter_best[*chain_num as usize].lock().unwrap();
                 let voter_best_level = voter_best.1;
                 drop(voter_best);
-                total_vote_blocks += self.num_voter_blocks(*chain_num, *vote_level, voter_best_level).unwrap();
+                total_vote_blocks += self
+                    .num_voter_blocks(*chain_num, *vote_level, voter_best_level)
+                    .unwrap();
                 total_vote_count += 1;
                 let this_depth = voter_best_level - vote_level + 1;
                 vote_depth.push(this_depth);
@@ -684,7 +692,7 @@ impl BlockChain {
             panic!(
                 "self.config.voter_chains: {} total_votes:{}",
                 self.config.voter_chains, total_vote_count
-                )
+            )
         }
 
         // no point in going further if less than 3/5 votes are cast
@@ -695,8 +703,7 @@ impl BlockChain {
             let avg_vote_blocks = total_vote_blocks as f32 / f32::from(total_vote_count);
             // expected voter depth of an adversary
             let adversary_expected_vote_depth =
-                avg_vote_blocks / (1.0 - self.config.adversary_ratio)
-                * self.config.adversary_ratio;
+                avg_vote_blocks / (1.0 - self.config.adversary_ratio) * self.config.adversary_ratio;
             let poisson = Poisson::new(f64::from(adversary_expected_vote_depth)).unwrap();
 
             // for each block calculate the lower bound on the number of votes
@@ -718,7 +725,7 @@ impl BlockChain {
                         let p1 = poisson.pmf(k) as f32;
                         // probability that the adversary will overtake 'depth-k' blocks
                         let p2 = (self.config.adversary_ratio
-                                  / (1.0 - self.config.adversary_ratio))
+                            / (1.0 - self.config.adversary_ratio))
                             .powi((depth - k + 1) as i32);
                         p += p1 * p2;
                     }
@@ -726,8 +733,8 @@ impl BlockChain {
                     block_votes_variance += p * (1.0 - p);
                 }
                 // using gaussian approximation
-                let tmp =
-                    block_votes_mean - (block_votes_variance).sqrt() * self.config.quantile_epsilon_confirm;
+                let tmp = block_votes_mean
+                    - (block_votes_variance).sqrt() * self.config.quantile_epsilon_confirm;
                 if tmp > 0.0 {
                     block_votes_lcb += tmp;
                 }
@@ -739,7 +746,9 @@ impl BlockChain {
                     new_leader = Some(*block);
                 }
                 // In case of a tie, choose block with lower hash.
-                if (max_vote_lcb - block_votes_lcb).abs() < std::f32::EPSILON && new_leader.is_some() {
+                if (max_vote_lcb - block_votes_lcb).abs() < std::f32::EPSILON
+                    && new_leader.is_some()
+                {
                     // TODO: is_some required?
                     if *block < new_leader.unwrap() {
                         new_leader = Some(*block);
@@ -758,17 +767,18 @@ impl BlockChain {
                     // if the below condition is true, then final votes on p_block could overtake new_leader
                     if max_vote_lcb < votes_lcb.get(p_block).unwrap() + remaining_votes
                         && *p_block != new_leader.unwrap()
-                        {
-                            new_leader = None;
-                            break;
-                        }
+                    {
+                        new_leader = None;
+                        break;
+                    }
                     //In case of a tie, choose block with lower hash.
-                    if (max_vote_lcb - (votes_lcb.get(p_block).unwrap() + remaining_votes)).abs() < std::f32::EPSILON
+                    if (max_vote_lcb - (votes_lcb.get(p_block).unwrap() + remaining_votes)).abs()
+                        < std::f32::EPSILON
                         && *p_block < new_leader.unwrap()
-                        {
-                            new_leader = None;
-                            break;
-                        }
+                    {
+                        new_leader = None;
+                        break;
+                    }
                 }
             }
         }
@@ -788,7 +798,13 @@ impl BlockChain {
         }
         let mut total: u64 = 0;
         for l in start_level..=end_level {
-            let t: u64 = deserialize(&self.db.get_pinned_cf(voter_tree_level_count_cf, serialize(&(chain, l)).unwrap())?.unwrap()).unwrap();
+            let t: u64 = deserialize(
+                &self
+                    .db
+                    .get_pinned_cf(voter_tree_level_count_cf, serialize(&(chain, l)).unwrap())?
+                    .unwrap(),
+            )
+            .unwrap();
             total += t;
         }
         Ok(total)

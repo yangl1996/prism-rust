@@ -9,7 +9,6 @@ use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::merkle::verify;
 extern crate bigint;
 
-
 /// The result of block validation.
 #[derive(Debug)]
 pub enum BlockResult {
@@ -215,4 +214,3 @@ fn check_transaction_block_exists(hash: H256, blockchain: &BlockChain) -> bool {
 
     in_chain
 }
-
