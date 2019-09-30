@@ -197,11 +197,10 @@ impl Context {
         }
 
         let mut rng = rand::thread_rng();
-        let mut block_start = time::Instant::now();
 
         // main mining loop
         loop {
-            block_start = time::Instant::now();
+            let block_start = time::Instant::now();
 
             // check and react to control signals
             match self.operating_state {
@@ -417,19 +416,16 @@ impl Context {
                 let skip: bool = {
                     if let OperatingState::Run(_, lazy) = self.operating_state {
                         if lazy {
-                            let empty = {
-                                match &mined_block.content {
-                                    Content::Transaction(content) => {
-                                        content.transactions.is_empty()
-                                    }
-                                    Content::Voter(content) => content.votes.is_empty(),
-                                    Content::Proposer(content) => {
-                                        content.transaction_refs.is_empty()
-                                            && content.proposer_refs.is_empty()
-                                    }
+                            match &mined_block.content {
+                                Content::Transaction(content) => {
+                                    content.transactions.is_empty()
                                 }
-                            };
-                            empty
+                                Content::Voter(content) => content.votes.is_empty(),
+                                Content::Proposer(content) => {
+                                    content.transaction_refs.is_empty()
+                                        && content.proposer_refs.is_empty()
+                                }
+                            }
                         } else {
                             false
                         }
@@ -499,13 +495,11 @@ impl Context {
         // Create a block
         // get the merkle proof
         let sortition_proof: Vec<H256> = self.content_merkle_tree.proof(sortition_id as usize);
-        let mined_block = Block::from_header(
+        Block::from_header(
             self.header,
             self.contents[sortition_id as usize].clone(),
             sortition_proof,
-        );
-
-        mined_block
+        )
     }
 
     /// Calculate the difficulty for the block to be mined

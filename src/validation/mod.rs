@@ -187,30 +187,24 @@ pub fn check_content_semantic(
 
 /// Check whether a proposer block exists in the block database and the blockchain.
 fn check_proposer_block_exists(hash: H256, blockchain: &BlockChain) -> bool {
-    let in_chain = match blockchain.contains_proposer(&hash) {
+    match blockchain.contains_proposer(&hash) {
         Err(e) => panic!("Blockchain error {}", e),
         Ok(b) => b,
-    };
-
-    in_chain
+    }
 }
 
 /// Check whether a voter block exists in the block database and the blockchain.
 fn check_voter_block_exists(hash: H256, blockchain: &BlockChain) -> bool {
-    let in_chain = match blockchain.contains_voter(&hash) {
+    match blockchain.contains_voter(&hash) {
         Err(e) => panic!("Blockchain error {}", e),
         Ok(b) => b,
-    };
-
-    in_chain
+    }
 }
 
 /// Check whether a transaction block exists in the block database.
 fn check_transaction_block_exists(hash: H256, blockchain: &BlockChain) -> bool {
-    let in_chain = match blockchain.contains_transaction(&hash) {
+    match blockchain.contains_transaction(&hash) {
         Err(e) => panic!("Blockchain error {}", e),
         Ok(b) => b,
-    };
-
-    in_chain
+    }
 }

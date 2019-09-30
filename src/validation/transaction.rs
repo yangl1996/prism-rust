@@ -21,30 +21,6 @@ pub fn check_sufficient_input(transaction: &Transaction) -> bool {
     input_sum >= output_sum
 }
 
-pub fn check_num_authorizations(transaction: &Transaction) -> bool {
-    let mut owners: Vec<Address> = transaction.input.iter().map(|x| x.owner).collect();
-    owners.sort_unstable();
-    owners.dedup();
-
-    // check that all owners have signed the transaction
-    if owners.len() != transaction.authorization.len() {
-        return false;
-    }
-    let owners_match =
-        owners
-            .iter()
-            .zip(transaction.authorization.iter())
-            .all(|(owner, authorization)| {
-                let addr: Address =
-                    ring::digest::digest(&ring::digest::SHA256, &authorization.pubkey).into();
-                addr == *owner
-            });
-    if !owners_match {
-        return false;
-    }
-    true
-}
-
 pub fn check_signature_batch(transactions: &[Transaction]) -> bool {
     let mut raw_messages: Vec<Vec<u8>> = vec![];
     let mut messages: Vec<&[u8]> = vec![];

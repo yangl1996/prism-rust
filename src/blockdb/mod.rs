@@ -187,8 +187,7 @@ impl BlockDatabase {
 
     /// Get the number of blocks in the database.
     pub fn num_blocks(&self) -> u64 {
-        let count = self.count.load(Ordering::Relaxed);
-        count
+        self.count.load(Ordering::Relaxed)
     }
 
     /// Get the hash of the latest block.

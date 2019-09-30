@@ -51,7 +51,7 @@ pub fn new(
     server: &ServerHandle,
     config: BlockchainConfig,
 ) -> Context {
-    let ctx = Context {
+    Context {
         msg_chan: msg_src,
         num_worker,
         chain: Arc::clone(blockchain),
@@ -65,8 +65,7 @@ pub fn new(
         recent_blocks: Arc::new(Mutex::new(HashSet::new())),
         requested_blocks: Arc::new(Mutex::new(HashSet::new())),
         config,
-    };
-    ctx
+    }
 }
 
 impl Context {

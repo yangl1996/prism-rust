@@ -1084,9 +1084,11 @@ impl BlockChain {
         let snapshot = self.db.snapshot();
         drop(ledger_tip_);
 
-        let ledger_bottom: u64 = match ledger_tip > limit {
-            true => ledger_tip - limit,
-            false => 0,
+        let ledger_bottom: u64 = if ledger_tip > limit {
+            ledger_tip - limit
+        }
+        else {
+            0
         };
         let proposer_ledger_order_cf = self.db.cf_handle(PROPOSER_LEDGER_ORDER_CF).unwrap();
         let transaction_ref_neighbor_cf = self.db.cf_handle(TRANSACTION_REF_NEIGHBOR_CF).unwrap();
@@ -1265,9 +1267,11 @@ impl BlockChain {
         // and the ledger_tip lock doesn't ensure it either.
         let snapshot = self.db.snapshot();
         drop(ledger_tip_);
-        let ledger_bottom: u64 = match ledger_tip > limit {
-            true => ledger_tip - limit,
-            false => 0,
+        let ledger_bottom: u64 = if ledger_tip > limit {
+            ledger_tip - limit
+        }
+        else {
+            0
         };
 
         // memory cache for votes

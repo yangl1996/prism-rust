@@ -8,13 +8,14 @@ use std::sync::atomic::{AtomicIsize, AtomicUsize, Ordering};
 use std::time::SystemTime;
 
 lazy_static! {
-    pub static ref PERFORMANCE_COUNTER: Counter = { Counter::new() };
+    pub static ref PERFORMANCE_COUNTER: Counter = { Counter::default() };
 }
 
 pub trait PayloadSize {
     fn size(&self) -> usize;
 }
 
+#[derive(Default)]
 pub struct Counter {
     generated_transactions: AtomicUsize,
     generated_transaction_bytes: AtomicUsize,
@@ -93,46 +94,6 @@ pub struct Snapshot {
 }
 
 impl Counter {
-    pub fn new() -> Self {
-        Self {
-            generated_transactions: AtomicUsize::new(0),
-            generated_transaction_bytes: AtomicUsize::new(0),
-            generate_transaction_failures: AtomicUsize::new(0),
-            confirmed_transactions: AtomicUsize::new(0),
-            confirmed_transaction_bytes: AtomicUsize::new(0),
-            deconfirmed_transactions: AtomicUsize::new(0),
-            deconfirmed_transaction_bytes: AtomicUsize::new(0),
-            confirmed_transaction_blocks: AtomicUsize::new(0),
-            deconfirmed_transaction_blocks: AtomicUsize::new(0),
-            processed_proposer_blocks: AtomicUsize::new(0),
-            processed_proposer_block_bytes: AtomicUsize::new(0),
-            processed_voter_blocks: AtomicUsize::new(0),
-            processed_voter_block_bytes: AtomicUsize::new(0),
-            processed_transaction_blocks: AtomicUsize::new(0),
-            processed_transaction_block_bytes: AtomicUsize::new(0),
-            mined_proposer_blocks: AtomicUsize::new(0),
-            mined_proposer_block_bytes: AtomicUsize::new(0),
-            mined_voter_blocks: AtomicUsize::new(0),
-            mined_voter_block_bytes: AtomicUsize::new(0),
-            mined_transaction_blocks: AtomicUsize::new(0),
-            mined_transaction_block_bytes: AtomicUsize::new(0),
-            total_proposer_block_delay: AtomicUsize::new(0),
-            total_voter_block_delay: AtomicUsize::new(0),
-            total_transaction_block_delay: AtomicUsize::new(0),
-            total_proposer_block_squared_delay: AtomicUsize::new(0),
-            total_voter_block_squared_delay: AtomicUsize::new(0),
-            total_transaction_block_squared_delay: AtomicUsize::new(0),
-            received_proposer_blocks: AtomicUsize::new(0),
-            received_voter_blocks: AtomicUsize::new(0),
-            received_transaction_blocks: AtomicUsize::new(0),
-            incoming_message_queue: AtomicIsize::new(0),
-            total_transaction_block_confirmation_latency: AtomicUsize::new(0),
-            total_transaction_block_squared_confirmation_latency: AtomicUsize::new(0),
-            proposer_main_chain_length: AtomicUsize::new(0),
-            voter_main_chain_length_sum: AtomicIsize::new(0),
-        }
-    }
-
     pub fn record_process_message(&self) {
         self.incoming_message_queue.fetch_sub(1, Ordering::Relaxed);
     }

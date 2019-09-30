@@ -103,9 +103,8 @@ impl TransactionGenerator {
             // TODO: make it flexible
             let addr = self.wallet.addresses().unwrap()[0];
             let mut prev_coin = None;
-            let mut tx_gen_start: time::Instant = time::Instant::now();
             loop {
-                tx_gen_start = time::Instant::now();
+                let tx_gen_start = time::Instant::now();
                 // check the current state and try to receive control message
                 match self.state {
                     State::Continuous(_) | State::Step(_) => match self.control_chan.try_recv() {
@@ -150,7 +149,7 @@ impl TransactionGenerator {
                 PERFORMANCE_COUNTER.record_generate_transaction(&transaction);
                 match transaction {
                     Ok(t) => {
-                        prev_coin = Some(t.input.last().unwrap().clone().coin);
+                        prev_coin = Some(t.input.last().unwrap().coin);
                         new_transaction(t, &self.mempool, &self.server);
                         // if we are in stepping mode, decrease the step count
                         if let State::Step(step_count) = self.state {

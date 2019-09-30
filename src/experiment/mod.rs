@@ -2,7 +2,7 @@ pub mod performance_counter;
 pub mod transaction_generator;
 
 use crate::crypto::hash::H256;
-use crate::transaction::{CoinId, Input, Output, Transaction};
+use crate::transaction::{CoinId, Output};
 use crate::utxodb::UtxoDatabase;
 use crate::wallet::Wallet;
 use bincode::serialize;
@@ -26,11 +26,7 @@ pub fn ico(
         let recipients = Arc::clone(&recipients);
         let utxodb = Arc::clone(&utxodb);
         let wallet = Arc::clone(&wallet);
-        let handle = thread::spawn(move || loop {
-            let recipient = match recipients.lock().unwrap().pop() {
-                Some(r) => r,
-                None => break,
-            };
+        let handle = thread::spawn(move || while let Some(recipient) = recipients.lock().unwrap().pop() {
             let transaction_id_start = (recipient.0 * num_coins) as u128;
 
             let mut write_opt = WriteOptions::default();
