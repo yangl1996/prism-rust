@@ -49,6 +49,12 @@ fn main() {
      (@arg execution_workers: --("execution-workers") [INT] default_value("8") "Sets the number of worker threads for transaction execution")
      (@arg execution_buffer: --("execution-buffer") [INT] default_value("3") "Sets the size of the buffer between pipeline stages in transaction execution")
      (@arg p2p_workers: --("p2p-workers") [INT] default_value("16") "Sets the number of worker threads for P2P server")
+     (@arg voter_chains: --("voter-chains") [INT] default_value("1000") "Sets the number of voter chains")
+     (@arg tx_throughput: --("tx-throughput") [INT] default_value("80000") "Sets the target transaction throughput")
+     (@arg tx_block_size: --("tx-block-size") [INT] default_value("64000") "Sets the maximum size of the transaction block in Bytes")
+     (@arg proposer_mining_rate: --("proposer-mining-rate") [FLOAT] default_value("0.1") "Sets the proposer chain mining rate")
+     (@arg voter_mining_rate: --("voter-mining-rate") [FLOAT] default_value("0.1") "Sets the voter chain mining rate")
+
      (@subcommand keygen =>
       (about: "Generates Prism wallet key pair")
       (@arg display_address: --addr "Prints the address of the key pair to STDERR")
@@ -82,7 +88,47 @@ fn main() {
     stderrlog::new().verbosity(verbosity).init().unwrap();
 
     // init config struct
-    let config = BlockchainConfig::new(1000, 64000, 80000, 0.1, 0.1);
+    let voter_chains = matches
+        .value_of("voter_chains")
+        .unwrap()
+        .parse::<u16>()
+        .unwrap_or_else(|e| {
+            error!("Error parsing voter chain number: {}", e);
+            process::exit(1);
+        });
+    let tx_throughput = matches
+        .value_of("tx_throughput")
+        .unwrap()
+        .parse::<u32>()
+        .unwrap_or_else(|e| {
+            error!("Error parsing target transaction throughput: {}", e);
+            process::exit(1);
+        });
+    let tx_blk_size = matches
+        .value_of("tx_block_size")
+        .unwrap()
+        .parse::<u32>()
+        .unwrap_or_else(|e| {
+            error!("Error parsing transaction block size: {}", e);
+            process::exit(1);
+        });
+    let proposer_mining_rate = matches
+        .value_of("proposer_mining_rate")
+        .unwrap()
+        .parse::<f32>()
+        .unwrap_or_else(|e| {
+            error!("Error parsing proposer chain mining rate: {}", e);
+            process::exit(1);
+        });
+    let voter_mining_rate = matches
+        .value_of("voter_mining_rate")
+        .unwrap()
+        .parse::<f32>()
+        .unwrap_or_else(|e| {
+            error!("Error parsing voter chain mining rate: {}", e);
+            process::exit(1);
+        });
+    let config = BlockchainConfig::new(voter_chains, tx_blk_size, tx_throughput, proposer_mining_rate, voter_mining_rate);
 
     // init mempool
     let mempool_size = matches
