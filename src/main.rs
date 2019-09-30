@@ -129,6 +129,9 @@ fn main() {
             process::exit(1);
         });
     let config = BlockchainConfig::new(voter_chains, tx_blk_size, tx_throughput, proposer_mining_rate, voter_mining_rate);
+    info!("Proposer block mining rate set to {} blks/s", config.proposer_mining_rate);
+    info!("Voter block mining rate set to {} blks/s per chain, {} chains", config.proposer_mining_rate, config.voter_chains);
+    info!("Transaction block mining rate set to {} blks/s", config.tx_mining_rate);
 
     // init mempool
     let mempool_size = matches
