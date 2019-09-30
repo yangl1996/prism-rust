@@ -7,7 +7,7 @@ use mio::{self, net};
 use mio_extras::channel;
 use std::sync::mpsc;
 use std::thread;
-use std::time;
+
 
 const MAX_INCOMING_CLIENT: usize = 256;
 const MAX_EVENT: usize = 1024;

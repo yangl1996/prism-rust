@@ -8,7 +8,7 @@ use crate::config::*;
 use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::merkle::verify;
 extern crate bigint;
-use bigint::uint::U256;
+
 
 /// The result of block validation.
 #[derive(Debug)]

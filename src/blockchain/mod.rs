@@ -4,7 +4,7 @@ use crate::crypto::hash::{Hashable, H256};
 
 use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 use bincode::{deserialize, serialize};
-use log::{debug, info, trace, warn};
+use log::{debug, info, warn};
 use rocksdb::{ColumnFamilyDescriptor, Options, WriteBatch, DB};
 use statrs::distribution::{Discrete, Poisson, Univariate};
 
@@ -410,12 +410,10 @@ impl BlockChain {
     pub fn update_ledger(&self) -> Result<(Vec<H256>, Vec<H256>)> {
         let proposer_node_vote_cf = self.db.cf_handle(PROPOSER_NODE_VOTE_CF).unwrap();
         let proposer_node_level_cf = self.db.cf_handle(PROPOSER_NODE_LEVEL_CF).unwrap();
-        let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
         let proposer_leader_sequence_cf = self.db.cf_handle(PROPOSER_LEADER_SEQUENCE_CF).unwrap();
         let proposer_ledger_order_cf = self.db.cf_handle(PROPOSER_LEDGER_ORDER_CF).unwrap();
         let proposer_ref_neighbor_cf = self.db.cf_handle(PROPOSER_REF_NEIGHBOR_CF).unwrap();
         let transaction_ref_neighbor_cf = self.db.cf_handle(TRANSACTION_REF_NEIGHBOR_CF).unwrap();
-        let voter_tree_level_count_cf = self.db.cf_handle(VOTER_TREE_LEVEL_COUNT_CF).unwrap();
 
         macro_rules! get_value {
             ($cf:expr, $key:expr) => {{

@@ -1,6 +1,3 @@
-use crate::block;
-use crate::block::proposer;
-use crate::block::voter;
 use crate::crypto::hash::H256;
 use bigint::uint::U256;
 
