@@ -417,9 +417,7 @@ impl Context {
                     if let OperatingState::Run(_, lazy) = self.operating_state {
                         if lazy {
                             match &mined_block.content {
-                                Content::Transaction(content) => {
-                                    content.transactions.is_empty()
-                                }
+                                Content::Transaction(content) => content.transactions.is_empty(),
                                 Content::Voter(content) => content.votes.is_empty(),
                                 Content::Proposer(content) => {
                                     content.transaction_refs.is_empty()

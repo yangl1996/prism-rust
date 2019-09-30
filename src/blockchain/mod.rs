@@ -1086,8 +1086,7 @@ impl BlockChain {
 
         let ledger_bottom: u64 = if ledger_tip > limit {
             ledger_tip - limit
-        }
-        else {
+        } else {
             0
         };
         let proposer_ledger_order_cf = self.db.cf_handle(PROPOSER_LEDGER_ORDER_CF).unwrap();
@@ -1269,8 +1268,7 @@ impl BlockChain {
         drop(ledger_tip_);
         let ledger_bottom: u64 = if ledger_tip > limit {
             ledger_tip - limit
-        }
-        else {
+        } else {
             0
         };
 

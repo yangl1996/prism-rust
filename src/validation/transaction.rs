@@ -1,4 +1,4 @@
-use crate::transaction::{Address, Transaction};
+use crate::transaction::Transaction;
 
 use ed25519_dalek::PublicKey;
 use ed25519_dalek::Signature;

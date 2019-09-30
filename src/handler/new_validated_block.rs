@@ -19,7 +19,7 @@ pub fn new_validated_block(
     PERFORMANCE_COUNTER.record_process_block(&block);
 
     // if this block is a transaction, remove transactions from mempool
-    if let Content::Transaction(content) =  &block.content {
+    if let Content::Transaction(content) = &block.content {
         let mut mempool = mempool.lock().unwrap();
         for tx in &content.transactions {
             mempool.remove_by_hash(&tx.hash());
