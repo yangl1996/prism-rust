@@ -56,92 +56,40 @@ impl BlockChain {
     /// This function also populates the metadata fields with default values, and those
     /// fields must be initialized later.
     fn open<P: AsRef<std::path::Path>>(path: P, config: BlockchainConfig) -> Result<Self> {
-        let proposer_node_level_cf =
-            ColumnFamilyDescriptor::new(PROPOSER_NODE_LEVEL_CF, Options::default());
-        let voter_node_level_cf =
-            ColumnFamilyDescriptor::new(VOTER_NODE_LEVEL_CF, Options::default());
-        let voter_node_chain_cf =
-            ColumnFamilyDescriptor::new(VOTER_NODE_CHAIN_CF, Options::default());
-        let voter_node_voted_level_cf =
-            ColumnFamilyDescriptor::new(VOTER_NODE_VOTED_LEVEL_CF, Options::default());
-        let proposer_leader_sequence_cf =
-            ColumnFamilyDescriptor::new(PROPOSER_LEADER_SEQUENCE_CF, Options::default());
-        let proposer_ledger_order_cf =
-            ColumnFamilyDescriptor::new(PROPOSER_LEDGER_ORDER_CF, Options::default());
 
-        let mut proposer_tree_level_option = Options::default();
-        proposer_tree_level_option.set_merge_operator(
-            "append H256 vec",
-            h256_vec_append_merge,
-            None,
-        );
-        let proposer_tree_level_cf =
-            ColumnFamilyDescriptor::new(PROPOSER_TREE_LEVEL_CF, proposer_tree_level_option);
+        let mut cfs: Vec<ColumnFamilyDescriptor> = vec![];
+        macro_rules! add_cf {
+            ($cf:expr) => {{
+                let cf_option = Options::default();
+                let cf = ColumnFamilyDescriptor::new($cf, cf_option);
+                cfs.push(cf);
+            }};
+            ($cf:expr, $merge_op:expr) => {{
+                let mut cf_option = Options::default();
+                cf_option.set_merge_operator(
+                    "mo",
+                    $merge_op,
+                    None
+                );
+                let cf = ColumnFamilyDescriptor::new($cf, cf_option);
+                cfs.push(cf);
+            }};
+        }
+        add_cf!(PROPOSER_NODE_LEVEL_CF);
+        add_cf!(VOTER_NODE_LEVEL_CF);
+        add_cf!(VOTER_NODE_CHAIN_CF);
+        add_cf!(VOTER_NODE_VOTED_LEVEL_CF);
+        add_cf!(PROPOSER_LEADER_SEQUENCE_CF);
+        add_cf!(PROPOSER_LEDGER_ORDER_CF);
+        add_cf!(PROPOSER_TREE_LEVEL_CF, h256_vec_append_merge);
+        add_cf!(PROPOSER_NODE_VOTE_CF, vote_vec_merge);
+        add_cf!(PARENT_NEIGHBOR_CF, h256_vec_append_merge);
+        add_cf!(VOTE_NEIGHBOR_CF, h256_vec_append_merge);
+        add_cf!(PROPOSER_VOTE_COUNT_CF, u64_plus_merge);
+        add_cf!(VOTER_PARENT_NEIGHBOR_CF, h256_vec_append_merge);
+        add_cf!(TRANSACTION_REF_NEIGHBOR_CF, h256_vec_append_merge);
+        add_cf!(PROPOSER_REF_NEIGHBOR_CF, h256_vec_append_merge);
 
-        let mut proposer_node_vote_option = Options::default();
-        proposer_node_vote_option.set_merge_operator("insert or remove vote", vote_vec_merge, None);
-        let proposer_node_vote_cf =
-            ColumnFamilyDescriptor::new(PROPOSER_NODE_VOTE_CF, proposer_node_vote_option);
-
-        let mut parent_neighbor_option = Options::default();
-        parent_neighbor_option.set_merge_operator("append H256 vec", h256_vec_append_merge, None);
-        let parent_neighbor_cf =
-            ColumnFamilyDescriptor::new(PARENT_NEIGHBOR_CF, parent_neighbor_option);
-
-        let mut vote_neighbor_option = Options::default();
-        vote_neighbor_option.set_merge_operator("append H256 vec", h256_vec_append_merge, None);
-        let vote_neighbor_cf = ColumnFamilyDescriptor::new(VOTE_NEIGHBOR_CF, vote_neighbor_option);
-
-        let mut proposer_vote_count_option = Options::default();
-        proposer_vote_count_option.set_merge_operator("add to u64", u64_plus_merge, None);
-        let proposer_vote_count_cf =
-            ColumnFamilyDescriptor::new(PROPOSER_VOTE_COUNT_CF, proposer_vote_count_option);
-
-        let mut voter_parent_neighbor_option = Options::default();
-        voter_parent_neighbor_option.set_merge_operator(
-            "append H256 vec",
-            h256_vec_append_merge,
-            None,
-        );
-        let voter_parent_neighbor_cf =
-            ColumnFamilyDescriptor::new(VOTER_PARENT_NEIGHBOR_CF, voter_parent_neighbor_option);
-
-        let mut transaction_ref_neighbor_option = Options::default();
-        transaction_ref_neighbor_option.set_merge_operator(
-            "append H256 vec",
-            h256_vec_append_merge,
-            None,
-        );
-        let transaction_ref_neighbor_cf = ColumnFamilyDescriptor::new(
-            TRANSACTION_REF_NEIGHBOR_CF,
-            transaction_ref_neighbor_option,
-        );
-
-        let mut proposer_ref_neighbor_option = Options::default();
-        proposer_ref_neighbor_option.set_merge_operator(
-            "append H256 vec",
-            h256_vec_append_merge,
-            None,
-        );
-        let proposer_ref_neighbor_cf =
-            ColumnFamilyDescriptor::new(PROPOSER_REF_NEIGHBOR_CF, proposer_ref_neighbor_option);
-
-        let cfs = vec![
-            proposer_node_level_cf,
-            voter_node_level_cf,
-            voter_node_chain_cf,
-            voter_node_voted_level_cf,
-            proposer_leader_sequence_cf,
-            proposer_ledger_order_cf,
-            proposer_tree_level_cf,
-            proposer_node_vote_cf,
-            parent_neighbor_cf,
-            vote_neighbor_cf,
-            proposer_vote_count_cf,
-            voter_parent_neighbor_cf,
-            transaction_ref_neighbor_cf,
-            proposer_ref_neighbor_cf,
-        ];
         let mut opts = Options::default();
         opts.create_if_missing(true);
         opts.create_missing_column_families(true);
