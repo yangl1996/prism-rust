@@ -2,6 +2,8 @@
 
 This directory holds the scripts for running experiments and reproducing the results in the paper.
 
+For a quick demo on how to reproduce out results, please check out this [screen recording](https://asciinema.org/a/YGz4dIkfKz4DrHLtVIGSfpmly).
+
 ## Setting Up
 
 ### Set Up AWS Account

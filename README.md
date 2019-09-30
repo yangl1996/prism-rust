@@ -22,5 +22,6 @@ The first build could take several mintues, mostly due to building RocksDB.
 
 ## Testbed and Reproducing
 
-The scripts used in the evaluation section of the paper are located in `/testbed`. `/testbed/README.md` provides instructions for running the experiments and reproducing the results.
+The scripts used in the evaluation section of the paper are located in `/testbed`. `/testbed/README.md` provides instructions for running the experiments and reproducing the results. Or, watch the screencast for a quick demo
 
+[![asciicast](https://asciinema.org/a/YGz4dIkfKz4DrHLtVIGSfpmly.svg)](https://asciinema.org/a/YGz4dIkfKz4DrHLtVIGSfpmly)
