@@ -739,7 +739,7 @@ impl BlockChain {
                     new_leader = Some(*block);
                 }
                 // In case of a tie, choose block with lower hash.
-                if max_vote_lcb == block_votes_lcb && new_leader.is_some() {
+                if (max_vote_lcb - block_votes_lcb).abs() < std::f32::EPSILON && new_leader.is_some() {
                     // TODO: is_some required?
                     if *block < new_leader.unwrap() {
                         new_leader = Some(*block);
@@ -763,7 +763,7 @@ impl BlockChain {
                             break;
                         }
                     //In case of a tie, choose block with lower hash.
-                    if max_vote_lcb == votes_lcb.get(p_block).unwrap() + remaining_votes
+                    if (max_vote_lcb - (votes_lcb.get(p_block).unwrap() + remaining_votes)).abs() < std::f32::EPSILON
                         && *p_block < new_leader.unwrap()
                         {
                             new_leader = None;
