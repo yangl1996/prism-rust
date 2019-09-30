@@ -246,7 +246,7 @@ impl Context {
                 let chain_id: usize = (FIRST_VOTER_INDEX + voter_chain) as usize;
                 let voter_parent = self.blockchain.best_voter(*voter_chain as usize);
                 if let Content::Voter(c) = &mut self.contents[chain_id] {
-                    if &voter_parent != &c.voter_parent {
+                    if voter_parent != c.voter_parent {
                         c.voter_parent = voter_parent;
                         // mark that we have shifted a vote
                         voter_shift = true;

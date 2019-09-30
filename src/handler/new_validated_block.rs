@@ -19,21 +19,18 @@ pub fn new_validated_block(
     PERFORMANCE_COUNTER.record_process_block(&block);
 
     // if this block is a transaction, remove transactions from mempool
-    match &block.content {
-        Content::Transaction(content) => {
-            let mut mempool = mempool.lock().unwrap();
-            for tx in &content.transactions {
-                mempool.remove_by_hash(&tx.hash());
-                // the inputs have been used here, so remove all transactions in the mempool that
-                // tries to use the input again.
-                for input in tx.input.iter() {
-                    mempool.remove_by_input(input);
-                }
+    if let Content::Transaction(content) =  &block.content {
+        let mut mempool = mempool.lock().unwrap();
+        for tx in &content.transactions {
+            mempool.remove_by_hash(&tx.hash());
+            // the inputs have been used here, so remove all transactions in the mempool that
+            // tries to use the input again.
+            for input in tx.input.iter() {
+                mempool.remove_by_input(input);
             }
-            drop(mempool);
         }
-        _ => (),
-    };
+        drop(mempool);
+    }
 
     // insert the new block into the blockchain
     chain.insert_block(&block).unwrap();

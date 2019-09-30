@@ -81,7 +81,7 @@ impl MemoryPool {
 
     /// Check whether the input of a tx is already recorded. If so, this tx is a double spend.
     /// When adding tx into mempool, should check this.
-    pub fn is_double_spend(&self, inputs: &Vec<Input>) -> bool {
+    pub fn is_double_spend(&self, inputs: &[Input]) -> bool {
         inputs.iter().any(|input| self.by_input.contains_key(input))
     }
 

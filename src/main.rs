@@ -414,16 +414,13 @@ fn main() {
     );
 
     // start the visualization server
-    match matches.value_of("visualization") {
-        Some(addr) => {
-            let addr = addr.parse::<net::SocketAddr>().unwrap_or_else(|e| {
-                error!("Error parsing visualization server socket address: {}", e);
-                process::exit(1);
-            });
-            info!("Starting visualization server at {}", &addr);
-            VisualizationServer::start(addr, &blockchain, &blockdb, &utxodb);
-        }
-        None => {}
+    if let Some(addr) = matches.value_of("visualization") {
+        let addr = addr.parse::<net::SocketAddr>().unwrap_or_else(|e| {
+            error!("Error parsing visualization server socket address: {}", e);
+            process::exit(1);
+        });
+        info!("Starting visualization server at {}", &addr);
+        VisualizationServer::start(addr, &blockchain, &blockdb, &utxodb);
     }
 
     loop {
