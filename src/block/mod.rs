@@ -63,15 +63,15 @@ impl Block {
 impl Hashable for Block {
     fn hash(&self) -> H256 {
         // TODO: we are only hashing the header here.
-        return self.header.hash();
+        self.header.hash()
     }
 }
 
 impl PayloadSize for Block {
     fn size(&self) -> usize {
-        return std::mem::size_of::<header::Header>()
+        std::mem::size_of::<header::Header>()
             + self.content.size()
-            + self.sortition_proof.len() * std::mem::size_of::<H256>();
+            + self.sortition_proof.len() * std::mem::size_of::<H256>()
     }
 }
 

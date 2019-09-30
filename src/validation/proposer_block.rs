@@ -27,7 +27,7 @@ pub fn get_missing_references(
         }
     }
 
-    return missing_blocks;
+    missing_blocks
 }
 
 pub fn check_ref_proposer_level(parent: &H256, content: &Content, blockchain: &BlockChain) -> bool {
@@ -38,5 +38,5 @@ pub fn check_ref_proposer_level(parent: &H256, content: &Content, blockchain: &B
             return false;
         }
     }
-    return true;
+    true
 }

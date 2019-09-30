@@ -63,7 +63,7 @@ impl Server {
             blockchain: Arc::clone(blockchain),
             blockdb: Arc::clone(blockdb),
             utxodb: Arc::clone(utxodb),
-            handle: handle,
+            handle,
         };
         thread::spawn(move || {
             for req in server.handle.incoming_requests() {

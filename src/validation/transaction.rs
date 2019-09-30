@@ -42,7 +42,7 @@ pub fn check_num_authorizations(transaction: &Transaction) -> bool {
     if !owners_match {
         return false;
     }
-    return true;
+    true
 }
 
 pub fn check_signature_batch(transactions: &[Transaction]) -> bool {
@@ -68,7 +68,7 @@ pub fn check_signature_batch(transactions: &[Transaction]) -> bool {
 
     // TODO: tune the batch size
     match ed25519_dalek::verify_batch(&messages, &signatures, &public_keys) {
-        Ok(()) => return true,
-        Err(_) => return false,
+        Ok(()) => true,
+        Err(_) => false,
     }
 }

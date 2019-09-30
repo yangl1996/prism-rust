@@ -126,16 +126,16 @@ pub fn new(
             extra_content: [0; 32],
             difficulty: *DEFAULT_DIFFICULTY,
         },
-        contents: contents,
-        content_merkle_tree: content_merkle_tree,
-        config: config,
+        contents,
+        content_merkle_tree,
+        config,
     };
 
     let handle = Handle {
         control_chan: signal_chan_sender,
     };
 
-    return (ctx, handle);
+    (ctx, handle)
 }
 
 impl Handle {
@@ -350,27 +350,25 @@ impl Context {
                         unreachable!();
                     }
                 }
-            } else {
-                if !new_voter_block.is_empty() {
-                    for voter_chain in 0..self.config.voter_chains {
-                        let chain_id: usize = (FIRST_VOTER_INDEX + voter_chain) as usize;
-                        let voter_parent = if let Content::Voter(c) = &self.contents[chain_id] {
-                            c.voter_parent
-                        } else {
-                            unreachable!();
-                        };
-                        if let Content::Voter(c) = &mut self.contents[chain_id] {
-                            c.votes = self
-                                .blockchain
-                                .unvoted_proposer(&voter_parent, &self.header.parent)
-                                .unwrap();
-                            touched_content.insert(chain_id as u16);
-                        } else {
-                            unreachable!();
-                        }
-                    }
-                }
-            }
+            } else if !new_voter_block.is_empty() {
+    for voter_chain in 0..self.config.voter_chains {
+        let chain_id: usize = (FIRST_VOTER_INDEX + voter_chain) as usize;
+        let voter_parent = if let Content::Voter(c) = &self.contents[chain_id] {
+            c.voter_parent
+        } else {
+            unreachable!();
+        };
+        if let Content::Voter(c) = &mut self.contents[chain_id] {
+            c.votes = self
+                .blockchain
+                .unvoted_proposer(&voter_parent, &self.header.parent)
+                .unwrap();
+            touched_content.insert(chain_id as u16);
+        } else {
+            unreachable!();
+        }
+    }
+}
 
             // update the difficulty
             self.header.difficulty = self.get_difficulty(&self.header.parent);
@@ -422,27 +420,14 @@ impl Context {
                             let empty = {
                                 match &mined_block.content {
                                     Content::Transaction(content) => {
-                                        if content.transactions.is_empty() {
-                                            true
-                                        } else {
-                                            false
-                                        }
+                                        content.transactions.is_empty()
                                     }
                                     Content::Voter(content) => {
-                                        if content.votes.is_empty() {
-                                            true
-                                        } else {
-                                            false
-                                        }
+                                        content.votes.is_empty()
                                     }
                                     Content::Proposer(content) => {
-                                        if content.transaction_refs.is_empty()
+                                        content.transaction_refs.is_empty()
                                             && content.proposer_refs.is_empty()
-                                        {
-                                            true
-                                        } else {
-                                            false
-                                        }
                                     }
                                 }
                             };
@@ -522,7 +507,7 @@ impl Context {
             sortition_proof,
         );
 
-        return mined_block;
+        mined_block
     }
 
     /// Calculate the difficulty for the block to be mined
@@ -532,10 +517,10 @@ impl Context {
         match self.blockdb.get(block_hash).unwrap() {
             // extract difficulty
             Some(b) => {
-                return b.header.difficulty;
+                b.header.difficulty
             }
             None => {
-                return *DEFAULT_DIFFICULTY;
+                *DEFAULT_DIFFICULTY
             }
         }
     }
@@ -551,7 +536,7 @@ fn get_time() -> u128 {
         Err(e) => println!("Error parsing time: {:?}", e),
     }
     // TODO: there should be a better way of handling this, or just unwrap and panic
-    return 0;
+    0
 }
 
 #[cfg(test)]

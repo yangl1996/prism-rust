@@ -41,10 +41,10 @@ impl BlockDatabase {
         opts.create_if_missing(true);
         opts.create_missing_column_families(true);
         let db = DB::open_cf_descriptors(&opts, path, cfs)?;
-        return Ok(BlockDatabase {
-            db: db,
+        Ok(BlockDatabase {
+            db,
             count: AtomicU64::new(0),
-        });
+        })
     }
 
     /// Create a new database at the given path, and initialize the content.
@@ -99,7 +99,7 @@ impl BlockDatabase {
         }
 
         db.count.store(counter, Ordering::Relaxed);
-        return Ok(db);
+        Ok(db)
     }
 
     /// Load database from a given path
@@ -108,7 +108,7 @@ impl BlockDatabase {
         config: BlockchainConfig,
     ) -> Result<Self, rocksdb::Error> {
         let db = Self::open(&path, config)?;
-        return Ok(db);
+        Ok(db)
     }
 
     /// Insert a new block to the database and returns the sequence number of the block.
@@ -124,7 +124,7 @@ impl BlockDatabase {
             .put_cf(block_arrival_order_cf, &counter.to_ne_bytes(), &hash)?;
         self.db
             .put_cf(block_sequence_number_cf, &hash, &counter.to_ne_bytes())?;
-        return Ok(counter);
+        Ok(counter)
     }
 
     pub fn insert_encoded(&self, hash: &H256, raw_block: &[u8]) -> Result<u64, rocksdb::Error> {
@@ -137,7 +137,7 @@ impl BlockDatabase {
             .put_cf(block_arrival_order_cf, &counter.to_ne_bytes(), &hash)?;
         self.db
             .put_cf(block_sequence_number_cf, &hash, &counter.to_ne_bytes())?;
-        return Ok(counter);
+        Ok(counter)
     }
 
     /// Get a block from the database.
@@ -145,8 +145,8 @@ impl BlockDatabase {
         let block_cf = self.db.cf_handle(BLOCK_CF).unwrap();
         let serialized = self.db.get_pinned_cf(block_cf, hash)?;
         match serialized {
-            None => return Ok(None),
-            Some(s) => return Ok(Some(deserialize(&s).unwrap())),
+            None => Ok(None),
+            Some(s) => Ok(Some(deserialize(&s).unwrap())),
         }
     }
 
@@ -156,15 +156,15 @@ impl BlockDatabase {
     ) -> Result<Option<rocksdb::DBPinnableSlice>, rocksdb::Error> {
         let block_cf = self.db.cf_handle(BLOCK_CF).unwrap();
         let serialized = self.db.get_pinned_cf(block_cf, hash)?;
-        return Ok(serialized);
+        Ok(serialized)
     }
 
     pub fn contains(&self, hash: &H256) -> Result<bool, rocksdb::Error> {
         let block_cf = self.db.cf_handle(BLOCK_CF).unwrap();
         let serialized = self.db.get_pinned_cf(block_cf, hash)?;
         match serialized {
-            None => return Ok(false),
-            Some(_) => return Ok(true),
+            None => Ok(false),
+            Some(_) => Ok(true),
         }
     }
 
@@ -178,17 +178,17 @@ impl BlockDatabase {
                 .try_into()
                 .unwrap(),
         ) + 1;
-        return BlocksInArrivalOrder {
+        BlocksInArrivalOrder {
             seq: start_seq,
             batch: batch_size,
             db: &self,
-        };
+        }
     }
 
     /// Get the number of blocks in the database.
     pub fn num_blocks(&self) -> u64 {
         let count = self.count.load(Ordering::Relaxed);
-        return count;
+        count
     }
 
     /// Get the hash of the latest block.
@@ -244,9 +244,9 @@ impl<'a> std::iter::Iterator for BlocksInArrivalOrder<'a> {
             this_batch += 1;
         }
         if result.is_empty() {
-            return None;
+            None
         } else {
-            return Some(result);
+            Some(result)
         }
     }
 }

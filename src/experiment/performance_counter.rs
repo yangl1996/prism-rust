@@ -94,7 +94,7 @@ pub struct Snapshot {
 
 impl Counter {
     pub fn new() -> Self {
-        return Self {
+        Self {
             generated_transactions: AtomicUsize::new(0),
             generated_transaction_bytes: AtomicUsize::new(0),
             generate_transaction_failures: AtomicUsize::new(0),
@@ -130,7 +130,7 @@ impl Counter {
             total_transaction_block_squared_confirmation_latency: AtomicUsize::new(0),
             proposer_main_chain_length: AtomicUsize::new(0),
             voter_main_chain_length_sum: AtomicIsize::new(0),
-        };
+        }
     }
 
     pub fn record_process_message(&self) {
@@ -307,7 +307,7 @@ impl Counter {
         } else {
             voter_main_chain_length_sum
         };
-        return Snapshot {
+        Snapshot {
             generated_transactions: self.generated_transactions.load(Ordering::Relaxed),
             generated_transaction_bytes: self.generated_transaction_bytes.load(Ordering::Relaxed),
             generate_transaction_failures: self
@@ -358,7 +358,7 @@ impl Counter {
             received_proposer_blocks: self.received_proposer_blocks.load(Ordering::Relaxed),
             received_voter_blocks: self.received_voter_blocks.load(Ordering::Relaxed),
             received_transaction_blocks: self.received_transaction_blocks.load(Ordering::Relaxed),
-            incoming_message_queue: incoming_message_queue,
+            incoming_message_queue,
             total_transaction_block_confirmation_latency: self
                 .total_transaction_block_confirmation_latency
                 .load(Ordering::Relaxed),
@@ -366,7 +366,7 @@ impl Counter {
                 .total_transaction_block_squared_confirmation_latency
                 .load(Ordering::Relaxed),
             proposer_main_chain_length: self.proposer_main_chain_length.load(Ordering::Relaxed),
-            voter_main_chain_length_sum: voter_main_chain_length_sum,
-        };
+            voter_main_chain_length_sum,
+        }
     }
 }

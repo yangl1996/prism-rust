@@ -70,7 +70,7 @@ impl MemoryPool {
 
     pub fn get(&self, h: &H256) -> Option<&Entry> {
         let entry = self.by_hash.get(h)?;
-        return Some(entry);
+        Some(entry)
     }
 
     /// Check whether a tx hash is in memory pool
@@ -92,7 +92,7 @@ impl MemoryPool {
         }
         self.by_storage_index.remove(&entry.storage_index);
         self.num_transactions -= 1;
-        return Some(entry);
+        Some(entry)
     }
 
     /// Remove a tx by its hash, also remove its recorded inputs

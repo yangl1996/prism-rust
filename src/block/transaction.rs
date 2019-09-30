@@ -22,7 +22,7 @@ impl PayloadSize for Content {
         for t in &self.transactions {
             total += t.size();
         }
-        return total;
+        total
     }
 }
 
@@ -30,7 +30,7 @@ impl Hashable for Content {
     fn hash(&self) -> H256 {
         // TODO: we are hashing txs in a merkle tree.
         let merkle_tree = MerkleTree::new(&self.transactions);
-        return merkle_tree.root();
+        merkle_tree.root()
     }
 }
 

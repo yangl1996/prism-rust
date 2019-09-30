@@ -35,7 +35,7 @@ impl MerkleTree {
                 this_layer_size += 1;
             }
             layer_size.push(this_layer_size);
-            this_layer_size = this_layer_size >> 1;
+            this_layer_size >>= 1;
         }
         let tree_size = layer_size.iter().sum();
 
@@ -73,17 +73,17 @@ impl MerkleTree {
             }
         }
 
-        return MerkleTree {
-            data_size: data_size,
-            nodes: nodes,
-        };
+        MerkleTree {
+            data_size,
+            nodes,
+        }
     }
 
     pub fn root(&self) -> H256 {
-        if self.nodes.len() == 0 {
-            return (&[0; 32]).into();
+        if self.nodes.is_empty() {
+            (&[0; 32]).into()
         } else {
-            return self.nodes[0];
+            self.nodes[0]
         }
     }
 
@@ -118,7 +118,7 @@ impl MerkleTree {
             } else {
                 layer_start - self.data_size[layer]
             };
-            index = index >> 1;
+            index >>= 1;
         }
         results
     }
@@ -187,7 +187,7 @@ impl MerkleTree {
                     layer_start - self.data_size[layer]
                 };
             }
-            index = index >> 1;
+            index >>= 1;
         }
     }
 }
@@ -209,7 +209,7 @@ pub fn verify(root: &H256, data: &H256, proof: &[H256], index: usize, leaf_size:
             this_layer_size += 1;
         }
         layer_size.push(this_layer_size);
-        this_layer_size = this_layer_size >> 1;
+        this_layer_size >>= 1;
     }
     //DELETE:println!("Verify, layer size len: {}, proof len: {}", layer_size.len(), proof.len());
     if layer_size.len() != proof.len() + 1 {
@@ -241,8 +241,8 @@ pub fn verify(root: &H256, data: &H256, proof: &[H256], index: usize, leaf_size:
         acc = digest.into();
         //DELETE:println!("\t= {}", acc);
         layer += 1;
-        layer_start = layer_start - layer_size[layer];
-        index = index >> 1;
+        layer_start -= layer_size[layer];
+        index >>= 1;
     }
     acc == *root
 }

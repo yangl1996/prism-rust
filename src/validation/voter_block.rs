@@ -27,7 +27,7 @@ pub fn get_missing_references(
         }
     }
 
-    return missing_blocks;
+    missing_blocks
 }
 
 pub fn check_chain_number(content: &Content, blockchain: &BlockChain) -> bool {

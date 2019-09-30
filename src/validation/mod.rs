@@ -133,9 +133,9 @@ pub fn check_data_availability(
     }
 
     if !missing.is_empty() {
-        return BlockResult::MissingReferences(missing);
+        BlockResult::MissingReferences(missing)
     } else {
-        return BlockResult::Pass;
+        BlockResult::Pass
     }
 }
 
@@ -152,7 +152,7 @@ pub fn check_content_semantic(
             if !proposer_block::check_ref_proposer_level(&parent, &content, blockchain) {
                 return BlockResult::WrongProposerRef;
             }
-            return BlockResult::Pass;
+            BlockResult::Pass
         }
         Content::Voter(content) => {
             // check chain number
@@ -163,7 +163,7 @@ pub fn check_content_semantic(
             if !voter_block::check_levels_voted(&content, blockchain, &parent) {
                 return BlockResult::WrongVoteLevel;
             }
-            return BlockResult::Pass;
+            BlockResult::Pass
         }
         Content::Transaction(content) => {
             // check each transaction
@@ -181,7 +181,7 @@ pub fn check_content_semantic(
             if !transaction::check_signature_batch(&content.transactions) {
                 return BlockResult::WrongSignature;
             }
-            return BlockResult::Pass;
+            BlockResult::Pass
         }
     }
 }
@@ -193,7 +193,7 @@ fn check_proposer_block_exists(hash: H256, blockchain: &BlockChain) -> bool {
         Ok(b) => b,
     };
 
-    return in_chain;
+    in_chain
 }
 
 /// Check whether a voter block exists in the block database and the blockchain.
@@ -203,7 +203,7 @@ fn check_voter_block_exists(hash: H256, blockchain: &BlockChain) -> bool {
         Ok(b) => b,
     };
 
-    return in_chain;
+    in_chain
 }
 
 /// Check whether a transaction block exists in the block database.
@@ -213,6 +213,6 @@ fn check_transaction_block_exists(hash: H256, blockchain: &BlockChain) -> bool {
         Ok(b) => b,
     };
 
-    return in_chain;
+    in_chain
 }
 

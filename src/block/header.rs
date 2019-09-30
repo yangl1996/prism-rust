@@ -43,7 +43,7 @@ impl Hashable for Header {
     fn hash(&self) -> H256 {
         let serialized = bincode::serialize(self).unwrap();
         let digest = ring::digest::digest(&ring::digest::SHA256, &serialized);
-        return digest.into();
+        digest.into()
     }
 }
 
@@ -80,8 +80,8 @@ pub mod tests {
     pub fn sample_header() -> Header {
         let parent_hash: H256 =
             (&hex!("0102010201020102010201020102010201020102010201020102010201020102")).into();
-        let timestamp: u128 = 7094730;
-        let nonce: u32 = 839782;
+        let timestamp: u128 = 7_094_730;
+        let nonce: u32 = 839_782;
         let content_root: H256 =
             (&hex!("deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")).into();
         let extra_content: [u8; 32] = [
@@ -101,12 +101,12 @@ pub mod tests {
             extra_content,
             difficulty,
         );
-        return header;
+        header
     }
 
     pub fn sample_header_hash_should_be() -> H256 {
         let header_hash_should_be =
             (&hex!("1d6e0f5f11248d070c6b15d103ead72a8802279c600a60b40b38510b582aacbf")).into(); // Calculated on Mar 15, 2019
-        return header_hash_should_be;
+        header_hash_should_be
     }
 }

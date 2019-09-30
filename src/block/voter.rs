@@ -29,9 +29,9 @@ impl Content {
 
 impl PayloadSize for Content {
     fn size(&self) -> usize {
-        return std::mem::size_of::<u16>()
+        std::mem::size_of::<u16>()
             + std::mem::size_of::<H256>()
-            + self.votes.len() * std::mem::size_of::<H256>();
+            + self.votes.len() * std::mem::size_of::<H256>()
     }
 }
 
@@ -43,7 +43,7 @@ impl Hashable for Content {
         bytes[..2].copy_from_slice(&self.chain_number.to_be_bytes());
         bytes[2..34].copy_from_slice(self.voter_parent.as_ref());
         bytes[34..66].copy_from_slice(merkle_tree.root().as_ref());
-        return ring::digest::digest(&ring::digest::SHA256, &bytes).into();
+        ring::digest::digest(&ring::digest::SHA256, &bytes).into()
     }
 }
 
@@ -57,7 +57,7 @@ pub fn genesis(chain_num: u16) -> Block {
     };
     // TODO: this block will definitely not pass validation. We depend on the fact that genesis
     // blocks are added to the system at initialization. Seems like a moderate hack.
-    return Block::new(
+    Block::new(
         all_zero.into(),
         0,
         0,
@@ -66,7 +66,7 @@ pub fn genesis(chain_num: u16) -> Block {
         BlockContent::Voter(content),
         all_zero,
         *DEFAULT_DIFFICULTY,
-    );
+    )
 }
 
 #[cfg(test)]

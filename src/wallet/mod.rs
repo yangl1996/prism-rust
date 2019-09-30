@@ -65,16 +65,16 @@ impl Wallet {
         db_opts.create_missing_column_families(true);
         db_opts.create_if_missing(true);
         let handle = rocksdb::DB::open_cf_descriptors(&db_opts, path, vec![coin_cf, keypair_cf])?;
-        return Ok(Self {
+        Ok(Self {
             db: handle,
             keypairs: Mutex::new(HashMap::new()),
             counter: AtomicUsize::new(0),
-        });
+        })
     }
 
     pub fn new<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
         rocksdb::DB::destroy(&rocksdb::Options::default(), &path)?;
-        return Self::open(path);
+        Self::open(path)
     }
 
     pub fn number_of_coins(&self) -> usize {
@@ -86,7 +86,7 @@ impl Wallet {
         let _cf = self.db.cf_handle(KEYPAIR_CF).unwrap();
         let mut csprng: OsRng = OsRng::new().unwrap();
         let keypair: Keypair = Keypair::generate(&mut csprng);
-        return self.load_keypair(keypair);
+        self.load_keypair(keypair)
     }
 
     pub fn load_keypair(&self, keypair: Keypair) -> Result<Address> {
@@ -189,7 +189,7 @@ impl Wallet {
         }
         // if we have enough money in our wallet, create tx
         // remove used coin from wallet
-        self.apply_diff(&vec![], &coins_to_use)?;
+        self.apply_diff(&[], &coins_to_use)?;
 
         // create the output
         let mut output = vec![Output { recipient, value }];
@@ -205,7 +205,7 @@ impl Wallet {
         let mut owners: Vec<Address> = inputs.iter().map(|input| input.owner).collect();
         let unsigned = Transaction {
             input: inputs,
-            output: output,
+            output,
             authorization: vec![],
             hash: RefCell::new(None),
         };

@@ -68,7 +68,7 @@ impl TransactionGenerator {
             value_distribution: ValueDistribution::Uniform(UniformValue { min: 50, max: 100 }),
             state: State::Paused,
         };
-        return (instance, tx);
+        (instance, tx)
     }
 
     fn handle_control_signal(&mut self, signal: ControlSignal) {

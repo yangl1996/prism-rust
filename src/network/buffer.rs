@@ -16,11 +16,11 @@ pub struct BlockBuffer {
 
 impl BlockBuffer {
     pub fn new() -> Self {
-        return Self {
+        Self {
             blocks: HashMap::new(),
             dependency: HashMap::new(),
             dependent: HashMap::new(),
-        };
+        }
     }
 
     /// Buffer a block whose parent and/or references are missing.
@@ -63,6 +63,6 @@ impl BlockBuffer {
                 }
             }
         }
-        return resolved_blocks;
+        resolved_blocks
     }
 }

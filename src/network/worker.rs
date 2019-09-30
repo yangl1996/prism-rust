@@ -53,7 +53,7 @@ pub fn new(
 ) -> Context {
     let ctx = Context {
         msg_chan: msg_src,
-        num_worker: num_worker,
+        num_worker,
         chain: Arc::clone(blockchain),
         blockdb: Arc::clone(blockdb),
         utxodb: Arc::clone(utxodb),
@@ -64,9 +64,9 @@ pub fn new(
         buffer: Arc::new(Mutex::new(BlockBuffer::new())),
         recent_blocks: Arc::new(Mutex::new(HashSet::new())),
         requested_blocks: Arc::new(Mutex::new(HashSet::new())),
-        config: config,
+        config,
     };
-    return ctx;
+    ctx
 }
 
 impl Context {
@@ -103,7 +103,7 @@ impl Context {
                             hashes_to_request.push(hash);
                         }
                     }
-                    if hashes_to_request.len() != 0 {
+                    if !hashes_to_request.is_empty() {
                         peer.write(Message::GetTransactions(hashes_to_request));
                     }
                 }
@@ -143,7 +143,7 @@ impl Context {
                         requested_blocks.insert(*hash);
                     }
                     drop(requested_blocks);
-                    if hashes_to_request.len() != 0 {
+                    if !hashes_to_request.is_empty() {
                         peer.write(Message::GetBlocks(hashes_to_request));
                     }
                 }

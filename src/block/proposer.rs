@@ -28,8 +28,8 @@ impl Content {
 
 impl PayloadSize for Content {
     fn size(&self) -> usize {
-        return std::mem::size_of::<H256>()
-            * (self.transaction_refs.len() + self.proposer_refs.len());
+        std::mem::size_of::<H256>()
+            * (self.transaction_refs.len() + self.proposer_refs.len())
     }
 }
 
@@ -40,7 +40,7 @@ impl Hashable for Content {
         let mut bytes = [0u8; 64];
         bytes[..32].copy_from_slice(tx_merkle_tree.root().as_ref());
         bytes[32..64].copy_from_slice(prop_merkle_tree.root().as_ref());
-        return ring::digest::digest(&ring::digest::SHA256, &bytes).into();
+        ring::digest::digest(&ring::digest::SHA256, &bytes).into()
     }
 }
 
@@ -52,7 +52,7 @@ pub fn genesis() -> Block {
     };
     let all_zero: [u8; 32] = [0; 32];
     // TODO: this will not pass validation.
-    return Block::new(
+    Block::new(
         all_zero.into(),
         0,
         0,
@@ -61,7 +61,7 @@ pub fn genesis() -> Block {
         BlockContent::Proposer(content),
         all_zero,
         *DEFAULT_DIFFICULTY,
-    );
+    )
 }
 
 #[cfg(test)]

@@ -23,13 +23,13 @@ pub fn new(
     let ctx = Context {
         peers: slab::Slab::new(),
         peer_list: vec![],
-        addr: addr,
+        addr,
         poll: mio::Poll::new()?,
         control_chan: control_signal_receiver,
         new_msg_chan: msg_sink,
         handle: handle.clone(),
     };
-    return Ok((ctx, handle));
+    Ok((ctx, handle))
 }
 
 pub struct Context {
@@ -48,10 +48,10 @@ impl Context {
         thread::spawn(move || {
             self.listen().unwrap_or_else(|e| {
                 error!("P2P server error: {}", e);
-                return;
+                
             });
         });
-        return Ok(());
+        Ok(())
     }
 
     /// Register a TCP stream in the event loop, and initialize peer context.
@@ -97,7 +97,7 @@ impl Context {
         // record the key of this peer
         self.peer_list.push(key);
         trace!("Registering peer with event token={}", key);
-        return Ok(handle);
+        Ok(handle)
     }
 
     /// Connect to a peer, and register this peer
@@ -106,7 +106,7 @@ impl Context {
         debug!("Establishing connection to peer {}", addr);
         let stream = std::net::TcpStream::connect(addr)?;
         let mio_stream = net::TcpStream::from_stream(stream)?;
-        return self.register(mio_stream, peer::Direction::Outgoing);
+        self.register(mio_stream, peer::Direction::Outgoing)
     }
 
     /// Accept an incoming peer and register it
@@ -124,7 +124,7 @@ impl Context {
                 error!("Error initializing incoming peer {}: {}", addr, e);
             }
         }
-        return Ok(());
+        Ok(())
     }
 
     fn process_control(&mut self, req: ControlSignal) -> std::io::Result<()> {
@@ -141,7 +141,7 @@ impl Context {
                 }
             }
         }
-        return Ok(());
+        Ok(())
     }
 
     fn register_write_interest(&mut self, peer_id: usize) -> std::io::Result<()> {
@@ -156,7 +156,7 @@ impl Context {
             mio::Ready::readable() | mio::Ready::writable(),
             mio::PollOpt::edge(),
         )?;
-        return Ok(());
+        Ok(())
     }
 
     fn process_readable(&mut self, peer_id: usize) -> std::io::Result<()> {
@@ -199,7 +199,7 @@ impl Context {
                 }
             }
         }
-        return Ok(());
+        Ok(())
     }
 
     fn process_writable(&mut self, peer_id: usize) -> std::io::Result<()> {
@@ -256,7 +256,7 @@ impl Context {
                 }
             }
         }
-        return Ok(());
+        Ok(())
     }
 
     /// The main event loop of the server.
@@ -377,13 +377,13 @@ impl Handle {
     pub fn connect(&self, addr: std::net::SocketAddr) -> std::io::Result<peer::Handle> {
         let (sender, receiver) = cbchannel::unbounded();
         let request = ConnectRequest {
-            addr: addr,
+            addr,
             result_chan: sender,
         };
         self.control_chan
             .send(ControlSignal::ConnectNewPeer(request))
             .unwrap();
-        return receiver.recv().unwrap();
+        receiver.recv().unwrap()
     }
 
     pub fn broadcast(&self, msg: message::Message) {

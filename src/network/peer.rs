@@ -33,7 +33,7 @@ impl ReadContext {
         match bytes_read {
             Ok(0) => {
                 trace!("Detected socket EOF");
-                return Ok(ReadResult::EOF);
+                Ok(ReadResult::EOF)
             }
             Ok(size) => {
                 trace!("Read {} bytes from socket", size);
@@ -52,7 +52,7 @@ impl ReadContext {
                                 self.buffer.resize(self.msg_length, 0);
                             }
                             trace!("Received message length={}", message_length);
-                            return Ok(ReadResult::Continue);
+                            Ok(ReadResult::Continue)
                         }
                         DecodeState::Payload => {
                             let new_payload: Vec<u8> = self.buffer[0..self.msg_length].to_vec();
@@ -60,15 +60,15 @@ impl ReadContext {
                             self.read_length = 0;
                             self.msg_length = std::mem::size_of::<u32>();
                             trace!("Received full message");
-                            return Ok(ReadResult::Message(new_payload));
+                            Ok(ReadResult::Message(new_payload))
                         }
                     }
                 } else {
-                    return Ok(ReadResult::Continue);
+                    Ok(ReadResult::Continue)
                 }
             }
             Err(e) => {
-                return Err(e);
+                Err(e)
             }
         }
     }
@@ -187,14 +187,14 @@ pub fn new(
         write_queue: write_sender,
     };
     let ctx = Context {
-        addr: addr,
-        stream: stream,
+        addr,
+        stream,
         reader: read_ctx,
         writer: write_ctx,
         handle: handle.clone(),
-        direction: direction,
+        direction,
     };
-    return Ok((ctx, handle));
+    Ok((ctx, handle))
 }
 
 #[derive(Copy, Clone)]
@@ -222,6 +222,6 @@ impl Handle {
         // TODO: return result
         let buffer = bincode::serialize(&msg).unwrap();
         self.write_queue.send(buffer);
-        return;
+        
     }
 }

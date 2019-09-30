@@ -126,7 +126,7 @@ pub fn dump_ledger(
     let dump = Dump {
         proposer: proposer_blocks,
     };
-    return serde_json::to_string_pretty(&dump).unwrap();
+    serde_json::to_string_pretty(&dump).unwrap()
 }
 
 pub fn dump_voter_timestamp(blockchain: &BlockChain, blockdb: &BlockDatabase) -> String {
@@ -177,5 +177,5 @@ pub fn dump_voter_timestamp(blockchain: &BlockChain, blockdb: &BlockDatabase) ->
             dump.push(format!("Chain {:7} only grows zero or one level.", chain));
         }
     }
-    return serde_json::to_string_pretty(&dump).unwrap();
+    serde_json::to_string_pretty(&dump).unwrap()
 }

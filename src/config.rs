@@ -75,7 +75,7 @@ impl BlockchainConfig {
             tx_thruput / tx_txs
         };
         let total_mining_rate: f32 =
-            proposer_rate + voter_rate * voter_chains as f32 + tx_mining_rate;
+            proposer_rate + voter_rate * f32::from(voter_chains) + tx_mining_rate;
         let proposer_width: u64 = {
             let precise: f32 = (proposer_rate / total_mining_rate) * SORTITION_PRECISION as f32;
             precise.ceil() as u64
@@ -85,32 +85,32 @@ impl BlockchainConfig {
             precise.ceil() as u64
         };
         let tx_width: u64 =
-            SORTITION_PRECISION - proposer_width - voter_width * voter_chains as u64;
+            SORTITION_PRECISION - proposer_width - voter_width * u64::from(voter_chains);
         let log_epsilon_confirm = log_epsilon * DECONFIRM_HEADROOM;
         let quantile_confirm: f32 =
-            (2.0 * log_epsilon_confirm - (2.0 * log_epsilon_confirm).ln() - (2.0 * 3.1416926 as f32).ln()).sqrt();
+            (2.0 * log_epsilon_confirm - (2.0 * log_epsilon_confirm).ln() - (2.0 * 3.141_692_6 as f32).ln()).sqrt();
         let quantile_deconfirm: f32 =
-            (2.0 * log_epsilon - (2.0 * log_epsilon).ln() - (2.0 * 3.1416926 as f32).ln()).sqrt();
-        return Self {
-            voter_chains: voter_chains,
-            tx_txs: tx_txs,
+            (2.0 * log_epsilon - (2.0 * log_epsilon).ln() - (2.0 * 3.141_692_6 as f32).ln()).sqrt();
+        Self {
+            voter_chains,
+            tx_txs,
             proposer_tx_refs: (tx_mining_rate / proposer_rate * PROPOSER_TX_REF_HEADROOM).ceil()
                 as u32,
             proposer_mining_rate: proposer_rate,
             voter_mining_rate: voter_rate,
-            tx_mining_rate: tx_mining_rate,
-            proposer_genesis: proposer_genesis,
+            tx_mining_rate,
+            proposer_genesis,
             voter_genesis: voter_genesis_hashes,
-            total_mining_rate: total_mining_rate,
+            total_mining_rate,
             total_sortition_width: SORTITION_PRECISION.into(),
             proposer_sortition_width: proposer_width.into(),
             voter_sortition_width: voter_width.into(),
             tx_sortition_width: tx_width.into(),
             adversary_ratio: adv_ratio,
-            log_epsilon: log_epsilon,
+            log_epsilon,
             quantile_epsilon_confirm: quantile_confirm,
             quantile_epsilon_deconfirm: quantile_deconfirm,
-        };
+        }
     }
 
     pub fn sortition_hash(&self, hash: &H256, difficulty: &H256) -> Option<u16> {

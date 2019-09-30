@@ -59,9 +59,9 @@ pub struct Transaction {
 impl PayloadSize for Transaction {
     /// Return the size in bytes
     fn size(&self) -> usize {
-        return self.input.len() * std::mem::size_of::<Input>()
+        self.input.len() * std::mem::size_of::<Input>()
             + self.output.len() * std::mem::size_of::<Output>()
-            + self.authorization.len() * std::mem::size_of::<Authorization>();
+            + self.authorization.len() * std::mem::size_of::<Authorization>()
     }
 }
 
@@ -76,7 +76,7 @@ impl Hashable for Transaction {
         let hash: H256 =
             ring::digest::digest(&ring::digest::SHA256, &serialize(self).unwrap()).into();
         *hash_mut = Some(hash);
-        return hash;
+        hash
     }
 }
 

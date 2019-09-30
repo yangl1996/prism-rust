@@ -81,7 +81,7 @@ impl Server {
     ) {
         let handle = HTTPServer::http(&addr).unwrap();
         let server = Self {
-            handle: handle,
+            handle,
             transaction_generator_handle: txgen_control_chan,
             miner: miner.clone(),
             wallet: Arc::clone(wallet),
@@ -292,7 +292,7 @@ impl Server {
                                     };
                                     transaction_generator::ArrivalDistribution::Uniform(
                                         transaction_generator::UniformArrival {
-                                            interval: interval,
+                                            interval,
                                         },
                                     )
                                 }
@@ -371,12 +371,12 @@ impl Server {
                                         respond_result!(
                                             req,
                                             false,
-                                            format!("min value is bigger than max value")
+                                            "min value is bigger than max value".to_string()
                                         );
                                         return;
                                     }
                                     transaction_generator::ValueDistribution::Uniform(
-                                        transaction_generator::UniformValue { min: min, max: max },
+                                        transaction_generator::UniformValue { min, max },
                                     )
                                 }
                                 d => {

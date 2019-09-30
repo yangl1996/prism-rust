@@ -96,18 +96,18 @@ impl BlockChain {
         }
 
         let blockchain_db = Self {
-            db: db,
+            db,
             proposer_best_level: Mutex::new(0),
-            voter_best: voter_best,
+            voter_best,
             unreferred_transactions: Mutex::new(HashSet::new()),
             unreferred_proposers: Mutex::new(HashSet::new()),
             unconfirmed_proposers: Mutex::new(HashSet::new()),
             proposer_ledger_tip: Mutex::new(0),
             voter_ledger_tips: Mutex::new(vec![H256::default(); config.voter_chains as usize]),
-            config: config,
+            config,
         };
 
-        return Ok(blockchain_db);
+        Ok(blockchain_db)
     }
 
     /// Destroy the existing database at the given path, create a new one, and initialize the content.
@@ -220,7 +220,7 @@ impl BlockChain {
         drop(voter_ledger_tips);
         db.db.write(wb)?;
 
-        return Ok(db);
+        Ok(db)
     }
 
     /// Insert a new block into the ledger. Returns the list of added transaction blocks and
@@ -404,7 +404,7 @@ impl BlockChain {
                 self.db.write(wb)?;
             }
         }
-        return Ok(());
+        Ok(())
     }
 
     pub fn update_ledger(&self) -> Result<(Vec<H256>, Vec<H256>)> {
@@ -627,9 +627,9 @@ impl BlockChain {
                 let t: Vec<H256> = get_value!(transaction_ref_neighbor_cf, block).unwrap();
                 added_transaction_blocks.extend(&t);
             }
-            return Ok((added_transaction_blocks, removed_transaction_blocks));
+            Ok((added_transaction_blocks, removed_transaction_blocks))
         } else {
-            return Ok((vec![], vec![]));
+            Ok((vec![], vec![]))
         }
     }
 
@@ -692,12 +692,12 @@ impl BlockChain {
             // calculate the average number of voter blocks mined after
             // a vote is casted. we use this as an estimator of honest mining
             // rate, and then derive the believed malicious mining rate
-            let avg_vote_blocks = total_vote_blocks as f32 / total_vote_count as f32;
+            let avg_vote_blocks = total_vote_blocks as f32 / f32::from(total_vote_count);
             // expected voter depth of an adversary
             let adversary_expected_vote_depth =
                 avg_vote_blocks / (1.0 - self.config.adversary_ratio)
                 * self.config.adversary_ratio;
-            let poisson = Poisson::new(adversary_expected_vote_depth as f64).unwrap();
+            let poisson = Poisson::new(f64::from(adversary_expected_vote_depth)).unwrap();
 
             // for each block calculate the lower bound on the number of votes
             let mut votes_lcb: HashMap<&H256, f32> = HashMap::new();
@@ -747,7 +747,7 @@ impl BlockChain {
                 }
             }
             // check if the lcb_vote of new_leader is bigger than second best ucb votes
-            let remaining_votes = self.config.voter_chains as f32 - total_votes_lcb;
+            let remaining_votes = f32::from(self.config.voter_chains) - total_votes_lcb;
 
             // if max_vote_lcb is lesser than the remaining_votes, then a private block could
             // get the remaining votes and become the leader block
@@ -857,7 +857,7 @@ impl BlockChain {
             from = get_value!(voter_parent_neighbor_cf, from);
             from_level -= 1;
         }
-        return Ok((added_votes, removed_votes));
+        Ok((added_votes, removed_votes))
     }
 
     pub fn best_proposer(&self) -> Result<H256> {
@@ -873,14 +873,14 @@ impl BlockChain {
                 .unwrap(),
         )
         .unwrap();
-        return Ok(blocks[0]);
+        Ok(blocks[0])
     }
 
     pub fn best_voter(&self, chain_num: usize) -> H256 {
         let voter_best = self.voter_best[chain_num].lock().unwrap();
         let hash = voter_best.0;
         drop(voter_best);
-        return hash;
+        hash
     }
 
     pub fn unreferred_proposers(&self) -> Vec<H256> {
@@ -889,7 +889,7 @@ impl BlockChain {
         let unreferred_proposers = self.unreferred_proposers.lock().unwrap();
         let list: Vec<H256> = unreferred_proposers.iter().cloned().collect();
         drop(unreferred_proposers);
-        return list;
+        list
     }
 
     pub fn unreferred_transactions(&self) -> Vec<H256> {
@@ -897,7 +897,7 @@ impl BlockChain {
         let unreferred_transactions = self.unreferred_transactions.lock().unwrap();
         let list: Vec<H256> = unreferred_transactions.iter().cloned().collect();
         drop(unreferred_transactions);
-        return list;
+        list
     }
 
     /// Get the list of unvoted proposer blocks that a voter chain should vote for, given the tip
@@ -959,7 +959,7 @@ impl BlockChain {
             }
             list.push(best_vote.unwrap().0); //Note: the last vote in list could be other proposer that at the same level of proposer_parent
         }
-        return Ok(list);
+        Ok(list)
     }
 
     /// Get the level of the proposer block
@@ -972,7 +972,7 @@ impl BlockChain {
                 .unwrap(),
         )
         .unwrap();
-        return Ok(level);
+        Ok(level)
     }
 
     /// Get the deepest voted level of a voter
@@ -986,7 +986,7 @@ impl BlockChain {
                 .unwrap(),
         )
         .unwrap();
-        return Ok(voted_level);
+        Ok(voted_level)
     }
 
     /// Get the chain number of the voter block
@@ -999,44 +999,44 @@ impl BlockChain {
                 .unwrap(),
         )
         .unwrap();
-        return Ok(chain);
+        Ok(chain)
     }
 
     /// Check whether the given proposer block exists in the database.
     pub fn contains_proposer(&self, hash: &H256) -> Result<bool> {
         let proposer_node_level_cf = self.db.cf_handle(PROPOSER_NODE_LEVEL_CF).unwrap();
-        return match self
+        match self
             .db
             .get_pinned_cf(proposer_node_level_cf, serialize(&hash).unwrap())?
         {
             Some(_) => Ok(true),
             None => Ok(false),
-        };
+        }
     }
 
     /// Check whether the given voter block exists in the database.
     pub fn contains_voter(&self, hash: &H256) -> Result<bool> {
         let voter_node_level_cf = self.db.cf_handle(VOTER_NODE_LEVEL_CF).unwrap();
-        return match self
+        match self
             .db
             .get_pinned_cf(voter_node_level_cf, serialize(&hash).unwrap())?
         {
             Some(_) => Ok(true),
             None => Ok(false),
-        };
+        }
     }
 
     /// Check whether the given transaction block exists in the database.
     // TODO: we can't tell whether it's is a transaction block!
     pub fn contains_transaction(&self, hash: &H256) -> Result<bool> {
         let parent_neighbor_cf = self.db.cf_handle(PARENT_NEIGHBOR_CF).unwrap();
-        return match self
+        match self
             .db
             .get_pinned_cf(parent_neighbor_cf, serialize(&hash).unwrap())?
         {
             Some(_) => Ok(true),
             None => Ok(false),
-        };
+        }
     }
 
     pub fn proposer_leaders(&self) -> Result<Vec<H256>> {
@@ -1055,7 +1055,7 @@ impl BlockChain {
                 None => unreachable!(),
             }
         }
-        return Ok(leaders);
+        Ok(leaders)
     }
 }
 
@@ -1126,9 +1126,9 @@ impl BlockChain {
                 }
                 None => unreachable!(),
             };
-            return Ok((proposer_bottom, proposer_tip, proposer_best_level));
+            Ok((proposer_bottom, proposer_tip, proposer_best_level))
         } else {
-            return Ok((H256::default(), H256::default(), 0));
+            Ok((H256::default(), H256::default(), 0))
         }
     }
 
@@ -1591,7 +1591,7 @@ fn vote_vec_merge(
         }
     }
     let result: Vec<u8> = serialize(&existing).unwrap();
-    return Some(result);
+    Some(result)
 }
 
 fn h256_vec_append_merge(
@@ -1610,7 +1610,7 @@ fn h256_vec_append_merge(
         }
     }
     let result: Vec<u8> = serialize(&existing).unwrap();
-    return Some(result);
+    Some(result)
 }
 
 fn u64_plus_merge(
@@ -1624,10 +1624,10 @@ fn u64_plus_merge(
     };
     for op in operands {
         let to_add: u64 = deserialize(op).unwrap();
-        existing = existing + to_add;
+        existing += to_add;
     }
     let result: Vec<u8> = serialize(&existing).unwrap();
-    return Some(result);
+    Some(result)
 }
 
 /*

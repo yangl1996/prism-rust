@@ -26,12 +26,12 @@ impl LedgerManager {
         utxodb: &Arc<UtxoDatabase>,
         wallet: &Arc<Wallet>,
     ) -> Self {
-        return Self {
+        Self {
             blockdb: Arc::clone(&blockdb),
             chain: Arc::clone(&chain),
             utxodb: Arc::clone(&utxodb),
             wallet: Arc::clone(&wallet),
-        };
+        }
     }
 
     pub fn start(self, buffer_size: usize, num_workers: usize) {
@@ -235,5 +235,5 @@ fn update_transaction_sequence(
             .collect();
         remove.append(&mut transactions);
     }
-    return (add, remove);
+    (add, remove)
 }

@@ -40,13 +40,13 @@ impl std::fmt::Debug for H256 {
 
 impl Hashable for H256 {
     fn hash(&self) -> H256 {
-        return ring::digest::digest(&ring::digest::SHA256, &self.0).into();
+        ring::digest::digest(&ring::digest::SHA256, &self.0).into()
     }
 }
 
 impl std::convert::AsRef<[u8]> for H256 {
     fn as_ref(&self) -> &[u8] {
-        return &self.0;
+        &self.0
     }
 }
 
@@ -54,7 +54,7 @@ impl std::convert::From<&[u8; 32]> for H256 {
     fn from(input: &[u8; 32]) -> H256 {
         let mut buffer: [u8; 32] = [0; 32];
         buffer[..].copy_from_slice(input);
-        return H256(buffer);
+        H256(buffer)
     }
 }
 
@@ -62,19 +62,19 @@ impl std::convert::From<&H256> for [u8; 32] {
     fn from(input: &H256) -> [u8; 32] {
         let mut buffer: [u8; 32] = [0; 32];
         buffer[..].copy_from_slice(&input.0);
-        return buffer;
+        buffer
     }
 }
 
 impl std::convert::From<[u8; 32]> for H256 {
     fn from(input: [u8; 32]) -> H256 {
-        return H256(input);
+        H256(input)
     }
 }
 
 impl std::convert::From<H256> for [u8; 32] {
     fn from(input: H256) -> [u8; 32] {
-        return input.0;
+        input.0
     }
 }
 
@@ -82,7 +82,7 @@ impl std::convert::From<ring::digest::Digest> for H256 {
     fn from(input: ring::digest::Digest) -> H256 {
         let mut raw_hash: [u8; 32] = [0; 32];
         raw_hash[0..32].copy_from_slice(input.as_ref());
-        return H256(raw_hash);
+        H256(raw_hash)
     }
 }
 
@@ -94,9 +94,9 @@ impl Ord for H256 {
         let other_lower = u128::from_be_bytes(other.0[16..32].try_into().unwrap());
         let higher = self_higher.cmp(&other_higher);
         match higher {
-            std::cmp::Ordering::Equal => return self_lower.cmp(&other_lower),
+            std::cmp::Ordering::Equal => self_lower.cmp(&other_lower),
             _ => {
-                return higher;
+                higher
             }
         }
     }
@@ -119,7 +119,7 @@ pub mod tests {
         let random_bytes: Vec<u8> = (0..32).map(|_| rng.gen_range(0, 255) as u8).collect();
         let mut raw_bytes = [0; 32];
         raw_bytes.copy_from_slice(&random_bytes);
-        return (&raw_bytes).into();
+        (&raw_bytes).into()
     }
 
     #[test]

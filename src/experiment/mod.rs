@@ -17,7 +17,7 @@ pub fn ico(
     num_coins: usize,
     value: u64,
 ) -> Result<(), rocksdb::Error> {
-    let recipients: Vec<(usize, H256)> = recipients.iter().map(|x| x.clone()).enumerate().collect();
+    let recipients: Vec<(usize, H256)> = recipients.iter().copied().enumerate().collect();
     let recipients = Arc::new(Mutex::new(recipients));
 
     // start a bunch of worker threads to commit those coins
@@ -36,7 +36,7 @@ pub fn ico(
             let mut write_opt = WriteOptions::default();
             write_opt.disable_wal(true);
             let output = Output {
-                value: value,
+                value,
                 recipient: recipient.1,
             };
             let output_raw = serialize(&output).unwrap();

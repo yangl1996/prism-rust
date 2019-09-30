@@ -31,7 +31,7 @@ impl UtxoDatabase {
         opts.set_max_write_buffer_number(32);
 
         let db = DB::open_cf_descriptors(&opts, path, cfs)?;
-        return Ok(Self { db: db });
+        Ok(Self { db })
     }
 
     /// Create a new database at the given path, and initialize the content.
@@ -39,7 +39,7 @@ impl UtxoDatabase {
         DB::destroy(&Options::default(), &path)?;
         let db = Self::open(&path)?;
 
-        return Ok(db);
+        Ok(db)
     }
 
     /// Check whether the given coin is in the UTXO set.
@@ -49,6 +49,7 @@ impl UtxoDatabase {
             Some(_) => return Ok(true),
             None => return Ok(false),
         };
+        unreachable!();
     }
 
     pub fn snapshot(&self) -> Result<Vec<u8>, rocksdb::Error> {
@@ -71,7 +72,7 @@ impl UtxoDatabase {
                 .map(|(&c, &k)| c ^ k)
                 .collect();
         }
-        return Ok(checksum);
+        Ok(checksum)
     }
 
     pub fn add_transaction(
@@ -116,7 +117,7 @@ impl UtxoDatabase {
         // commit to database
         for (idx, output) in t.output.iter().enumerate() {
             let id = CoinId {
-                hash: hash,
+                hash,
                 index: idx as u32,
             };
             batch.put(serialize(&id).unwrap(), serialize(&output).unwrap())?;
@@ -132,7 +133,7 @@ impl UtxoDatabase {
             PERFORMANCE_COUNTER.record_confirm_transaction(&t);
         }
 
-        return Ok((added_coins, removed_coins));
+        Ok((added_coins, removed_coins))
     }
 
     pub fn remove_transaction(
@@ -150,7 +151,7 @@ impl UtxoDatabase {
         // valid when it was originally added
         for (idx, _out) in t.output.iter().enumerate() {
             let id = CoinId {
-                hash: hash,
+                hash,
                 index: idx as u32,
             };
             let id_ser = serialize(&id).unwrap();
@@ -182,7 +183,7 @@ impl UtxoDatabase {
             PERFORMANCE_COUNTER.record_deconfirm_transaction(&t);
         }
 
-        return Ok((added_coins, removed_coins));
+        Ok((added_coins, removed_coins))
     }
 
     pub fn flush(&self) -> Result<(), rocksdb::Error> {
