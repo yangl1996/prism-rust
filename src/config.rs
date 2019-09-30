@@ -7,6 +7,7 @@ use bigint::uint::U256;
 const AVG_TX_SIZE: u32 = 168; // average size of a transaction (in Bytes)
 const PROPOSER_TX_REF_HEADROOM: f32 = 10.0;
 const SORTITION_PRECISION: u64 = std::u64::MAX;
+const DECONFIRM_HEADROOM: f32 = 1.05;
 
 // Chain IDs
 pub const PROPOSER_INDEX: u16 = 0;
@@ -36,6 +37,10 @@ pub struct BlockchainConfig {
     proposer_sortition_width: U256,
     voter_sortition_width: U256,
     tx_sortition_width: U256,
+    pub adversary_ratio: f32,
+    log_epsilon: f32,
+    pub quantile_epsilon_confirm: f32,
+    pub quantile_epsilon_deconfirm: f32,
 }
 
 impl BlockchainConfig {
@@ -45,6 +50,8 @@ impl BlockchainConfig {
         tx_throughput: u32,
         proposer_rate: f32,
         voter_rate: f32,
+        adv_ratio: f32,
+        log_epsilon: f32,
     ) -> Self {
         let tx_txs = tx_size / AVG_TX_SIZE;
         let proposer_genesis: H256 = {
@@ -82,6 +89,11 @@ impl BlockchainConfig {
         };
         let tx_width: u64 =
             SORTITION_PRECISION - proposer_width - voter_width * voter_chains as u64;
+        let log_epsilon_confirm = log_epsilon * DECONFIRM_HEADROOM;
+        let quantile_confirm: f32 =
+            (2.0 * log_epsilon_confirm - (2.0 * log_epsilon_confirm).ln() - (2.0 * 3.1416926 as f32).ln()).sqrt();
+        let quantile_deconfirm: f32 =
+            (2.0 * log_epsilon - (2.0 * log_epsilon).ln() - (2.0 * 3.1416926 as f32).ln()).sqrt();
         return Self {
             voter_chains: voter_chains,
             tx_txs: tx_txs,
@@ -97,6 +109,10 @@ impl BlockchainConfig {
             proposer_sortition_width: proposer_width.into(),
             voter_sortition_width: voter_width.into(),
             tx_sortition_width: tx_width.into(),
+            adversary_ratio: adv_ratio,
+            log_epsilon: log_epsilon,
+            quantile_epsilon_confirm: quantile_confirm,
+            quantile_epsilon_deconfirm: quantile_deconfirm,
         };
     }
 
@@ -121,13 +137,7 @@ impl BlockchainConfig {
     }
 }
 
-// Security parameters
-pub const ADVERSARY_MINING_POWER: f32 = 0.40; // the adversary power we want to tolerate
-pub const LOG_EPSILON: f32 = 20.0; // -ln(1-confirmation_guarantee)
-
 lazy_static! {
-    pub static ref QUANTILE_EPSILON: f32 =
-        (2.0 * LOG_EPSILON - (2.0 * LOG_EPSILON).ln() - (2.0 * 3.1416926 as f32).ln()).sqrt();
     pub static ref DEFAULT_DIFFICULTY: H256 = {
         let raw: [u8; 32] = [255; 32];
         raw.into()

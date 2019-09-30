@@ -340,7 +340,7 @@ impl BlockChain {
                 drop(unreferred_transactions);
 
                 debug!(
-                    "Adding proposer block {:8} at level {}",
+                    "Adding proposer block {:.8} at level {}",
                     block_hash, self_level
                 );
             }
@@ -388,7 +388,7 @@ impl BlockChain {
                 }
                 drop(voter_best);
                 debug!(
-                    "Adding voter block {:8} at chain {} level {}",
+                    "Adding voter block {:.8} at chain {} level {}",
                     block_hash, self_chain, self_level
                 );
             }
@@ -524,7 +524,7 @@ impl BlockChain {
 
             if new_leader != existing_leader {
                 match new_leader {
-                    Some(hash) => info!("New proposer leader selected for level {}: {:8}", level, hash),
+                    Some(hash) => info!("New proposer leader selected for level {}: {:.8}", level, hash),
                     None => warn!("Proposer leader deconfirmed for level {}", level),
                 }
                 // mark it's the beginning of the change
@@ -697,8 +697,8 @@ impl BlockChain {
             let avg_vote_blocks = total_vote_blocks as f32 / total_vote_count as f32;
             // expected voter depth of an adversary
             let adversary_expected_vote_depth =
-                avg_vote_blocks / (1.0 - ADVERSARY_MINING_POWER)
-                * ADVERSARY_MINING_POWER;
+                avg_vote_blocks / (1.0 - self.config.adversary_ratio)
+                * self.config.adversary_ratio;
             let poisson = Poisson::new(adversary_expected_vote_depth as f64).unwrap();
 
             // for each block calculate the lower bound on the number of votes
@@ -719,8 +719,8 @@ impl BlockChain {
                         // probability that the adversary has mined k blocks
                         let p1 = poisson.pmf(k) as f32;
                         // probability that the adversary will overtake 'depth-k' blocks
-                        let p2 = ((ADVERSARY_MINING_POWER)
-                                  / (1.0 - ADVERSARY_MINING_POWER))
+                        let p2 = (self.config.adversary_ratio
+                                  / (1.0 - self.config.adversary_ratio))
                             .powi((depth - k + 1) as i32);
                         p += p1 * p2;
                     }
@@ -729,7 +729,7 @@ impl BlockChain {
                 }
                 // using gaussian approximation
                 let tmp =
-                    block_votes_mean - (block_votes_variance).sqrt() * (*QUANTILE_EPSILON);
+                    block_votes_mean - (block_votes_variance).sqrt() * self.config.quantile_epsilon_confirm;
                 if tmp > 0.0 {
                     block_votes_lcb += tmp;
                 }

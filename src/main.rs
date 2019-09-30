@@ -54,6 +54,8 @@ fn main() {
      (@arg tx_block_size: --("tx-block-size") [INT] default_value("64000") "Sets the maximum size of the transaction block in Bytes")
      (@arg proposer_mining_rate: --("proposer-mining-rate") [FLOAT] default_value("0.1") "Sets the proposer chain mining rate")
      (@arg voter_mining_rate: --("voter-mining-rate") [FLOAT] default_value("0.1") "Sets the voter chain mining rate")
+     (@arg adv_ratio: --("adversary-ratio") [FLOAT] default_value("0.4") "Sets the ratio of adversary hashing power")
+     (@arg log_epsilon: --("confirm-confidence") [FLOAT] default_value("20.0") "Sets -log(epsilon) for confirmation")
 
      (@subcommand keygen =>
       (about: "Generates Prism wallet key pair")
@@ -88,10 +90,10 @@ fn main() {
     stderrlog::new().verbosity(verbosity).init().unwrap();
 
     // init config struct
-    let voter_chains = matches
+    let voter_chains: u16 = matches
         .value_of("voter_chains")
         .unwrap()
-        .parse::<u16>()
+        .parse()
         .unwrap_or_else(|e| {
             error!("Error parsing voter chain number: {}", e);
             process::exit(1);
@@ -128,12 +130,30 @@ fn main() {
             error!("Error parsing voter chain mining rate: {}", e);
             process::exit(1);
         });
+    let adv_ratio = matches
+        .value_of("adv_ratio")
+        .unwrap()
+        .parse::<f32>()
+        .unwrap_or_else(|e| {
+            error!("Error parsing adversary power ratio: {}", e);
+            process::exit(1);
+        });
+    let log_epsilon = matches
+        .value_of("log_epsilon")
+        .unwrap()
+        .parse::<f32>()
+        .unwrap_or_else(|e| {
+            error!("Error parsing confirm confidence: {}", e);
+            process::exit(1);
+        });
     let config = BlockchainConfig::new(
         voter_chains,
         tx_blk_size,
         tx_throughput,
         proposer_mining_rate,
         voter_mining_rate,
+        adv_ratio,
+        log_epsilon
     );
     info!(
         "Proposer block mining rate set to {} blks/s",
