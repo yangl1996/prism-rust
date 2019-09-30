@@ -103,7 +103,7 @@ impl BlockchainConfig {
         if hash < proposer_width {
             Some(PROPOSER_INDEX)
         }
-        else if hash < transaction_width {
+        else if hash < (transaction_width + proposer_width) {
             Some(TRANSACTION_INDEX)
         }
         else if hash < difficulty {
