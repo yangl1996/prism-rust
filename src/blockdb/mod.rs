@@ -24,7 +24,7 @@ impl BlockDatabase {
     /// Open the database at the given path, and create a new one if missing.
     fn open<P: AsRef<std::path::Path>>(
         path: P,
-        config: BlockchainConfig,
+        _config: BlockchainConfig,
     ) -> Result<Self, rocksdb::Error> {
         let mut opts = Options::default();
         opts.set_prefix_extractor(SliceTransform::create_fixed_prefix(32));
