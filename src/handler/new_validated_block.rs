@@ -7,8 +7,6 @@ use crate::miner::memory_pool::MemoryPool;
 
 use crate::network::server::Handle as ServerHandle;
 
-
-
 use std::sync::Mutex;
 
 pub fn new_validated_block(

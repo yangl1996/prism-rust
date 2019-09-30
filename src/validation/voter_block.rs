@@ -1,12 +1,10 @@
-
 use super::{check_proposer_block_exists, check_voter_block_exists};
 use crate::block::voter::Content;
-
 
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
 
-use crate::crypto::hash::{H256};
+use crate::crypto::hash::H256;
 
 pub fn get_missing_references(
     content: &Content,

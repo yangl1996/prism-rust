@@ -50,15 +50,8 @@ impl Hashable for Header {
 #[cfg(test)]
 pub mod tests {
     use super::super::header::Header;
-    
-    
-    
-    
-    
 
     use crate::crypto::hash::{Hashable, H256};
-    
-    
 
     ///The hash should match
     #[test]

@@ -1,9 +1,7 @@
-
 use crate::transaction::{Address, Transaction};
 
 use ed25519_dalek::PublicKey;
 use ed25519_dalek::Signature;
-
 
 /// Checks that input and output are non-empty
 pub fn check_non_empty(transaction: &Transaction) -> bool {

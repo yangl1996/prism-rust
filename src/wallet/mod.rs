@@ -1,7 +1,6 @@
-
 use crate::transaction::{Address, Authorization, CoinId, Input, Output, Transaction};
-use bincode::{serialize};
-use ed25519_dalek::{Keypair};
+use bincode::serialize;
+use ed25519_dalek::Keypair;
 use rand::rngs::OsRng;
 
 use std::cell::RefCell;

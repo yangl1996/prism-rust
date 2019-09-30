@@ -1,10 +1,10 @@
 use super::message;
+use log::trace;
 use mio;
 use mio_extras::channel;
+use std::convert::TryInto;
 use std::io::{Read, Write};
 use std::sync::mpsc;
-use log::trace;
-use std::convert::TryInto;
 
 enum DecodeState {
     Length,
@@ -43,7 +43,8 @@ impl ReadContext {
                     // buffer filled, process the buffer
                     match self.state {
                         DecodeState::Length => {
-                            let message_length = u32::from_be_bytes(self.buffer[0..4].try_into().unwrap());
+                            let message_length =
+                                u32::from_be_bytes(self.buffer[0..4].try_into().unwrap());
                             self.state = DecodeState::Payload;
                             self.read_length = 0;
                             self.msg_length = message_length as usize;
@@ -134,7 +135,8 @@ impl WriteContext {
                         // encode the message and the length
                         self.msg_buffer = msg;
                         self.msg_length = self.msg_buffer.len();
-                        self.len_buffer[..4].copy_from_slice(&(self.msg_length as u32).to_be_bytes());
+                        self.len_buffer[..4]
+                            .copy_from_slice(&(self.msg_length as u32).to_be_bytes());
                         self.written_length = 0;
                         self.state = WriteState::Length;
                         continue;

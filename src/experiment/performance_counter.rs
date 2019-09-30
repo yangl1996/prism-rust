@@ -3,9 +3,9 @@ use crate::block::Content as BlockContent;
 
 use crate::transaction::Transaction;
 use crate::wallet::WalletError;
+use log::debug;
 use std::sync::atomic::{AtomicIsize, AtomicUsize, Ordering};
 use std::time::SystemTime;
-use log::debug;
 
 lazy_static! {
     pub static ref PERFORMANCE_COUNTER: Counter = { Counter::new() };

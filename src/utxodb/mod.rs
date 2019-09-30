@@ -1,4 +1,3 @@
-
 use crate::crypto::hash::H256;
 use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 use crate::transaction::{Address, CoinId, Output, Transaction};
@@ -194,10 +193,4 @@ impl UtxoDatabase {
 }
 
 #[cfg(test)]
-mod test {
-    
-    
-    
-    
-    
-}
+mod test {}

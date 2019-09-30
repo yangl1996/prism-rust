@@ -1,9 +1,10 @@
 use super::buffer::BlockBuffer;
-use super::message::{Message};
+use super::message::Message;
 use super::peer;
 use crate::block::{Block, Content};
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
+use crate::config::*;
 use crate::crypto::hash::{Hashable, H256};
 use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 use crate::handler::new_transaction;
@@ -17,8 +18,6 @@ use crate::wallet::Wallet;
 use crossbeam::channel;
 use log::{debug, warn};
 use std::collections::HashSet;
-use crate::config::*;
-
 
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -50,7 +49,7 @@ pub fn new(
     mempool: &Arc<Mutex<MemoryPool>>,
     ctx_update_sink: channel::Sender<ContextUpdateSignal>,
     server: &ServerHandle,
-    config: BlockchainConfig
+    config: BlockchainConfig,
 ) -> Context {
     let ctx = Context {
         msg_chan: msg_src,
@@ -263,7 +262,8 @@ impl Context {
                         }
 
                         // check sortition proof and content semantics
-                        let sortition_proof = validation::check_sortition_proof(&block, &self.config);
+                        let sortition_proof =
+                            validation::check_sortition_proof(&block, &self.config);
                         match sortition_proof {
                             BlockResult::Pass => {}
                             _ => {

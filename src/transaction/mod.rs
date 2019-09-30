@@ -2,9 +2,8 @@ use crate::crypto::hash::{Hashable, H256};
 use crate::experiment::performance_counter::PayloadSize;
 use bincode::serialize;
 
-
 use std::cell::RefCell;
-use std::hash::{Hash};
+use std::hash::Hash;
 
 /// A unique identifier of a transaction output, a.k.a. a coin.
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq, Hash)]

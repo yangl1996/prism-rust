@@ -1,4 +1,3 @@
-
 use crate::crypto::hash::H256;
 use crate::transaction::Transaction;
 

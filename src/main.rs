@@ -3,10 +3,11 @@ extern crate clap;
 
 use crossbeam::channel;
 use ed25519_dalek::Keypair;
-use log::{error, info, debug};
+use log::{debug, error, info};
 use prism::api::Server as ApiServer;
 use prism::blockchain::BlockChain;
 use prism::blockdb::BlockDatabase;
+use prism::config::BlockchainConfig;
 use prism::crypto::hash::H256;
 use prism::experiment::transaction_generator::TransactionGenerator;
 use prism::ledger_manager::LedgerManager;
@@ -25,7 +26,6 @@ use std::process;
 use std::sync::Arc;
 use std::thread;
 use std::time;
-use prism::config::BlockchainConfig;
 
 fn main() {
     // parse command line arguments
@@ -128,10 +128,25 @@ fn main() {
             error!("Error parsing voter chain mining rate: {}", e);
             process::exit(1);
         });
-    let config = BlockchainConfig::new(voter_chains, tx_blk_size, tx_throughput, proposer_mining_rate, voter_mining_rate);
-    info!("Proposer block mining rate set to {} blks/s", config.proposer_mining_rate);
-    info!("Voter block mining rate set to {} blks/s per chain, {} chains", config.proposer_mining_rate, config.voter_chains);
-    info!("Transaction block mining rate set to {} blks/s", config.tx_mining_rate);
+    let config = BlockchainConfig::new(
+        voter_chains,
+        tx_blk_size,
+        tx_throughput,
+        proposer_mining_rate,
+        voter_mining_rate,
+    );
+    info!(
+        "Proposer block mining rate set to {} blks/s",
+        config.proposer_mining_rate
+    );
+    info!(
+        "Voter block mining rate set to {} blks/s per chain, {} chains",
+        config.proposer_mining_rate, config.voter_chains
+    );
+    info!(
+        "Transaction block mining rate set to {} blks/s",
+        config.tx_mining_rate
+    );
 
     // init mempool
     let mempool_size = matches
@@ -147,7 +162,8 @@ fn main() {
     debug!("Initialized mempool, maximum size set to {}", mempool_size);
 
     // init block database
-    let blockdb = BlockDatabase::new(&matches.value_of("block_db").unwrap(), config.clone()).unwrap();
+    let blockdb =
+        BlockDatabase::new(&matches.value_of("block_db").unwrap(), config.clone()).unwrap();
     let blockdb = Arc::new(blockdb);
     debug!("Initialized block database");
 
@@ -157,7 +173,8 @@ fn main() {
     debug!("Initialized UTXO database");
 
     // init blockchain database
-    let blockchain = BlockChain::new(&matches.value_of("blockchain_db").unwrap(), config.clone()).unwrap();
+    let blockchain =
+        BlockChain::new(&matches.value_of("blockchain_db").unwrap(), config.clone()).unwrap();
     let blockchain = Arc::new(blockchain);
     debug!("Initialized blockchain database");
 
@@ -213,7 +230,10 @@ fn main() {
         });
     let ledger_manager = LedgerManager::new(&blockdb, &blockchain, &utxodb, &wallet);
     ledger_manager.start(tx_buffer, tx_workers);
-    debug!("Initialized ledger manager with buffer size {} and {} workers", tx_buffer, tx_workers);
+    debug!(
+        "Initialized ledger manager with buffer size {} and {} workers",
+        tx_buffer, tx_workers
+    );
 
     // parse p2p server address
     let p2p_addr = matches
@@ -263,7 +283,7 @@ fn main() {
         &mempool,
         ctx_tx,
         &server,
-        config.clone()
+        config.clone(),
     );
     worker_ctx.start();
 

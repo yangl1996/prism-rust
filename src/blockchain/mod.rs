@@ -13,7 +13,6 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ops::Range;
 use std::sync::Mutex;
 
-
 // Column family names for node/chain metadata
 const PROPOSER_NODE_LEVEL_CF: &str = "PROPOSER_NODE_LEVEL"; // hash to node level (u64)
 const VOTER_NODE_LEVEL_CF: &str = "VOTER_NODE_LEVEL"; // hash to node level (u64)
@@ -56,7 +55,6 @@ impl BlockChain {
     /// This function also populates the metadata fields with default values, and those
     /// fields must be initialized later.
     fn open<P: AsRef<std::path::Path>>(path: P, config: BlockchainConfig) -> Result<Self> {
-
         let mut cfs: Vec<ColumnFamilyDescriptor> = vec![];
         macro_rules! add_cf {
             ($cf:expr) => {{
@@ -66,11 +64,7 @@ impl BlockChain {
             }};
             ($cf:expr, $merge_op:expr) => {{
                 let mut cf_option = Options::default();
-                cf_option.set_merge_operator(
-                    "mo",
-                    $merge_op,
-                    None
-                );
+                cf_option.set_merge_operator("mo", $merge_op, None);
                 let cf = ColumnFamilyDescriptor::new($cf, cf_option);
                 cfs.push(cf);
             }};

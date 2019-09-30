@@ -1,8 +1,8 @@
-use crate::crypto::hash::H256;
-use bigint::uint::U256;
+use crate::block;
 use crate::block::proposer;
 use crate::block::voter;
-use crate::block;
+use crate::crypto::hash::H256;
+use bigint::uint::U256;
 
 const AVG_TX_SIZE: u32 = 168; // average size of a transaction (in Bytes)
 const PROPOSER_TX_REF_HEADROOM: f32 = 10.0;
@@ -39,10 +39,15 @@ pub struct BlockchainConfig {
 }
 
 impl BlockchainConfig {
-    pub fn new(voter_chains: u16, tx_size: u32, tx_throughput: u32, proposer_rate: f32,
-               voter_rate: f32) -> Self {
+    pub fn new(
+        voter_chains: u16,
+        tx_size: u32,
+        tx_throughput: u32,
+        proposer_rate: f32,
+        voter_rate: f32,
+    ) -> Self {
         let tx_txs = tx_size / AVG_TX_SIZE;
-        let proposer_genesis: H256 = { 
+        let proposer_genesis: H256 = {
             let mut raw_hash: [u8; 32] = [0; 32];
             let bytes = PROPOSER_INDEX.to_be_bytes();
             raw_hash[30] = bytes[0];
@@ -65,8 +70,8 @@ impl BlockchainConfig {
             let tx_txs: f32 = tx_txs as f32;
             tx_thruput / tx_txs
         };
-        let total_mining_rate: f32 = proposer_rate + voter_rate * voter_chains as f32
-            + tx_mining_rate;
+        let total_mining_rate: f32 =
+            proposer_rate + voter_rate * voter_chains as f32 + tx_mining_rate;
         let proposer_width: u64 = {
             let precise: f32 = (proposer_rate / total_mining_rate) * SORTITION_PRECISION as f32;
             precise.ceil() as u64
@@ -75,11 +80,13 @@ impl BlockchainConfig {
             let precise: f32 = (voter_rate / total_mining_rate) * SORTITION_PRECISION as f32;
             precise.ceil() as u64
         };
-        let tx_width: u64 = SORTITION_PRECISION - proposer_width - voter_width * voter_chains as u64;
+        let tx_width: u64 =
+            SORTITION_PRECISION - proposer_width - voter_width * voter_chains as u64;
         return Self {
             voter_chains: voter_chains,
             tx_txs: tx_txs,
-            proposer_tx_refs: (tx_mining_rate / proposer_rate * PROPOSER_TX_REF_HEADROOM).ceil() as u32,
+            proposer_tx_refs: (tx_mining_rate / proposer_rate * PROPOSER_TX_REF_HEADROOM).ceil()
+                as u32,
             proposer_mining_rate: proposer_rate,
             voter_mining_rate: voter_rate,
             tx_mining_rate: tx_mining_rate,
@@ -97,25 +104,22 @@ impl BlockchainConfig {
         let hash = U256::from_big_endian(hash.as_ref());
         let difficulty = U256::from_big_endian(difficulty.as_ref());
         let multiplier = difficulty / self.total_sortition_width;
-        
+
         let proposer_width = multiplier * self.proposer_sortition_width;
-        let transaction_width = multiplier * (self.proposer_sortition_width + self.tx_sortition_width);
+        let transaction_width =
+            multiplier * (self.proposer_sortition_width + self.tx_sortition_width);
         if hash < proposer_width {
             Some(PROPOSER_INDEX)
-        }
-        else if hash < (transaction_width + proposer_width) {
+        } else if hash < (transaction_width + proposer_width) {
             Some(TRANSACTION_INDEX)
-        }
-        else if hash < difficulty {
+        } else if hash < difficulty {
             let voter_idx = (hash - proposer_width - transaction_width) % self.voter_chains.into();
             Some(voter_idx.as_u32() as u16 + FIRST_VOTER_INDEX)
-        }
-        else {
+        } else {
             None
         }
     }
 }
-
 
 // Security parameters
 pub const NETWORK_DELAY: f32 = 1.4; // the expected block propagation delay (in seconds)
@@ -123,11 +127,11 @@ pub const ADVERSARY_MINING_POWER: f32 = 0.40; // the adversary power we want to 
 pub const LOG_EPSILON: f32 = 20.0; // -ln(1-confirmation_guarantee)
 pub const ALPHA: f32 = 0.1;
 // FIXME
-    //(VOTER_CHAIN_MINING_RATE * NETWORK_DELAY) / (1.0 + VOTER_CHAIN_MINING_RATE * NETWORK_DELAY); // alpha = orphan blocks / total blocks
+//(VOTER_CHAIN_MINING_RATE * NETWORK_DELAY) / (1.0 + VOTER_CHAIN_MINING_RATE * NETWORK_DELAY); // alpha = orphan blocks / total blocks
 
 lazy_static! {
-    pub static ref QUANTILE_EPSILON: f32 = (2.0 * LOG_EPSILON - (2.0 * LOG_EPSILON).ln() - (2.0 * 3.1416926 as f32).ln()).sqrt();
-
+    pub static ref QUANTILE_EPSILON: f32 =
+        (2.0 * LOG_EPSILON - (2.0 * LOG_EPSILON).ln() - (2.0 * 3.1416926 as f32).ln()).sqrt();
     pub static ref DEFAULT_DIFFICULTY: H256 = {
         let raw: [u8; 32] = [255; 32];
         raw.into()

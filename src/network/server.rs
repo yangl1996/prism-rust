@@ -2,7 +2,7 @@ use super::message;
 use super::peer::{self, ReadResult, WriteResult};
 use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 use crossbeam::channel as cbchannel;
-use log::{debug, error, info, warn, trace};
+use log::{debug, error, info, trace, warn};
 use mio::{self, net};
 use mio_extras::channel;
 use std::sync::mpsc;
@@ -110,17 +110,18 @@ impl Context {
     }
 
     /// Accept an incoming peer and register it
-    fn accept(&mut self, stream: net::TcpStream, addr: std::net::SocketAddr) -> std::io::Result<()> {
+    fn accept(
+        &mut self,
+        stream: net::TcpStream,
+        addr: std::net::SocketAddr,
+    ) -> std::io::Result<()> {
         debug!("New incoming connection from {}", addr);
         match self.register(stream, peer::Direction::Incoming) {
             Ok(_) => {
                 info!("Connected to incoming peer {}", addr);
             }
             Err(e) => {
-                error!(
-                    "Error initializing incoming peer {}: {}",
-                    addr, e
-                    );
+                error!("Error initializing incoming peer {}: {}", addr, e);
             }
         }
         return Ok(());
@@ -154,7 +155,7 @@ impl Context {
             socket_token,
             mio::Ready::readable() | mio::Ready::writable(),
             mio::PollOpt::edge(),
-            )?;
+        )?;
         return Ok(());
     }
 
@@ -179,9 +180,7 @@ impl Context {
                 Ok(ReadResult::Message(m)) => {
                     trace!("Peer {} yield message", peer_id);
                     // we just received a full message
-                    self.new_msg_chan
-                        .send((m, peer.handle.clone()))
-                        .unwrap();
+                    self.new_msg_chan.send((m, peer.handle.clone())).unwrap();
                     PERFORMANCE_COUNTER.record_receive_message();
                     continue;
                 }
@@ -191,10 +190,7 @@ impl Context {
                         // socket is not ready anymore, stop reading
                         break;
                     } else {
-                        warn!(
-                            "Error reading peer {}, disconnecting: {}",
-                            peer.addr, e
-                            );
+                        warn!("Error reading peer {}, disconnecting: {}", peer.addr, e);
                         self.peers.remove(peer_id);
                         let index = self.peer_list.iter().position(|&x| x == peer_id).unwrap();
                         self.peer_list.swap_remove(index);
@@ -220,14 +216,14 @@ impl Context {
                     socket_token,
                     mio::Ready::readable(),
                     mio::PollOpt::edge(),
-                    )?;
+                )?;
                 // we're interested in write queue again.
                 self.poll.reregister(
                     &peer.writer.queue,
                     writer_token,
                     mio::Ready::readable(),
                     mio::PollOpt::edge() | mio::PollOpt::oneshot(),
-                    )?;
+                )?;
             }
             Ok(WriteResult::EOF) => {
                 // EOF, remove it from the connections set
@@ -245,18 +241,15 @@ impl Context {
                     socket_token,
                     mio::Ready::readable(),
                     mio::PollOpt::edge(),
-                    )?;
+                )?;
                 self.poll.deregister(&peer.writer.queue)?;
             }
             Err(e) => {
                 if e.kind() == std::io::ErrorKind::WouldBlock {
                     trace!("Peer {} finished writing", peer_id);
-                    // socket is not ready anymore, stop reading
+                // socket is not ready anymore, stop reading
                 } else {
-                    warn!(
-                        "Error writing peer {}, disconnecting: {}",
-                        peer.addr, e
-                        );
+                    warn!("Error writing peer {}, disconnecting: {}", peer.addr, e);
                     self.peers.remove(peer_id);
                     let index = self.peer_list.iter().position(|&x| x == peer_id).unwrap();
                     self.peer_list.swap_remove(index);
@@ -289,10 +282,7 @@ impl Context {
             mio::PollOpt::edge(),
         )?;
 
-        info!(
-            "P2P server listening at {}",
-            server.local_addr()?
-        );
+        info!("P2P server listening at {}", server.local_addr()?);
 
         // initialize space for polled events
         let mut events = mio::Events::with_capacity(MAX_EVENT);

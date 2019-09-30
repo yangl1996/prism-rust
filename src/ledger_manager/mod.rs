@@ -1,10 +1,8 @@
-use crate::block::{Content};
+use crate::block::Content;
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
 use crate::crypto::hash::{Hashable, H256};
 use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
-
-
 
 use crate::transaction::{CoinId, Output, Transaction};
 use crate::utxodb::UtxoDatabase;

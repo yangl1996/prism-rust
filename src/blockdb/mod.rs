@@ -22,7 +22,10 @@ pub struct BlockDatabase {
 
 impl BlockDatabase {
     /// Open the database at the given path, and create a new one if missing.
-    fn open<P: AsRef<std::path::Path>>(path: P, config: BlockchainConfig) -> Result<Self, rocksdb::Error> {
+    fn open<P: AsRef<std::path::Path>>(
+        path: P,
+        config: BlockchainConfig,
+    ) -> Result<Self, rocksdb::Error> {
         let mut opts = Options::default();
         opts.set_prefix_extractor(SliceTransform::create_fixed_prefix(32));
         opts.optimize_for_point_lookup(512);
@@ -45,7 +48,10 @@ impl BlockDatabase {
     }
 
     /// Create a new database at the given path, and initialize the content.
-    pub fn new<P: AsRef<std::path::Path>>(path: P, config: BlockchainConfig) -> Result<Self, rocksdb::Error> {
+    pub fn new<P: AsRef<std::path::Path>>(
+        path: P,
+        config: BlockchainConfig,
+    ) -> Result<Self, rocksdb::Error> {
         DB::destroy(&Options::default(), &path)?;
         let db = Self::open(&path, config.clone())?;
 
@@ -97,7 +103,10 @@ impl BlockDatabase {
     }
 
     /// Load database from a given path
-    pub fn load<P: AsRef<std::path::Path>>(path: P, config: BlockchainConfig) -> Result<Self, rocksdb::Error> {
+    pub fn load<P: AsRef<std::path::Path>>(
+        path: P,
+        config: BlockchainConfig,
+    ) -> Result<Self, rocksdb::Error> {
         let db = Self::open(&path, config)?;
         return Ok(db);
     }

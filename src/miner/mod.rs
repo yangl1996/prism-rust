@@ -509,7 +509,9 @@ impl Context {
     /// Given a valid header, sortition its hash and create the block
     fn produce_block(&self, header_hash: H256) -> Block {
         // Get sortition ID
-        let sortition_id = self.config.sortition_hash(&header_hash, &self.header.difficulty)
+        let sortition_id = self
+            .config
+            .sortition_hash(&header_hash, &self.header.difficulty)
             .expect("Block Hash should <= Difficulty");
         // Create a block
         // get the merkle proof
@@ -553,18 +555,4 @@ fn get_time() -> u128 {
 }
 
 #[cfg(test)]
-mod tests {
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-}
+mod tests {}
