@@ -216,18 +216,3 @@ fn check_transaction_block_exists(hash: H256, blockchain: &BlockChain) -> bool {
     return in_chain;
 }
 
-#[cfg(test)]
-mod tests {
-    use super::super::config::*;
-    use super::get_sortition_id;
-    use crate::crypto::hash::H256;
-
-    #[test]
-    fn sortition_id() {
-        let difficulty = *DEFAULT_DIFFICULTY;
-        let hash: H256 = [0; 32].into();
-        assert_eq!(get_sortition_id(&hash, &difficulty), Some(PROPOSER_INDEX));
-        // This hash should fail PoW test (so result is None)
-        assert_eq!(get_sortition_id(&difficulty, &difficulty), None);
-    }
-}

@@ -251,6 +251,7 @@ impl<'a> std::iter::Iterator for BlocksInArrivalOrder<'a> {
     }
 }
 
+/*
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -306,3 +307,4 @@ mod tests {
         );
     }
 }
+*/

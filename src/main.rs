@@ -393,7 +393,7 @@ fn main() {
     }
 
     // create wallet key pair if there is none
-    if wallet.addresses().unwrap().len() == 0 {
+    if wallet.addresses().unwrap().is_empty() {
         wallet.generate_keypair().unwrap();
     }
 

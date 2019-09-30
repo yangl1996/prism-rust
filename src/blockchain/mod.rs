@@ -1630,6 +1630,7 @@ fn u64_plus_merge(
     return Some(result);
 }
 
+/*
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2023,3 +2024,4 @@ mod tests {
         assert_eq!(result, vec![(0, 0), (10, 0)]);
     }
 }
+*/
