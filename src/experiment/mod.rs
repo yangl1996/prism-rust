@@ -57,7 +57,7 @@ pub fn ico(
         workers.push(handle);
     }
     for child in workers.drain(..) {
-        child.join();
+        child.join().unwrap();
     }
     utxodb.flush()?;
     Ok(())

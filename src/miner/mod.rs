@@ -188,12 +188,12 @@ impl Context {
     fn miner_loop(&mut self) {
         // tell ourself to update all context
         self.context_update_tx
-            .send(ContextUpdateSignal::NewProposerBlock);
+            .send(ContextUpdateSignal::NewProposerBlock).unwrap();
         self.context_update_tx
-            .send(ContextUpdateSignal::NewTransactionBlock);
+            .send(ContextUpdateSignal::NewTransactionBlock).unwrap();
         for voter_chain in 0..self.config.voter_chains {
             self.context_update_tx
-                .send(ContextUpdateSignal::NewVoterBlock(voter_chain as u16));
+                .send(ContextUpdateSignal::NewVoterBlock(voter_chain as u16)).unwrap();
         }
 
         let mut rng = rand::thread_rng();

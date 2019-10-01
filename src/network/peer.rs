@@ -1,5 +1,5 @@
 use super::message;
-use log::trace;
+use log::{trace, warn};
 use mio;
 use mio_extras::channel;
 use std::convert::TryInto;
@@ -183,6 +183,7 @@ pub fn new(
     };
     let handle = Handle {
         write_queue: write_sender,
+        addr: addr,
     };
     let ctx = Context {
         addr,
@@ -212,6 +213,7 @@ pub struct Context {
 
 #[derive(Clone)]
 pub struct Handle {
+    addr: std::net::SocketAddr,
     write_queue: channel::Sender<Vec<u8>>,
 }
 
@@ -219,6 +221,8 @@ impl Handle {
     pub fn write(&self, msg: message::Message) {
         // TODO: return result
         let buffer = bincode::serialize(&msg).unwrap();
-        self.write_queue.send(buffer);
+        if self.write_queue.send(buffer).is_err() {
+            warn!("Failed to send write request for peer {}, channel detached", self.addr);
+        }
     }
 }

@@ -26,7 +26,7 @@ pub fn new(
         poll: mio::Poll::new()?,
         control_chan: control_signal_receiver,
         new_msg_chan: msg_sink,
-        handle: handle.clone(),
+        _handle: handle.clone(),
     };
     Ok((ctx, handle))
 }
@@ -38,7 +38,7 @@ pub struct Context {
     poll: mio::Poll,
     control_chan: channel::Receiver<ControlSignal>,
     new_msg_chan: cbchannel::Sender<(Vec<u8>, peer::Handle)>,
-    handle: Handle,
+    _handle: Handle,
 }
 
 impl Context {
@@ -297,7 +297,7 @@ impl Context {
                             // get the new control singal from the channel
                             match self.control_chan.try_recv() {
                                 Ok(req) => {
-                                    self.process_control(req);
+                                    self.process_control(req).unwrap();
                                 }
                                 Err(e) => match e {
                                     mpsc::TryRecvError::Empty => break,
@@ -318,7 +318,7 @@ impl Context {
                             // accept the connection
                             match server.accept() {
                                 Ok((stream, client_addr)) => {
-                                    self.accept(stream, client_addr);
+                                    self.accept(stream, client_addr).unwrap();
                                 }
                                 Err(e) => {
                                     if e.kind() == std::io::ErrorKind::WouldBlock {

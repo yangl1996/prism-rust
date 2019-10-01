@@ -49,7 +49,6 @@ impl UtxoDatabase {
             Some(_) => return Ok(true),
             None => return Ok(false),
         };
-        unreachable!();
     }
 
     pub fn snapshot(&self) -> Result<Vec<u8>, rocksdb::Error> {

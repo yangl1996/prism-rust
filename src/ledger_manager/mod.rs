@@ -153,7 +153,7 @@ impl LedgerManager {
         let wallet = Arc::clone(&self.wallet);
         thread::spawn(move || loop {
             let coin_diff = coin_diff_rx.recv().unwrap();
-            wallet.apply_diff(&coin_diff.0, &coin_diff.1);
+            wallet.apply_diff(&coin_diff.0, &coin_diff.1).unwrap();
         });
     }
 }

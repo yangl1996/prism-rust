@@ -489,11 +489,13 @@ impl BlockChain {
 
         // recompute the leader of each level that was affected
         let mut wb = WriteBatch::default();
+        /*
         macro_rules! merge_value {
             ($cf:expr, $key:expr, $value:expr) => {{
                 wb.merge_cf($cf, serialize(&$key).unwrap(), serialize(&$value).unwrap())?;
             }};
         }
+        */
         macro_rules! put_value {
             ($cf:expr, $key:expr, $value:expr) => {{
                 wb.put_cf($cf, serialize(&$key).unwrap(), serialize(&$value).unwrap())?;
@@ -552,11 +554,13 @@ impl BlockChain {
             let mut removed: Vec<H256> = vec![];
             let mut added: Vec<H256> = vec![];
             let mut wb = WriteBatch::default();
+            /*
             macro_rules! merge_value {
                 ($cf:expr, $key:expr, $value:expr) => {{
                     wb.merge_cf($cf, serialize(&$key).unwrap(), serialize(&$value).unwrap())?;
                 }};
             }
+            */
             macro_rules! put_value {
                 ($cf:expr, $key:expr, $value:expr) => {{
                     wb.put_cf($cf, serialize(&$key).unwrap(), serialize(&$value).unwrap())?;
@@ -788,14 +792,6 @@ impl BlockChain {
 
     fn num_voter_blocks(&self, chain: u16, start_level: u64, end_level: u64) -> Result<u64> {
         let voter_tree_level_count_cf = self.db.cf_handle(VOTER_TREE_LEVEL_COUNT_CF).unwrap();
-        macro_rules! get_value {
-            ($cf:expr, $key:expr) => {{
-                match self.db.get_pinned_cf($cf, serialize(&$key).unwrap())? {
-                    Some(raw) => Some(deserialize(&raw).unwrap()),
-                    None => None,
-                }
-            }};
-        }
         let mut total: u64 = 0;
         for l in start_level..=end_level {
             let t: u64 = deserialize(
