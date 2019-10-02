@@ -46,9 +46,9 @@ impl UtxoDatabase {
     pub fn contains(&self, coin: &CoinId) -> Result<bool, rocksdb::Error> {
         let result = self.db.get_pinned(serialize(&coin).unwrap())?;
         match result {
-            Some(_) => return Ok(true),
-            None => return Ok(false),
-        };
+            Some(_) => Ok(true),
+            None => Ok(false),
+        }
     }
 
     pub fn snapshot(&self) -> Result<Vec<u8>, rocksdb::Error> {

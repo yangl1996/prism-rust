@@ -183,7 +183,7 @@ pub fn new(
     };
     let handle = Handle {
         write_queue: write_sender,
-        addr: addr,
+        addr,
     };
     let ctx = Context {
         addr,
