@@ -24,7 +24,24 @@ For a quick demo on how to reproduce out results, please check out this [screen 
     - Security Groups: the one just created
     - Storage (Volumes): 32 GiB `gp2` volume, delete on termination
     - Instance tags: Key=prism, Value=distributed-testing, tag instance
-5. Create a S3 bucket with name `prism-binary` and set it to be publicly accessible
+5. Create a S3 bucket with name `prism-binary` and set it to be publicly accessible by putting the following in the bucket policy
+
+```json
+{
+    "Version": "2008-10-17",
+    "Statement": [
+        {
+            "Sid": "AddPerm",
+            "Effect": "Allow",
+            "Principal": {
+                "AWS": "*"
+            },
+            "Action": "s3:GetObject",
+            "Resource": "arn:aws:s3:::prism-binary/*"
+        }
+    ]
+}
+```
 
 ### Install Dependencies
 
