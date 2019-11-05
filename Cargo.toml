@@ -13,7 +13,7 @@ bincode = "1.2"
 serde_derive = "1.0"
 serde = "1.0"
 hex-literal = "0.2"
-rocksdb = "0.12"
+rocksdb = { git = "https://github.com/rust-rocksdb/rust-rocksdb.git" }
 log = "0.4"
 stderrlog = "0.4"
 mio = "0.6"
