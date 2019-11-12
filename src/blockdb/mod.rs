@@ -1,6 +1,6 @@
 use crate::block::proposer::genesis as proposer_genesis;
 use crate::block::voter::genesis as voter_genesis;
-use crate::block::Block;
+use crate::block::{Block, Content};
 use crate::config::*;
 use crate::crypto::hash::{Hashable, H256};
 use bincode::{deserialize, serialize};
@@ -11,6 +11,11 @@ use std::sync::atomic::{AtomicU64, Ordering};
 const BLOCK_CF: &str = "BLOCK";
 const BLOCK_ARRIVAL_ORDER_CF: &str = "BLOCK_ARRIVAL_ORDER";
 const BLOCK_SEQUENCE_NUMBER_CF: &str = "BLOCK_SEQUENCE_NUMBER";
+const BLOCK_TYPE_CF: &str = "BLOCK_TYPE";
+
+pub const PROPOSER: u8 = 0;
+pub const VOTER: u8 = 1;
+pub const TRANSACTION: u8 = 2;
 
 /// Database that stores blocks.
 pub struct BlockDatabase {
@@ -36,7 +41,11 @@ impl BlockDatabase {
         opts.set_prefix_extractor(SliceTransform::create_fixed_prefix(32));
         opts.optimize_for_point_lookup(512);
         let block_sequence_number_cf = ColumnFamilyDescriptor::new(BLOCK_SEQUENCE_NUMBER_CF, opts);
-        let cfs = vec![block_cf, block_arrival_order_cf, block_sequence_number_cf];
+        let mut opts = Options::default();
+        opts.set_prefix_extractor(SliceTransform::create_fixed_prefix(32));
+        opts.optimize_for_point_lookup(512);
+        let block_type_cf = ColumnFamilyDescriptor::new(BLOCK_TYPE_CF, opts);
+        let cfs = vec![block_cf, block_arrival_order_cf, block_sequence_number_cf, block_type_cf];
         let mut opts = Options::default();
         opts.create_if_missing(true);
         opts.create_missing_column_families(true);
@@ -58,6 +67,7 @@ impl BlockDatabase {
         let block_cf = db.db.cf_handle(BLOCK_CF).unwrap();
         let block_arrival_order_cf = db.db.cf_handle(BLOCK_ARRIVAL_ORDER_CF).unwrap();
         let block_sequence_number_cf = db.db.cf_handle(BLOCK_SEQUENCE_NUMBER_CF).unwrap();
+        let block_type_cf = db.db.cf_handle(BLOCK_TYPE_CF).unwrap();
 
         let mut counter: u64 = 0;
         // insert proposer genesis block
@@ -75,6 +85,11 @@ impl BlockDatabase {
             block_sequence_number_cf,
             &config.proposer_genesis,
             &counter.to_ne_bytes(),
+        )?;
+        db.db.put_cf(
+            block_type_cf,
+            &config.proposer_genesis,
+            &[PROPOSER],
         )?;
         counter += 1;
 
@@ -95,6 +110,11 @@ impl BlockDatabase {
                 &config.voter_genesis[i as usize],
                 &counter.to_ne_bytes(),
             )?;
+            db.db.put_cf(
+                block_type_cf,
+                &config.voter_genesis[i as usize],
+                &[VOTER],
+                )?;
             counter += 1;
         }
 
@@ -116,6 +136,7 @@ impl BlockDatabase {
         let block_cf = self.db.cf_handle(BLOCK_CF).unwrap();
         let block_arrival_order_cf = self.db.cf_handle(BLOCK_ARRIVAL_ORDER_CF).unwrap();
         let block_sequence_number_cf = self.db.cf_handle(BLOCK_SEQUENCE_NUMBER_CF).unwrap();
+        let block_type_cf = self.db.cf_handle(BLOCK_TYPE_CF).unwrap();
         let hash: H256 = block.hash();
         let serialized = serialize(block).unwrap();
         let counter = self.count.fetch_add(1, Ordering::Relaxed);
@@ -124,19 +145,27 @@ impl BlockDatabase {
             .put_cf(block_arrival_order_cf, &counter.to_ne_bytes(), &hash)?;
         self.db
             .put_cf(block_sequence_number_cf, &hash, &counter.to_ne_bytes())?;
+        let block_type = match block.content {
+            Content::Proposer(_) => PROPOSER,
+            Content::Voter(_) => VOTER,
+            Content::Transaction(_) => TRANSACTION,
+        };
+        self.db.put_cf(block_type_cf, &hash, &[block_type])?;
         Ok(counter)
     }
 
-    pub fn insert_encoded(&self, hash: &H256, raw_block: &[u8]) -> Result<u64, rocksdb::Error> {
+    pub fn insert_encoded(&self, hash: &H256, raw_block: &[u8], block_type: u8) -> Result<u64, rocksdb::Error> {
         let block_cf = self.db.cf_handle(BLOCK_CF).unwrap();
         let block_arrival_order_cf = self.db.cf_handle(BLOCK_ARRIVAL_ORDER_CF).unwrap();
         let block_sequence_number_cf = self.db.cf_handle(BLOCK_SEQUENCE_NUMBER_CF).unwrap();
+        let block_type_cf = self.db.cf_handle(BLOCK_TYPE_CF).unwrap();
         let counter = self.count.fetch_add(1, Ordering::Relaxed);
         self.db.put_cf(block_cf, &hash, &raw_block)?;
         self.db
             .put_cf(block_arrival_order_cf, &counter.to_ne_bytes(), &hash)?;
         self.db
             .put_cf(block_sequence_number_cf, &hash, &counter.to_ne_bytes())?;
+        self.db.put_cf(block_type_cf, &hash, &[block_type])?;
         Ok(counter)
     }
 
@@ -153,10 +182,16 @@ impl BlockDatabase {
     pub fn get_encoded(
         &self,
         hash: &H256,
-    ) -> Result<Option<rocksdb::DBPinnableSlice>, rocksdb::Error> {
+    ) -> Result<(Option<rocksdb::DBPinnableSlice>, Option<u8>), rocksdb::Error> {
         let block_cf = self.db.cf_handle(BLOCK_CF).unwrap();
+        let block_type_cf = self.db.cf_handle(BLOCK_TYPE_CF).unwrap();
         let serialized = self.db.get_pinned_cf(block_cf, hash)?;
-        Ok(serialized)
+        let serialized_type = self.db.get_pinned_cf(block_type_cf, hash)?;
+        let block_type = match serialized_type {
+            Some(d) => Some(d[0]),
+            None => None,
+        };
+        Ok((serialized, block_type))
     }
 
     pub fn contains(&self, hash: &H256) -> Result<bool, rocksdb::Error> {

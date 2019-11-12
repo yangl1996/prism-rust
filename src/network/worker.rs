@@ -3,7 +3,7 @@ use super::message::Message;
 use super::peer;
 use crate::block::{Block, Content};
 use crate::blockchain::BlockChain;
-use crate::blockdb::BlockDatabase;
+use crate::blockdb::{BlockDatabase, PROPOSER, VOTER, TRANSACTION};
 use crate::config::*;
 use crate::crypto::hash::{Hashable, H256};
 use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
@@ -148,18 +148,29 @@ impl Context {
                 }
                 Message::GetBlocks(hashes) => {
                     debug!("Asked for {} blocks", hashes.len());
-                    let mut blocks = vec![];
+                    let mut high_prio_blocks = vec![];
+                    let mut low_prio_blocks = vec![];
                     for hash in hashes {
                         match self.blockdb.get_encoded(&hash).unwrap() {
-                            None => {}
-                            Some(encoded_block) => {
-                                blocks.push(encoded_block.to_vec());
+                            (None, None) => {},
+                            (Some(encoded_block), Some(block_type)) => {
+                                match block_type {
+                                    PROPOSER | VOTER => high_prio_blocks.push(encoded_block.to_vec()),
+                                    TRANSACTION => low_prio_blocks.push(encoded_block.to_vec()),
+                                    _ => unreachable!(),
+                                }
                             }
+                            _ => unreachable!(),
                         }
                     }
-                    peer.write(Message::Blocks(blocks));
+                    if !high_prio_blocks.is_empty() {
+                        peer.write(Message::ProposerVoterBlocks(high_prio_blocks));
+                    }
+                    if !low_prio_blocks.is_empty() {
+                        peer.write(Message::TransactionBlocks(low_prio_blocks));
+                    }
                 }
-                Message::Blocks(encoded_blocks) => {
+                Message::ProposerVoterBlocks(encoded_blocks) | Message::TransactionBlocks(encoded_blocks) => {
                     debug!("Got {} blocks", encoded_blocks.len());
 
                     // decode the blocks
@@ -210,7 +221,12 @@ impl Context {
                         }
 
                         // store the block into database
-                        self.blockdb.insert_encoded(&hash, &encoded_block).unwrap();
+                        let block_type = match block.content {
+                            Content::Proposer(_) => PROPOSER,
+                            Content::Voter(_) => VOTER,
+                            Content::Transaction(_) => TRANSACTION,
+                        };
+                        self.blockdb.insert_encoded(&hash, &encoded_block, block_type).unwrap();
 
                         // now that this block is store, remove the reference
                         let mut recent_blocks = self.recent_blocks.lock().unwrap();

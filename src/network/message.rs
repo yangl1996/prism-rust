@@ -7,7 +7,8 @@ pub enum Message {
     Pong(String),
     NewBlockHashes(Vec<H256>),
     GetBlocks(Vec<H256>),
-    Blocks(Vec<Vec<u8>>),
+    ProposerVoterBlocks(Vec<Vec<u8>>),
+    TransactionBlocks(Vec<Vec<u8>>),
     NewTransactionHashes(Vec<H256>),
     GetTransactions(Vec<H256>),
     Transactions(Vec<Transaction>),
@@ -18,8 +19,8 @@ impl Message {
     pub fn priority(&self) -> usize {
         match self {
             Message::Ping(_) | Message::Pong(_) | Message::NewBlockHashes(_) | Message::GetBlocks(_) => 0,
-            Message::Blocks(_) => 1,
-            Message::NewTransactionHashes(_) | Message::GetTransactions(_) | Message::Transactions(_) | Message::Bootstrap(_) => 2,
+            Message::ProposerVoterBlocks(_) => 1,
+            Message::NewTransactionHashes(_) | Message::GetTransactions(_) | Message::Transactions(_) | Message::Bootstrap(_) | Message::TransactionBlocks(_) => 2,
         }
     }
 }
