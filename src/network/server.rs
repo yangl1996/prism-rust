@@ -69,8 +69,7 @@ impl Context {
         }
 
         // set two tokens, one for socket and one for write queue
-        let socket_token = mio::Token(key * 2);
-        let writer_token = mio::Token(key * 2 + 1);
+        let socket_token = mio::Token(key * 4);
 
         // register the new connection
         self.poll.register(
@@ -82,12 +81,15 @@ impl Context {
         let (ctx, handle) = peer::new(stream, direction, self.new_msg_chan.clone())?;
 
         // register the writer queue
-        self.poll.register(
-            &ctx.writer.queue,
-            writer_token,
-            mio::Ready::readable(),
-            mio::PollOpt::edge() | mio::PollOpt::oneshot(),
-        )?;
+        for i in 0..3 {
+            let writer_token = mio::Token(key * 4 + i + 1);
+            self.poll.register(
+                &ctx.writer.queues[i],
+                writer_token,
+                mio::Ready::readable(),
+                mio::PollOpt::edge() | mio::PollOpt::oneshot(),
+                )?;
+        }
 
         // insert the context and return the handle
         vacant.insert(ctx);
@@ -145,7 +147,7 @@ impl Context {
         trace!("Registering socket write interest for peer {}", peer_id);
         let peer = &mut self.peers[peer_id];
         // we have stuff to write at the writer queue
-        let socket_token = mio::Token(peer_id * 2);
+        let socket_token = mio::Token(peer_id * 4);
         // register for writable event
         self.poll.reregister(
             &peer.stream,
@@ -192,8 +194,7 @@ impl Context {
             Ok(WriteResult::Complete) => {
                 trace!("Peer {} outgoing queue drained", peer_id);
                 // we wrote everything in the write queue
-                let socket_token = mio::Token(peer_id * 2);
-                let writer_token = mio::Token(peer_id * 2 + 1);
+                let socket_token = mio::Token(peer_id * 4);
                 // we've done writing. no longer interested.
                 self.poll.reregister(
                     &peer.stream,
@@ -202,12 +203,15 @@ impl Context {
                     mio::PollOpt::edge(),
                 )?;
                 // we're interested in write queue again.
-                self.poll.reregister(
-                    &peer.writer.queue,
-                    writer_token,
-                    mio::Ready::readable(),
-                    mio::PollOpt::edge() | mio::PollOpt::oneshot(),
-                )?;
+                for i in 0..3 {
+                    let writer_token = mio::Token(peer_id * 4 + i + 1);
+                    self.poll.reregister(
+                        &peer.writer.queues[i],
+                        writer_token,
+                        mio::Ready::readable(),
+                        mio::PollOpt::edge() | mio::PollOpt::oneshot(),
+                    )?;
+                }
             }
             Ok(WriteResult::EOF) => {
                 // EOF, remove it from the connections set
@@ -219,14 +223,16 @@ impl Context {
             Ok(WriteResult::ChanClosed) => {
                 // the channel is closed. no more writes.
                 warn!("Peer {} outgoing queue closed", peer_id);
-                let socket_token = mio::Token(peer_id * 2);
+                let socket_token = mio::Token(peer_id * 4);
                 self.poll.reregister(
                     &peer.stream,
                     socket_token,
                     mio::Ready::readable(),
                     mio::PollOpt::edge(),
                 )?;
-                self.poll.deregister(&peer.writer.queue)?;
+                for i in 0..3 {
+                    self.poll.deregister(&peer.writer.queues[i])?;
+                }
             }
             Err(e) => {
                 if e.kind() == std::io::ErrorKind::WouldBlock {
@@ -318,8 +324,8 @@ impl Context {
                         }
                     }
                     mio::Token(token_id) => {
-                        // peer id (the index in the peers list) is token_id/2
-                        let peer_id = token_id >> 1;
+                        // peer id (the index in the peers list) is token_id/4
+                        let peer_id = token_id >> 2;
                         // if the token_id is odd, it's new write request, else it's socket
                         match token_id & 0x01 {
                             0 => {

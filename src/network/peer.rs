@@ -94,7 +94,7 @@ enum WriteState {
 
 pub struct WriteContext {
     writer: std::io::BufWriter<mio::net::TcpStream>,
-    pub queue: channel::Receiver<Vec<u8>>,
+    pub queues: [channel::Receiver<Vec<u8>>; 3],
     len_buffer: [u8; std::mem::size_of::<u32>()],
     msg_buffer: Vec<u8>,
     msg_length: usize,
@@ -129,7 +129,7 @@ impl WriteContext {
                         // if the previous message has been fully written, try to get the next message
                         // first flush the writer
                         self.writer.flush()?;
-                        let msg = match self.queue.try_recv() {
+                        let msg = match self.queues[0].try_recv() {
                             Ok(msg) => msg,
                             Err(e) => match e {
                                 mpsc::TryRecvError::Empty => return Ok(WriteResult::Complete),
@@ -174,10 +174,12 @@ pub fn new(
     let addr = stream.peer_addr()?;
 
     let bufwriter = std::io::BufWriter::new(writer_stream);
-    let (write_sender, write_receiver) = channel::channel();
+    let (write_sender_0, write_receiver_0) = channel::channel();
+    let (write_sender_1, write_receiver_1) = channel::channel();
+    let (write_sender_2, write_receiver_2) = channel::channel();
     let write_ctx = WriteContext {
         writer: bufwriter,
-        queue: write_receiver,
+        queues: [write_receiver_0, write_receiver_1, write_receiver_2],
         len_buffer: [0; std::mem::size_of::<u32>()],
         msg_buffer: Vec::new(),
         msg_length: 0,
@@ -186,7 +188,7 @@ pub fn new(
     };
 
     let handle = Handle {
-        write_queue: write_sender,
+        write_queues: [write_sender_0, write_sender_1, write_sender_2],
         addr,
     };
 
@@ -230,14 +232,14 @@ pub struct Context {
 #[derive(Clone)]
 pub struct Handle {
     addr: std::net::SocketAddr,
-    write_queue: channel::Sender<Vec<u8>>,
+    write_queues: [channel::Sender<Vec<u8>>; 3],
 }
 
 impl Handle {
     pub fn write(&self, msg: message::Message) {
         // TODO: return result
         let buffer = bincode::serialize(&msg).unwrap();
-        if self.write_queue.send(buffer).is_err() {
+        if self.write_queues[0].send(buffer).is_err() {
             warn!("Failed to send write request for peer {}, channel detached", self.addr);
         }
     }
