@@ -129,14 +129,25 @@ impl WriteContext {
                         // if the previous message has been fully written, try to get the next message
                         // first flush the writer
                         self.writer.flush()?;
-                        let msg = match self.queues[0].try_recv() {
-                            Ok(msg) => msg,
-                            Err(e) => match e {
-                                mpsc::TryRecvError::Empty => return Ok(WriteResult::Complete),
-                                mpsc::TryRecvError::Disconnected => {
-                                    return Ok(WriteResult::ChanClosed);
+                        let mut msg = None;
+                        // try three queues one by one
+                        for i in 0..3 {
+                            match self.queues[i].try_recv() {
+                                Ok(m) => {
+                                    msg = Some(m);
+                                    break;
                                 }
-                            },
+                                Err(e) => match e {
+                                    mpsc::TryRecvError::Empty => continue,
+                                    mpsc::TryRecvError::Disconnected => {
+                                        return Ok(WriteResult::ChanClosed);
+                                    }
+                                }
+                            }
+                        }
+                        let msg = match msg {
+                            Some(m) => m,
+                            None => return Ok(WriteResult::Complete),
                         };
 
                         // encode the message and the length

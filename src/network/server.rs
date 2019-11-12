@@ -327,7 +327,7 @@ impl Context {
                         // peer id (the index in the peers list) is token_id/4
                         let peer_id = token_id >> 2;
                         // if the token_id is odd, it's new write request, else it's socket
-                        match token_id & 0x01 {
+                        match token_id & 0x11 {
                             0 => {
                                 let readiness = event.readiness();
                                 if readiness.is_readable() {
@@ -345,7 +345,7 @@ impl Context {
                                     self.process_writable(peer_id).unwrap();
                                 }
                             }
-                            1 => {
+                            1 | 2 | 3 => {
                                 trace!("Peer {} outgoing queue readable", peer_id);
                                 self.register_write_interest(peer_id)?;
                             }
