@@ -13,3 +13,13 @@ pub enum Message {
     Transactions(Vec<Transaction>),
     Bootstrap(H256),
 }
+
+impl Message {
+    pub fn priority(&self) -> usize {
+        match self {
+            Message::Ping(_) | Message::Pong(_) | Message::NewBlockHashes(_) | Message::GetBlocks(_) => 0,
+            Message::Blocks(_) => 1,
+            Message::NewTransactionHashes(_) | Message::GetTransactions(_) | Message::Transactions(_) | Message::Bootstrap(_) => 2,
+        }
+    }
+}

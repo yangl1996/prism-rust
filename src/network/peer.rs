@@ -249,8 +249,9 @@ pub struct Handle {
 impl Handle {
     pub fn write(&self, msg: message::Message) {
         // TODO: return result
+        let prio = msg.priority();
         let buffer = bincode::serialize(&msg).unwrap();
-        if self.write_queues[0].send(buffer).is_err() {
+        if self.write_queues[prio].send(buffer).is_err() {
             warn!("Failed to send write request for peer {}, channel detached", self.addr);
         }
     }
