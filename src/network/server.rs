@@ -80,7 +80,7 @@ impl Context {
             mio::Ready::readable(),
             mio::PollOpt::edge(),
         )?;
-        let (ctx, handle) = peer::new(stream, direction)?;
+        let (ctx, handle) = peer::new(stream, direction, self.new_msg_chan.clone())?;
 
         // register the writer queue
         self.poll.register(
@@ -160,40 +160,25 @@ impl Context {
     fn process_readable(&mut self, peer_id: usize) -> std::io::Result<()> {
         // we are using edge-triggered events, loop until block
         let peer = &mut self.peers[peer_id];
-        loop {
-            match peer.reader.read() {
-                Ok(ReadResult::EOF) => {
-                    // EOF, remove it from the connections set
-                    info!("Peer {} dropped connection", peer.addr);
+        match peer.reader.read() {
+            Ok(ReadResult::EOF) => {
+                // EOF, remove it from the connections set
+                info!("Peer {} dropped connection", peer.addr);
+                self.peers.remove(peer_id);
+                let index = self.peer_list.iter().position(|&x| x == peer_id).unwrap();
+                self.peer_list.swap_remove(index);
+            }
+            Ok(_) => {
+            }
+            Err(e) => {
+                if e.kind() == std::io::ErrorKind::WouldBlock {
+                    trace!("Peer {} finished reading", peer_id);
+                    // socket is not ready anymore, stop reading
+                } else {
+                    warn!("Error reading peer {}, disconnecting: {}", peer.addr, e);
                     self.peers.remove(peer_id);
                     let index = self.peer_list.iter().position(|&x| x == peer_id).unwrap();
                     self.peer_list.swap_remove(index);
-                    break;
-                }
-                Ok(ReadResult::Continue) => {
-                    trace!("Peer {} reading continue", peer_id);
-                    // no full message has been received
-                    continue;
-                }
-                Ok(ReadResult::Message(m)) => {
-                    trace!("Peer {} yield message", peer_id);
-                    // we just received a full message
-                    self.new_msg_chan.send((m, peer.handle.clone())).unwrap();
-                    PERFORMANCE_COUNTER.record_receive_message();
-                    continue;
-                }
-                Err(e) => {
-                    if e.kind() == std::io::ErrorKind::WouldBlock {
-                        trace!("Peer {} finished reading", peer_id);
-                        // socket is not ready anymore, stop reading
-                        break;
-                    } else {
-                        warn!("Error reading peer {}, disconnecting: {}", peer.addr, e);
-                        self.peers.remove(peer_id);
-                        let index = self.peer_list.iter().position(|&x| x == peer_id).unwrap();
-                        self.peer_list.swap_remove(index);
-                        break;
-                    }
                 }
             }
         }

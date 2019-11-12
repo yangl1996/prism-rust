@@ -12,62 +12,67 @@ enum DecodeState {
 }
 
 pub enum ReadResult {
-    Continue,
-    Message(Vec<u8>),
+    Complete,
     EOF,
+    ChanClosed,
 }
 
 pub struct ReadContext {
     reader: std::io::BufReader<mio::net::TcpStream>,
+    new_msg_chan: crossbeam::channel::Sender<(Vec<u8>, Handle)>,
     buffer: Vec<u8>,
     msg_length: usize,
     read_length: usize,
     state: DecodeState,
+    handle: Handle,
 }
 
 impl ReadContext {
     pub fn read(&mut self) -> std::io::Result<ReadResult> {
-        let bytes_read = self
-            .reader
-            .read(&mut self.buffer[self.read_length..self.msg_length]);
-        match bytes_read {
-            Ok(0) => {
-                trace!("Detected socket EOF");
-                Ok(ReadResult::EOF)
-            }
-            Ok(size) => {
-                trace!("Read {} bytes from socket", size);
-                // we got some data, move the cursor
-                self.read_length += size;
-                if self.read_length == self.msg_length {
-                    // buffer filled, process the buffer
-                    match self.state {
-                        DecodeState::Length => {
-                            let message_length =
-                                u32::from_be_bytes(self.buffer[0..4].try_into().unwrap());
-                            self.state = DecodeState::Payload;
-                            self.read_length = 0;
-                            self.msg_length = message_length as usize;
-                            if self.buffer.len() < self.msg_length {
-                                self.buffer.resize(self.msg_length, 0);
-                            }
-                            trace!("Received message length={}", message_length);
-                            Ok(ReadResult::Continue)
-                        }
-                        DecodeState::Payload => {
-                            let new_payload: Vec<u8> = self.buffer[0..self.msg_length].to_vec();
-                            self.state = DecodeState::Length;
-                            self.read_length = 0;
-                            self.msg_length = std::mem::size_of::<u32>();
-                            trace!("Received full message");
-                            Ok(ReadResult::Message(new_payload))
-                        }
-                    }
-                } else {
-                    Ok(ReadResult::Continue)
+        loop {
+            let bytes_read = self
+                .reader
+                .read(&mut self.buffer[self.read_length..self.msg_length]);
+            match bytes_read {
+                Ok(0) => {
+                    trace!("Detected socket EOF");
+                    return Ok(ReadResult::EOF);
                 }
+                Ok(size) => {
+                    trace!("Read {} bytes from socket", size);
+                    // we got some data, move the cursor
+                    self.read_length += size;
+                    if self.read_length == self.msg_length {
+                        // buffer filled, process the buffer
+                        match self.state {
+                            DecodeState::Length => {
+                                let message_length =
+                                    u32::from_be_bytes(self.buffer[0..4].try_into().unwrap());
+                                self.state = DecodeState::Payload;
+                                self.read_length = 0;
+                                self.msg_length = message_length as usize;
+                                if self.buffer.len() < self.msg_length {
+                                    self.buffer.resize(self.msg_length, 0);
+                                }
+                                trace!("Received message length={}", message_length);
+                                continue;
+                            }
+                            DecodeState::Payload => {
+                                let new_payload: Vec<u8> = self.buffer[0..self.msg_length].to_vec();
+                                self.state = DecodeState::Length;
+                                self.read_length = 0;
+                                self.msg_length = std::mem::size_of::<u32>();
+                                trace!("Received full message");
+                                self.new_msg_chan.send((new_payload, self.handle.clone())).unwrap();
+                                continue;
+                            }
+                        }
+                    } else {
+                        continue;
+                    }
+                }
+                Err(e) => return Err(e),
             }
-            Err(e) => Err(e),
         }
     }
 }
@@ -158,18 +163,12 @@ impl WriteContext {
 pub fn new(
     stream: mio::net::TcpStream,
     direction: Direction,
+    new_msg_chan: crossbeam::channel::Sender<(Vec<u8>, Handle)>
 ) -> std::io::Result<(Context, Handle)> {
     let reader_stream = stream.try_clone()?;
     let writer_stream = stream.try_clone()?;
     let addr = stream.peer_addr()?;
-    let bufreader = std::io::BufReader::new(reader_stream);
-    let read_ctx = ReadContext {
-        reader: bufreader,
-        buffer: vec![0; std::mem::size_of::<u32>()],
-        msg_length: std::mem::size_of::<u32>(),
-        read_length: 0,
-        state: DecodeState::Length,
-    };
+
     let bufwriter = std::io::BufWriter::new(writer_stream);
     let (write_sender, write_receiver) = channel::channel();
     let write_ctx = WriteContext {
@@ -181,10 +180,23 @@ pub fn new(
         written_length: 0,
         state: WriteState::Payload,
     };
+
     let handle = Handle {
         write_queue: write_sender,
         addr,
     };
+
+    let bufreader = std::io::BufReader::new(reader_stream);
+    let read_ctx = ReadContext {
+        reader: bufreader,
+        buffer: vec![0; std::mem::size_of::<u32>()],
+        msg_length: std::mem::size_of::<u32>(),
+        read_length: 0,
+        state: DecodeState::Length,
+        new_msg_chan,
+        handle: handle.clone(),
+    };
+
     let ctx = Context {
         addr,
         stream,
