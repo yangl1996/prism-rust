@@ -1,6 +1,5 @@
 use super::message;
 use super::peer::{self, ReadResult, WriteResult};
-use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 use crossbeam::channel as cbchannel;
 use log::{debug, error, info, trace, warn};
 use mio::{self, net};
@@ -168,8 +167,10 @@ impl Context {
                 let index = self.peer_list.iter().position(|&x| x == peer_id).unwrap();
                 self.peer_list.swap_remove(index);
             }
-            Ok(_) => {
+            Ok(ReadResult::ChanClosed) => {
+                panic!("Incoming message queue detached");
             }
+            Ok(_) => {}
             Err(e) => {
                 if e.kind() == std::io::ErrorKind::WouldBlock {
                     trace!("Peer {} finished reading", peer_id);

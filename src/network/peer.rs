@@ -5,6 +5,7 @@ use mio_extras::channel;
 use std::convert::TryInto;
 use std::io::{Read, Write};
 use std::sync::mpsc;
+use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 
 enum DecodeState {
     Length,
@@ -63,8 +64,11 @@ impl ReadContext {
                                 self.read_length = 0;
                                 self.msg_length = std::mem::size_of::<u32>();
                                 trace!("Received full message");
-                                self.new_msg_chan.send((new_payload, self.handle.clone())).unwrap();
-                                continue;
+                                PERFORMANCE_COUNTER.record_receive_message();
+                                match self.new_msg_chan.send((new_payload, self.handle.clone())) {
+                                    Ok(_) => continue,
+                                    Err(_) => return Ok(ReadResult::ChanClosed),
+                                }
                             }
                         }
                     } else {
