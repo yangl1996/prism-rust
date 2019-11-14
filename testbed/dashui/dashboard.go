@@ -9,7 +9,7 @@ import (
 	"github.com/hajimehoshi/ebiten"
 )
 
-const w, h = 960, 540
+const w, h = 520, 320
 
 func dashboard(args []string) {
 	cmd := flag.NewFlagSet("dashboard", flag.ExitOnError)
