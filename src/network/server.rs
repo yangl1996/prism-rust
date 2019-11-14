@@ -71,6 +71,9 @@ impl Context {
         // set two tokens, one for socket and one for write queue
         let socket_token = mio::Token(key * 4);
 
+        // set tcp nodelay
+        stream.set_nodelay(true)?;
+
         // register the new connection
         self.poll.register(
             &stream,
