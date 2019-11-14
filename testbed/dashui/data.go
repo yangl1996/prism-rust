@@ -32,11 +32,23 @@ func (d *TimeSeries) Record(val float64, t time.Time) {
 	}
 	// check if there's anything that we can consolidate
 	if t.After(d.nextConsolidation) {
+		// find the timestamp for this consolidation
+		cTime := d.nextConsolidation
+		for {
+			// find the first tick that is not earlier than the last datapoint
+			if !d.raw.time[len(d.raw.time)-1].After(cTime) {
+				break
+			}
+			cTime = cTime.Add(d.ConsolidationInterval)
+		}
+
+		// note that the raw arries will never be empty
+		cVal := d.Consolidation(d.raw.val)
 		d.consolidated.time = append(d.consolidated.time, d.nextConsolidation)
-		d.consolidated.val = append(d.consolidated.val, d.Consolidation(d.raw.val))
+		d.consolidated.val = append(d.consolidated.val, cVal)
 		d.raw.time = nil
 		d.raw.val = nil
-		d.nextConsolidation = d.nextConsolidation.Add(d.ConsolidationInterval)
+		d.nextConsolidation = cTime.Add(d.ConsolidationInterval)
 	}
 	d.raw.time = append(d.raw.time, t)
 	d.raw.val = append(d.raw.val, val)

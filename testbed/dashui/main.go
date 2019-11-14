@@ -2,7 +2,6 @@ package main
 
 import (
 	"log"
-	"math/rand"
 	"os"
 	"time"
 
@@ -16,18 +15,26 @@ func main() {
 	ebiten.SetRunnableInBackground(true)
 
 	g := DefaultTimeSeries(w, h, s)
-	d := TimeSeries{}
-	d.Consolidation = Avg
-	d.ConsolidationInterval = time.Duration(16) * time.Millisecond
-	ds := []Dataset{&d}
+	proposerSeries := TimeSeries{}
+	proposerSeries.Consolidation = Avg
+	proposerSeries.ConsolidationInterval = time.Duration(250) * time.Millisecond
+	voterSeries := TimeSeries{}
+	voterSeries.Consolidation = Avg
+	voterSeries.ConsolidationInterval = time.Duration(250) * time.Millisecond
+	transactionSeries := TimeSeries{}
+	transactionSeries.Consolidation = Avg
+	transactionSeries.ConsolidationInterval = time.Duration(250) * time.Millisecond
+	ds := []Dataset{&proposerSeries, &voterSeries, &transactionSeries}
 
-	go generateRandomData(&d, 8*time.Millisecond)
+	m := g.PlotTimeSeries(ds, time.Now().Add(time.Duration(-60) * time.Second), time.Now())
 
-	m := g.PlotTimeSeries(ds, time.Now().Add(time.Duration(-10) * time.Minute), time.Now())
+	go func() {
+		extractDelay("../0.log", &proposerSeries, &voterSeries, &transactionSeries)
+	}()
 
 	go func() {
 		for range time.NewTicker(8 * time.Millisecond).C {
-			m = g.PlotTimeSeries(ds, time.Now().Add(time.Duration(-10) * time.Second), time.Now())
+			m = g.PlotTimeSeries(ds, time.Now().Add(time.Duration(-60) * time.Second), time.Now())
 		}
 	}()
 
@@ -48,8 +55,3 @@ func main() {
 	}
 }
 
-func generateRandomData(s *TimeSeries, d time.Duration) {
-	for range time.NewTicker(d).C {
-		s.Record(rand.Float64(), time.Now())
-	}
-}

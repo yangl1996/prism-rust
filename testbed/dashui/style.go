@@ -22,10 +22,6 @@ func DefaultTimeSeries(w, h int, s float64) *Figure {
 		Style: chart.Style {
 			Show: true,
 		},
-		Range: &chart.ContinuousRange {
-			Max: 1,
-			Min: -1,
-		},
 	}
 	return &c
 }
