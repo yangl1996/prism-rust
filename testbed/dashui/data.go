@@ -1,8 +1,8 @@
 package main
 
 import (
-	"time"
 	"sort"
+	"time"
 )
 
 type Dataset interface {
@@ -17,12 +17,12 @@ type TimeSeries struct {
 	}
 	raw struct {
 		time []time.Time
-		val []float64
+		val  []float64
 	}
-	Consolidation func(vals []float64) float64
+	Consolidation         func(vals []float64) float64
 	ConsolidationInterval time.Duration
-	nextConsolidation time.Time
-	inited bool
+	nextConsolidation     time.Time
+	inited                bool
 }
 
 func (d *TimeSeries) Record(val float64, t time.Time) {

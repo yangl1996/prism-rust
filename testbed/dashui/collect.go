@@ -1,11 +1,11 @@
 package main
 
 import (
-	"time"
+	"github.com/hpcloud/tail"
 	"log"
 	"regexp"
 	"strconv"
-	"github.com/hpcloud/tail"
+	"time"
 )
 
 func extractDelay(f string, p *TimeSeries, v *TimeSeries, t *TimeSeries) {

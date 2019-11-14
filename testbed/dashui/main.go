@@ -26,7 +26,7 @@ func main() {
 	transactionSeries.ConsolidationInterval = time.Duration(250) * time.Millisecond
 	ds := []Dataset{&proposerSeries, &voterSeries, &transactionSeries}
 
-	m := g.PlotTimeSeries(ds, time.Now().Add(time.Duration(-60) * time.Second), time.Now())
+	m := g.PlotTimeSeries(ds, time.Now().Add(time.Duration(-60)*time.Second), time.Now())
 
 	go func() {
 		extractDelay("../0.log", &proposerSeries, &voterSeries, &transactionSeries)
@@ -34,7 +34,7 @@ func main() {
 
 	go func() {
 		for range time.NewTicker(8 * time.Millisecond).C {
-			m = g.PlotTimeSeries(ds, time.Now().Add(time.Duration(-60) * time.Second), time.Now())
+			m = g.PlotTimeSeries(ds, time.Now().Add(time.Duration(-60)*time.Second), time.Now())
 		}
 	}()
 
@@ -54,4 +54,3 @@ func main() {
 		log.Fatal(err)
 	}
 }
-
