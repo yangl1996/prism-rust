@@ -338,7 +338,7 @@ impl Context {
                     if !to_request.is_empty() {
                         to_request.sort();
                         to_request.dedup();
-                        peer.write(Message::GetBlocks(to_request));
+                        //peer.write(Message::GetBlocks(to_request));
                     }
                 }
                 Message::Bootstrap(after) => {
