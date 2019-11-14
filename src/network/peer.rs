@@ -184,7 +184,7 @@ pub fn new(
     let writer_stream = stream.try_clone()?;
     let addr = stream.peer_addr()?;
 
-    let bufwriter = std::io::BufWriter::new(writer_stream);
+    let bufwriter = std::io::BufWriter::with_capacity(1500, writer_stream);
     let (write_sender_0, write_receiver_0) = channel::channel();
     let (write_sender_1, write_receiver_1) = channel::channel();
     let (write_sender_2, write_receiver_2) = channel::channel();
@@ -203,7 +203,7 @@ pub fn new(
         addr,
     };
 
-    let bufreader = std::io::BufReader::new(reader_stream);
+    let bufreader = std::io::BufReader::with_capacity(1500, reader_stream);
     let read_ctx = ReadContext {
         reader: bufreader,
         buffer: vec![0; std::mem::size_of::<u32>()],
