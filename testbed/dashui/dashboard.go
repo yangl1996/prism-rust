@@ -20,7 +20,7 @@ func dashboard(args []string) {
 	s := ebiten.DeviceScaleFactor()
 	ebiten.SetRunnableInBackground(true)
 
-	g := DefaultTimeSeries(w, h, s)
+	g := DefaultTimeSeries(250, 155, s)
 	proposerSeries := TimeSeries{}
 	proposerSeries.Consolidation = Avg
 	proposerSeries.ConsolidationInterval = time.Duration(250) * time.Millisecond
@@ -50,7 +50,9 @@ func dashboard(args []string) {
 		}
 
 		if !ebiten.IsDrawingSkipped() {
-			screen.ReplacePixels(m.Pix)
+			plot1, _ := ebiten.NewImageFromImage(m, ebiten.FilterNearest)
+			opts := &ebiten.DrawImageOptions{}
+			screen.DrawImage(plot1, opts)
 		}
 
 		return nil
