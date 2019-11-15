@@ -15,11 +15,10 @@ func dashboard(args []string) {
 	widthFlag := cmd.Int("width", 970, "width of the visualization window")
 	heightFlag := cmd.Int("height", 600, "height of the visualization window")
 	logFlag := cmd.String("log", "../0.log", "path to the Prism client log file")
+	cmd.Parse(args)
 
 	w := *widthFlag
 	h := *heightFlag
-
-	cmd.Parse(args)
 
 	s := ebiten.DeviceScaleFactor()
 	ebiten.SetRunnableInBackground(true)

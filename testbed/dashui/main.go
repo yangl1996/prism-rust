@@ -20,5 +20,5 @@ func main() {
 
 func usage() {
 	fmt.Println("Subcommands: dashboard")
-	os.Exit(1)
+	os.Exit(0)
 }
