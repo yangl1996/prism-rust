@@ -5,11 +5,11 @@ import (
 	"github.com/wcharczuk/go-chart/drawing"
 )
 
-func DefaultTimeSeries(w, h int, s float64, dpi int, title string) *Figure {
+func DefaultTimeSeries(w, h int, s, dpi float64, title string) *Figure {
 	c := Figure{}
 	c.Width = int(float64(w) * s)
 	c.Height = int(float64(h) * s)
-	c.DPI = float64(dpi)
+	c.DPI = dpi
 	c.Background = chart.Style{
 		Padding: chart.Box{
 			Top:    50,
@@ -24,12 +24,6 @@ func DefaultTimeSeries(w, h int, s float64, dpi int, title string) *Figure {
 			Show: true,
 		},
 	}
-	/*
-	c.Title = title
-	c.TitleStyle = chart.Style{
-		Show: true,
-		FontSize: 12.0,
-	}
-	*/
+	c.FigureTitle = title
 	return &c
 }

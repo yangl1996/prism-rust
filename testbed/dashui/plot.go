@@ -8,6 +8,7 @@ import (
 
 type Figure struct {
 	chart.Chart
+	FigureTitle string
 }
 
 func (c *Figure) PlotTimeSeries(ds []Dataset, start, end time.Time) *image.RGBA {
@@ -25,6 +26,11 @@ func (c *Figure) PlotTimeSeries(ds []Dataset, start, end time.Time) *image.RGBA 
 			},
 		}
 		allSeries = append(allSeries, series)
+	}
+	// https://github.com/wcharczuk/go-chart/blob/master/times.go#L43
+	c.XAxis.Range = &chart.ContinuousRange {
+		Min: float64(start.UnixNano()),
+		Max: float64(end.UnixNano()),
 	}
 	c.Series = allSeries
 	c.Elements = []chart.Renderable {
