@@ -22,6 +22,7 @@ func dashboard(args []string) {
 	s := ebiten.DeviceScaleFactor()
 	ebiten.SetRunnableInBackground(true)
 
+	// set up figures and datasets
 	g := DefaultTimeSeries(w/2, h/2, s, "Block Propagation Delay")
 	proposerSeries := TimeSeries{}
 	proposerSeries.Consolidation = Avg
@@ -36,10 +37,12 @@ func dashboard(args []string) {
 
 	m := g.PlotTimeSeries(ds, time.Now().Add(time.Duration(-60)*time.Second), time.Now())
 
+	// update the datasets
 	go func() {
 		extractDelay(*logFlag, &proposerSeries, &voterSeries, &transactionSeries)
 	}()
 
+	// update the figures
 	go func() {
 		for range time.NewTicker(8 * time.Millisecond).C {
 			m = g.PlotTimeSeries(ds, time.Now().Add(time.Duration(-60)*time.Second), time.Now())
@@ -52,9 +55,22 @@ func dashboard(args []string) {
 		}
 
 		if !ebiten.IsDrawingSkipped() {
-			plot1, _ := ebiten.NewImageFromImage(m, ebiten.FilterNearest)
-			opts := &ebiten.DrawImageOptions{}
-			screen.DrawImage(plot1, opts)
+			// draw four figures: upper left, upper right, lower left, lower right
+			plotUL, _ := ebiten.NewImageFromImage(m, ebiten.FilterNearest)
+			plotUR, _ := ebiten.NewImageFromImage(m, ebiten.FilterNearest)
+			plotLL, _ := ebiten.NewImageFromImage(m, ebiten.FilterNearest)
+			plotLR, _ := ebiten.NewImageFromImage(m, ebiten.FilterNearest)
+			optsUL := &ebiten.DrawImageOptions{}
+			optsUR := &ebiten.DrawImageOptions{}
+			optsUR.GeoM.Translate(float64(w), 0)
+			optsLL := &ebiten.DrawImageOptions{}
+			optsLL.GeoM.Translate(0, float64(h))
+			optsLR := &ebiten.DrawImageOptions{}
+			optsLR.GeoM.Translate(float64(w), float64(h))
+			screen.DrawImage(plotUL, optsUL)
+			screen.DrawImage(plotUR, optsUR)
+			screen.DrawImage(plotLL, optsLL)
+			screen.DrawImage(plotLR, optsLR)
 		}
 
 		return nil
