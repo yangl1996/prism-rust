@@ -28,7 +28,7 @@ func (c *Figure) PlotTimeSeries(ds []Dataset, start, end time.Time) *image.RGBA 
 	}
 	c.Series = allSeries
 	c.Elements = []chart.Renderable {
-		chart.Legend(&c.Chart, chart.Style {
+		chart.LegendThin(&c.Chart, chart.Style {
 			FontSize: 9.0,
 			StrokeWidth: 1.5,
 		}),

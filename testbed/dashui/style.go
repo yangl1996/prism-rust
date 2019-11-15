@@ -12,10 +12,10 @@ func DefaultTimeSeries(w, h int, s float64, dpi int, title string) *Figure {
 	c.DPI = float64(dpi)
 	c.Background = chart.Style{
 		Padding: chart.Box{
-			Top:    45,
-			Left:   25,
-			Right:  25,
-			Bottom: 25,
+			Top:    50,
+			Left:   10,
+			Right:  10,
+			Bottom: 10,
 		},
 		FillColor: drawing.ColorFromHex("efefef"),
 	}
@@ -24,10 +24,12 @@ func DefaultTimeSeries(w, h int, s float64, dpi int, title string) *Figure {
 			Show: true,
 		},
 	}
+	/*
 	c.Title = title
 	c.TitleStyle = chart.Style{
 		Show: true,
 		FontSize: 12.0,
 	}
+	*/
 	return &c
 }
