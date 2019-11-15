@@ -14,25 +14,30 @@ func dashboard(args []string) {
 	widthFlag := cmd.Int("width", 970, "width of the visualization window")
 	heightFlag := cmd.Int("height", 600, "height of the visualization window")
 	logFlag := cmd.String("log", "../0.log", "path to the Prism client log file")
+	dpiFlag := cmd.Int("dpi", 150, "DPI of the images")
 	cmd.Parse(args)
 
 	w := *widthFlag
 	h := *heightFlag
+	dpi := *dpiFlag
 
 	s := ebiten.DeviceScaleFactor()
 	ebiten.SetRunnableInBackground(true)
 
 	// set up figures and datasets
-	g := DefaultTimeSeries(w/2, h/2, s, "Block Propagation Delay")
+	g := DefaultTimeSeries(w/2, h/2, s, dpi, "Block Propagation Delay")
 	proposerSeries := TimeSeries{}
 	proposerSeries.Consolidation = Avg
 	proposerSeries.ConsolidationInterval = time.Duration(250) * time.Millisecond
+	proposerSeries.Title = "Proposer"
 	voterSeries := TimeSeries{}
 	voterSeries.Consolidation = Avg
 	voterSeries.ConsolidationInterval = time.Duration(250) * time.Millisecond
+	voterSeries.Title = "Voter"
 	transactionSeries := TimeSeries{}
 	transactionSeries.Consolidation = Avg
 	transactionSeries.ConsolidationInterval = time.Duration(250) * time.Millisecond
+	transactionSeries.Title = "Transaction"
 	ds := []Dataset{&proposerSeries, &voterSeries, &transactionSeries}
 
 	m := g.PlotTimeSeries(ds, time.Now().Add(time.Duration(-60)*time.Second), time.Now())

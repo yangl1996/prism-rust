@@ -15,6 +15,7 @@ func (c *Figure) PlotTimeSeries(ds []Dataset, start, end time.Time) *image.RGBA 
 	for i, d := range ds {
 		time, val := d.Range(start, end)
 		series := chart.TimeSeries{
+			Name: d.Name(),
 			XValues: time,
 			YValues: val,
 			Style: chart.Style{
@@ -26,6 +27,12 @@ func (c *Figure) PlotTimeSeries(ds []Dataset, start, end time.Time) *image.RGBA 
 		allSeries = append(allSeries, series)
 	}
 	c.Series = allSeries
+	c.Elements = []chart.Renderable {
+		chart.Legend(&c.Chart, chart.Style {
+			FontSize: 9.0,
+			StrokeWidth: 1.5,
+		}),
+	}
 	iw := &chart.ImageWriter{}
 	c.Render(chart.PNG, iw)
 	m, _ := iw.Image()

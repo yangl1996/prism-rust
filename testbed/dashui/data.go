@@ -8,6 +8,7 @@ import (
 type Dataset interface {
 	Range(start, end time.Time) ([]time.Time, []float64)
 	Record(val float64, t time.Time)
+	Name() string
 }
 
 type TimeSeries struct {
@@ -23,6 +24,11 @@ type TimeSeries struct {
 	ConsolidationInterval time.Duration
 	nextConsolidation     time.Time
 	inited                bool
+	Title string
+}
+
+func (d *TimeSeries) Name() string {
+	return d.Title
 }
 
 func (d *TimeSeries) Record(val float64, t time.Time) {
