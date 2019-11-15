@@ -1,14 +1,13 @@
 package main
 
 import (
+	"flag"
 	"log"
 	"os"
 	"time"
-	"flag"
 
 	"github.com/hajimehoshi/ebiten"
 )
-
 
 func dashboard(args []string) {
 	cmd := flag.NewFlagSet("dashboard", flag.ExitOnError)
@@ -23,7 +22,7 @@ func dashboard(args []string) {
 	s := ebiten.DeviceScaleFactor()
 	ebiten.SetRunnableInBackground(true)
 
-	g := DefaultTimeSeries(w / 2, h / 2, s)
+	g := DefaultTimeSeries(w/2, h/2, s, "Block Propagation Delay")
 	proposerSeries := TimeSeries{}
 	proposerSeries.Consolidation = Avg
 	proposerSeries.ConsolidationInterval = time.Duration(250) * time.Millisecond
