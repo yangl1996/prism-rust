@@ -9,18 +9,22 @@ import (
 	"github.com/hajimehoshi/ebiten"
 )
 
-const w, h = 520, 320
 
 func dashboard(args []string) {
 	cmd := flag.NewFlagSet("dashboard", flag.ExitOnError)
-	logFlag := cmd.String("log", "../0.log", "Set the path to the Prism client log file")
+	widthFlag := cmd.Int("width", 970, "width of the visualization window")
+	heightFlag := cmd.Int("height", 600, "height of the visualization window")
+	logFlag := cmd.String("log", "../0.log", "path to the Prism client log file")
+
+	w := *widthFlag
+	h := *heightFlag
 
 	cmd.Parse(args)
 
 	s := ebiten.DeviceScaleFactor()
 	ebiten.SetRunnableInBackground(true)
 
-	g := DefaultTimeSeries(250, 155, s)
+	g := DefaultTimeSeries(w / 2, h / 2, s)
 	proposerSeries := TimeSeries{}
 	proposerSeries.Consolidation = Avg
 	proposerSeries.ConsolidationInterval = time.Duration(250) * time.Millisecond
@@ -58,7 +62,7 @@ func dashboard(args []string) {
 		return nil
 	}
 
-	if err := ebiten.Run(update, int(w*s), int(h*s), 1/s, "Prism"); err != nil {
+	if err := ebiten.Run(update, int(float64(w)*s), int(float64(h)*s), 1/s, "Prism"); err != nil {
 		log.Fatal(err)
 	}
 }
