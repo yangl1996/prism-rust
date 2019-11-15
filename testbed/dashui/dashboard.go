@@ -62,11 +62,11 @@ func dashboard(args []string) {
 			plotLR, _ := ebiten.NewImageFromImage(m, ebiten.FilterNearest)
 			optsUL := &ebiten.DrawImageOptions{}
 			optsUR := &ebiten.DrawImageOptions{}
-			optsUR.GeoM.Translate(float64(w), 0)
+			optsUR.GeoM.Translate(float64(w) * s / 2, 0)
 			optsLL := &ebiten.DrawImageOptions{}
-			optsLL.GeoM.Translate(0, float64(h))
+			optsLL.GeoM.Translate(0, float64(h) * s / 2)
 			optsLR := &ebiten.DrawImageOptions{}
-			optsLR.GeoM.Translate(float64(w), float64(h))
+			optsLR.GeoM.Translate(float64(w) * s / 2, float64(h) * s / 2)
 			screen.DrawImage(plotUL, optsUL)
 			screen.DrawImage(plotUR, optsUR)
 			screen.DrawImage(plotLL, optsLL)
