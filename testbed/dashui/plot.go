@@ -13,8 +13,15 @@ type Figure struct {
 
 func (c *Figure) PlotTimeSeries(ds []Dataset, start, end time.Time) *image.RGBA {
 	allSeries := []chart.Series{}
+	gMax := 0.0
+	// get the max of all data series at the same time
 	for i, d := range ds {
 		time, val := d.Range(start, end)
+		for _, d := range val {
+			if d > gMax {
+				gMax = d
+			}
+		}
 		series := chart.TimeSeries{
 			Name: d.Name(),
 			XValues: time,
@@ -31,6 +38,11 @@ func (c *Figure) PlotTimeSeries(ds []Dataset, start, end time.Time) *image.RGBA 
 	c.XAxis.Range = &chart.ContinuousRange {
 		Min: float64(start.UnixNano()),
 		Max: float64(end.UnixNano()),
+	}
+
+	c.YAxis.Range = &chart.ContinuousRange {
+		Min: 0.00,
+		Max: float64(int(gMax / 100) * 100 + 100),
 	}
 	c.Series = allSeries
 	c.Elements = []chart.Renderable {
