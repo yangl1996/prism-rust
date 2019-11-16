@@ -6,6 +6,7 @@ use mio::{self, net};
 use mio_extras::channel;
 use std::sync::mpsc;
 use std::thread;
+use std::sync::{Arc, Mutex};
 
 const MAX_INCOMING_CLIENT: usize = 256;
 const MAX_EVENT: usize = 1024;
@@ -15,12 +16,18 @@ pub fn new(
     msg_sink: cbchannel::Sender<(Vec<u8>, peer::Handle)>,
 ) -> std::io::Result<(Context, Handle)> {
     let (control_signal_sender, control_signal_receiver) = channel::channel();
+    let peer_handles: Vec<peer::Handle> = vec![];
+    let peer_handles = Mutex::new(peer_handles);
+    let peer_handles = Arc::new(peer_handles);
     let handle = Handle {
         control_chan: control_signal_sender,
+        peer_handles: Arc::clone(&peer_handles)
+
     };
     let ctx = Context {
         peers: slab::Slab::new(),
         peer_list: vec![],
+        peer_handles: Arc::clone(&peer_handles),
         addr,
         poll: mio::Poll::new()?,
         control_chan: control_signal_receiver,
@@ -32,6 +39,7 @@ pub fn new(
 
 pub struct Context {
     peers: slab::Slab<peer::Context>,
+    peer_handles: Arc<Mutex<Vec<peer::Handle>>>,
     peer_list: Vec<usize>,
     addr: std::net::SocketAddr,
     poll: mio::Poll,
@@ -99,6 +107,12 @@ impl Context {
         // record the key of this peer
         self.peer_list.push(key);
         trace!("Registering peer with event token={}", key);
+
+        // insert the handle into the peer handle list
+        // FIXME: when do we remove from it?
+        let mut peer_handles = self.peer_handles.lock().unwrap();
+        peer_handles.push(handle.clone());
+        drop(peer_handles);
         Ok(handle)
     }
 
@@ -135,12 +149,6 @@ impl Context {
                 trace!("Processing ConnectNewPeer command");
                 let handle = self.connect(&req.addr);
                 req.result_chan.send(handle).unwrap();
-            }
-            ControlSignal::BroadcastMessage(msg) => {
-                trace!("Processing BroadcastMessage command");
-                for peer_id in &self.peer_list {
-                    self.peers[*peer_id].handle.write(msg.clone());
-                }
             }
         }
         Ok(())
@@ -364,6 +372,7 @@ impl Context {
 #[derive(Clone)]
 pub struct Handle {
     control_chan: channel::Sender<ControlSignal>,
+    peer_handles: Arc<Mutex<Vec<peer::Handle>>>,
 }
 
 impl Handle {
@@ -380,15 +389,15 @@ impl Handle {
     }
 
     pub fn broadcast(&self, msg: message::Message) {
-        self.control_chan
-            .send(ControlSignal::BroadcastMessage(msg))
-            .unwrap();
+        let peer_handles = self.peer_handles.lock().unwrap();
+        for peer in peer_handles.iter() {
+            peer.write(msg.clone());
+        }
     }
 }
 
 enum ControlSignal {
     ConnectNewPeer(ConnectRequest),
-    BroadcastMessage(message::Message),
 }
 
 struct ConnectRequest {
