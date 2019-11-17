@@ -117,6 +117,7 @@ impl WriteContext {
                         let written = self.writer.write(
                             &self.len_buffer[self.written_length..std::mem::size_of::<u32>()],
                         )?;
+                        trace!("Wrote {} bytes to socket", written);
                         if written == 0 {
                             return Ok(WriteResult::EOF);
                         }
@@ -163,6 +164,7 @@ impl WriteContext {
                         let written = self
                             .writer
                             .write(&self.msg_buffer[self.written_length..self.msg_length])?;
+                        trace!("Wrote {} bytes to socket", written);
                         if written == 0 {
                             return Ok(WriteResult::EOF);
                         }

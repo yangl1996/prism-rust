@@ -22,6 +22,7 @@ type TimeSeries struct {
 	}
 	Consolidation         func(vals []float64) float64
 	ConsolidationInterval time.Duration
+	Interpolation         func() float64
 	nextConsolidation     time.Time
 	inited                bool
 	Title string
@@ -44,13 +45,18 @@ func (d *TimeSeries) Record(val float64, t time.Time) {
 			// find the first tick that is not earlier than the last datapoint
 			if !d.raw.time[len(d.raw.time)-1].After(cTime) {
 				break
+			} else {
+				if d.Interpolation != nil {
+					d.consolidated.time = append(d.consolidated.time, cTime)
+					d.consolidated.val = append(d.consolidated.val, d.Interpolation())
+				}
 			}
 			cTime = cTime.Add(d.ConsolidationInterval)
 		}
 
 		// note that the raw arries will never be empty
 		cVal := d.Consolidation(d.raw.val)
-		d.consolidated.time = append(d.consolidated.time, d.nextConsolidation)
+		d.consolidated.time = append(d.consolidated.time, cTime)
 		d.consolidated.val = append(d.consolidated.val, cVal)
 		d.raw.time = nil
 		d.raw.val = nil
@@ -82,4 +88,16 @@ func Avg(vals []float64) float64 {
 		tot += v
 	}
 	return tot / float64(len(vals))
+}
+
+func Sum(vals []float64) float64 {
+	tot := .0
+	for _, v := range vals {
+		tot += v
+	}
+	return tot
+}
+
+func FillZero() float64 {
+	return 0.0
 }

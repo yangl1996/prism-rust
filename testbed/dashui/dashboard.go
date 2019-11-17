@@ -75,8 +75,20 @@ func dashboard(args []string) {
 	transactionSeries.Title = "Transaction"
 	ds := []Dataset{&proposerSeries, &voterSeries, &transactionSeries}
 
+	readSeries := TimeSeries{}
+	readSeries.Consolidation = Sum
+	readSeries.ConsolidationInterval = time.Duration(10) * time.Millisecond
+	readSeries.Title = "Read"
+	readSeries.Interpolation = FillZero
+	writeSeries := TimeSeries{}
+	writeSeries.Consolidation = Sum
+	writeSeries.ConsolidationInterval = time.Duration(10) * time.Millisecond
+	writeSeries.Title = "Write"
+	writeSeries.Interpolation = FillZero
+	ds2 := []Dataset{&readSeries, &writeSeries}
+
 	chartUL := DefaultTimeSeries(w/2, h/2 - titleHeight, s, dpi, "Block Propagation Delay")
-	chartUR := DefaultTimeSeries(w/2, h/2 - titleHeight, s, dpi, "Block Propagation Delay")
+	chartUR := DefaultTimeSeries(w/2, h/2 - titleHeight, s, dpi, "Socket Activity")
 	chartLL := DefaultTimeSeries(w/2, h/2 - titleHeight, s, dpi, "Block Propagation Delay")
 	chartLR := DefaultTimeSeries(w/2, h/2 - titleHeight, s, dpi, "Block Propagation Delay")
 	imgUL := &image.RGBA{}
@@ -86,14 +98,14 @@ func dashboard(args []string) {
 
 	// update the datasets
 	go func() {
-		extractDelay(*logFlag, &proposerSeries, &voterSeries, &transactionSeries)
+		extractLog(*logFlag, &proposerSeries, &voterSeries, &transactionSeries, &readSeries, &writeSeries)
 	}()
 
 	// update the figures
 	go func() {
 		for range time.NewTicker(interval).C {
 			imgUL = chartUL.PlotTimeSeries(ds, time.Now().Add(time.Duration(-span)*time.Second), time.Now())
-			imgUR = chartUR.PlotTimeSeries(ds, time.Now().Add(time.Duration(-span)*time.Second), time.Now())
+			imgUR = chartUR.PlotTimeSeries(ds2, time.Now().Add(time.Duration(-span)*time.Second), time.Now())
 			imgLL = chartLL.PlotTimeSeries(ds, time.Now().Add(time.Duration(-span)*time.Second), time.Now())
 			imgLR = chartLR.PlotTimeSeries(ds, time.Now().Add(time.Duration(-span)*time.Second), time.Now())
 		}
