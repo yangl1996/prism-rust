@@ -91,10 +91,10 @@ func dashboard(args []string) {
 	chartUR := DefaultTimeSeries(w/2, h/2 - titleHeight, s, dpi, "Socket Activity")
 	chartLL := DefaultTimeSeries(w/2, h/2 - titleHeight, s, dpi, "Block Propagation Delay")
 	chartLR := DefaultTimeSeries(w/2, h/2 - titleHeight, s, dpi, "Block Propagation Delay")
-	imgUL := &image.RGBA{}
-	imgUR := &image.RGBA{}
-	imgLL := &image.RGBA{}
-	imgLR := &image.RGBA{}
+	imgUL := image.NewRGBA(image.Rect(0, 0, 1, 1))
+	imgUR := image.NewRGBA(image.Rect(0, 0, 1, 1))
+	imgLL := image.NewRGBA(image.Rect(0, 0, 1, 1))
+	imgLR := image.NewRGBA(image.Rect(0, 0, 1, 1))
 
 	// update the datasets
 	go func() {
