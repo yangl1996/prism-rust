@@ -105,11 +105,24 @@ func dashboard(args []string) {
 	go func() {
 		for range time.NewTicker(interval).C {
 			imgUL = chartUL.PlotTimeSeries(ds, time.Now().Add(time.Duration(-span)*time.Second), time.Now())
+		}
+	}()
+	go func() {
+		for range time.NewTicker(interval).C {
 			imgUR = chartUR.PlotTimeSeries(ds2, time.Now().Add(time.Duration(-span)*time.Second), time.Now())
+		}
+	}()
+	go func() {
+		for range time.NewTicker(interval).C {
 			imgLL = chartLL.PlotTimeSeries(ds, time.Now().Add(time.Duration(-span)*time.Second), time.Now())
+		}
+	}()
+	go func() {
+		for range time.NewTicker(interval).C {
 			imgLR = chartLR.PlotTimeSeries(ds, time.Now().Add(time.Duration(-span)*time.Second), time.Now())
 		}
 	}()
+
 
 	update := func(screen *ebiten.Image) error {
 		if ebiten.IsKeyPressed(ebiten.KeyEscape) || ebiten.IsKeyPressed(ebiten.KeyQ) {

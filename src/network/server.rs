@@ -88,7 +88,7 @@ impl Context {
         // set tcp socket buffer size
         let fd = stream.as_raw_fd();
         setsockopt(fd, RcvBuf, &65535).unwrap();
-        setsockopt(fd, SndBuf, &1024).unwrap();
+        setsockopt(fd, SndBuf, &65535).unwrap();
 
 
         // register the new connection
