@@ -7,6 +7,9 @@ use mio_extras::channel;
 use std::sync::mpsc;
 use std::thread;
 use std::sync::{Arc, Mutex};
+use std::os::unix::io::AsRawFd;
+use nix::sys::socket::setsockopt;
+use nix::sys::socket::sockopt::{SndBuf, RcvBuf};
 
 const MAX_INCOMING_CLIENT: usize = 256;
 const MAX_EVENT: usize = 1024;
@@ -81,6 +84,12 @@ impl Context {
 
         // set tcp nodelay
         stream.set_nodelay(true)?;
+
+        // set tcp socket buffer size
+        let fd = stream.as_raw_fd();
+        setsockopt(fd, RcvBuf, &65535).unwrap();
+        setsockopt(fd, SndBuf, &1024).unwrap();
+
 
         // register the new connection
         self.poll.register(
