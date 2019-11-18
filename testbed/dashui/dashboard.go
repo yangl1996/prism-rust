@@ -110,7 +110,6 @@ func dashboard(args []string) {
 	ds3 := []Dataset{&pollSeries, &readableSeries, &writableSeries, &outqueueSeries}
 
 	chartUL := DefaultTimeSeries(w/2, h/2 - titleHeight, s, dpi, "Block Propagation Delay")
-	chartUL.Prefetch = span
 	chartUL.YRangeStep = 100
 	chartUR := DefaultTimeSeries(w/2, h/2 - titleHeight, s, dpi, "Socket Activity")
 	chartUR.SMA = 1000 / 10
