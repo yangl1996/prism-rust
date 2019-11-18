@@ -78,20 +78,52 @@ func dashboard(args []string) {
 	readSeries := TimeSeries{}
 	readSeries.Consolidation = Sum
 	readSeries.ConsolidationInterval = time.Duration(10) * time.Millisecond
-	readSeries.Title = "Read"
+	readSeries.Title = "Read Kbps"
 	readSeries.Interpolation = FillZero
 	writeSeries := TimeSeries{}
 	writeSeries.Consolidation = Sum
 	writeSeries.ConsolidationInterval = time.Duration(10) * time.Millisecond
-	writeSeries.Title = "Write"
+	writeSeries.Title = "Write Kbps"
 	writeSeries.Interpolation = FillZero
 	ds2 := []Dataset{&readSeries, &writeSeries}
 
+	pollSeries := TimeSeries{}
+	pollSeries.Consolidation = Sum
+	pollSeries.ConsolidationInterval = time.Duration(10) * time.Millisecond
+	pollSeries.Title = "Poll/s"
+	pollSeries.Interpolation = FillZero
+	readableSeries := TimeSeries{}
+	readableSeries.Consolidation = Sum
+	readableSeries.ConsolidationInterval = time.Duration(10) * time.Millisecond
+	readableSeries.Title = "Read/s"
+	readableSeries.Interpolation = FillZero
+	writableSeries := TimeSeries{}
+	writableSeries.Consolidation = Sum
+	writableSeries.ConsolidationInterval = time.Duration(10) * time.Millisecond
+	writableSeries.Title = "Write/s"
+	writableSeries.Interpolation = FillZero
+	outqueueSeries := TimeSeries{}
+	outqueueSeries.Consolidation = Sum
+	outqueueSeries.ConsolidationInterval = time.Duration(10) * time.Millisecond
+	outqueueSeries.Title = "Queue/s"
+	outqueueSeries.Interpolation = FillZero
+	ds3 := []Dataset{&pollSeries, &readableSeries, &writableSeries, &outqueueSeries}
+
 	chartUL := DefaultTimeSeries(w/2, h/2 - titleHeight, s, dpi, "Block Propagation Delay")
+	chartUL.Prefetch = span
+	chartUL.YRangeStep = 100
 	chartUR := DefaultTimeSeries(w/2, h/2 - titleHeight, s, dpi, "Socket Activity")
 	chartUR.SMA = 1000 / 10
-	chartLL := DefaultTimeSeries(w/2, h/2 - titleHeight, s, dpi, "Block Propagation Delay")
+	chartUR.YRangeStep = 10000
+	chartUR.OnlySMA = true
+	chartUR.Prefetch = 1
+	chartLL := DefaultTimeSeries(w/2, h/2 - titleHeight, s, dpi, "Polling Events")
+	chartLL.SMA = 1000 / 10
+	chartLL.YRangeStep = 25
+	chartLL.OnlySMA = true
+	chartLL.Prefetch = 1
 	chartLR := DefaultTimeSeries(w/2, h/2 - titleHeight, s, dpi, "Block Propagation Delay")
+
 	imgUL := image.NewRGBA(image.Rect(0, 0, 1, 1))
 	imgUR := image.NewRGBA(image.Rect(0, 0, 1, 1))
 	imgLL := image.NewRGBA(image.Rect(0, 0, 1, 1))
@@ -99,7 +131,7 @@ func dashboard(args []string) {
 
 	// update the datasets
 	go func() {
-		extractLog(*logFlag, &proposerSeries, &voterSeries, &transactionSeries, &readSeries, &writeSeries)
+		extractLog(*logFlag, &proposerSeries, &voterSeries, &transactionSeries, &readSeries, &writeSeries, &pollSeries, &readableSeries, &writableSeries, &outqueueSeries)
 	}()
 
 	// update the figures
@@ -115,7 +147,7 @@ func dashboard(args []string) {
 	}()
 	go func() {
 		for range time.NewTicker(interval).C {
-			imgLL = chartLL.PlotTimeSeries(ds, time.Now().Add(time.Duration(-span)*time.Second), time.Now())
+			imgLL = chartLL.PlotTimeSeries(ds3, time.Now().Add(time.Duration(-span)*time.Second), time.Now())
 		}
 	}()
 	go func() {

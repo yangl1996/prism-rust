@@ -299,6 +299,7 @@ impl Context {
 
         loop {
             self.poll.poll(&mut events, None)?;
+            trace!("New polling results received");
 
             for event in events.iter() {
                 match event.token() {
