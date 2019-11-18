@@ -9,7 +9,7 @@ import (
 type Figure struct {
 	chart.Chart
 	FigureTitle string
-	SMA bool
+	SMA int
 }
 
 func (c *Figure) PlotTimeSeries(ds []Dataset, start, end time.Time) *image.RGBA {
@@ -34,9 +34,10 @@ func (c *Figure) PlotTimeSeries(ds []Dataset, start, end time.Time) *image.RGBA 
 			},
 		}
 		allSeries = append(allSeries, series)
-		if c.SMA {
+		if c.SMA != 0 {
 			sma := &chart.SMASeries {
 				InnerSeries: series,
+				Period: c.SMA,
 			}
 			allSeries = append(allSeries, sma)
 		}
