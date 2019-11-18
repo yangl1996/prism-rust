@@ -9,6 +9,7 @@ import (
 type Figure struct {
 	chart.Chart
 	FigureTitle string
+	SMA bool
 }
 
 func (c *Figure) PlotTimeSeries(ds []Dataset, start, end time.Time) *image.RGBA {
@@ -33,6 +34,12 @@ func (c *Figure) PlotTimeSeries(ds []Dataset, start, end time.Time) *image.RGBA 
 			},
 		}
 		allSeries = append(allSeries, series)
+		if c.SMA {
+			sma := &chart.SMASeries {
+				InnerSeries: series,
+			}
+			allSeries = append(allSeries, sma)
+		}
 	}
 	// https://github.com/wcharczuk/go-chart/blob/master/times.go#L43
 	c.XAxis.Range = &chart.ContinuousRange {
@@ -56,3 +63,4 @@ func (c *Figure) PlotTimeSeries(ds []Dataset, start, end time.Time) *image.RGBA 
 	m, _ := iw.Image()
 	return m.(*image.RGBA)
 }
+

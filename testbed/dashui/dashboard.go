@@ -89,6 +89,7 @@ func dashboard(args []string) {
 
 	chartUL := DefaultTimeSeries(w/2, h/2 - titleHeight, s, dpi, "Block Propagation Delay")
 	chartUR := DefaultTimeSeries(w/2, h/2 - titleHeight, s, dpi, "Socket Activity")
+	chartUR.SMA = true
 	chartLL := DefaultTimeSeries(w/2, h/2 - titleHeight, s, dpi, "Block Propagation Delay")
 	chartLR := DefaultTimeSeries(w/2, h/2 - titleHeight, s, dpi, "Block Propagation Delay")
 	imgUL := image.NewRGBA(image.Rect(0, 0, 1, 1))
