@@ -6,7 +6,48 @@ import (
 	"regexp"
 	"strconv"
 	"time"
+	"fmt"
+	"net/http"
+	"encoding/json"
 )
+
+type Snapshot struct {
+	Confirmed_transactions int
+	Proposer_main_chain_length int
+	Voter_main_chain_length_sum int
+	Processed_proposer_blocks int
+	Processed_voter_blocks int
+}
+
+func traceCounter(addr string, confirmThroughput *TimeSeries, interval time.Duration) {
+	url := fmt.Sprintf("http://%v/telematics/snapshot", addr)
+
+	lastQuery := time.Now()
+	lastTx := 0
+
+	for range time.NewTicker(interval).C {
+		resp, err := http.Get(url)
+		thisQuery := time.Now()
+		if err != nil {
+			continue
+		}
+		defer resp.Body.Close()
+
+		snapshot := Snapshot{}
+		err = json.NewDecoder(resp.Body).Decode(&snapshot)
+		if err != nil {
+			continue
+		}
+
+		timeDiff := thisQuery.Sub(lastQuery).Seconds()
+		txDiff := snapshot.Confirmed_transactions - lastTx
+		txRate := float64(txDiff) / timeDiff
+		lastTx = snapshot.Confirmed_transactions
+		confirmThroughput.Record(txRate, thisQuery)
+
+		lastQuery = thisQuery
+	}
+}
 
 func extractLog(f string, p *TimeSeries, v *TimeSeries, t *TimeSeries, r *TimeSeries, w *TimeSeries, ps *TimeSeries, prs *TimeSeries, pws *TimeSeries, pqs *TimeSeries) {
 	file, err := tail.TailFile(f, tail.Config{Follow: true})

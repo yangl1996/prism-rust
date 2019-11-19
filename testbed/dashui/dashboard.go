@@ -7,6 +7,8 @@ import (
 	"time"
 	"image"
 	"image/color"
+	"fmt"
+	"strings"
 
 	"github.com/hajimehoshi/ebiten"
 	"github.com/golang/freetype/truetype"
@@ -20,6 +22,7 @@ func dashboard(args []string) {
 	widthFlag := cmd.Int("width", 970, "width of the visualization window")
 	heightFlag := cmd.Int("height", 600, "height of the visualization window")
 	logFlag := cmd.String("log", "../0.log", "path to the Prism client log file")
+	apiFlag := cmd.String("api", "localhost:7000,localhost:7001", "list of addresses of the API server separated by commas")
 	dpiFlag := cmd.Int("dpi", 150, "DPI of the plots")
 	fpsFlag := cmd.Int("fps", 10, "FPS of the GUI")
 	spanFlag := cmd.Int("span", 60, "timespan of the plots")
@@ -35,6 +38,7 @@ func dashboard(args []string) {
 	dpi := float64(*dpiFlag)
 	s := ebiten.DeviceScaleFactor()
 	span := *spanFlag
+	apis := strings.Split(*apiFlag, ",")
 
 	titleHeight := 25
 
@@ -109,6 +113,17 @@ func dashboard(args []string) {
 	outqueueSeries.Interpolation = FillZero
 	ds3 := []Dataset{&pollSeries, &readableSeries, &writableSeries, &outqueueSeries}
 
+	ds4 := []Dataset{}
+	numNodes := len(apis)
+	for i := 0; i < numNodes; i++ {
+		confirmSeries := TimeSeries{}
+		confirmSeries.Consolidation = Avg
+		confirmSeries.ConsolidationInterval = time.Duration(100) * time.Millisecond
+		confirmSeries.Title = fmt.Sprintf("Node %v", i)
+		confirmSeries.Interpolation = FillZero
+		ds4 = append(ds4, &confirmSeries)
+	}
+
 	chartUL := DefaultTimeSeries(w/2, h/2 - titleHeight, s, dpi, "Block Propagation Delay")
 	chartUL.YRangeStep = 100
 	chartUR := DefaultTimeSeries(w/2, h/2 - titleHeight, s, dpi, "Socket Activity")
@@ -121,7 +136,8 @@ func dashboard(args []string) {
 	chartLL.YRangeStep = 25
 	chartLL.OnlySMA = true
 	chartLL.Prefetch = 1
-	chartLR := DefaultTimeSeries(w/2, h/2 - titleHeight, s, dpi, "Block Propagation Delay")
+	chartLR := DefaultTimeSeries(w/2, h/2 - titleHeight, s, dpi, "Transaction Confirmation")
+	chartLR.YRangeStep = 1000
 
 	imgUL := image.NewRGBA(image.Rect(0, 0, 1, 1))
 	imgUR := image.NewRGBA(image.Rect(0, 0, 1, 1))
@@ -132,6 +148,11 @@ func dashboard(args []string) {
 	go func() {
 		extractLog(*logFlag, &proposerSeries, &voterSeries, &transactionSeries, &readSeries, &writeSeries, &pollSeries, &readableSeries, &writableSeries, &outqueueSeries)
 	}()
+	for i, a := range(apis) {
+		go func(a string, i int) {
+			traceCounter(a, ds4[i].(*TimeSeries), time.Duration(100) * time.Millisecond)
+		}(a, i)
+	}
 
 	// update the figures
 	go func() {
@@ -151,7 +172,7 @@ func dashboard(args []string) {
 	}()
 	go func() {
 		for range time.NewTicker(interval).C {
-			imgLR = chartLR.PlotTimeSeries(ds, time.Now().Add(time.Duration(-span)*time.Second), time.Now())
+			imgLR = chartLR.PlotTimeSeries(ds4, time.Now().Add(time.Duration(-span)*time.Second), time.Now())
 		}
 	}()
 
