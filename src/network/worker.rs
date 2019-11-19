@@ -155,10 +155,8 @@ impl Context {
                             (None, None) => {},
                             (Some(encoded_block), Some(block_type)) => {
                                 match block_type {
-                                    // FIXME: we should priortize both proposer and voter. this is
-                                    // just for ease of experiments
-                                    PROPOSER => high_prio_blocks.push(encoded_block.to_vec()),
-                                    VOTER | TRANSACTION => low_prio_blocks.push(encoded_block.to_vec()),
+                                    PROPOSER | VOTER => high_prio_blocks.push(encoded_block.to_vec()),
+                                    TRANSACTION => low_prio_blocks.push(encoded_block.to_vec()),
                                     _ => unreachable!(),
                                 }
                             }

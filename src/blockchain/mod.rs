@@ -400,6 +400,9 @@ impl BlockChain {
                 // mark itself as unreferred
                 // Note that this could happen before committing to db, because no module will try
                 // to access transaction content based on pointers in unreferred_transactions.
+
+                // FIXME: if a transaction comes later than the proposer block referring it, don't
+                // add it
                 let mut unreferred_transactions = self.unreferred_transactions.lock().unwrap();
                 unreferred_transactions.insert(block_hash);
                 drop(unreferred_transactions);
