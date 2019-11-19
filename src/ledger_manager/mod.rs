@@ -11,6 +11,7 @@ use crossbeam::channel;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::collections::VecDeque;
 
 #[derive(Clone)]
 pub struct LedgerManager {
@@ -18,7 +19,8 @@ pub struct LedgerManager {
     chain: Arc<BlockChain>,
     utxodb: Arc<UtxoDatabase>,
     wallet: Arc<Wallet>,
-    ledger_tip: Arc<Mutex<Option<H256>>>,
+    // list of transaction blocks in the ledger order that we have not received
+    unresolved_ledger: Arc<Mutex<VecDeque<H256>>>,
 }
 
 impl LedgerManager {
@@ -33,7 +35,7 @@ impl LedgerManager {
             chain: Arc::clone(&chain),
             utxodb: Arc::clone(&utxodb),
             wallet: Arc::clone(&wallet),
-            ledger_tip: Arc::new(Mutex::new(None)),
+            unresolved_ledger: Arc::new(Mutex::new(VecDeque::new())),
         }
     }
 
@@ -162,14 +164,64 @@ impl LedgerManager {
     fn update_transaction_sequence(
         &self,
         ) -> (Vec<(Transaction, H256)>, Vec<(Transaction, H256)>) {
-        let diff = self.chain.update_ledger().unwrap();
+        let mut diff = self.chain.update_ledger().unwrap();
         PERFORMANCE_COUNTER.record_deconfirm_transaction_blocks(diff.1.len());
 
         // gather the transaction diff
         let mut add: Vec<(Transaction, H256)> = vec![];
         let mut remove: Vec<(Transaction, H256)> = vec![];
+
+        let mut unresolved_ledger = self.unresolved_ledger.lock().unwrap();
+
+        // remove the portion of unresolved ledger that is deconfirmed
+        // FIXME: lack checks here. e.g. whether we are deleting the same item from
+        // resolved_ledger_size and diff.1 (deleted)
+        while (!unresolved_ledger.is_empty()) && (!diff.1.is_empty()) {
+            unresolved_ledger.pop_back();
+            diff.1.pop();
+        }
+
+        // mark whether we failed to resolve all buffered tx blocks 
+        let mut ledger_growing_stopped = false;
+
+        // try to resolve some confirmed ledger
+        for hash in unresolved_ledger.iter() {
+            let block = match self.blockdb.get(&hash).unwrap() {
+                Some(b) => b,
+                None => {
+                    ledger_growing_stopped = true;
+                    break;
+                }
+            };
+            PERFORMANCE_COUNTER.record_confirm_transaction_block(&block);
+            let content = match block.content {
+                Content::Transaction(data) => data,
+                _ => unreachable!(),
+            };
+            let mut transactions = content
+                .transactions
+                .iter()
+                .map(|t| (t.clone(), t.hash()))
+                .collect();
+            // TODO: precompute the hash here. Note that although lazy-eval for tx hash, and we could have
+            // just called hash() here without storing the results (the results will be cached in the struct),
+            // such function call will be optimized away by LLVM. As a result, we have to manually pass the hash
+            // here. The same for added transactions below. This is a very ugly hack.
+            add.append(&mut transactions);
+        }
+
         for hash in diff.0 {
-            let block = self.blockdb.get(&hash).unwrap().unwrap();
+            if ledger_growing_stopped {
+                unresolved_ledger.push_back(hash);
+                continue;
+            }
+            let block = match self.blockdb.get(&hash).unwrap() {
+                Some(b) => b,
+                None => {
+                    ledger_growing_stopped = true;
+                    continue;
+                }
+            };
             PERFORMANCE_COUNTER.record_confirm_transaction_block(&block);
             let content = match block.content {
                 Content::Transaction(data) => data,
