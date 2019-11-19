@@ -1,5 +1,6 @@
 #!/bin/bash
 
+VOTER_CHAINS="1000"
 MINING_RATE="0.1"
 THROUGHPUT="5000.0"
 MINING_MODIFIER="2.3"	# mine faster than it should be
@@ -11,7 +12,7 @@ if [ "$#" -ne 1 ]; then
 fi
 
 throughput_param=`echo "$THROUGHPUT / 1" | bc`
-blkps=`echo "(100.0 + 1.0) * ${MINING_RATE} + ${THROUGHPUT} / (64000.0 / 168.0)" | bc`
+blkps=`echo "(${VOTER_CHAINS}.0 + 1.0) * ${MINING_RATE} + ${THROUGHPUT} / (64000.0 / 168.0)" | bc`
 mining_lambda=`echo "1000000.0 / ${MINING_MODIFIER} / ( ${blkps} / ${1}.0 ) / 1" | bc`
 
 echo "Throughput=${throughput_param}, Mining Lambda=${mining_lambda} (${blkps} blocks/s)"
@@ -99,7 +100,7 @@ for (( i = 0; i < $num_nodes; i++ )); do
 	p2p=`expr $p2p_port + $i`
 	api=`expr $api_port + $i`
 	vis=`expr $vis_port + $i`
-	command="$binary_path --p2p 127.0.0.1:${p2p} --api 127.0.0.1:${api} --visual 127.0.0.1:${vis} --blockdb /tmp/prism-${i}-blockdb.rocksdb --blockchaindb /tmp/prism-${i}-blockchaindb.rocksdb --utxodb /tmp/prism-${i}-utxodb.rocksdb --walletdb /tmp/prism-${i}-wallet.rocksdb -vvvvv --load-key ${i}.pkcs8 --fund-coins=60000 --voter-chains=100 --tx-throughput=${throughput_param} --proposer-mining-rate=${MINING_RATE} --voter-mining-rate=${MINING_RATE} --confirm-confidence=20.0 --adversary-ratio=0.33"
+	command="$binary_path --p2p 127.0.0.1:${p2p} --api 127.0.0.1:${api} --visual 127.0.0.1:${vis} --blockdb /tmp/prism-${i}-blockdb.rocksdb --blockchaindb /tmp/prism-${i}-blockchaindb.rocksdb --utxodb /tmp/prism-${i}-utxodb.rocksdb --walletdb /tmp/prism-${i}-wallet.rocksdb -vvvvv --load-key ${i}.pkcs8 --fund-coins=60000 --voter-chains=${VOTER_CHAINS} --tx-throughput=${throughput_param} --proposer-mining-rate=${MINING_RATE} --voter-mining-rate=${MINING_RATE} --confirm-confidence=20.0 --adversary-ratio=0.33"
 
 	for (( j = 0; j < $i; j++ )); do
 		peer_port=`expr $p2p_port + $j`
