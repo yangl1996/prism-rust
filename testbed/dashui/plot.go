@@ -13,12 +13,14 @@ type Figure struct {
 	SMA int
 	OnlySMA bool
 	YRangeStep float64
+	YAutoLow bool
 	Prefetch int
 }
 
 func (c *Figure) PlotTimeSeries(ds []Dataset, start, end time.Time) *image.RGBA {
 	allSeries := []chart.Series{}
 	gMax := 0.0
+	gMin := math.Inf(1)
 	// get the max of all data series at the same time
 	for i, d := range ds {
 		times := []time.Time{}
@@ -46,6 +48,9 @@ func (c *Figure) PlotTimeSeries(ds []Dataset, start, end time.Time) *image.RGBA 
 				if d > gMax {
 					gMax = d
 				}
+				if d < gMin {
+					gMin = d
+				}
 			}
 		}
 		if c.SMA != 0 {
@@ -69,6 +74,9 @@ func (c *Figure) PlotTimeSeries(ds []Dataset, start, end time.Time) *image.RGBA 
 				if y > gMax {
 					gMax = y
 				}
+				if y < gMin {
+					gMin = y
+				}
 			}
 		}
 	}
@@ -79,8 +87,15 @@ func (c *Figure) PlotTimeSeries(ds []Dataset, start, end time.Time) *image.RGBA 
 	}
 
 	if c.YRangeStep != 0 {
+		yMin := 0.0
+		if c.YAutoLow {
+			yMin = float64(int(gMin / c.YRangeStep)) * c.YRangeStep - c.YRangeStep
+		}
+		if yMin < 0.0 {
+			yMin = 0.0
+		}
 		c.YAxis.Range = &chart.ContinuousRange {
-			Min: 0.00,
+			Min: yMin,
 			Max: float64(int(gMax / c.YRangeStep)) * c.YRangeStep + c.YRangeStep,
 		}
 	}

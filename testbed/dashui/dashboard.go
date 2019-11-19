@@ -144,6 +144,7 @@ func dashboard(args []string) {
 	chartLL.Prefetch = 1
 	chartLR := DefaultTimeSeries(w/2, h/2 - titleHeight, s, dpi, "Transaction Confirmation")
 	chartLR.YRangeStep = 50000
+	chartLR.YAutoLow = true
 
 	imgUL := image.NewRGBA(image.Rect(0, 0, 1, 1))
 	imgUR := image.NewRGBA(image.Rect(0, 0, 1, 1))
