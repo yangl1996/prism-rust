@@ -19,7 +19,7 @@ type Snapshot struct {
 	Processed_voter_blocks int
 }
 
-func traceCounter(addr string, confirmThroughput *TimeSeries, interval time.Duration) {
+func traceCounter(addr string, confirmThroughput *TimeSeries, confirmAmount *TimeSeries, interval time.Duration) {
 	url := fmt.Sprintf("http://%v/telematics/snapshot", addr)
 
 	lastQuery := time.Now()
@@ -44,6 +44,7 @@ func traceCounter(addr string, confirmThroughput *TimeSeries, interval time.Dura
 		txRate := float64(txDiff) / timeDiff
 		lastTx = snapshot.Confirmed_transactions
 		confirmThroughput.Record(txRate, thisQuery)
+		confirmAmount.Record(float64(snapshot.Confirmed_transactions), thisQuery)
 
 		lastQuery = thisQuery
 	}

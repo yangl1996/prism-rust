@@ -113,7 +113,8 @@ func dashboard(args []string) {
 	outqueueSeries.Interpolation = FillZero
 	ds3 := []Dataset{&pollSeries, &readableSeries, &writableSeries, &outqueueSeries}
 
-	ds4 := []Dataset{}
+	ds4 := []Dataset{}	// confirm throughput
+	ds5 := []Dataset{}	// confirm amount
 	numNodes := len(apis)
 	for i := 0; i < numNodes; i++ {
 		confirmSeries := TimeSeries{}
@@ -121,7 +122,12 @@ func dashboard(args []string) {
 		confirmSeries.ConsolidationInterval = time.Duration(100) * time.Millisecond
 		confirmSeries.Title = fmt.Sprintf("Node %v", i)
 		confirmSeries.Interpolation = FillZero
+		confirmAmountSeries := TimeSeries{}
+		confirmAmountSeries.Consolidation = Avg
+		confirmAmountSeries.ConsolidationInterval = time.Duration(100) * time.Millisecond
+		confirmAmountSeries.Title = fmt.Sprintf("Node %v", i)
 		ds4 = append(ds4, &confirmSeries)
+		ds5 = append(ds5, &confirmAmountSeries)
 	}
 
 	chartUL := DefaultTimeSeries(w/2, h/2 - titleHeight, s, dpi, "Block Propagation Delay")
@@ -137,7 +143,7 @@ func dashboard(args []string) {
 	chartLL.OnlySMA = true
 	chartLL.Prefetch = 1
 	chartLR := DefaultTimeSeries(w/2, h/2 - titleHeight, s, dpi, "Transaction Confirmation")
-	chartLR.YRangeStep = 1000
+	chartLR.YRangeStep = 50000
 
 	imgUL := image.NewRGBA(image.Rect(0, 0, 1, 1))
 	imgUR := image.NewRGBA(image.Rect(0, 0, 1, 1))
@@ -150,7 +156,7 @@ func dashboard(args []string) {
 	}()
 	for i, a := range(apis) {
 		go func(a string, i int) {
-			traceCounter(a, ds4[i].(*TimeSeries), time.Duration(100) * time.Millisecond)
+			traceCounter(a, ds4[i].(*TimeSeries), ds5[i].(*TimeSeries), time.Duration(100) * time.Millisecond)
 		}(a, i)
 	}
 
@@ -172,7 +178,7 @@ func dashboard(args []string) {
 	}()
 	go func() {
 		for range time.NewTicker(interval).C {
-			imgLR = chartLR.PlotTimeSeries(ds4, time.Now().Add(time.Duration(-span)*time.Second), time.Now())
+			imgLR = chartLR.PlotTimeSeries(ds5, time.Now().Add(time.Duration(-span)*time.Second), time.Now())
 		}
 	}()
 
