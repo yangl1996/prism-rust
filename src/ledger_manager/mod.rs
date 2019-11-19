@@ -185,11 +185,12 @@ impl LedgerManager {
         let mut ledger_growing_stopped = false;
 
         // try to resolve some confirmed ledger
-        for hash in unresolved_ledger.iter() {
+        while let Some(hash) = unresolved_ledger.pop_front() {
             let block = match self.blockdb.get(&hash).unwrap() {
                 Some(b) => b,
                 None => {
                     ledger_growing_stopped = true;
+                    unresolved_ledger.push_front(hash);
                     break;
                 }
             };
@@ -219,6 +220,7 @@ impl LedgerManager {
                 Some(b) => b,
                 None => {
                     ledger_growing_stopped = true;
+                    unresolved_ledger.push_back(hash);
                     continue;
                 }
             };
