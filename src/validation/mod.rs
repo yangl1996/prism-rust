@@ -112,11 +112,15 @@ pub fn check_data_availability(
     match &block.content {
         Content::Proposer(content) => {
             // check for missing references
+            // FIXME: removed because we want to allow transaction blocks to be lagged behind
+            // but we may still want some checks
+            /*
             let missing_refs =
                 proposer_block::get_missing_references(&content, blockchain, blockdb);
             if !missing_refs.is_empty() {
                 missing.extend_from_slice(&missing_refs);
             }
+            */
         }
         Content::Voter(content) => {
             // check for missing references
