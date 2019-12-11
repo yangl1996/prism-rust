@@ -5,6 +5,7 @@ use crate::config::*;
 use crate::crypto::hash::{Hashable, H256};
 use bincode::{deserialize, serialize};
 use rocksdb::{self, ColumnFamilyDescriptor, Options, SliceTransform, DB};
+use rocksdb::WriteBatch;
 use std::convert::TryInto;
 use std::sync::atomic::{AtomicU64, Ordering};
 use crate::block::BlockType;
@@ -100,14 +101,16 @@ impl BlockDatabase {
 
     /// Insert a new block to the database and returns the sequence number of the block.
     pub fn insert(&self, block: &Block) -> Result<u64, rocksdb::Error> {
+        let mut wb = WriteBatch::default();
         let block_cf = self.db.cf_handle(BLOCK_CF).unwrap();
         let block_type_cf = self.db.cf_handle(BLOCK_TYPE_CF).unwrap();
         let hash: H256 = block.hash();
         let serialized = serialize(block).unwrap();
         let counter = self.count.fetch_add(1, Ordering::Relaxed);
-        self.db.put_cf(block_cf, &hash, &serialized)?;
+        wb.put_cf(block_cf, &hash, &serialized)?;
         let block_type: u8 = block.block_type().into();
-        self.db.put_cf(block_type_cf, &hash, &[block_type])?;
+        wb.put_cf(block_type_cf, &hash, &[block_type])?;
+        self.db.write(wb)?;
         Ok(counter)
     }
 
@@ -115,8 +118,10 @@ impl BlockDatabase {
         let block_cf = self.db.cf_handle(BLOCK_CF).unwrap();
         let block_type_cf = self.db.cf_handle(BLOCK_TYPE_CF).unwrap();
         let counter = self.count.fetch_add(1, Ordering::Relaxed);
-        self.db.put_cf(block_cf, &hash, &raw_block)?;
-        self.db.put_cf(block_type_cf, &hash, &[block_type.into()])?;
+        let mut wb = WriteBatch::default();
+        wb.put_cf(block_cf, &hash, &raw_block)?;
+        wb.put_cf(block_type_cf, &hash, &[block_type.into()])?;
+        self.db.write(wb)?;
         Ok(counter)
     }
 
