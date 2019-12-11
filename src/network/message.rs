@@ -12,7 +12,6 @@ pub enum Message {
     NewTransactionHashes(Vec<H256>),
     GetTransactions(Vec<H256>),
     Transactions(Vec<Transaction>),
-    Bootstrap(H256),
 }
 
 impl Message {
@@ -20,7 +19,7 @@ impl Message {
         match self {
             Message::Ping(_) | Message::Pong(_) | Message::NewBlockHashes(_) | Message::GetBlocks(_) => 0,
             Message::ProposerVoterBlocks(_) => 1,
-            Message::NewTransactionHashes(_) | Message::GetTransactions(_) | Message::Transactions(_) | Message::Bootstrap(_) | Message::TransactionBlocks(_) => 2,
+            Message::NewTransactionHashes(_) | Message::GetTransactions(_) | Message::Transactions(_) | Message::TransactionBlocks(_) => 2,
         }
     }
 }
