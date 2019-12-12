@@ -10,6 +10,7 @@ use std::sync::{Arc, Mutex};
 use std::os::unix::io::AsRawFd;
 use nix::sys::socket::setsockopt;
 use nix::sys::socket::sockopt::{SndBuf, RcvBuf};
+use super::PRIORITY_LEVEL;
 
 const MAX_INCOMING_CLIENT: usize = 256;
 const MAX_EVENT: usize = 1024;
@@ -79,8 +80,10 @@ impl Context {
             ));
         }
 
-        // set two tokens, one for socket and one for write queue
-        let socket_token = mio::Token(key * 4);
+        // set the tokens
+        // we need PRIORITY_LEVEL + 1 tokens for each socket
+        let token_space = (PRIORITY_LEVEL + 1).next_power_of_two();
+        let socket_token = mio::Token(key * token_space);
 
         // set tcp nodelay
         stream.set_nodelay(true)?;
@@ -100,9 +103,9 @@ impl Context {
         )?;
         let (ctx, handle) = peer::new(stream, direction, self.new_msg_chan.clone())?;
 
-        // register the writer queue
-        for i in 0..3 {
-            let writer_token = mio::Token(key * 4 + i + 1);
+        // register the writer queues
+        for i in 0..PRIORITY_LEVEL {
+            let writer_token = mio::Token(key * token_space + i + 1);
             self.poll.register(
                 &ctx.writer.queues[i],
                 writer_token,
@@ -164,10 +167,11 @@ impl Context {
     }
 
     fn register_write_interest(&mut self, peer_id: usize) -> std::io::Result<()> {
+        let token_space = (PRIORITY_LEVEL + 1).next_power_of_two();
         trace!("Registering socket write interest for peer {}", peer_id);
         let peer = &mut self.peers[peer_id];
         // we have stuff to write at the writer queue
-        let socket_token = mio::Token(peer_id * 4);
+        let socket_token = mio::Token(peer_id * token_space);
         // register for writable event
         self.poll.reregister(
             &peer.stream,
@@ -210,11 +214,12 @@ impl Context {
 
     fn process_writable(&mut self, peer_id: usize) -> std::io::Result<()> {
         let peer = &mut self.peers[peer_id];
+        let token_space = (PRIORITY_LEVEL + 1).next_power_of_two();
         match peer.writer.write() {
             Ok(WriteResult::Complete) => {
                 trace!("Peer {} outgoing queue drained", peer_id);
                 // we wrote everything in the write queue
-                let socket_token = mio::Token(peer_id * 4);
+                let socket_token = mio::Token(peer_id * token_space);
                 // we've done writing. no longer interested.
                 self.poll.reregister(
                     &peer.stream,
@@ -223,8 +228,8 @@ impl Context {
                     mio::PollOpt::edge(),
                 )?;
                 // we're interested in write queue again.
-                for i in 0..3 {
-                    let writer_token = mio::Token(peer_id * 4 + i + 1);
+                for i in 0..PRIORITY_LEVEL {
+                    let writer_token = mio::Token(peer_id * token_space + i + 1);
                     self.poll.reregister(
                         &peer.writer.queues[i],
                         writer_token,
@@ -243,14 +248,14 @@ impl Context {
             Ok(WriteResult::ChanClosed) => {
                 // the channel is closed. no more writes.
                 warn!("Peer {} outgoing queue closed", peer_id);
-                let socket_token = mio::Token(peer_id * 4);
+                let socket_token = mio::Token(peer_id * token_space);
                 self.poll.reregister(
                     &peer.stream,
                     socket_token,
                     mio::Ready::readable(),
                     mio::PollOpt::edge(),
                 )?;
-                for i in 0..3 {
+                for i in 0..PRIORITY_LEVEL {
                     self.poll.deregister(&peer.writer.queues[i])?;
                 }
             }
@@ -271,6 +276,7 @@ impl Context {
 
     /// The main event loop of the server.
     fn listen(&mut self) -> std::io::Result<()> {
+        let token_space = (PRIORITY_LEVEL + 1).next_power_of_two();
         // bind server to passed addr and register to the poll
         let server = net::TcpListener::bind(&self.addr)?;
 
@@ -346,9 +352,9 @@ impl Context {
                     }
                     mio::Token(token_id) => {
                         // peer id (the index in the peers list) is token_id/4
-                        let peer_id = token_id >> 2;
+                        let peer_id = token_id / token_space;
                         // if the token_id is odd, it's new write request, else it's socket
-                        match token_id & 0x11 {
+                        match token_id & (token_space - 1) {
                             0 => {
                                 let readiness = event.readiness();
                                 if readiness.is_readable() {
@@ -366,7 +372,7 @@ impl Context {
                                     self.process_writable(peer_id).unwrap();
                                 }
                             }
-                            1 | 2 | 3 => {
+                            1..=PRIORITY_LEVEL => {
                                 trace!("Peer {} outgoing queue readable", peer_id);
                                 self.register_write_interest(peer_id)?;
                             }

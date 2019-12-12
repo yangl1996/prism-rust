@@ -6,6 +6,7 @@ use std::convert::TryInto;
 use std::io::{Read, Write};
 use std::sync::mpsc;
 use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
+use super::PRIORITY_LEVEL;
 
 enum DecodeState {
     Length,
@@ -94,7 +95,7 @@ enum WriteState {
 
 pub struct WriteContext {
     writer: std::io::BufWriter<mio::net::TcpStream>,
-    pub queues: [channel::Receiver<Vec<u8>>; 3],
+    pub queues: [channel::Receiver<Vec<u8>>; PRIORITY_LEVEL],
     len_buffer: [u8; std::mem::size_of::<u32>()],
     msg_buffer: Vec<u8>,
     msg_length: usize,
@@ -132,7 +133,7 @@ impl WriteContext {
                         self.writer.flush()?;
                         let mut msg = None;
                         // try three queues one by one
-                        for i in 0..3 {
+                        for i in 0..PRIORITY_LEVEL {
                             match self.queues[i].try_recv() {
                                 Ok(m) => {
                                     msg = Some(m);
@@ -187,12 +188,29 @@ pub fn new(
     let addr = stream.peer_addr()?;
 
     let bufwriter = std::io::BufWriter::with_capacity(1500, writer_stream);
-    let (write_sender_0, write_receiver_0) = channel::channel();
-    let (write_sender_1, write_receiver_1) = channel::channel();
-    let (write_sender_2, write_receiver_2) = channel::channel();
+    let (senders, receivers) = {
+        let mut senders: [std::mem::MaybeUninit<channel::Sender<Vec<u8>>>; PRIORITY_LEVEL] = unsafe {
+            std::mem::MaybeUninit::uninit().assume_init()
+        };
+        let mut receivers: [std::mem::MaybeUninit<channel::Receiver<Vec<u8>>>; PRIORITY_LEVEL] = unsafe {
+            std::mem::MaybeUninit::uninit().assume_init()
+        };
+
+        for i in 0..PRIORITY_LEVEL {
+            let (sender, receiver) = channel::channel();
+            *&mut senders[i] = std::mem::MaybeUninit::new(sender);
+            *&mut receivers[i] = std::mem::MaybeUninit::new(receiver);
+        }
+
+        unsafe {
+            (std::mem::transmute::<_, [channel::Sender<Vec<u8>>; PRIORITY_LEVEL]>(senders),
+            std::mem::transmute::<_, [channel::Receiver<Vec<u8>>; PRIORITY_LEVEL]>(receivers))
+        }
+
+    };
     let write_ctx = WriteContext {
         writer: bufwriter,
-        queues: [write_receiver_0, write_receiver_1, write_receiver_2],
+        queues: receivers,
         len_buffer: [0; std::mem::size_of::<u32>()],
         msg_buffer: Vec::new(),
         msg_length: 0,
@@ -201,7 +219,7 @@ pub fn new(
     };
 
     let handle = Handle {
-        write_queues: [write_sender_0, write_sender_1, write_sender_2],
+        write_queues: senders,
         addr,
     };
 
@@ -245,7 +263,7 @@ pub struct Context {
 #[derive(Clone)]
 pub struct Handle {
     addr: std::net::SocketAddr,
-    write_queues: [channel::Sender<Vec<u8>>; 3],
+    write_queues: [channel::Sender<Vec<u8>>; PRIORITY_LEVEL],
 }
 
 impl Handle {
