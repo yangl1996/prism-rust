@@ -177,8 +177,11 @@ impl LedgerManager {
         // FIXME: lack checks here. e.g. whether we are deleting the same item from
         // resolved_ledger_size and diff.1 (deleted)
         while (!unresolved_ledger.is_empty()) && (!diff.1.is_empty()) {
-            unresolved_ledger.pop_back();
-            diff.1.pop();
+            let removed_from_buffer = unresolved_ledger.pop_back().unwrap();
+            let removed_from_diff = diff.1.pop().unwrap();
+            if removed_from_buffer != removed_from_diff {
+                panic!("Ledger altered");
+            }
         }
 
         // mark whether we failed to resolve all buffered tx blocks 
