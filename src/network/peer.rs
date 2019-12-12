@@ -132,7 +132,7 @@ impl WriteContext {
                         // first flush the writer
                         self.writer.flush()?;
                         let mut msg = None;
-                        // try three queues one by one
+                        // try write queues one by one
                         for i in 0..PRIORITY_LEVEL {
                             match self.queues[i].try_recv() {
                                 Ok(m) => {
