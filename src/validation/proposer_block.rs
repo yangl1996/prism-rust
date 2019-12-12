@@ -12,12 +12,15 @@ pub fn get_missing_references(
     let mut missing_blocks: Vec<H256> = vec![];
 
     // check whether the tx block referred are present
+    // FIXME: removed for now since we want to let the miner mine when not receiving all tx blk
+    /*
     for tx_block_hash in content.transaction_refs.iter() {
         let tx_block = check_transaction_block_exists(*tx_block_hash, blockchain);
         if !tx_block {
             missing_blocks.push(*tx_block_hash);
         }
     }
+    */
 
     // check whether the proposer blocks referred are present
     for prop_block_hash in content.proposer_refs.iter() {
