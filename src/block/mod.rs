@@ -5,6 +5,35 @@ pub mod voter;
 use crate::crypto::hash::{Hashable, H256};
 use crate::experiment::performance_counter::PayloadSize;
 
+pub enum BlockType {
+    Proposer,
+    Voter,
+    Transaction,
+}
+
+impl std::convert::TryFrom<u8> for BlockType {
+    type Error = &'static str;
+
+    fn try_from(input: u8) -> Result<Self, Self::Error> {
+        match input {
+            0 => Ok(BlockType::Proposer),
+            1 => Ok(BlockType::Voter),
+            2 => Ok(BlockType::Transaction),
+            _ => Err("Out of range"),
+        }
+    }
+}
+
+impl std::convert::Into<u8> for BlockType {
+    fn into(self) -> u8 {
+        match self {
+            Self::Proposer => 0,
+            Self::Voter => 1,
+            Self::Transaction => 2,
+        }
+    }
+}
+
 /// A block in the Prism blockchain.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Block {
@@ -56,6 +85,14 @@ impl Block {
             header,
             content,
             sortition_proof,
+        }
+    }
+
+    pub fn block_type(&self) -> BlockType {
+        match self.content {
+            Content::Proposer(_) => BlockType::Proposer,
+            Content::Voter(_) => BlockType::Voter,
+            Content::Transaction(_) => BlockType::Transaction,
         }
     }
 }

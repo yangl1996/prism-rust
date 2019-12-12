@@ -13,7 +13,7 @@ bincode = "1.2"
 serde_derive = "1.0"
 serde = "1.0"
 hex-literal = "0.2"
-rocksdb = { git = "https://github.com/rust-rocksdb/rust-rocksdb.git" }
+rocksdb = "0.13"
 log = "0.4"
 stderrlog = "0.4"
 mio = "0.6"
@@ -31,6 +31,7 @@ url = "2.1"
 base64 = "0.10"
 crossbeam = "0.7"
 statrs = "0.12"
+nix = "0.15"
 
 [dependencies.ed25519-dalek]
 version = "1.0.0-pre.2"

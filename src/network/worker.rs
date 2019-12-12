@@ -3,7 +3,8 @@ use super::message::Message;
 use super::peer;
 use crate::block::{Block, Content};
 use crate::blockchain::BlockChain;
-use crate::blockdb::BlockDatabase;
+use crate::block::BlockType;
+use crate::blockdb::{BlockDatabase};
 use crate::config::*;
 use crate::crypto::hash::{Hashable, H256};
 use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
@@ -148,18 +149,28 @@ impl Context {
                 }
                 Message::GetBlocks(hashes) => {
                     debug!("Asked for {} blocks", hashes.len());
-                    let mut blocks = vec![];
+                    let mut high_prio_blocks = vec![];
+                    let mut low_prio_blocks = vec![];
                     for hash in hashes {
-                        match self.blockdb.get_encoded(&hash).unwrap() {
-                            None => {}
-                            Some(encoded_block) => {
-                                blocks.push(encoded_block.to_vec());
+                        match self.blockdb.get_type(&hash).unwrap() {
+                            None => {},
+                            Some(block_type) => {
+                                let encoded_block = self.blockdb.get_encoded(&hash).unwrap().unwrap();
+                                match block_type {
+                                    BlockType::Proposer | BlockType::Voter => high_prio_blocks.push(encoded_block.to_vec()),
+                                    BlockType::Transaction => low_prio_blocks.push(encoded_block.to_vec()),
+                                }
                             }
                         }
                     }
-                    peer.write(Message::Blocks(blocks));
+                    if !high_prio_blocks.is_empty() {
+                        peer.write(Message::ProposerVoterBlocks(high_prio_blocks));
+                    }
+                    if !low_prio_blocks.is_empty() {
+                        peer.write(Message::TransactionBlocks(low_prio_blocks));
+                    }
                 }
-                Message::Blocks(encoded_blocks) => {
+                Message::ProposerVoterBlocks(encoded_blocks) | Message::TransactionBlocks(encoded_blocks) => {
                     debug!("Got {} blocks", encoded_blocks.len());
 
                     // decode the blocks
@@ -210,7 +221,8 @@ impl Context {
                         }
 
                         // store the block into database
-                        self.blockdb.insert_encoded(&hash, &encoded_block).unwrap();
+                        let block_type = block.block_type();
+                        self.blockdb.insert_encoded(&hash, &encoded_block, block_type).unwrap();
 
                         // now that this block is store, remove the reference
                         let mut recent_blocks = self.recent_blocks.lock().unwrap();
@@ -322,17 +334,8 @@ impl Context {
                     if !to_request.is_empty() {
                         to_request.sort();
                         to_request.dedup();
-                        peer.write(Message::GetBlocks(to_request));
+                        //peer.write(Message::GetBlocks(to_request));
                     }
-                }
-                Message::Bootstrap(after) => {
-                    debug!("Asked for all blocks after {}", &after);
-                    /*
-                     * TODO: recover this message
-                    for batch in self.blockdb.blocks_after(&after, 500) {
-                        peer.write(Message::Blocks(batch));
-                    }
-                    */
                 }
             }
         }

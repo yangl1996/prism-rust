@@ -9,14 +9,18 @@ use crate::utxodb::UtxoDatabase;
 use crate::wallet::Wallet;
 use crossbeam::channel;
 use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::thread;
+use std::collections::VecDeque;
 
+#[derive(Clone)]
 pub struct LedgerManager {
     blockdb: Arc<BlockDatabase>,
     chain: Arc<BlockChain>,
     utxodb: Arc<UtxoDatabase>,
     wallet: Arc<Wallet>,
+    // list of transaction blocks in the ledger order that we have not received
+    unresolved_ledger: Arc<Mutex<VecDeque<H256>>>,
 }
 
 impl LedgerManager {
@@ -31,16 +35,16 @@ impl LedgerManager {
             chain: Arc::clone(&chain),
             utxodb: Arc::clone(&utxodb),
             wallet: Arc::clone(&wallet),
+            unresolved_ledger: Arc::new(Mutex::new(VecDeque::new())),
         }
     }
 
     pub fn start(self, buffer_size: usize, num_workers: usize) {
         // start thread that updates transaction sequence
-        let blockdb = Arc::clone(&self.blockdb);
-        let chain = Arc::clone(&self.chain);
+        let ctx = self.clone();
         let (tx_diff_tx, tx_diff_rx) = channel::bounded(buffer_size);
         thread::spawn(move || loop {
-            let tx_diff = update_transaction_sequence(&blockdb, &chain);
+            let tx_diff = ctx.update_transaction_sequence();
             tx_diff_tx.send(tx_diff).unwrap();
         });
 
@@ -156,6 +160,104 @@ impl LedgerManager {
             wallet.apply_diff(&coin_diff.0, &coin_diff.1).unwrap();
         });
     }
+
+    fn update_transaction_sequence(
+        &self,
+        ) -> (Vec<(Transaction, H256)>, Vec<(Transaction, H256)>) {
+        let mut diff = self.chain.update_ledger().unwrap();
+        PERFORMANCE_COUNTER.record_deconfirm_transaction_blocks(diff.1.len());
+
+        // gather the transaction diff
+        let mut add: Vec<(Transaction, H256)> = vec![];
+        let mut remove: Vec<(Transaction, H256)> = vec![];
+
+        let mut unresolved_ledger = self.unresolved_ledger.lock().unwrap();
+
+        // remove the portion of unresolved ledger that is deconfirmed
+        // FIXME: lack checks here. e.g. whether we are deleting the same item from
+        // resolved_ledger_size and diff.1 (deleted)
+        while (!unresolved_ledger.is_empty()) && (!diff.1.is_empty()) {
+            let removed_from_buffer = unresolved_ledger.pop_back().unwrap();
+            let removed_from_diff = diff.1.pop().unwrap();
+            if removed_from_buffer != removed_from_diff {
+                panic!("Ledger altered");
+            }
+        }
+
+        // mark whether we failed to resolve all buffered tx blocks 
+        let mut ledger_growing_stopped = false;
+
+        // try to resolve some confirmed ledger
+        while let Some(hash) = unresolved_ledger.pop_front() {
+            let block = match self.blockdb.get(&hash).unwrap() {
+                Some(b) => b,
+                None => {
+                    ledger_growing_stopped = true;
+                    unresolved_ledger.push_front(hash);
+                    break;
+                }
+            };
+            PERFORMANCE_COUNTER.record_confirm_transaction_block(&block);
+            let content = match block.content {
+                Content::Transaction(data) => data,
+                _ => unreachable!(),
+            };
+            let mut transactions = content
+                .transactions
+                .iter()
+                .map(|t| (t.clone(), t.hash()))
+                .collect();
+            // TODO: precompute the hash here. Note that although lazy-eval for tx hash, and we could have
+            // just called hash() here without storing the results (the results will be cached in the struct),
+            // such function call will be optimized away by LLVM. As a result, we have to manually pass the hash
+            // here. The same for added transactions below. This is a very ugly hack.
+            add.append(&mut transactions);
+        }
+
+        for hash in diff.0 {
+            if ledger_growing_stopped {
+                unresolved_ledger.push_back(hash);
+                continue;
+            }
+            let block = match self.blockdb.get(&hash).unwrap() {
+                Some(b) => b,
+                None => {
+                    ledger_growing_stopped = true;
+                    unresolved_ledger.push_back(hash);
+                    continue;
+                }
+            };
+            PERFORMANCE_COUNTER.record_confirm_transaction_block(&block);
+            let content = match block.content {
+                Content::Transaction(data) => data,
+                _ => unreachable!(),
+            };
+            let mut transactions = content
+                .transactions
+                .iter()
+                .map(|t| (t.clone(), t.hash()))
+                .collect();
+            // TODO: precompute the hash here. Note that although lazy-eval for tx hash, and we could have
+            // just called hash() here without storing the results (the results will be cached in the struct),
+            // such function call will be optimized away by LLVM. As a result, we have to manually pass the hash
+            // here. The same for added transactions below. This is a very ugly hack.
+            add.append(&mut transactions);
+        }
+        for hash in diff.1 {
+            let block = self.blockdb.get(&hash).unwrap().unwrap();
+            let content = match block.content {
+                Content::Transaction(data) => data,
+                _ => unreachable!(),
+            };
+            let mut transactions = content
+                .transactions
+                .iter()
+                .map(|t| (t.clone(), t.hash()))
+                .collect();
+            remove.append(&mut transactions);
+        }
+        (add, remove)
+    }
 }
 
 #[derive(Clone)]
@@ -194,46 +296,3 @@ impl UtxoManager {
     }
 }
 
-fn update_transaction_sequence(
-    blockdb: &BlockDatabase,
-    chain: &BlockChain,
-) -> (Vec<(Transaction, H256)>, Vec<(Transaction, H256)>) {
-    let diff = chain.update_ledger().unwrap();
-    PERFORMANCE_COUNTER.record_deconfirm_transaction_blocks(diff.1.len());
-
-    // gather the transaction diff
-    let mut add: Vec<(Transaction, H256)> = vec![];
-    let mut remove: Vec<(Transaction, H256)> = vec![];
-    for hash in diff.0 {
-        let block = blockdb.get(&hash).unwrap().unwrap();
-        PERFORMANCE_COUNTER.record_confirm_transaction_block(&block);
-        let content = match block.content {
-            Content::Transaction(data) => data,
-            _ => unreachable!(),
-        };
-        let mut transactions = content
-            .transactions
-            .iter()
-            .map(|t| (t.clone(), t.hash()))
-            .collect();
-        // TODO: precompute the hash here. Note that although lazy-eval for tx hash, and we could have
-        // just called hash() here without storing the results (the results will be cached in the struct),
-        // such function call will be optimized away by LLVM. As a result, we have to manually pass the hash
-        // here. The same for added transactions below. This is a very ugly hack.
-        add.append(&mut transactions);
-    }
-    for hash in diff.1 {
-        let block = blockdb.get(&hash).unwrap().unwrap();
-        let content = match block.content {
-            Content::Transaction(data) => data,
-            _ => unreachable!(),
-        };
-        let mut transactions = content
-            .transactions
-            .iter()
-            .map(|t| (t.clone(), t.hash()))
-            .collect();
-        remove.append(&mut transactions);
-    }
-    (add, remove)
-}

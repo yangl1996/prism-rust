@@ -283,6 +283,17 @@ impl BlockChain {
                     block_hash,
                     content.transaction_refs
                 );
+                // add ref'ed transaction blocks
+                // note that we only add the reference links from proposer to transactions for now.
+                // links from transaction to proposer will be added later when we insert the tx
+                // blocks.
+                for transaction_block in &content.transaction_refs {
+                    merge_value!(
+                        transaction_ref_neighbor_cf,
+                        transaction_block,
+                        block_hash
+                    );
+                }
                 // get current block level
                 let parent_level: u64 = get_value!(proposer_node_level_cf, parent_hash);
                 let self_level = parent_level + 1;
@@ -400,9 +411,16 @@ impl BlockChain {
                 // mark itself as unreferred
                 // Note that this could happen before committing to db, because no module will try
                 // to access transaction content based on pointers in unreferred_transactions.
+
                 let mut unreferred_transactions = self.unreferred_transactions.lock().unwrap();
                 unreferred_transactions.insert(block_hash);
                 drop(unreferred_transactions);
+
+                if self.db.get_pinned_cf(transaction_ref_neighbor_cf, serialize(&block_hash).unwrap())?.is_some() {
+                    let mut unreferred_transactions = self.unreferred_transactions.lock().unwrap();
+                    unreferred_transactions.remove(&block_hash);
+                    drop(unreferred_transactions);
+                }
 
                 // This db write is only to facilitate check_existence
                 self.db.write(wb)?;

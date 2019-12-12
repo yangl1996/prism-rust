@@ -1,12 +1,16 @@
 use super::message;
 use super::peer::{self, ReadResult, WriteResult};
-use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 use crossbeam::channel as cbchannel;
 use log::{debug, error, info, trace, warn};
 use mio::{self, net};
 use mio_extras::channel;
 use std::sync::mpsc;
 use std::thread;
+use std::sync::{Arc, Mutex};
+use std::os::unix::io::AsRawFd;
+use nix::sys::socket::setsockopt;
+use nix::sys::socket::sockopt::{SndBuf, RcvBuf};
+use super::PRIORITY_LEVEL;
 
 const MAX_INCOMING_CLIENT: usize = 256;
 const MAX_EVENT: usize = 1024;
@@ -16,12 +20,18 @@ pub fn new(
     msg_sink: cbchannel::Sender<(Vec<u8>, peer::Handle)>,
 ) -> std::io::Result<(Context, Handle)> {
     let (control_signal_sender, control_signal_receiver) = channel::channel();
+    let peer_handles: Vec<peer::Handle> = vec![];
+    let peer_handles = Mutex::new(peer_handles);
+    let peer_handles = Arc::new(peer_handles);
     let handle = Handle {
         control_chan: control_signal_sender,
+        peer_handles: Arc::clone(&peer_handles)
+
     };
     let ctx = Context {
         peers: slab::Slab::new(),
         peer_list: vec![],
+        peer_handles: Arc::clone(&peer_handles),
         addr,
         poll: mio::Poll::new()?,
         control_chan: control_signal_receiver,
@@ -33,6 +43,7 @@ pub fn new(
 
 pub struct Context {
     peers: slab::Slab<peer::Context>,
+    peer_handles: Arc<Mutex<Vec<peer::Handle>>>,
     peer_list: Vec<usize>,
     addr: std::net::SocketAddr,
     poll: mio::Poll,
@@ -69,9 +80,19 @@ impl Context {
             ));
         }
 
-        // set two tokens, one for socket and one for write queue
-        let socket_token = mio::Token(key * 2);
-        let writer_token = mio::Token(key * 2 + 1);
+        // set the tokens
+        // we need PRIORITY_LEVEL + 1 tokens for each socket
+        let token_space = (PRIORITY_LEVEL + 1).next_power_of_two();
+        let socket_token = mio::Token(key * token_space);
+
+        // set tcp nodelay
+        stream.set_nodelay(true)?;
+
+        // set tcp socket buffer size
+        let fd = stream.as_raw_fd();
+        setsockopt(fd, RcvBuf, &65535).unwrap();
+        setsockopt(fd, SndBuf, &65535).unwrap();
+
 
         // register the new connection
         self.poll.register(
@@ -80,21 +101,30 @@ impl Context {
             mio::Ready::readable(),
             mio::PollOpt::edge(),
         )?;
-        let (ctx, handle) = peer::new(stream, direction)?;
+        let (ctx, handle) = peer::new(stream, direction, self.new_msg_chan.clone())?;
 
-        // register the writer queue
-        self.poll.register(
-            &ctx.writer.queue,
-            writer_token,
-            mio::Ready::readable(),
-            mio::PollOpt::edge() | mio::PollOpt::oneshot(),
-        )?;
+        // register the writer queues
+        for i in 0..PRIORITY_LEVEL {
+            let writer_token = mio::Token(key * token_space + i + 1);
+            self.poll.register(
+                &ctx.writer.queues[i],
+                writer_token,
+                mio::Ready::readable(),
+                mio::PollOpt::edge() | mio::PollOpt::oneshot(),
+                )?;
+        }
 
         // insert the context and return the handle
         vacant.insert(ctx);
         // record the key of this peer
         self.peer_list.push(key);
         trace!("Registering peer with event token={}", key);
+
+        // insert the handle into the peer handle list
+        // FIXME: when do we remove from it?
+        let mut peer_handles = self.peer_handles.lock().unwrap();
+        peer_handles.push(handle.clone());
+        drop(peer_handles);
         Ok(handle)
     }
 
@@ -132,21 +162,16 @@ impl Context {
                 let handle = self.connect(&req.addr);
                 req.result_chan.send(handle).unwrap();
             }
-            ControlSignal::BroadcastMessage(msg) => {
-                trace!("Processing BroadcastMessage command");
-                for peer_id in &self.peer_list {
-                    self.peers[*peer_id].handle.write(msg.clone());
-                }
-            }
         }
         Ok(())
     }
 
     fn register_write_interest(&mut self, peer_id: usize) -> std::io::Result<()> {
+        let token_space = (PRIORITY_LEVEL + 1).next_power_of_two();
         trace!("Registering socket write interest for peer {}", peer_id);
         let peer = &mut self.peers[peer_id];
         // we have stuff to write at the writer queue
-        let socket_token = mio::Token(peer_id * 2);
+        let socket_token = mio::Token(peer_id * token_space);
         // register for writable event
         self.poll.reregister(
             &peer.stream,
@@ -160,40 +185,27 @@ impl Context {
     fn process_readable(&mut self, peer_id: usize) -> std::io::Result<()> {
         // we are using edge-triggered events, loop until block
         let peer = &mut self.peers[peer_id];
-        loop {
-            match peer.reader.read() {
-                Ok(ReadResult::EOF) => {
-                    // EOF, remove it from the connections set
-                    info!("Peer {} dropped connection", peer.addr);
+        match peer.reader.read() {
+            Ok(ReadResult::EOF) => {
+                // EOF, remove it from the connections set
+                info!("Peer {} dropped connection", peer.addr);
+                self.peers.remove(peer_id);
+                let index = self.peer_list.iter().position(|&x| x == peer_id).unwrap();
+                self.peer_list.swap_remove(index);
+            }
+            Ok(ReadResult::ChanClosed) => {
+                panic!("Incoming message queue detached");
+            }
+            Ok(_) => {}
+            Err(e) => {
+                if e.kind() == std::io::ErrorKind::WouldBlock {
+                    trace!("Peer {} finished reading", peer_id);
+                    // socket is not ready anymore, stop reading
+                } else {
+                    warn!("Error reading peer {}, disconnecting: {}", peer.addr, e);
                     self.peers.remove(peer_id);
                     let index = self.peer_list.iter().position(|&x| x == peer_id).unwrap();
                     self.peer_list.swap_remove(index);
-                    break;
-                }
-                Ok(ReadResult::Continue) => {
-                    trace!("Peer {} reading continue", peer_id);
-                    // no full message has been received
-                    continue;
-                }
-                Ok(ReadResult::Message(m)) => {
-                    trace!("Peer {} yield message", peer_id);
-                    // we just received a full message
-                    self.new_msg_chan.send((m, peer.handle.clone())).unwrap();
-                    PERFORMANCE_COUNTER.record_receive_message();
-                    continue;
-                }
-                Err(e) => {
-                    if e.kind() == std::io::ErrorKind::WouldBlock {
-                        trace!("Peer {} finished reading", peer_id);
-                        // socket is not ready anymore, stop reading
-                        break;
-                    } else {
-                        warn!("Error reading peer {}, disconnecting: {}", peer.addr, e);
-                        self.peers.remove(peer_id);
-                        let index = self.peer_list.iter().position(|&x| x == peer_id).unwrap();
-                        self.peer_list.swap_remove(index);
-                        break;
-                    }
                 }
             }
         }
@@ -202,12 +214,12 @@ impl Context {
 
     fn process_writable(&mut self, peer_id: usize) -> std::io::Result<()> {
         let peer = &mut self.peers[peer_id];
+        let token_space = (PRIORITY_LEVEL + 1).next_power_of_two();
         match peer.writer.write() {
             Ok(WriteResult::Complete) => {
                 trace!("Peer {} outgoing queue drained", peer_id);
                 // we wrote everything in the write queue
-                let socket_token = mio::Token(peer_id * 2);
-                let writer_token = mio::Token(peer_id * 2 + 1);
+                let socket_token = mio::Token(peer_id * token_space);
                 // we've done writing. no longer interested.
                 self.poll.reregister(
                     &peer.stream,
@@ -216,12 +228,15 @@ impl Context {
                     mio::PollOpt::edge(),
                 )?;
                 // we're interested in write queue again.
-                self.poll.reregister(
-                    &peer.writer.queue,
-                    writer_token,
-                    mio::Ready::readable(),
-                    mio::PollOpt::edge() | mio::PollOpt::oneshot(),
-                )?;
+                for i in 0..PRIORITY_LEVEL {
+                    let writer_token = mio::Token(peer_id * token_space + i + 1);
+                    self.poll.reregister(
+                        &peer.writer.queues[i],
+                        writer_token,
+                        mio::Ready::readable(),
+                        mio::PollOpt::edge() | mio::PollOpt::oneshot(),
+                    )?;
+                }
             }
             Ok(WriteResult::EOF) => {
                 // EOF, remove it from the connections set
@@ -233,14 +248,16 @@ impl Context {
             Ok(WriteResult::ChanClosed) => {
                 // the channel is closed. no more writes.
                 warn!("Peer {} outgoing queue closed", peer_id);
-                let socket_token = mio::Token(peer_id * 2);
+                let socket_token = mio::Token(peer_id * token_space);
                 self.poll.reregister(
                     &peer.stream,
                     socket_token,
                     mio::Ready::readable(),
                     mio::PollOpt::edge(),
                 )?;
-                self.poll.deregister(&peer.writer.queue)?;
+                for i in 0..PRIORITY_LEVEL {
+                    self.poll.deregister(&peer.writer.queues[i])?;
+                }
             }
             Err(e) => {
                 if e.kind() == std::io::ErrorKind::WouldBlock {
@@ -259,6 +276,7 @@ impl Context {
 
     /// The main event loop of the server.
     fn listen(&mut self) -> std::io::Result<()> {
+        let token_space = (PRIORITY_LEVEL + 1).next_power_of_two();
         // bind server to passed addr and register to the poll
         let server = net::TcpListener::bind(&self.addr)?;
 
@@ -287,6 +305,7 @@ impl Context {
 
         loop {
             self.poll.poll(&mut events, None)?;
+            trace!("New polling results received");
 
             for event in events.iter() {
                 match event.token() {
@@ -332,10 +351,10 @@ impl Context {
                         }
                     }
                     mio::Token(token_id) => {
-                        // peer id (the index in the peers list) is token_id/2
-                        let peer_id = token_id >> 1;
+                        // peer id (the index in the peers list) is token_id/4
+                        let peer_id = token_id / token_space;
                         // if the token_id is odd, it's new write request, else it's socket
-                        match token_id & 0x01 {
+                        match token_id & (token_space - 1) {
                             0 => {
                                 let readiness = event.readiness();
                                 if readiness.is_readable() {
@@ -353,7 +372,7 @@ impl Context {
                                     self.process_writable(peer_id).unwrap();
                                 }
                             }
-                            1 => {
+                            1..=PRIORITY_LEVEL => {
                                 trace!("Peer {} outgoing queue readable", peer_id);
                                 self.register_write_interest(peer_id)?;
                             }
@@ -369,6 +388,7 @@ impl Context {
 #[derive(Clone)]
 pub struct Handle {
     control_chan: channel::Sender<ControlSignal>,
+    peer_handles: Arc<Mutex<Vec<peer::Handle>>>,
 }
 
 impl Handle {
@@ -385,15 +405,15 @@ impl Handle {
     }
 
     pub fn broadcast(&self, msg: message::Message) {
-        self.control_chan
-            .send(ControlSignal::BroadcastMessage(msg))
-            .unwrap();
+        let peer_handles = self.peer_handles.lock().unwrap();
+        for peer in peer_handles.iter() {
+            peer.write(msg.clone());
+        }
     }
 }
 
 enum ControlSignal {
     ConnectNewPeer(ConnectRequest),
-    BroadcastMessage(message::Message),
 }
 
 struct ConnectRequest {
