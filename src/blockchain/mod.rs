@@ -283,6 +283,10 @@ impl BlockChain {
                     block_hash,
                     content.transaction_refs
                 );
+                // add ref'ed transaction blocks
+                // note that we only add the reference links from proposer to transactions for now.
+                // links from transaction to proposer will be added later when we insert the tx
+                // blocks.
                 for transaction_block in &content.transaction_refs {
                     merge_value!(
                         transaction_ref_neighbor_cf,
@@ -408,10 +412,13 @@ impl BlockChain {
                 // Note that this could happen before committing to db, because no module will try
                 // to access transaction content based on pointers in unreferred_transactions.
 
-                // first check whether it has already been referred by someone
-                if self.db.get_pinned_cf(transaction_ref_neighbor_cf, serialize(&block_hash).unwrap())?.is_none() {
+                let mut unreferred_transactions = self.unreferred_transactions.lock().unwrap();
+                unreferred_transactions.insert(block_hash);
+                drop(unreferred_transactions);
+
+                if self.db.get_pinned_cf(transaction_ref_neighbor_cf, serialize(&block_hash).unwrap())?.is_some() {
                     let mut unreferred_transactions = self.unreferred_transactions.lock().unwrap();
-                    unreferred_transactions.insert(block_hash);
+                    unreferred_transactions.remove(&block_hash);
                     drop(unreferred_transactions);
                 }
 
