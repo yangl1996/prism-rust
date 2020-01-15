@@ -56,6 +56,7 @@ fn main() {
      (@arg voter_mining_rate: --("voter-mining-rate") [FLOAT] default_value("0.1") "Sets the voter chain mining rate")
      (@arg adv_ratio: --("adversary-ratio") [FLOAT] default_value("0.4") "Sets the ratio of adversary hashing power")
      (@arg log_epsilon: --("confirm-confidence") [FLOAT] default_value("20.0") "Sets -log(epsilon) for confirmation")
+     (@arg jitter: --("jitter") [INT] default_value("1500") "Enables a uniform random jitter with specified maximum duration (ms) before accepting a pending transaction")
 
      (@subcommand keygen =>
       (about: "Generates Prism wallet key pair")
