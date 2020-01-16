@@ -1,7 +1,7 @@
 #!/bin/bash
 
 VOTER_CHAINS="300"
-MINING_RATE="0.1"
+MINING_RATE="0.0001"
 THROUGHPUT="5000.0"
 MINING_MODIFIER="2.3"	# mine faster than it should be
 

@@ -2,6 +2,7 @@ use crate::transaction::{Address, Authorization, CoinId, Input, Output, Transact
 use bincode::serialize;
 use ed25519_dalek::Keypair;
 use rand::rngs::OsRng;
+use crate::crypto::hash::Hashable;
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -9,6 +10,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 use std::{error, fmt};
+use log::trace;
 
 pub const COIN_CF: &str = "COIN";
 pub const KEYPAIR_CF: &str = "KEYPAIR"; // &Address to &KeyPairPKCS8
@@ -229,6 +231,7 @@ impl Wallet {
         }
         self.counter
             .fetch_sub(unsigned.input.len(), Ordering::Relaxed);
+        trace!("Created transaction using coin {:.32}:{}", unsigned.input[0].coin.hash, unsigned.input[0].coin.index);
         Ok(Transaction {
             authorization,
             ..unsigned
