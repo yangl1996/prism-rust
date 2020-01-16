@@ -505,7 +505,9 @@ function start_transactions_single
 {
 	curl -s "http://$3:$4/transaction-generator/set-arrival-distribution?interval=100&distribution=uniform"
 	curl -s "http://$3:$4/transaction-generator/set-value-distribution?min=100&max=100&distribution=uniform"
-	curl -s "http://$3:$4/transaction-generator/start?throttle=10000"
+	timenow=`date +"%s"`
+	timestart=`expr \( $timenow + 10 \) \* 1000`
+	curl -s "http://$3:$4/transaction-generator/syncstart?start=$timestart&interval=100&count=500"
 }
 
 function start_mining_single

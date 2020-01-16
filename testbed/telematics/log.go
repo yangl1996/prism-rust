@@ -22,6 +22,7 @@ type Snapshot struct {
 	Mined_proposer_blocks                        int
 	Mined_voter_blocks                           int
 	Mined_transaction_blocks                     int
+    Mined_transaction_block_bytes                int
 	Total_proposer_block_delay                   int
 	Total_voter_block_delay                      int
 	Total_transaction_block_delay                int
@@ -251,7 +252,7 @@ func log(interval, duration uint, nodesFile, dataDir string, grafana bool) {
 					ctot.Incoming_message_queue += v.Incoming_message_queue
 					ctot.Mined_proposer_blocks += v.Mined_proposer_blocks
 					ctot.Mined_voter_blocks += v.Mined_voter_blocks
-					ctot.Mined_transaction_blocks += v.Mined_transaction_blocks
+					ctot.Mined_transaction_blocks += v.Mined_transaction_block_bytes
 					ctot.Total_proposer_block_delay += v.Total_proposer_block_delay
 					ctot.Total_voter_block_delay += v.Total_voter_block_delay
 					ctot.Total_transaction_block_delay += v.Total_transaction_block_delay
@@ -420,7 +421,7 @@ func log(interval, duration uint, nodesFile, dataDir string, grafana bool) {
 				tm.Printf("                  Queue Length    %8v  %8v\n", cavg.Incoming_message_queue, (cavg.Incoming_message_queue-pavg.Incoming_message_queue)/int(interval))
 				tm.Printf("          Mining -    Proposer    %8.3g  %8.3g\n", float64(cavg.Mined_proposer_blocks)/float64(dur), float64(cavg.Mined_proposer_blocks-pavg.Mined_proposer_blocks)/float64(interval))
 				tm.Printf("          Mining -       Voter    %8.3g  %8.3g\n", float64(cavg.Mined_voter_blocks)/float64(dur), float64(cavg.Mined_voter_blocks-pavg.Mined_voter_blocks)/float64(interval))
-				tm.Printf("          Mining - Transaction    %8.3g  %8.3g\n", float64(cavg.Mined_transaction_blocks)/float64(dur), float64(cavg.Mined_transaction_blocks-pavg.Mined_transaction_blocks)/float64(interval))
+				tm.Printf("          Mining - Transaction    %8.3g  %8.3g\n", float64(cavg.Mined_transaction_blocks), float64(cavg.Mined_transaction_blocks-pavg.Mined_transaction_blocks)/float64(interval))
 				tm.Printf("           Delay -    Proposer    %8.3g  %8.3g\n", float64(cavg.Total_proposer_block_delay)/float64(cavg.Received_proposer_blocks), float64(cavg.Total_proposer_block_delay-pavg.Total_proposer_block_delay)/float64(cavg.Received_proposer_blocks-pavg.Received_proposer_blocks))
 				tm.Printf("           Delay -       Voter    %8.3g  %8.3g\n", float64(cavg.Total_voter_block_delay)/float64(cavg.Received_voter_blocks), float64(cavg.Total_voter_block_delay-pavg.Total_voter_block_delay)/float64(cavg.Received_voter_blocks-pavg.Received_voter_blocks))
 				tm.Printf("           Delay - Transaction    %8.3g  %8.3g\n", float64(cavg.Total_transaction_block_delay)/float64(cavg.Received_transaction_blocks), float64(cavg.Total_transaction_block_delay-pavg.Total_transaction_block_delay)/float64(cavg.Received_transaction_blocks-pavg.Received_transaction_blocks))
