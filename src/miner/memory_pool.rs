@@ -142,11 +142,22 @@ impl MemoryPool {
 
     /// get n transaction by fifo
     pub fn get_transactions(&self, n: u32) -> Vec<Transaction> {
-        self.by_storage_index
-            .values()
-            .take(n as usize)
-            .map(|hash| self.get(hash).unwrap().transaction.clone())
-            .collect()
+        let mut r: Vec<Transaction> = vec![];
+        let now = time::Instant::now();
+        let mut remaining = n;
+        for (_, hash) in self.by_storage_index.iter() {
+            if remaining == 0 {
+                break;
+            }
+            let entry = self.get(hash).unwrap();
+            if entry.effective_from > now {
+                continue;
+            } else {
+                r.push(entry.transaction.clone());
+                remaining -= 1;
+            }
+        }
+        return r;
     }
 
     /// get size/length
