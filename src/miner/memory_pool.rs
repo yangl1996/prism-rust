@@ -118,8 +118,9 @@ impl MemoryPool {
 
     /// Remove potential tx that use this input.
     /// This function runs recursively, so it may remove more transactions.
-    pub fn remove_by_input(&mut self, prevout: &Input) {
+    pub fn remove_by_input(&mut self, prevout: &Input) -> u64 {
         //use a deque to recursively remove, in case there are multi level dependency between txs.
+        let mut num_removed: u64 = 0;
         let mut queue: VecDeque<Input> = VecDeque::new();
         queue.push_back(prevout.clone());
 
@@ -127,6 +128,7 @@ impl MemoryPool {
             if let Some(entry_hash) = self.by_input.get(&prevout) {
                 let entry_hash = *entry_hash;
                 let entry = self.remove_and_get(&entry_hash).unwrap();
+                num_removed += 1;
                 for (index, output) in entry.transaction.output.iter().enumerate() {
                     queue.push_back(Input {
                         coin: CoinId {
@@ -139,6 +141,7 @@ impl MemoryPool {
                 }
             }
         }
+        return num_removed;
     }
 
     /// get n transaction by fifo

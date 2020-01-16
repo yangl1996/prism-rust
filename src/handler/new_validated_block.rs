@@ -6,6 +6,7 @@ use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 use crate::miner::memory_pool::MemoryPool;
 
 use crate::network::server::Handle as ServerHandle;
+use log::trace;
 
 use std::sync::Mutex;
 
@@ -21,15 +22,19 @@ pub fn new_validated_block(
     // if this block is a transaction, remove transactions from mempool
     if let Content::Transaction(content) = &block.content {
         let mut mempool = mempool.lock().unwrap();
+        let mut removed: u64 = 0;
         for tx in &content.transactions {
             mempool.remove_by_hash(&tx.hash());
             // the inputs have been used here, so remove all transactions in the mempool that
             // tries to use the input again.
             for input in tx.input.iter() {
-                mempool.remove_by_input(input);
+                removed += mempool.remove_by_input(input);
             }
         }
         drop(mempool);
+        if removed != 0 {
+            trace!("Removed {} transactions from mempool due to conflict", removed);
+        }
     }
 
     // insert the new block into the blockchain
