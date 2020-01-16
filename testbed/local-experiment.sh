@@ -42,6 +42,7 @@ function kill_prism() {
 	generated=0
 	generated_bytes=0
 	generate_failures=0
+	mined_tx=0
 
 	echo "------ Results ------"
 	for (( i = 0; i < $num_nodes; i++ )); do
@@ -56,13 +57,16 @@ function kill_prism() {
 		mined_proposer=`echo $result | jq .[$'"mined_proposer_blocks"']`
 		mined_voter=`echo $result | jq .[$'"mined_voter_blocks"']`
 		mined_transaction=`echo $result | jq .[$'"mined_transaction_blocks"']`
+		mined_tx_count=`echo $result | jq .[$'"mined_transaction_block_bytes"']`
         mined=`expr $mined_proposer + $mined_voter + $mined_transaction`
+		mined_tx=`expr $mined_tx + $mined_tx_count`
 		echo "Node $i Mined blocks: $(expr $mined / $elapsed) blk/s"
 		echo "Node $i Transaction Confirmation: $(expr $confirmed / $elapsed) Tx/s"
 		echo "Node $i Transaction Confirmation: $(expr $confirmed_bytes / $elapsed) B/s"
 	done
 	echo "Transaction Generation: $(expr $generated / $elapsed) Tx/s, $generated Txs"
 	echo "Transaction Generation: $(expr $generated_bytes / $elapsed) B/s"
+	echo "Transaction Mined: $mined_tx"
 	echo "Generation Failures: $generate_failures"
 	echo "---------------------"
 
@@ -100,7 +104,7 @@ for (( i = 0; i < $num_nodes; i++ )); do
 	p2p=`expr $p2p_port + $i`
 	api=`expr $api_port + $i`
 	vis=`expr $vis_port + $i`
-	command="$binary_path --p2p 127.0.0.1:${p2p} --api 127.0.0.1:${api} --visual 127.0.0.1:${vis} --blockdb /tmp/prism-${i}-blockdb.rocksdb --blockchaindb /tmp/prism-${i}-blockchaindb.rocksdb --utxodb /tmp/prism-${i}-utxodb.rocksdb --walletdb /tmp/prism-${i}-wallet.rocksdb -vvvvv --load-key 0.pkcs8 --fund-coins=100000 --voter-chains=${VOTER_CHAINS} --tx-throughput=${throughput_param} --proposer-mining-rate=${MINING_RATE} --voter-mining-rate=${MINING_RATE} --confirm-confidence=20.0 --adversary-ratio=0.33 --jitter=1500"
+	command="$binary_path --p2p 127.0.0.1:${p2p} --api 127.0.0.1:${api} --visual 127.0.0.1:${vis} --blockdb /tmp/prism-${i}-blockdb.rocksdb --blockchaindb /tmp/prism-${i}-blockchaindb.rocksdb --utxodb /tmp/prism-${i}-utxodb.rocksdb --walletdb /tmp/prism-${i}-wallet.rocksdb -vvvvv --load-key ${i}.pkcs8 --fund-coins=100000 --voter-chains=${VOTER_CHAINS} --tx-throughput=${throughput_param} --proposer-mining-rate=${MINING_RATE} --voter-mining-rate=${MINING_RATE} --confirm-confidence=20.0 --adversary-ratio=0.33 --jitter=1500"
 
 	for (( j = 0; j < $i; j++ )); do
 		peer_port=`expr $p2p_port + $j`

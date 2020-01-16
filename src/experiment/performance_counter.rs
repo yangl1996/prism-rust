@@ -166,12 +166,12 @@ impl Counter {
     }
 
     pub fn record_mine_block(&self, b: &Block) {
-        match b.content {
-            BlockContent::Transaction(_) => {
+        match &b.content {
+            BlockContent::Transaction(c) => {
                 self.mined_transaction_blocks
                     .fetch_add(1, Ordering::Relaxed);
                 self.mined_transaction_block_bytes
-                    .fetch_add(b.size(), Ordering::Relaxed);
+                    .fetch_add(c.transactions.len(), Ordering::Relaxed);
             }
             BlockContent::Voter(_) => {
                 self.mined_voter_blocks.fetch_add(1, Ordering::Relaxed);
