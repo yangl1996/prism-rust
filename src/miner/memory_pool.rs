@@ -1,5 +1,6 @@
 use crate::crypto::hash::{Hashable, H256};
 use crate::transaction::{CoinId, Input, Transaction};
+use log::trace;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::VecDeque;
@@ -145,18 +146,21 @@ impl MemoryPool {
         let mut r: Vec<Transaction> = vec![];
         let now = time::Instant::now();
         let mut remaining = n;
+        let mut passed: u64 = 0;
         for (_, hash) in self.by_storage_index.iter() {
             if remaining == 0 {
                 break;
             }
             let entry = self.get(hash).unwrap();
             if entry.effective_from > now {
+                passed += 1;
                 continue;
             } else {
                 r.push(entry.transaction.clone());
                 remaining -= 1;
             }
         }
+        trace!("Excluding {} transactions due to jittering", passed);
         return r;
     }
 
