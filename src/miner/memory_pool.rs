@@ -3,6 +3,8 @@ use crate::transaction::{CoinId, Input, Transaction};
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::VecDeque;
+use std::time;
+use rand::Rng;
 
 /// transactions storage
 #[derive(Debug)]
@@ -19,6 +21,8 @@ pub struct MemoryPool {
     by_input: HashMap<Input, H256>,
     /// Storage for order by storage index, it is equivalent to FIFO
     by_storage_index: BTreeMap<u64, H256>,
+    /// Max. jitter duration
+    jitter_max: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -27,10 +31,11 @@ pub struct Entry {
     pub transaction: Transaction,
     /// counter of the tx
     storage_index: u64,
+    effective_from: time::Instant,
 }
 
 impl MemoryPool {
-    pub fn new(size_limit: u64) -> Self {
+    pub fn new(size_limit: u64, jitter_max: u64) -> Self {
         Self {
             num_transactions: 0,
             max_transactions: size_limit,
@@ -38,11 +43,20 @@ impl MemoryPool {
             by_hash: HashMap::new(),
             by_input: HashMap::new(),
             by_storage_index: BTreeMap::new(),
+            jitter_max: jitter_max,
         }
     }
 
     /// Insert a tx into memory pool. The input of it will also be recorded.
     pub fn insert(&mut self, tx: Transaction) {
+        let mut rng = rand::thread_rng();
+        let jitter_ms: u64 = if self.jitter_max == 0 {
+            0
+        } else 
+        {
+            rng.gen_range(0, self.jitter_max)
+        };
+        let effective = time::Instant::now() + time::Duration::from_millis(jitter_ms);
         if self.num_transactions > self.max_transactions {
             return;
         }
@@ -51,6 +65,7 @@ impl MemoryPool {
         let entry = Entry {
             transaction: tx,
             storage_index: self.counter,
+            effective_from: effective,
         };
         self.counter += 1;
 

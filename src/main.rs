@@ -56,7 +56,7 @@ fn main() {
      (@arg voter_mining_rate: --("voter-mining-rate") [FLOAT] default_value("0.1") "Sets the voter chain mining rate")
      (@arg adv_ratio: --("adversary-ratio") [FLOAT] default_value("0.4") "Sets the ratio of adversary hashing power")
      (@arg log_epsilon: --("confirm-confidence") [FLOAT] default_value("20.0") "Sets -log(epsilon) for confirmation")
-     (@arg jitter: --("jitter") [INT] default_value("1500") "Enables a uniform random jitter with specified maximum duration (ms) before accepting a pending transaction")
+     (@arg jitter: --("jitter") [INT] default_value("0") "Enables a uniform random jitter with specified maximum duration (ms) before accepting a pending transaction")
 
      (@subcommand keygen =>
       (about: "Generates Prism wallet key pair")
@@ -178,9 +178,17 @@ fn main() {
             error!("Error parsing memory pool size limit: {}", e);
             process::exit(1);
         });
-    let mempool = MemoryPool::new(mempool_size);
+    let max_jitter: u64 = matches
+        .value_of("jitter")
+        .unwrap()
+        .parse()
+        .unwrap_or_else(|e| {
+            error!("Error parsing max jitter: {}", e);
+            process::exit(1);
+        });
+    let mempool = MemoryPool::new(mempool_size, max_jitter);
     let mempool = Arc::new(std::sync::Mutex::new(mempool));
-    debug!("Initialized mempool, maximum size set to {}", mempool_size);
+    debug!("Initialized mempool, maximum size set to {}, max jitter is {} ms", mempool_size, max_jitter);
 
     // init block database
     let blockdb =
