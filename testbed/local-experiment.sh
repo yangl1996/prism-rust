@@ -61,7 +61,7 @@ function kill_prism() {
 		echo "Node $i Transaction Confirmation: $(expr $confirmed / $elapsed) Tx/s"
 		echo "Node $i Transaction Confirmation: $(expr $confirmed_bytes / $elapsed) B/s"
 	done
-	echo "Transaction Generation: $(expr $generated / $elapsed) Tx/s"
+	echo "Transaction Generation: $(expr $generated / $elapsed) Tx/s, $generated Txs"
 	echo "Transaction Generation: $(expr $generated_bytes / $elapsed) B/s"
 	echo "Generation Failures: $generate_failures"
 	echo "---------------------"
@@ -131,7 +131,9 @@ for (( i = 0; i < $num_nodes; i++ )); do
 		echo "Failed to set transaction rate for node $i"
 		exit 1
 	fi
-	url="localhost:${port}/transaction-generator/start?throttle=10000"
+	timenow=`date +"%s"`
+	timestart=`expr \( $timenow + 3 \) \* 1000`
+	url="localhost:${port}/transaction-generator/syncstart?start=$timestart&interval=100&count=50"
 	curl "$url" &> /dev/null
 	if [ "$?" -ne 0 ]; then
 		echo "Failed to start transaction generation for node $i"

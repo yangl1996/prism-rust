@@ -15,6 +15,7 @@ use tiny_http::Header;
 use tiny_http::Response;
 use tiny_http::Server as HTTPServer;
 use url::Url;
+use std::time::{UNIX_EPOCH, Duration, SystemTime};
 
 pub struct Server {
     transaction_generator_handle: crossbeam::Sender<transaction_generator::ControlSignal>,
@@ -176,6 +177,79 @@ impl Server {
                         }
                         "/telematics/snapshot" => {
                             respond_json!(req, PERFORMANCE_COUNTER.snapshot());
+                        }
+                        "/transaction-generator/syncstart" => {
+                            let params = url.query_pairs();
+                            let params: HashMap<_, _> = params.into_owned().collect();
+                            let start_ms = match params.get("start") {
+                                Some(v) => v,
+                                None => {
+                                    respond_result!(req, false, "missing starting time (ms)");
+                                    return;
+                                }
+                            };
+                            let start_ms = match start_ms.parse::<u64>() {
+                                Ok(v) => v,
+                                Err(e) => {
+                                    respond_result!(
+                                        req,
+                                        false,
+                                        format!("error parsing starting time: {}", e)
+                                    );
+                                    return;
+                                }
+                            };
+                            let interval = match params.get("interval") {
+                                Some(v) => v,
+                                None => {
+                                    respond_result!(req, false, "missing interval (ms)");
+                                    return;
+                                }
+                            };
+                            let interval = match interval.parse::<u64>() {
+                                Ok(v) => v,
+                                Err(e) => {
+                                    respond_result!(
+                                        req,
+                                        false,
+                                        format!("error parsing interval: {}", e)
+                                    );
+                                    return;
+                                }
+                            };
+                            let total_count = match params.get("count") {
+                                Some(v) => v,
+                                None => {
+                                    respond_result!(req, false, "missing count");
+                                    return;
+                                }
+                            };
+                            let total_count = match total_count.parse::<u64>() {
+                                Ok(v) => v,
+                                Err(e) => {
+                                    respond_result!(
+                                        req,
+                                        false,
+                                        format!("error parsing total count: {}", e)
+                                    );
+                                    return;
+                                }
+                            };
+                            let tx_gen_handle = transaction_generator_handle.clone();
+                            thread::spawn(move || {
+                                let mut remaining = total_count;
+                                let mut next_time = UNIX_EPOCH + Duration::from_millis(start_ms);
+                                let interval = Duration::from_millis(interval);
+                                while remaining > 0 {
+                                    while SystemTime::now() < next_time {
+                                    }
+                                    next_time += interval;
+                                    let signal = transaction_generator::ControlSignal::Step(1);
+                                    tx_gen_handle.send(signal);
+                                    remaining -= 1;
+                                }
+                            });
+                            respond_result!(req, true, "ok");
                         }
                         "/transaction-generator/start" => {
                             let params = url.query_pairs();
