@@ -295,7 +295,11 @@ impl Context {
                         );
                         match &block.content {
                             Content::Proposer(_) => {
-                                context_update_sig.push(ContextUpdateSignal::NewProposerBlock);
+                                if block.header.extra_content[0] == 1 {
+                                    context_update_sig.push(ContextUpdateSignal::NewProposerBlock(true));
+                                } else {
+                                    context_update_sig.push(ContextUpdateSignal::NewProposerBlock(false));
+                                }
                                 context_update_sig.push(ContextUpdateSignal::NewTransactionBlock);
                             }
                             _ => unreachable!()

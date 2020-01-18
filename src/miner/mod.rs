@@ -39,7 +39,7 @@ pub enum ContextUpdateSignal {
     // TODO: New transaction comes, we update transaction block's content
     //NewTx,//should be called: mem pool change
     // New proposer block comes, we need to update all contents' parent
-    NewProposerBlock,
+    NewProposerBlock(bool),
     // New voter block comes, we need to update that voter chain
     NewVoterBlock(u16),
     // New transaction block comes, we need to update proposer content's tx ref
@@ -187,7 +187,7 @@ impl Context {
     fn miner_loop(&mut self) {
         // tell ourself to update all context
         self.context_update_tx
-            .send(ContextUpdateSignal::NewProposerBlock);
+            .send(ContextUpdateSignal::NewProposerBlock(true));
         self.context_update_tx
             .send(ContextUpdateSignal::NewTransactionBlock);
         for voter_chain in 0..NUM_VOTER_CHAINS {
@@ -196,6 +196,8 @@ impl Context {
         }
 
         let mut rng = rand::thread_rng();
+        // whether the next block should be micro
+        let mut micro = false;
 
         // main mining loop
         loop {
@@ -225,10 +227,17 @@ impl Context {
                 if i != 0 {
                     let interval_dist = rand::distributions::Exp::new(1.0 / (i as f64));
                     let interval = interval_dist.sample(&mut rng);
-                    let interval = time::Duration::from_micros(interval as u64);
+                    let mut interval = time::Duration::from_micros(interval as u64);
+                    if micro {
+                        interval = time::Duration::from_micros(MICRO_INTV as u64);
+                    }
                     thread::sleep(interval);
                 }
             }
+
+            // whether this block will be a micro block
+            let this_micro = micro;
+            micro = true;
 
             // check whether there is new content through context update channel
             let mut new_transaction_block: bool = false;
@@ -236,7 +245,12 @@ impl Context {
             let mut new_proposer_block: bool = false;
             for sig in self.context_update_chan.try_iter() {
                 match sig {
-                    ContextUpdateSignal::NewProposerBlock => new_proposer_block = true,
+                    ContextUpdateSignal::NewProposerBlock(from_outside) => {
+                        new_proposer_block = true;
+                        if from_outside {
+                            micro = false
+                        }
+                    }
                     ContextUpdateSignal::NewVoterBlock(chain) => {
                         new_voter_block.insert(chain);
                     }
@@ -372,6 +386,11 @@ impl Context {
 
             // update the difficulty
             self.header.difficulty = self.get_difficulty(&self.header.parent);
+            if this_micro {
+                self.header.extra_content[0] = 0;
+            } else {
+                self.header.extra_content[0] = 1;
+            }
 
             // update or rebuild the merkle tree according to what we did in the last stage
             if new_proposer_block {
@@ -444,7 +463,7 @@ impl Context {
                 Content::Proposer(_) => {
                     self
                         .context_update_tx
-                        .send(ContextUpdateSignal::NewProposerBlock)
+                        .send(ContextUpdateSignal::NewProposerBlock(false))
                         .unwrap();
                     self
                         .context_update_tx

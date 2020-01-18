@@ -18,7 +18,7 @@ bincode = "1.1"
 serde_derive = "1.0"
 serde = "1.0"
 hex-literal = "0.2"
-rocksdb = "0.12"
+rocksdb = "0.13"
 clap = "2.32"
 log = "0.4"
 stderrlog = "0.4"
@@ -40,4 +40,4 @@ crossbeam = "0.7"
 [dependencies.ed25519-dalek]
 version = "1.0.0-pre.1"
 default-features = false
-features = ["avx2_backend", "std"]
+features = ["avx2_backend", "std", "batch"]
