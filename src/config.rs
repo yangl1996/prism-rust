@@ -1,9 +1,9 @@
 use crate::crypto::hash::H256;
 
 // Longest chain k parameter
-pub const MICRO_INTV: u64 = 1000; // micro seconds
+pub const MICRO_INTV: u64 = 5000; // micro seconds
 pub const KAPPA: u64 = 28;
-pub const TX_BLOCK_TRANSACTIONS: u32 = 10;
+pub const TX_BLOCK_TRANSACTIONS: u32 = 360;
 
 // Do not change from here
 pub const TX_MINING_RATE: f32 = 0.0;

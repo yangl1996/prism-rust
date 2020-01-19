@@ -56,7 +56,7 @@ pub fn genesis() -> Block {
     };
     let all_zero: [u8; 32] = [0; 32];
     // TODO: this will not pass validation.
-    return Block::new(
+    let mut block = Block::new(
         all_zero.into(),
         0,
         0,
@@ -66,6 +66,8 @@ pub fn genesis() -> Block {
         all_zero,
         *DEFAULT_DIFFICULTY,
     );
+    block.header.extra_content[0] = 1;
+    return block;
 }
 
 #[cfg(test)]

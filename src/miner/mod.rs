@@ -390,6 +390,7 @@ impl Context {
                 self.header.extra_content[0] = 0;
             } else {
                 self.header.extra_content[0] = 1;
+                info!("New epoch started");
             }
 
             // update or rebuild the merkle tree according to what we did in the last stage
