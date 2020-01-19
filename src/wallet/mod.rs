@@ -3,13 +3,13 @@ use crate::transaction::{Address, Authorization, CoinId, Input, Output, Transact
 use bincode::{deserialize, serialize};
 use ed25519_dalek::{Keypair, Signature};
 use rand::rngs::OsRng;
-use rand::Rng;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 use std::{error, fmt};
+use rand::Rng;
 
 pub const COIN_CF: &str = "COIN";
 pub const KEYPAIR_CF: &str = "KEYPAIR"; // &Address to &KeyPairPKCS8
@@ -160,40 +160,27 @@ impl Wallet {
         let cf = self.db.cf_handle(COIN_CF).unwrap();
         let previous_used_coin: Option<CoinId> = None;
         let iter = self.db.iterator_cf(cf, rocksdb::IteratorMode::Start)?;
+        let mut rng = rand::thread_rng();
+        let val: u64 = rng.gen_range(0, 1000000000);
         // iterate through our wallet
         for (k, v) in iter {
             let coin_id: CoinId = bincode::deserialize(k.as_ref()).unwrap();
             let coin_data: Output = bincode::deserialize(v.as_ref()).unwrap();
-            value_sum += coin_data.value;
+            value_sum += val;
             coins_to_use.push(coin_id);
             inputs.push(Input {
                 coin: coin_id,
-                value: coin_data.value,
+                value: val,
                 owner: coin_data.recipient,
             }); // coins that will be used for this transaction
-            if value_sum >= value {
-                // if we already have enough money, break
-                break;
-            }
-        }
-        if value_sum < value {
-            // we don't have enough money in wallet
-            return Err(WalletError::InsufficientBalance);
+            break;
         }
         // if we have enough money in our wallet, create tx
         // remove used coin from wallet
         //self.apply_diff(&vec![], &coins_to_use)?;
 
         // create the output
-        let mut output = vec![Output { recipient, value }];
-        if value_sum > value {
-            // transfer the remaining value back to self
-            let recipient = self.addresses()?[0];
-            output.push(Output {
-                recipient,
-                value: value_sum - value,
-            });
-        }
+        let mut output = vec![Output { recipient, value:val }];
 
         let mut owners: Vec<Address> = inputs.iter().map(|input| input.owner).collect();
         let unsigned = Transaction {
