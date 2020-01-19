@@ -25,11 +25,11 @@ pub fn new_validated_block(
         Content::Proposer(content) => {
             let mut mempool = mempool.lock().unwrap();
             for tx in &content.transactions {
-                mempool.remove_by_hash(&tx.hash());
+                //mempool.remove_by_hash(&tx.hash());
                 // the inputs have been used here, so remove all transactions in the mempool that
                 // tries to use the input again.
                 for input in tx.input.iter() {
-                    mempool.remove_by_input(input);
+                    //mempool.remove_by_input(input);
                 }
             }
             drop(mempool);
