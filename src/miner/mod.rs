@@ -198,6 +198,9 @@ impl Context {
         let mut rng = rand::thread_rng();
         // whether the next block should be micro
         let mut micro = false;
+        let mut raw: [u8; 32] = [0; 32];
+        raw[10] = 10;
+        let mut last_my_micro: H256 = raw.into();
 
         // main mining loop
         loop {
@@ -307,6 +310,12 @@ impl Context {
             // update the best proposer
             if new_proposer_block {
                 self.header.parent = self.blockchain.best_proposer().unwrap();
+            }
+            if !this_micro {
+                if self.header.parent == last_my_micro {
+                    micro = false;
+                    continue;
+                }
             }
 
             // update the best proposer and the proposer/transaction refs. Note that if the best
@@ -453,6 +462,9 @@ impl Context {
             // only broadcast after the proposer block is also mined
             self.server
                 .broadcast(Message::NewBlockHashes(vec![header_hash]));
+            if this_micro {
+                last_my_micro = header_hash;
+            }
 
             // if we are stepping, pause the miner loop
             if let OperatingState::Step = self.operating_state {
