@@ -36,7 +36,7 @@ pub type Result<T> = std::result::Result<T, rocksdb::Error>;
 
 pub struct BlockChain {
     db: DB,
-    proposer_best_level: Mutex<u64>,
+    proposer_best_level: Mutex<(u64, H256, u64)>,   // level, hash, macro level
     voter_best: Vec<Mutex<(H256, u64)>>,
     unreferred_transactions: Mutex<HashSet<H256>>,
     unreferred_proposers: Mutex<HashSet<H256>>,
@@ -142,7 +142,7 @@ impl BlockChain {
 
         let blockchain_db = Self {
             db: db,
-            proposer_best_level: Mutex::new(0),
+            proposer_best_level: Mutex::new((0, *PROPOSER_GENESIS_HASH, 0)),
             voter_best: voter_best,
             unreferred_transactions: Mutex::new(HashSet::new()),
             unreferred_proposers: Mutex::new(HashSet::new()),
@@ -184,7 +184,12 @@ impl BlockChain {
         wb.put_cf(
             vote_neighbor_cf,
             serialize(&(*PROPOSER_GENESIS_HASH)).unwrap(),
+            serialize(&(*PROPOSER_GENESIS_HASH, true)).unwrap(),
+        )?;
+        wb.put_cf(
+            voter_node_level_cf,
             serialize(&(*PROPOSER_GENESIS_HASH)).unwrap(),
+            serialize(&(0 as u64)).unwrap(),
         )?;
         wb.merge_cf(
             proposer_tree_level_cf,
@@ -306,22 +311,25 @@ impl BlockChain {
                 // note that the parent is the first proposer block that we refer
                 let mut refed_proposer: Vec<H256> = vec![parent_hash];
                 refed_proposer.extend(&content.proposer_refs);
-                // FIXME: we repurpose vote_neighbor_cf to store the parent macro block
-                if block.header.extra_content[0] == 1 {
-                    let mut parent: H256 = parent_hash;
-                    loop {
-                        let is_macro = match self.db.get_cf(vote_neighbor_cf,
-                                                            serialize(&parent).unwrap())? {
-                            Some(_) => true,
-                            None => false,
-                        };
-                        if is_macro {
-                            break;
-                        }
-                        parent = get_value!(parent_neighbor_cf, parent);
+                // FIXME: we repurpose vote_neighbor_cf to store (parent_macro, is_macro)
+                // FIXME: we repurpose voter_node_level_cf to store macro level
+                let macro_parent = {
+                    let (mp, is_m): (H256, bool) = get_value!(vote_neighbor_cf, parent_hash);
+                    // if we are micro and parent is macro
+                    if is_m && block.header.extra_content[0] == 0 {
+                        parent_hash
+                    } else {
+                        mp
                     }
-                    // now parent is the macro parent, store it.
-                    put_value!(vote_neighbor_cf, block_hash, parent);
+                };
+                let macro_parent_level: u64 = get_value!(voter_node_level_cf, macro_parent);
+                if block.header.extra_content[0] == 1 {
+                    put_value!(vote_neighbor_cf, block_hash, (macro_parent, true));
+                    put_value!(voter_node_level_cf, block_hash, macro_parent_level + 1);
+                    
+                } else {
+                    put_value!(vote_neighbor_cf, block_hash, (macro_parent, false));
+                    put_value!(voter_node_level_cf, block_hash, macro_parent_level);
                 }
                 put_value!(proposer_ref_neighbor_cf, block_hash, refed_proposer);
                 put_value!(
@@ -332,6 +340,13 @@ impl BlockChain {
                 // get current block level
                 let parent_level: u64 = get_value!(proposer_node_level_cf, parent_hash);
                 let self_level = parent_level + 1;
+                let self_macro_level =  {
+                    if block.header.extra_content[0] == 1 {
+                        macro_parent_level + 1
+                    } else {
+                        macro_parent_level
+                    }
+                };
                 // set current block level
                 put_value!(proposer_node_level_cf, block_hash, self_level as u64);
                 merge_value!(proposer_tree_level_cf, self_level, block_hash);
@@ -362,9 +377,32 @@ impl BlockChain {
                 // proposer block and is using it as the proposer parent.
                 let mut proposer_best = self.proposer_best_level.lock().unwrap();
                 self.db.write(wb)?;
-                if self_level > *proposer_best {
-                    *proposer_best = self_level;
-                    PERFORMANCE_COUNTER.record_update_proposer_main_chain(self_level as usize);
+                if block.header.extra_content[0] == 1 {
+                    // if macro block
+                    if self_macro_level > proposer_best.2 {
+                        *proposer_best = (self_level, block_hash, self_macro_level);
+                    }
+                } else {
+                    // if micro block
+                    if self_macro_level > proposer_best.2 {
+                        *proposer_best = (self_level, block_hash, self_macro_level);
+                    } else if self_macro_level == proposer_best.2 {
+                        // check whether we are extending the same chain
+                        let best_macro_parent = {
+                            let (macro_parent, is_macro) = get_value!(vote_neighbor_cf, proposer_best.1);
+                            if is_macro {
+                                proposer_best.1
+                            } else {
+                                macro_parent
+                            }
+                        };
+                        if macro_parent == best_macro_parent {
+                            // we are extendig the same macro parent
+                            if self_level > proposer_best.0 {
+                                *proposer_best = (self_level, block_hash, self_macro_level);
+                            }
+                        }
+                    }
                 }
                 drop(proposer_best);
 
@@ -454,6 +492,7 @@ impl BlockChain {
         let transaction_ref_neighbor_cf = self.db.cf_handle(TRANSACTION_REF_NEIGHBOR_CF).unwrap();
         let parent_neighbor_cf = self.db.cf_handle(PARENT_NEIGHBOR_CF).unwrap();
         let vote_neighbor_cf = self.db.cf_handle(VOTE_NEIGHBOR_CF).unwrap();
+        let voter_node_level_cf = self.db.cf_handle(VOTER_NODE_LEVEL_CF).unwrap();
 
         macro_rules! get_value {
             ($cf:expr, $key:expr) => {{
@@ -484,27 +523,16 @@ impl BlockChain {
         let mut change_begin: Option<u64> = None;
 
         let proposer_best = self.proposer_best_level.lock().unwrap();
-        let proposer_best_level: u64 = *proposer_best;
+        let proposer_best_level: u64 = proposer_best.0;
+        let mut new_leader: H256 = proposer_best.1;
         drop(proposer_best);
         // if level is more than parameter K, we may have a change_begin in leaders
         if proposer_best_level >= KAPPA {
-            let proposer_blocks: Vec<H256> = get_value!(proposer_tree_level_cf, proposer_best_level).unwrap();
-            let mut new_leader = proposer_blocks[0];    // best block of current level
             // K deep from best proposer should be the ledger tip
             // first find the first macro block
-            loop {
-                let macro_parent: Option<H256> = get_value!(vote_neighbor_cf, new_leader);
-                match macro_parent {
-                    Some(_) => break,
-                    None => {
-                        new_leader = get_value!(parent_neighbor_cf, new_leader).unwrap();
-                    }
-                }
-            }
-            // trace back for kappa blocks
             for _ in 0..KAPPA {
-                let macro_parent = get_value!(vote_neighbor_cf, new_leader).unwrap();
-                new_leader = macro_parent;
+                let (macro_parent, is_macro): (H256, bool) = get_value!(vote_neighbor_cf, new_leader).unwrap();
+                new_leader = macro_parent
             }
             let mut level: u64 = get_value!(proposer_node_level_cf, new_leader).unwrap();
             let mut existing_leader: Option<H256> = get_value!(proposer_leader_sequence_cf, level);
@@ -769,19 +797,10 @@ impl BlockChain {
     }
 
     pub fn best_proposer(&self) -> Result<H256> {
-        let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
-
         let proposer_best = self.proposer_best_level.lock().unwrap();
-        let level: u64 = *proposer_best;
+        let val = proposer_best.1;
         drop(proposer_best);
-        let blocks: Vec<H256> = deserialize(
-            &self
-                .db
-                .get_cf(proposer_tree_level_cf, serialize(&level).unwrap())?
-                .unwrap(),
-        )
-        .unwrap();
-        return Ok(blocks[0]);
+        return Ok(val);
     }
 
     pub fn best_voter(&self, chain_num: usize) -> H256 {
@@ -998,7 +1017,7 @@ impl BlockChain {
         };
         if let Some(proposer_bottom) = proposer_bottom {
             let proposer_best = self.proposer_best_level.lock().unwrap();
-            let proposer_best_level = *proposer_best;
+            let proposer_best_level = proposer_best.0;
             drop(proposer_best);
             let proposer_tip = match self.db.get_cf(
                 proposer_tree_level_cf,
@@ -1553,7 +1572,7 @@ mod tests {
             true_genesis_votes.push((chain_num as u16, 0));
         }
         assert_eq!(genesis_votes, true_genesis_votes);
-        assert_eq!(*db.proposer_best_level.lock().unwrap(), 0);
+        assert_eq!(*db.proposer_best_level.lock().unwrap().0, 0);
         assert_eq!(*db.unconfirmed_proposers.lock().unwrap(), HashSet::new());
         assert_eq!(db.unreferred_proposers.lock().unwrap().len(), 1);
         assert_eq!(

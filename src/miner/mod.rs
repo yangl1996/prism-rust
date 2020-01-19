@@ -200,7 +200,7 @@ impl Context {
         let mut micro = false;
         let mut raw: [u8; 32] = [0; 32];
         raw[10] = 10;
-        let mut last_my_micro: H256 = raw.into();
+        let mut last_my_block: H256 = raw.into();
 
         // main mining loop
         loop {
@@ -238,9 +238,6 @@ impl Context {
                 }
             }
 
-            // whether this block will be a micro block
-            let this_micro = micro;
-            micro = true;
 
             // check whether there is new content through context update channel
             let mut new_transaction_block: bool = false;
@@ -248,11 +245,8 @@ impl Context {
             let mut new_proposer_block: bool = false;
             for sig in self.context_update_chan.try_iter() {
                 match sig {
-                    ContextUpdateSignal::NewProposerBlock(from_outside) => {
+                    ContextUpdateSignal::NewProposerBlock(_) => {
                         new_proposer_block = true;
-                        if from_outside {
-                            micro = false
-                        }
                     }
                     ContextUpdateSignal::NewVoterBlock(chain) => {
                         new_voter_block.insert(chain);
@@ -311,10 +305,21 @@ impl Context {
             if new_proposer_block {
                 self.header.parent = self.blockchain.best_proposer().unwrap();
             }
-            if !this_micro {
-                if self.header.parent == last_my_micro {
+            // whether this block will be a micro block
+            let mut this_micro = micro;
+            if self.header.parent == last_my_block {
+                // if we are mining on ourself
+                this_micro = true;
+                micro = true;
+            } else {
+                // if we are not mining on ourself, only continue if we have slept enough
+                if micro {
                     micro = false;
+                    this_micro = false;
                     continue;
+                } else {
+                    this_micro = false;
+                    micro = true;
                 }
             }
 
@@ -462,9 +467,8 @@ impl Context {
             // only broadcast after the proposer block is also mined
             self.server
                 .broadcast(Message::NewBlockHashes(vec![header_hash]));
-            if this_micro {
-                last_my_micro = header_hash;
-            }
+            last_my_block = header_hash;
+            micro = true;
 
             // if we are stepping, pause the miner loop
             if let OperatingState::Step = self.operating_state {
