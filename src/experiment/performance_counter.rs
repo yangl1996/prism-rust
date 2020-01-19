@@ -214,9 +214,15 @@ impl Counter {
                     .fetch_add(b.size(), Ordering::Relaxed);
             }
             BlockContent::Proposer(_) => {
-                self.mined_proposer_blocks.fetch_add(1, Ordering::Relaxed);
-                self.mined_proposer_block_bytes
-                    .fetch_add(b.size(), Ordering::Relaxed);
+                if b.header.extra_content[0] == 1 {
+                    self.mined_proposer_blocks.fetch_add(1, Ordering::Relaxed);
+                    self.mined_proposer_block_bytes
+                        .fetch_add(b.size(), Ordering::Relaxed);
+                } else {
+                    self.mined_voter_blocks.fetch_add(1, Ordering::Relaxed);
+                    self.mined_voter_block_bytes
+                        .fetch_add(b.size(), Ordering::Relaxed);
+                }
             }
         }
     }
