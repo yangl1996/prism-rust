@@ -159,16 +159,7 @@ impl Wallet {
         let mut value_sum = 0u64;
         let cf = self.db.cf_handle(COIN_CF).unwrap();
         let previous_used_coin: Option<CoinId> = None;
-        let iter = match previous_used_coin {
-            Some(c) => {
-                let prev_key = serialize(&c).unwrap();
-                self.db.iterator_cf(
-                    cf,
-                    rocksdb::IteratorMode::From(&prev_key, rocksdb::Direction::Forward),
-                )?
-            }
-            None => self.db.iterator_cf(cf, rocksdb::IteratorMode::Start)?,
-        };
+        let iter = self.db.iterator_cf(cf, rocksdb::IteratorMode::Start)?;
         // iterate through our wallet
         for (k, v) in iter {
             let coin_id: CoinId = bincode::deserialize(k.as_ref()).unwrap();
@@ -191,7 +182,7 @@ impl Wallet {
         }
         // if we have enough money in our wallet, create tx
         // remove used coin from wallet
-        self.apply_diff(&vec![], &coins_to_use)?;
+        //self.apply_diff(&vec![], &coins_to_use)?;
 
         // create the output
         let mut output = vec![Output { recipient, value }];
