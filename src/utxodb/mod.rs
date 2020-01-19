@@ -80,6 +80,9 @@ impl UtxoDatabase {
         t: &Transaction,
         hash: H256,
     ) -> Result<(Vec<(CoinId, Output)>, Vec<CoinId>), rocksdb::Error> {
+        if !t.input.is_empty() {
+            PERFORMANCE_COUNTER.record_confirm_transaction(&t);
+        }
         let mut added_coins: Vec<(CoinId, Output)> = vec![];
         let mut removed_coins: Vec<CoinId> = vec![];
 
@@ -125,9 +128,6 @@ impl UtxoDatabase {
         // the disk at certain time, and manually log the state (e.g. voter tips, etc.)
         self.db.write_without_wal(batch)?;
 
-        if !t.input.is_empty() {
-            PERFORMANCE_COUNTER.record_confirm_transaction(&t);
-        }
 
         return Ok((added_coins, removed_coins));
     }
