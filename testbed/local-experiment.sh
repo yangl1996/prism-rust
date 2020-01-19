@@ -112,13 +112,13 @@ done
 echo "Starting transaction generation and mining on each node"
 for (( i = 0; i < $num_nodes; i++ )); do
 	port=`expr $api_port + $i`
-	url="localhost:${port}/transaction-generator/set-arrival-distribution?interval=1000&distribution=uniform"
+	url="localhost:${port}/transaction-generator/set-arrival-distribution?interval=0&distribution=uniform"
 	curl "$url" &> /dev/null
 	if [ "$?" -ne 0 ]; then
 		echo "Failed to set transaction rate for node $i"
 		exit 1
 	fi
-	url="localhost:${port}/transaction-generator/start?throttle=50"
+	url="localhost:${port}/transaction-generator/start?throttle=50000"
 	curl "$url" &> /dev/null
 	if [ "$?" -ne 0 ]; then
 		echo "Failed to start transaction generation for node $i"
