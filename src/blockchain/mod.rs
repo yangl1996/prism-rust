@@ -811,12 +811,7 @@ impl BlockChain {
     }
 
     pub fn unreferred_proposers(&self) -> Vec<H256> {
-        // TODO: does ordering matter?
-        // TODO: should remove the parent block when mining
-        let unreferred_proposers = self.unreferred_proposers.lock().unwrap();
-        let list: Vec<H256> = unreferred_proposers.iter().cloned().collect();
-        drop(unreferred_proposers);
-        return list;
+        return vec![];
     }
 
     pub fn unreferred_transactions(&self) -> Vec<H256> {

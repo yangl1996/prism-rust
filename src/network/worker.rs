@@ -297,6 +297,7 @@ impl Context {
                             Content::Proposer(_) => {
                                 if block.header.extra_content[0] == 1 {
                                     context_update_sig.push(ContextUpdateSignal::NewProposerBlock(true));
+                                    info!("New epoch started by other miner");
                                 } else {
                                     context_update_sig.push(ContextUpdateSignal::NewProposerBlock(false));
                                 }
