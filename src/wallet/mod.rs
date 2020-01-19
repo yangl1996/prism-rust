@@ -158,6 +158,7 @@ impl Wallet {
         let mut inputs: Vec<Input> = vec![];
         let mut value_sum = 0u64;
         let cf = self.db.cf_handle(COIN_CF).unwrap();
+        let previous_used_coin: Option<CoinId> = None;
         let iter = match previous_used_coin {
             Some(c) => {
                 let prev_key = serialize(&c).unwrap();
