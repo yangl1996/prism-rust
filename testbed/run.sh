@@ -1,7 +1,7 @@
 #!/bin/bash
 
-LAUNCH_TEMPLATE=lt-02226ebae5fbef5f3	# Ohio
-#LAUNCH_TEMPLATE=lt-09d74bbb3e4da1ff9	# N. Virginia
+#LAUNCH_TEMPLATE=lt-02226ebae5fbef5f3	# Ohio
+LAUNCH_TEMPLATE=lt-03aa896a891777df7	# real
 
 function start_instances
 {
@@ -188,7 +188,13 @@ function prepare_payload
 	mkdir -p payload/common/scripts
 
 	echo "Download binaries"
-	scp prism:~/prism/target/release/prism-copy payload/common/binary/prism
+	# if you have a Ubuntu 18.04 VM named `prism`
+	#scp prism:~/prism/target/release/prism-copy payload/common/binary/prism
+	# if your machine is Ubuntu 18.04
+	cp ../target/release/prism ../target/release/prism-copy
+	strip ../target/release/prism-copy
+	cp ../target/release/prism-copy payload/common/binary/prism
+
 	cp scripts/start-prism.sh payload/common/scripts/start-prism.sh
 	cp scripts/stop-prism.sh payload/common/scripts/stop-prism.sh
 
@@ -302,15 +308,15 @@ function prepare_algorand_payload
 function sync_payload
 {
 	echo "Uploading payload to S3"
-	aws s3 rm --quiet --recursive s3://prism-binary/payload
-	aws s3 sync --quiet payload s3://prism-binary/payload
+	aws s3 rm --quiet --recursive s3://prism-real/payload
+	aws s3 sync --quiet payload s3://prism-real/payload
 	echo "Downloading payload on each instance"
 	execute_on_all get_payload
 }
 
 function get_payload_single
 {
-	ssh $1 -- "rm -f /home/ubuntu/*.tar.gz && rm -rf /home/ubuntu/payload && wget https://prism-binary.s3.amazonaws.com/payload/$1.tar.gz -O local.tar.gz && wget https://prism-binary.s3.amazonaws.com/payload/common.tar.gz && mkdir -p /home/ubuntu/payload && tar xf local.tar.gz -C /home/ubuntu/payload && tar xf common.tar.gz -C /home/ubuntu/payload"
+	ssh $1 -- "rm -f /home/ubuntu/*.tar.gz && rm -rf /home/ubuntu/payload && wget https://prism-real.s3.amazonaws.com/payload/$1.tar.gz -O local.tar.gz && wget https://prism-real.s3.amazonaws.com/payload/common.tar.gz && mkdir -p /home/ubuntu/payload && tar xf local.tar.gz -C /home/ubuntu/payload && tar xf common.tar.gz -C /home/ubuntu/payload"
 }
 
 function install_perf_single
@@ -510,7 +516,7 @@ function start_transactions_single
 
 function start_mining_single
 {
-	curl -s "http://$3:$4/miner/start?lambda=322477&lazy=false"
+	curl -s "http://$3:$4/miner/start?lambda=3224&lazy=false"
 }
 
 function stop_transactions_single
