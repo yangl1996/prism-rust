@@ -16,9 +16,7 @@ Abstract: Bitcoin is the first fully decentralized permissionless blockchain pro
 
 This project requires Rust `nightly` because some of our dependencies rely on nightly-only features like inline assembly.
 
-To build the binary, run `cargo build --release`.
-
-The first build could take several mintues, mostly due to building RocksDB.
+To build the binary, run `cargo build --release`. The first build could take several mintues, mostly due to building RocksDB.
 
 ## Testbed and Reproducing
 
