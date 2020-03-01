@@ -14,13 +14,9 @@ Abstract: Bitcoin is the first fully decentralized permissionless blockchain pro
 
 ## Build
 
-This project requires Rust `nightly` because some of our dependencies rely on nightly-only features like inline assembly. However, as of Oct. 31 2019, the cutting-edge `nightly` toolchain won't build the project due to incompatibility in `rocksdb-rust` (see [here](https://github.com/rust-rocksdb/rust-rocksdb/issues/335) and [here](https://github.com/rust-rocksdb/rust-rocksdb/issues/341)).
+This project requires Rust `nightly` because some of our dependencies rely on nightly-only features like inline assembly.
 
-As a workaround, please use `nightly-2019-09-13` (install by `rustup toolchain install nightly-2019-09-13`) for now.
-
-To build the binary, run `cargo build --release`.
-
-The first build could take several mintues, mostly due to building RocksDB.
+To build the binary, run `cargo build --release`. The first build could take several mintues, mostly due to building RocksDB.
 
 ## Testbed and Reproducing
 
