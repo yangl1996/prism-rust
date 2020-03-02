@@ -1,0 +1,88 @@
+namespace P2P;
+
+struct SHA256 {
+    first: uint64;
+    second: uint64;
+    third: uint64;
+    fourth: uint64;
+}
+
+struct UInt128 {
+    high: uint64;
+    low: uint64;
+}
+
+struct Coin {
+    transaction: SHA256;
+    id: uint8;
+}
+
+struct Output {
+    value: uint32;
+    recipient: SHA256;
+}
+
+struct Signature {
+    first: uint64;
+    second: uint64;
+    third: uint64;
+    fourth: uint64;
+}
+
+struct PublicKey {
+    first: uint64;
+    second: uint64;
+    third: uint64;
+    fourth: uint64;
+}
+
+struct Authorization {
+    signature: Signature;
+    pubkey: PublicKey;
+}
+
+table Transaction {
+    inputs: [Coin];
+    outputs: [Output];
+    authorizations: [Authorization];
+}
+
+struct Header {
+    parent: SHA256;
+    timestamp: UInt128;
+    nonce: uint32;
+    content_merkle_root: SHA256;
+}
+
+table ProposerContent {
+    transaction_refs: [SHA256];
+    proposer_refs: [SHA256];
+}
+
+table VoterContent {
+    voter_parent: SHA256;
+    proposer_votes: [SHA256];
+}
+
+table TransactionContent {
+    transactions: [Transaction];
+}
+
+union Content {
+    proposer: ProposerContent,
+    voter: VoterContent,
+    transaction: TransactionContent
+}
+
+table Block {
+    header: Header;
+    content: Content;
+}
+
+table Message {
+    Ping:string;
+    Pong:string;
+    NewBlockHashes:[SHA256];
+    GetBlocks:[SHA256];
+    Blocks:[Block];
+}
