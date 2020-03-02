@@ -1,4 +1,3 @@
-use super::message;
 use super::peer::{self, ReadResult, WriteResult};
 use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 use crossbeam::channel as cbchannel;
@@ -384,7 +383,7 @@ impl Handle {
         receiver.recv().unwrap()
     }
 
-    pub fn broadcast(&self, msg: message::Message) {
+    pub fn broadcast(&self, msg: Vec<u8>) {
         self.control_chan
             .send(ControlSignal::BroadcastMessage(msg))
             .unwrap();
@@ -393,7 +392,7 @@ impl Handle {
 
 enum ControlSignal {
     ConnectNewPeer(ConnectRequest),
-    BroadcastMessage(message::Message),
+    BroadcastMessage(Vec<u8>),
 }
 
 struct ConnectRequest {

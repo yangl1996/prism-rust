@@ -80,9 +80,10 @@ table Block {
 }
 
 table Message {
-    Ping:string;
-    Pong:string;
-    NewBlockHashes:[SHA256];
-    GetBlocks:[SHA256];
-    Blocks:[Block];
+    ping:string;
+    pong:string;
+    new_block_hashes:[SHA256];
+    get_blocks:[SHA256];
+    blocks:[Block];
 }
+

@@ -1,4 +1,3 @@
-use super::message;
 use log::{trace, warn};
 use mio;
 use mio_extras::channel;
@@ -218,10 +217,9 @@ pub struct Handle {
 }
 
 impl Handle {
-    pub fn write(&self, msg: message::Message) {
+    pub fn write(&self, msg: Vec<u8>) {
         // TODO: return result
-        let buffer = bincode::serialize(&msg).unwrap();
-        if self.write_queue.send(buffer).is_err() {
+        if self.write_queue.send(msg).is_err() {
             warn!("Failed to send write request for peer {}, channel detached", self.addr);
         }
     }

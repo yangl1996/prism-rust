@@ -78,6 +78,44 @@ impl std::convert::From<H256> for [u8; 32] {
     }
 }
 
+impl std::convert::From<[u64; 4]> for H256 {
+    fn from(input: [u64; 4]) -> H256 {
+        return (&input).into();
+    }
+}
+
+impl std::convert::From<&[u64; 4]> for H256 {
+    fn from(input: &[u64; 4]) -> H256 {
+        let mut buffer: [u8; 32] = [0; 32];
+        let first = input[0].to_be_bytes();
+        let second = input[1].to_be_bytes();
+        let third = input[2].to_be_bytes();
+        let fourth = input[3].to_be_bytes();
+        buffer[0..8].copy_from_slice(&first);
+        buffer[8..16].copy_from_slice(&second);
+        buffer[16..24].copy_from_slice(&third);
+        buffer[24..32].copy_from_slice(&fourth);
+        return buffer.into();
+    }
+}
+
+impl std::convert::From<&H256> for [u64; 4] {
+    fn from(input: &H256) -> [u64; 4] {
+        let buffer: [u8; 32] = input.into();
+        let mut raw: [u8; 8] = [0; 8];
+        let mut result: [u64; 4] = [0; 4];
+        raw[..].copy_from_slice(&buffer[0..8]);
+        result[0] = u64::from_be_bytes(raw);
+        raw[..].copy_from_slice(&buffer[8..16]);
+        result[1] = u64::from_be_bytes(raw);
+        raw[..].copy_from_slice(&buffer[16..24]);
+        result[2] = u64::from_be_bytes(raw);
+        raw[..].copy_from_slice(&buffer[24..32]);
+        result[3] = u64::from_be_bytes(raw);
+        return result;
+    }
+}
+
 impl std::convert::From<ring::digest::Digest> for H256 {
     fn from(input: ring::digest::Digest) -> H256 {
         let mut raw_hash: [u8; 32] = [0; 32];

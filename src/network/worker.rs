@@ -1,5 +1,5 @@
 use super::buffer::BlockBuffer;
-use super::message::Message;
+use super::p2p_generated::p2p;
 use super::peer;
 use crate::block::{Block, Content};
 use crate::blockchain::BlockChain;
@@ -85,55 +85,48 @@ impl Context {
             let msg = self.msg_chan.recv().unwrap();
             PERFORMANCE_COUNTER.record_process_message();
             let (msg, peer) = msg;
-            let msg: Message = bincode::deserialize(&msg).unwrap();
-            match msg {
-                Message::Ping(nonce) => {
-                    debug!("Ping: {}", nonce);
-                    peer.write(Message::Pong(nonce.to_string()));
+            // parse the flatbuffer TODO: validate the buffer
+            let msg: p2p::Message = flatbuffers::get_root::<p2p::Message>(&msg);
+            // the size is a preallocated buffer. it should auto-increase
+            let mut builder = flatbuffers::FlatBufferBuilder::new_with_capacity(1024);
+            let mut args = p2p::MessageArgs {
+                ping: None,
+                pong: None,
+                new_block_hashes: None,
+                get_blocks: None,
+                blocks: None,
+            };
+            match msg.ping() {
+                None => {}
+                Some(v) => {
+                    debug!("Ping: {}", v);
+                    let pong_str = builder.create_string(v);
+                    args.pong = Some(pong_str);
                 }
-                Message::Pong(nonce) => {
-                    debug!("Pong: {}", nonce);
+            }
+            match msg.pong() {
+                None => {}
+                Some(v) => {
+                    debug!("Pong: {}", v);
                 }
-                Message::NewTransactionHashes(hashes) => {
-                    debug!("Got {} new transaction hashes", hashes.len());
+            }
+            match msg.new_block_hashes() {
+                None => {}
+                Some(v) => {
+                    let num_hashes = v.len();
+                    debug!("Got {} new block hashes", num_hashes);
+                    let mut raw_hashes_to_request = vec![];
                     let mut hashes_to_request = vec![];
-                    for hash in hashes {
-                        if !self.mempool.lock().unwrap().contains(&hash) {
-                            hashes_to_request.push(hash);
-                        }
-                    }
-                    if !hashes_to_request.is_empty() {
-                        peer.write(Message::GetTransactions(hashes_to_request));
-                    }
-                }
-                Message::GetTransactions(hashes) => {
-                    debug!("Asked for {} transactions", hashes.len());
-                    let mut transactions = vec![];
-                    for hash in hashes {
-                        match self.mempool.lock().unwrap().get(&hash) {
-                            None => {}
-                            Some(entry) => {
-                                transactions.push(entry.transaction.clone());
-                            }
-                        }
-                    }
-                    peer.write(Message::Transactions(transactions));
-                }
-                Message::Transactions(transactions) => {
-                    debug!("Got {} transactions", transactions.len());
-                    for transaction in transactions {
-                        new_transaction(transaction, &self.mempool, &self.server);
-                    }
-                }
-                Message::NewBlockHashes(hashes) => {
-                    debug!("Got {} new block hashes", hashes.len());
-                    let mut hashes_to_request = vec![];
-                    for hash in hashes {
+                    for i in 0..num_hashes {
+                        let raw = v.get(i).unwrap();
+                        let bytes: [u64; 4] = [raw.first(), raw.second(), raw.third(), raw.fourth()];
+                        let hash: H256 = bytes.into();
                         let in_blockdb = self.blockdb.contains(&hash).unwrap();
                         let requested_blocks = self.requested_blocks.lock().unwrap();
                         let requested = requested_blocks.contains(&hash);
                         drop(requested_blocks);
                         if !(in_blockdb || requested) {
+                            raw_hashes_to_request.push(raw);
                             hashes_to_request.push(hash);
                         }
                     }
@@ -142,10 +135,14 @@ impl Context {
                         requested_blocks.insert(*hash);
                     }
                     drop(requested_blocks);
-                    if !hashes_to_request.is_empty() {
-                        peer.write(Message::GetBlocks(hashes_to_request));
+                    if !raw_hashes_to_request.is_empty() {
+                        let hashes_buf = builder.create_vector(&raw_hashes_to_request);
+                        args.get_blocks = Some(hashes_buf);
                     }
                 }
+            }
+            /*
+            match msg {
                 Message::GetBlocks(hashes) => {
                     debug!("Asked for {} blocks", hashes.len());
                     let mut blocks = vec![];
@@ -325,16 +322,7 @@ impl Context {
                         peer.write(Message::GetBlocks(to_request));
                     }
                 }
-                Message::Bootstrap(after) => {
-                    debug!("Asked for all blocks after {}", &after);
-                    /*
-                     * TODO: recover this message
-                    for batch in self.blockdb.blocks_after(&after, 500) {
-                        peer.write(Message::Blocks(batch));
-                    }
-                    */
-                }
-            }
+            }*/
         }
     }
 }

@@ -8,6 +8,7 @@ edition = "2018"
 debug = true
 
 [dependencies]
+flatbuffers = "0.6"
 ring = "0.16"
 bincode = "1.2"
 serde_derive = "1.0"
