@@ -1100,6 +1100,91 @@ impl<'a: 'b, 'b> BlockBuilder<'a, 'b> {
   }
 }
 
+pub enum EncodedBlockOffset {}
+#[derive(Copy, Clone, Debug, PartialEq)]
+
+pub struct EncodedBlock<'a> {
+  pub _tab: flatbuffers::Table<'a>,
+}
+
+impl<'a> flatbuffers::Follow<'a> for EncodedBlock<'a> {
+    type Inner = EncodedBlock<'a>;
+    #[inline]
+    fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+        Self {
+            _tab: flatbuffers::Table { buf: buf, loc: loc },
+        }
+    }
+}
+
+impl<'a> EncodedBlock<'a> {
+    #[inline]
+    pub fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+        EncodedBlock {
+            _tab: table,
+        }
+    }
+    #[allow(unused_mut)]
+    pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+        _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+        args: &'args EncodedBlockArgs<'args>) -> flatbuffers::WIPOffset<EncodedBlock<'bldr>> {
+      let mut builder = EncodedBlockBuilder::new(_fbb);
+      if let Some(x) = args.raw { builder.add_raw(x); }
+      builder.finish()
+    }
+
+    pub const VT_RAW: flatbuffers::VOffsetT = 4;
+
+  #[inline]
+  pub fn raw(&self) -> Option<&'a [u8]> {
+    self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(EncodedBlock::VT_RAW, None).map(|v| v.safe_slice())
+  }
+  pub fn raw_nested_flatbuffer(&'a self) ->  Option<EncodedBlock<'a>> {
+     match self.raw() {
+         None => { None }
+         Some(data) => {
+             use self::flatbuffers::Follow;
+             Some(<flatbuffers::ForwardsUOffset<EncodedBlock<'a>>>::follow(data, 0))
+         },
+     }
+  }
+}
+
+pub struct EncodedBlockArgs<'a> {
+    pub raw: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a ,  u8>>>,
+}
+impl<'a> Default for EncodedBlockArgs<'a> {
+    #[inline]
+    fn default() -> Self {
+        EncodedBlockArgs {
+            raw: None,
+        }
+    }
+}
+pub struct EncodedBlockBuilder<'a: 'b, 'b> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+}
+impl<'a: 'b, 'b> EncodedBlockBuilder<'a, 'b> {
+  #[inline]
+  pub fn add_raw(&mut self, raw: flatbuffers::WIPOffset<flatbuffers::Vector<'b , u8>>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(EncodedBlock::VT_RAW, raw);
+  }
+  #[inline]
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> EncodedBlockBuilder<'a, 'b> {
+    let start = _fbb.start_table();
+    EncodedBlockBuilder {
+      fbb_: _fbb,
+      start_: start,
+    }
+  }
+  #[inline]
+  pub fn finish(self) -> flatbuffers::WIPOffset<EncodedBlock<'a>> {
+    let o = self.fbb_.end_table(self.start_);
+    flatbuffers::WIPOffset::new(o.value())
+  }
+}
+
 pub enum MessageOffset {}
 #[derive(Copy, Clone, Debug, PartialEq)]
 
@@ -1160,8 +1245,8 @@ impl<'a> Message<'a> {
     self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<SHA256>>>(Message::VT_GET_BLOCKS, None).map(|v| v.safe_slice() )
   }
   #[inline]
-  pub fn blocks(&self) -> Option<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<Block<'a>>>> {
-    self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<flatbuffers::ForwardsUOffset<Block<'a>>>>>(Message::VT_BLOCKS, None)
+  pub fn blocks(&self) -> Option<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<EncodedBlock<'a>>>> {
+    self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<flatbuffers::ForwardsUOffset<EncodedBlock<'a>>>>>(Message::VT_BLOCKS, None)
   }
 }
 
@@ -1170,7 +1255,7 @@ pub struct MessageArgs<'a> {
     pub pong: Option<flatbuffers::WIPOffset<&'a  str>>,
     pub new_block_hashes: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a , SHA256>>>,
     pub get_blocks: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a , SHA256>>>,
-    pub blocks: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a , flatbuffers::ForwardsUOffset<Block<'a >>>>>,
+    pub blocks: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a , flatbuffers::ForwardsUOffset<EncodedBlock<'a >>>>>,
 }
 impl<'a> Default for MessageArgs<'a> {
     #[inline]
@@ -1206,7 +1291,7 @@ impl<'a: 'b, 'b> MessageBuilder<'a, 'b> {
     self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(Message::VT_GET_BLOCKS, get_blocks);
   }
   #[inline]
-  pub fn add_blocks(&mut self, blocks: flatbuffers::WIPOffset<flatbuffers::Vector<'b , flatbuffers::ForwardsUOffset<Block<'b >>>>) {
+  pub fn add_blocks(&mut self, blocks: flatbuffers::WIPOffset<flatbuffers::Vector<'b , flatbuffers::ForwardsUOffset<EncodedBlock<'b >>>>) {
     self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(Message::VT_BLOCKS, blocks);
   }
   #[inline]

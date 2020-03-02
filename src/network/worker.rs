@@ -141,21 +141,37 @@ impl Context {
                     }
                 }
             }
-            /*
-            match msg {
-                Message::GetBlocks(hashes) => {
-                    debug!("Asked for {} blocks", hashes.len());
+            match msg.new_block_hashes() {
+                None => {}
+                Some(v) => {
+                    let num_hashes = v.len();
+                    debug!("Asked for {} blocks", num_hashes);
                     let mut blocks = vec![];
-                    for hash in hashes {
+                    for i in 0..num_hashes {
+                        let raw = v.get(i).unwrap();
+                        let bytes: [u64; 4] = [raw.first(), raw.second(), raw.third(), raw.fourth()];
+                        let hash: H256 = bytes.into();
                         match self.blockdb.get_encoded(&hash).unwrap() {
                             None => {}
                             Some(encoded_block) => {
-                                blocks.push(encoded_block.to_vec());
+                                // TODO: replace with the faster alternative
+                                let raw_vec = builder.create_vector(&encoded_block);
+                                let encoded_arg = p2p::EncodedBlockArgs {
+                                    raw: Some(raw_vec)
+                                };
+                                let encoded = p2p::EncodedBlock::create(&mut builder, &encoded_arg);
+                                blocks.push(encoded);
                             }
                         }
+                        if !blocks.is_empty() {
+                            let blocks_buf = builder.create_vector(&blocks);
+                            args.blocks = Some(blocks_buf);
+                        }
                     }
-                    peer.write(Message::Blocks(blocks));
                 }
+            }
+            /*
+            match msg {
                 Message::Blocks(encoded_blocks) => {
                     debug!("Got {} blocks", encoded_blocks.len());
 

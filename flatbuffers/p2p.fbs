@@ -79,11 +79,15 @@ table Block {
     content: Content;
 }
 
+table EncodedBlock {
+    raw: [ubyte] (nested_flatbuffer: "Block");
+}
+
 table Message {
     ping:string;
     pong:string;
     new_block_hashes:[SHA256];
     get_blocks:[SHA256];
-    blocks:[Block];
+    blocks:[EncodedBlock];
 }
 
