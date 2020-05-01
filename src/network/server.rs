@@ -5,6 +5,7 @@ use crossbeam::channel as cbchannel;
 use log::{debug, error, info, trace, warn};
 use mio::{self, net};
 use mio_extras::channel;
+use piper;
 use std::sync::mpsc;
 use std::thread;
 
@@ -13,7 +14,7 @@ const MAX_EVENT: usize = 1024;
 
 pub fn new(
     addr: std::net::SocketAddr,
-    msg_sink: cbchannel::Sender<(Vec<u8>, peer::Handle)>,
+    msg_sink: piper::Sender<(Vec<u8>, peer::Handle)>,
 ) -> std::io::Result<(Context, Handle)> {
     let (control_signal_sender, control_signal_receiver) = channel::channel();
     let handle = Handle {
@@ -37,7 +38,7 @@ pub struct Context {
     addr: std::net::SocketAddr,
     poll: mio::Poll,
     control_chan: channel::Receiver<ControlSignal>,
-    new_msg_chan: cbchannel::Sender<(Vec<u8>, peer::Handle)>,
+    new_msg_chan: piper::Sender<(Vec<u8>, peer::Handle)>,
     _handle: Handle,
 }
 
@@ -157,7 +158,7 @@ impl Context {
         Ok(())
     }
 
-    fn process_readable(&mut self, peer_id: usize) -> std::io::Result<()> {
+    async fn process_readable(&mut self, peer_id: usize) -> std::io::Result<()> {
         // we are using edge-triggered events, loop until block
         let peer = &mut self.peers[peer_id];
         loop {
@@ -178,7 +179,7 @@ impl Context {
                 Ok(ReadResult::Message(m)) => {
                     trace!("Peer {} yield message", peer_id);
                     // we just received a full message
-                    self.new_msg_chan.send((m, peer.handle.clone())).unwrap();
+                    self.new_msg_chan.send((m, peer.handle.clone())).await;
                     PERFORMANCE_COUNTER.record_receive_message();
                     continue;
                 }
@@ -343,7 +344,7 @@ impl Context {
                                     if !self.peers.contains(peer_id) {
                                         continue;
                                     }
-                                    self.process_readable(peer_id).unwrap();
+                                    futures::executor::block_on(self.process_readable(peer_id)).unwrap();
                                 }
                                 if readiness.is_writable() {
                                     trace!("Peer {} writable", peer_id);
