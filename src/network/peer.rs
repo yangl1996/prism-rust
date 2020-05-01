@@ -222,7 +222,10 @@ impl Handle {
         // TODO: return result
         let buffer = bincode::serialize(&msg).unwrap();
         if self.write_queue.send(buffer).is_err() {
-            warn!("Failed to send write request for peer {}, channel detached", self.addr);
+            warn!(
+                "Failed to send write request for peer {}, channel detached",
+                self.addr
+            );
         }
     }
 }
