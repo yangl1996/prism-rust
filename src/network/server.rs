@@ -4,7 +4,6 @@ use super::peer;
 use log::{debug, info, trace};
 use piper;
 use piper::Arc;
-use piper::Lock;
 use std::net;
 
 use futures::io::{AsyncReadExt, AsyncWriteExt};
@@ -12,28 +11,29 @@ use futures::io::{BufReader, BufWriter};
 use smol::{Async, Task};
 use std::thread;
 
-
 pub fn new(
     addr: std::net::SocketAddr,
     msg_sink: piper::Sender<(Vec<u8>, peer::Handle)>,
 ) -> std::io::Result<(Context, Handle)> {
     let (control_signal_sender, control_signal_receiver) = piper::chan(10000); // TODO: think about the buffer size
     let handle = Handle {
-        control_chan: control_signal_sender,
+        control_chan: control_signal_sender.clone(),
     };
     let ctx = Context {
-        peers: Lock::new(std::collections::HashMap::new()),
+        peers: std::collections::HashMap::new(),
         addr,
         control_chan: control_signal_receiver,
+        control_sender: control_signal_sender,
         new_msg_chan: msg_sink,
     };
     Ok((ctx, handle))
 }
 
 pub struct Context {
-    peers: Lock<std::collections::HashMap<std::net::SocketAddr, peer::Handle>>,
+    peers: std::collections::HashMap<std::net::SocketAddr, peer::Handle>,
     addr: std::net::SocketAddr,
     control_chan: piper::Receiver<ControlSignal>,
+    control_sender: piper::Sender<ControlSignal>,
     new_msg_chan: piper::Sender<(Vec<u8>, peer::Handle)>,
 }
 
@@ -48,29 +48,27 @@ impl Context {
         return Ok(());
     }
 
-    pub async fn mainloop(self) -> std::io::Result<()> {
+    pub async fn mainloop(mut self) -> std::io::Result<()> {
         // initialize the server socket
         let listener = Async::<net::TcpListener>::bind(&self.addr)?;
         info!("P2P server listening at {}", self.addr);
-        let ctx = std::sync::Arc::new(self);
-        let ctx1 = ctx.clone();
-        let ctx2 = ctx.clone();
+        let control_chan = self.control_sender.clone();
 
         // start the task that handles control signals
         Task::local(async move {
-            ctx1.dispatch_control().await.unwrap();
+            self.dispatch_control().await.unwrap();
         })
         .detach();
 
         // finally, enter the loop that endlessly accept incoming peers
         loop {
             let (stream, addr) = listener.accept().await?;
-            ctx2.accept(stream).await?;
+            control_chan.send(ControlSignal::GetNewPeer(stream)).await;
             info!("Incoming peer from {}", addr);
         }
     }
 
-    async fn dispatch_control(&self) -> std::io::Result<()> {
+    async fn dispatch_control(&mut self) -> std::io::Result<()> {
         // read the next control signal
         while let Some(ctrl) = self.control_chan.recv().await {
             match ctrl {
@@ -82,11 +80,13 @@ impl Context {
                 // TODO: fix this
                 ControlSignal::BroadcastMessage(msg) => {
                     trace!("Processing BroadcastMessage command");
-                    let peers = self.peers.lock().await;
-                    for (_, hd) in peers.iter() {
+                    for (_, hd) in self.peers.iter() {
                         hd.write(msg.clone());
                     }
-                    drop(peers);
+                }
+                ControlSignal::GetNewPeer(stream) => {
+                    trace!("Processing GetNewPeer command");
+                    self.accept(stream).await?;
                 }
             }
         }
@@ -94,7 +94,7 @@ impl Context {
     }
 
     /// Connect to a peer, and register this peer
-    async fn connect(&self, addr: &std::net::SocketAddr) -> std::io::Result<peer::Handle> {
+    async fn connect(&mut self, addr: &std::net::SocketAddr) -> std::io::Result<peer::Handle> {
         debug!("Establishing connection to peer {}", addr);
         let stream = Async::<std::net::TcpStream>::connect(addr).await?;
 
@@ -102,13 +102,13 @@ impl Context {
         self.register(stream, peer::Direction::Outgoing).await
     }
 
-    async fn accept(&self, stream: Async<net::TcpStream>) -> std::io::Result<()> {
+    async fn accept(&mut self, stream: Async<net::TcpStream>) -> std::io::Result<()> {
         self.register(stream, peer::Direction::Incoming).await?;
         Ok(())
     }
 
     async fn register(
-        &self,
+        &mut self,
         stream: Async<net::TcpStream>,
         _direction: peer::Direction,
     ) -> std::io::Result<peer::Handle> {
@@ -195,9 +195,7 @@ impl Context {
         .detach();
 
         // insert the peer handle so that we can broadcast to this guy later
-        let mut peers = self.peers.lock().await;
-        peers.insert(stream.get_ref().peer_addr()?, handle.clone());
-        drop(peers);
+        self.peers.insert(stream.get_ref().peer_addr()?, handle.clone());
         Ok(handle)
     }
 }
@@ -229,6 +227,7 @@ impl Handle {
 enum ControlSignal {
     ConnectNewPeer(ConnectRequest),
     BroadcastMessage(message::Message),
+    GetNewPeer(Async<net::TcpStream>),
 }
 
 struct ConnectRequest {
