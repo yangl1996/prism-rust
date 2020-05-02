@@ -19,7 +19,7 @@ pub fn new(
     addr: std::net::SocketAddr,
     msg_sink: piper::Sender<(Vec<u8>, peer::Handle)>,
 ) -> std::io::Result<(Context, Handle)> {
-    let (control_signal_sender, control_signal_receiver) = piper::chan(100);    // TODO: think about the buffer size
+    let (control_signal_sender, control_signal_receiver) = piper::chan(10000);    // TODO: think about the buffer size
     let handle = Handle {
         control_chan: control_signal_sender,
     };
@@ -186,6 +186,13 @@ impl Context {
                         // TODO: EOF, the connection is dropped
                     }
                 }
+                match writer.flush().await {
+                    Ok(_) => {
+                    }
+                    Err(_) => {
+                        // TODO: EOF, the connection is dropped
+                    }
+                }
             }
 
         }).detach();
@@ -205,7 +212,7 @@ pub struct Handle {
 
 impl Handle {
     pub fn connect(&self, addr: std::net::SocketAddr) -> std::io::Result<peer::Handle> {
-        let (sender, receiver) = piper::chan(100);
+        let (sender, receiver) = piper::chan(1);
         let request = ConnectRequest {
             addr,
             result_chan: sender,
