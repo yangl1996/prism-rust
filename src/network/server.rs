@@ -1,14 +1,14 @@
 use super::message;
 use super::peer;
-use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
-use log::{debug, error, info, trace, warn};
+
+use log::{debug, error, info, trace};
 use std::net;
 use piper;
 use piper::Arc;
 use piper::Lock;
-use std::sync::mpsc;
+
 use smol::{Async, Task};
-use futures::io::{self, BufReader, BufWriter};
+use futures::io::{BufReader, BufWriter};
 use futures::io::{AsyncReadExt, AsyncWriteExt};
 use std::thread;
 
@@ -41,7 +41,7 @@ pub struct Context {
 
 impl Context {
     /// Start a new server context.
-    pub fn start(mut self) -> std::io::Result<()> {
+    pub fn start(self) -> std::io::Result<()> {
         thread::spawn(move || {
             smol::run(async move {
                 self.mainloop().await.unwrap();
@@ -50,7 +50,7 @@ impl Context {
         return Ok(());
     }
 
-    pub async fn mainloop(mut self) -> std::io::Result<()> {
+    pub async fn mainloop(self) -> std::io::Result<()> {
         // initialize the server socket
         let listener = Async::<net::TcpListener>::bind(&self.addr)?;
         info!("P2P server listening at {}", self.addr);
@@ -114,7 +114,7 @@ impl Context {
     async fn register(
         &self,
         stream: Async<net::TcpStream>,
-        direction: peer::Direction,
+        _direction: peer::Direction,
     ) -> std::io::Result<peer::Handle> {
         // create a handle so that we can write to this peer TODO
         let (write_queue, handle) = peer::new(&stream)?;
