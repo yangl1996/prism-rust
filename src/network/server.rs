@@ -2,14 +2,14 @@ use super::message;
 use super::peer;
 
 use log::{debug, error, info, trace};
-use std::net;
 use piper;
 use piper::Arc;
 use piper::Lock;
+use std::net;
 
-use smol::{Async, Task};
-use futures::io::{BufReader, BufWriter};
 use futures::io::{AsyncReadExt, AsyncWriteExt};
+use futures::io::{BufReader, BufWriter};
+use smol::{Async, Task};
 use std::thread;
 
 const MAX_INCOMING_CLIENT: usize = 256;
@@ -19,7 +19,7 @@ pub fn new(
     addr: std::net::SocketAddr,
     msg_sink: piper::Sender<(Vec<u8>, peer::Handle)>,
 ) -> std::io::Result<(Context, Handle)> {
-    let (control_signal_sender, control_signal_receiver) = piper::chan(10000);    // TODO: think about the buffer size
+    let (control_signal_sender, control_signal_receiver) = piper::chan(10000); // TODO: think about the buffer size
     let handle = Handle {
         control_chan: control_signal_sender,
     };
@@ -61,9 +61,10 @@ impl Context {
         // start the task that handles control signals
         Task::local(async move {
             ctx1.dispatch_control().await.unwrap();
-        }).detach();
+        })
+        .detach();
 
-        // finally, enter the loop that endlessly accept incoming peers 
+        // finally, enter the loop that endlessly accept incoming peers
         loop {
             let (stream, addr) = listener.accept().await?;
             ctx2.accept(stream).await?;
@@ -72,7 +73,6 @@ impl Context {
         error!("P2P server stopped");
         Ok(())
     }
-
 
     async fn dispatch_control(&self) -> std::io::Result<()> {
         // read the next control signal
@@ -146,7 +146,10 @@ impl Context {
                 if msg_buffer.len() < msg_size as usize {
                     msg_buffer.resize(msg_size as usize, 0);
                 }
-                match reader.read_exact(&mut msg_buffer[0..msg_size as usize]).await {
+                match reader
+                    .read_exact(&mut msg_buffer[0..msg_size as usize])
+                    .await
+                {
                     Ok(_) => {
                         let new_payload: Vec<u8> = msg_buffer[0..msg_size as usize].to_vec();
                         new_msg_chan.send((new_payload, handle_copy.clone())).await;
@@ -156,14 +159,15 @@ impl Context {
                     }
                 }
             }
-        }).detach();
+        })
+        .detach();
 
         // second, start a task that keeps writing to this guy
         let mut writer = BufWriter::new(stream.clone());
         Task::local(async move {
             // the buffer to store the frame header
             let mut size_buffer: [u8; 4] = [0; 4];
-            
+
             loop {
                 // first, get a message to write from the queue
                 let new_msg = write_queue.recv().await.unwrap();
@@ -173,30 +177,27 @@ impl Context {
 
                 // third, write the frame header and the payload
                 match writer.write_all(&size_buffer).await {
-                    Ok(_) => {
-                    }
+                    Ok(_) => {}
                     Err(_) => {
                         // TODO: EOF, the connection is dropped
                     }
                 }
                 match writer.write_all(&new_msg).await {
-                    Ok(_) => {
-                    }
+                    Ok(_) => {}
                     Err(_) => {
                         // TODO: EOF, the connection is dropped
                     }
                 }
                 match writer.flush().await {
-                    Ok(_) => {
-                    }
+                    Ok(_) => {}
                     Err(_) => {
                         // TODO: EOF, the connection is dropped
                     }
                 }
             }
+        })
+        .detach();
 
-        }).detach();
-        
         // insert the peer handle so that we can broadcast to this guy later
         let mut peers = self.peers.lock().await;
         peers.insert(stream.get_ref().peer_addr()?, handle.clone());
@@ -217,15 +218,15 @@ impl Handle {
             addr,
             result_chan: sender,
         };
-        futures::executor::block_on(self.control_chan
-            .send(ControlSignal::ConnectNewPeer(request)));
+        futures::executor::block_on(
+            self.control_chan
+                .send(ControlSignal::ConnectNewPeer(request)),
+        );
         futures::executor::block_on(receiver.recv()).unwrap()
     }
 
     pub fn broadcast(&self, msg: message::Message) {
-        futures::executor::block_on(
-        self.control_chan
-            .send(ControlSignal::BroadcastMessage(msg)));
+        futures::executor::block_on(self.control_chan.send(ControlSignal::BroadcastMessage(msg)));
     }
 }
 
