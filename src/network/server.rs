@@ -7,10 +7,10 @@ use piper;
 use piper::Arc;
 use piper::Lock;
 use std::sync::mpsc;
-use std::thread;
 use smol::{Async, Task};
 use futures::io::{self, BufReader, BufWriter};
 use futures::io::{AsyncReadExt, AsyncWriteExt};
+use std::thread;
 
 const MAX_INCOMING_CLIENT: usize = 256;
 const MAX_EVENT: usize = 1024;
@@ -42,8 +42,10 @@ pub struct Context {
 impl Context {
     /// Start a new server context.
     pub fn start(mut self) -> std::io::Result<()> {
-        smol::run(async move {
-            self.mainloop().await.unwrap();
+        thread::spawn(move || {
+            smol::run(async move {
+                self.mainloop().await.unwrap();
+            });
         });
         return Ok(());
     }
@@ -51,6 +53,7 @@ impl Context {
     pub async fn mainloop(mut self) -> std::io::Result<()> {
         // initialize the server socket
         let listener = Async::<net::TcpListener>::bind(&self.addr)?;
+        info!("P2P server listening at {}", self.addr);
         let ctx = std::sync::Arc::new(self);
         let ctx1 = ctx.clone();
         let ctx2 = ctx.clone();
@@ -64,7 +67,9 @@ impl Context {
         loop {
             let (stream, addr) = listener.accept().await?;
             ctx2.accept(stream).await?;
+            info!("Incoming peer from {}", addr);
         }
+        error!("P2P server stopped");
         Ok(())
     }
 
@@ -94,7 +99,6 @@ impl Context {
 
     /// Connect to a peer, and register this peer
     async fn connect(&self, addr: &std::net::SocketAddr) -> std::io::Result<peer::Handle> {
-        // we need to estabilsh a stdlib tcp stream, since we need it to block
         debug!("Establishing connection to peer {}", addr);
         let stream = Async::<std::net::TcpStream>::connect(addr).await?;
 
@@ -201,7 +205,7 @@ pub struct Handle {
 
 impl Handle {
     pub fn connect(&self, addr: std::net::SocketAddr) -> std::io::Result<peer::Handle> {
-        let (sender, receiver) = piper::chan(1);
+        let (sender, receiver) = piper::chan(100);
         let request = ConnectRequest {
             addr,
             result_chan: sender,
