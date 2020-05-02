@@ -1,7 +1,7 @@
 use super::message;
 use super::peer;
 
-use log::{debug, error, info, trace};
+use log::{debug, info, trace};
 use piper;
 use piper::Arc;
 use piper::Lock;
@@ -12,8 +12,6 @@ use futures::io::{BufReader, BufWriter};
 use smol::{Async, Task};
 use std::thread;
 
-const MAX_INCOMING_CLIENT: usize = 256;
-const MAX_EVENT: usize = 1024;
 
 pub fn new(
     addr: std::net::SocketAddr,
@@ -70,8 +68,6 @@ impl Context {
             ctx2.accept(stream).await?;
             info!("Incoming peer from {}", addr);
         }
-        error!("P2P server stopped");
-        Ok(())
     }
 
     async fn dispatch_control(&self) -> std::io::Result<()> {
