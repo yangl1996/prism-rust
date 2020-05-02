@@ -77,7 +77,6 @@ impl Context {
                     let handle = self.connect(&req.addr).await;
                     req.result_chan.send(handle).await;
                 }
-                // TODO: fix this
                 ControlSignal::BroadcastMessage(msg) => {
                     trace!("Processing BroadcastMessage command");
                     for (_, hd) in self.peers.iter() {
