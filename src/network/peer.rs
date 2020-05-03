@@ -1,6 +1,7 @@
 use super::message;
 use futures::{channel::mpsc, sink::SinkExt};
 use smol::Async;
+use log::trace;
 
 pub fn new(
     stream: &Async<std::net::TcpStream>,
@@ -20,7 +21,7 @@ pub enum Direction {
     Outgoing,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Handle {
     addr: std::net::SocketAddr,
     write_queue: mpsc::UnboundedSender<Vec<u8>>,
@@ -30,6 +31,10 @@ impl Handle {
     pub fn write(&mut self, msg: message::Message) {
         // TODO: return result
         let buffer = bincode::serialize(&msg).unwrap();
-        futures::executor::block_on(self.write_queue.send(buffer));
+        futures::executor::block_on(async move {
+            if self.write_queue.send(buffer).await.is_err() {
+                trace!("Trying to send to disconnected peer");
+            }
+        });
     }
 }

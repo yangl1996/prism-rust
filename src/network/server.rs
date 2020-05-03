@@ -5,7 +5,7 @@ use log::{debug, info, trace};
 use piper;
 use piper::Arc;
 use std::net;
-use futures::{channel::mpsc, stream::StreamExt, channel::oneshot};
+use futures::{stream::StreamExt, channel::oneshot};
 
 use futures::io::{AsyncReadExt, AsyncWriteExt};
 use futures::io::{BufReader, BufWriter};
@@ -73,10 +73,10 @@ impl Context {
         // read the next control signal
         while let Some(ctrl) = self.control_chan.recv().await {
             match ctrl {
-                ControlSignal::ConnectNewPeer(req) => {
+                ControlSignal::ConnectNewPeer(addr, result_chan) => {
                     trace!("Processing ConnectNewPeer command");
-                    let handle = self.connect(&req.addr).await;
-                    req.result_chan.send(handle).await;
+                    let handle = self.connect(&addr).await;
+                    result_chan.send(handle).unwrap();
                 }
                 ControlSignal::BroadcastMessage(msg) => {
                     trace!("Processing BroadcastMessage command");
@@ -87,6 +87,11 @@ impl Context {
                 ControlSignal::GetNewPeer(stream) => {
                     trace!("Processing GetNewPeer command");
                     self.accept(stream).await?;
+                }
+                ControlSignal::DroppedPeer(addr) => {
+                    trace!("Processing DroppedPeer({})", addr);
+                    self.peers.remove(&addr);
+                    info!("Peer {} disconnected", addr);
                 }
             }
         }
@@ -118,6 +123,8 @@ impl Context {
         let stream = Arc::new(stream);
         let new_msg_chan = self.new_msg_chan.clone();
         let handle_copy = handle.clone();
+        let control_chan = self.control_sender.clone();
+        let addr = stream.get_ref().peer_addr()?;
 
         // start the reactor for this peer
         // first, start a task that keeps reading from this guy
@@ -189,11 +196,12 @@ impl Context {
                 }
             }
             // the peer is disconnected
+            control_chan.send(ControlSignal::DroppedPeer(addr)).await;
         })
         .detach();
 
         // insert the peer handle so that we can broadcast to this guy later
-        self.peers.insert(stream.get_ref().peer_addr()?, handle.clone());
+        self.peers.insert(addr, handle.clone());
         Ok(handle)
     }
 }
@@ -205,16 +213,12 @@ pub struct Handle {
 
 impl Handle {
     pub fn connect(&self, addr: std::net::SocketAddr) -> std::io::Result<peer::Handle> {
-        let (sender, receiver) = piper::chan(1);
-        let request = ConnectRequest {
-            addr,
-            result_chan: sender,
-        };
+        let (sender, receiver) = oneshot::channel();
         futures::executor::block_on(
             self.control_chan
-                .send(ControlSignal::ConnectNewPeer(request)),
+                .send(ControlSignal::ConnectNewPeer(addr, sender)),
         );
-        futures::executor::block_on(receiver.recv()).unwrap()
+        futures::executor::block_on(receiver).unwrap()
     }
 
     pub fn broadcast(&self, msg: message::Message) {
@@ -223,12 +227,9 @@ impl Handle {
 }
 
 enum ControlSignal {
-    ConnectNewPeer(ConnectRequest),
+    ConnectNewPeer(std::net::SocketAddr, oneshot::Sender<std::io::Result<peer::Handle>>),
     BroadcastMessage(message::Message),
     GetNewPeer(Async<net::TcpStream>),
+    DroppedPeer(std::net::SocketAddr),
 }
 
-struct ConnectRequest {
-    addr: std::net::SocketAddr,
-    result_chan: piper::Sender<std::io::Result<peer::Handle>>,
-}
