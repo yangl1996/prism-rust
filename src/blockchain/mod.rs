@@ -524,15 +524,16 @@ impl BlockChain {
         for level in affected_range {
             let existing_leader: Option<H256> =
                 get_value!(proposer_leader_sequence_cf, level as u64);
-            let new_leader_confirm: Option<H256> = self.proposer_leader(level as u64, self.config.quantile_epsilon_confirm)?;
-            let new_leader_deconfirm: Option<H256> = self.proposer_leader(level as u64, self.config.quantile_epsilon_deconfirm)?;
+            let new_leader_confirm: Option<H256> =
+                self.proposer_leader(level as u64, self.config.quantile_epsilon_confirm)?;
+            let new_leader_deconfirm: Option<H256> =
+                self.proposer_leader(level as u64, self.config.quantile_epsilon_deconfirm)?;
 
             // we confirm with a higher confidence so we don't have false deconfirmation
             let new_leader = {
                 if existing_leader.is_some() {
                     new_leader_deconfirm
-                }
-                else {
+                } else {
                     new_leader_confirm
                 }
             };
@@ -748,8 +749,7 @@ impl BlockChain {
                     block_votes_variance += p * (1.0 - p);
                 }
                 // using gaussian approximation
-                let tmp = block_votes_mean
-                    - (block_votes_variance).sqrt() * quantile;
+                let tmp = block_votes_mean - (block_votes_variance).sqrt() * quantile;
                 if tmp > 0.0 {
                     block_votes_lcb += tmp;
                 }

@@ -4,6 +4,7 @@ extern crate clap;
 use crossbeam::channel;
 use ed25519_dalek::Keypair;
 use log::{debug, error, info};
+use piper;
 use prism::api::Server as ApiServer;
 use prism::blockchain::BlockChain;
 use prism::blockdb::BlockDatabase;
@@ -276,7 +277,7 @@ fn main() {
         });
 
     // create channels between server and worker, worker and miner, miner and worker
-    let (msg_tx, msg_rx) = channel::unbounded();
+    let (msg_tx, msg_rx) = piper::chan(100); // TODO: make this buffer adjustable
     let (ctx_tx, ctx_rx) = channel::unbounded();
     let ctx_tx_miner = ctx_tx.clone();
 

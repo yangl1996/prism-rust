@@ -24,7 +24,7 @@ use std::thread;
 
 #[derive(Clone)]
 pub struct Context {
-    msg_chan: channel::Receiver<(Vec<u8>, peer::Handle)>,
+    msg_chan: piper::Receiver<(Vec<u8>, peer::Handle)>,
     num_worker: usize,
     chain: Arc<BlockChain>,
     blockdb: Arc<BlockDatabase>,
@@ -41,7 +41,7 @@ pub struct Context {
 
 pub fn new(
     num_worker: usize,
-    msg_src: channel::Receiver<(Vec<u8>, peer::Handle)>,
+    msg_src: piper::Receiver<(Vec<u8>, peer::Handle)>,
     blockchain: &Arc<BlockChain>,
     blockdb: &Arc<BlockDatabase>,
     utxodb: &Arc<UtxoDatabase>,
@@ -82,9 +82,9 @@ impl Context {
 
     fn worker_loop(&self) {
         loop {
-            let msg = self.msg_chan.recv().unwrap();
+            let msg = futures::executor::block_on(self.msg_chan.recv()).unwrap();
             PERFORMANCE_COUNTER.record_process_message();
-            let (msg, peer) = msg;
+            let (msg, mut peer) = msg;
             let msg: Message = bincode::deserialize(&msg).unwrap();
             match msg {
                 Message::Ping(nonce) => {
