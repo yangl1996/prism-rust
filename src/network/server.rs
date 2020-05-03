@@ -5,6 +5,7 @@ use log::{debug, info, trace};
 use piper;
 use piper::Arc;
 use std::net;
+use futures::{channel::mpsc, stream::StreamExt, channel::oneshot};
 
 use futures::io::{AsyncReadExt, AsyncWriteExt};
 use futures::io::{BufReader, BufWriter};
@@ -112,7 +113,7 @@ impl Context {
         _direction: peer::Direction,
     ) -> std::io::Result<peer::Handle> {
         // create a handle so that we can write to this peer TODO
-        let (write_queue, handle) = peer::new(&stream)?;
+        let (mut write_queue, handle) = peer::new(&stream)?;
 
         let stream = Arc::new(stream);
         let new_msg_chan = self.new_msg_chan.clone();
@@ -162,7 +163,7 @@ impl Context {
         Task::local(async move {
             loop {
                 // first, get a message to write from the queue
-                let new_msg = write_queue.recv().await.unwrap();
+                let new_msg = write_queue.next().await.unwrap();
 
                 // second, encode the length of the message
                 let size_buffer = (new_msg.len() as u32).to_be_bytes();
