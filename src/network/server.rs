@@ -126,17 +126,16 @@ impl Context {
             let mut size_buffer: [u8; 4] = [0; 4];
             // the buffer to store the message content
             let mut msg_buffer: Vec<u8> = vec![];
-            let mut msg_size: u32 = 0;
             loop {
                 // first, read exactly 4 bytes to get the frame header
-                match reader.read_exact(&mut size_buffer).await {
+                let msg_size = match reader.read_exact(&mut size_buffer).await {
                     Ok(_) => {
-                        msg_size = u32::from_be_bytes(size_buffer);
+                        u32::from_be_bytes(size_buffer)
                     }
                     Err(_) => {
-                        // TODO: EOF, the connection is dropped
+                        break;
                     }
-                }
+                };
                 // then, read exactly msg_size bytes to get the whole message
                 if msg_buffer.len() < msg_size as usize {
                     msg_buffer.resize(msg_size as usize, 0);
@@ -150,46 +149,45 @@ impl Context {
                         new_msg_chan.send((new_payload, handle_copy.clone())).await;
                     }
                     Err(_) => {
-                        // TODO: EOF, the connection is dropped
+                        break;
                     }
                 }
             }
+            // the peer is disconnected
         })
         .detach();
 
         // second, start a task that keeps writing to this guy
         let mut writer = BufWriter::new(stream.clone());
         Task::local(async move {
-            // the buffer to store the frame header
-            let mut size_buffer: [u8; 4] = [0; 4];
-
             loop {
                 // first, get a message to write from the queue
                 let new_msg = write_queue.recv().await.unwrap();
 
                 // second, encode the length of the message
-                size_buffer.copy_from_slice(&(new_msg.len() as u32).to_be_bytes());
+                let size_buffer = (new_msg.len() as u32).to_be_bytes();
 
                 // third, write the frame header and the payload
                 match writer.write_all(&size_buffer).await {
                     Ok(_) => {}
                     Err(_) => {
-                        // TODO: EOF, the connection is dropped
+                        break;
                     }
                 }
                 match writer.write_all(&new_msg).await {
                     Ok(_) => {}
                     Err(_) => {
-                        // TODO: EOF, the connection is dropped
+                        break;
                     }
                 }
                 match writer.flush().await {
                     Ok(_) => {}
                     Err(_) => {
-                        // TODO: EOF, the connection is dropped
+                        break;
                     }
                 }
             }
+            // the peer is disconnected
         })
         .detach();
 
