@@ -84,7 +84,7 @@ impl Context {
         loop {
             let msg = futures::executor::block_on(self.msg_chan.recv()).unwrap();
             PERFORMANCE_COUNTER.record_process_message();
-            let (msg, peer) = msg;
+            let (msg, mut peer) = msg;
             let msg: Message = bincode::deserialize(&msg).unwrap();
             match msg {
                 Message::Ping(nonce) => {

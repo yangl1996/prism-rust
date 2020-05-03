@@ -80,7 +80,7 @@ impl Context {
                 }
                 ControlSignal::BroadcastMessage(msg) => {
                     trace!("Processing BroadcastMessage command");
-                    for (_, hd) in self.peers.iter() {
+                    for (_, hd) in self.peers.iter_mut() {
                         hd.write(msg.clone());
                     }
                 }
