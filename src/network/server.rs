@@ -1,11 +1,11 @@
 use super::message;
 use super::peer;
 
+use futures::{channel::oneshot, stream::StreamExt};
 use log::{debug, info, trace};
 use piper;
 use piper::Arc;
 use std::net;
-use futures::{stream::StreamExt, channel::oneshot};
 
 use futures::io::{AsyncReadExt, AsyncWriteExt};
 use futures::io::{BufReader, BufWriter};
@@ -137,9 +137,7 @@ impl Context {
             loop {
                 // first, read exactly 4 bytes to get the frame header
                 let msg_size = match reader.read_exact(&mut size_buffer).await {
-                    Ok(_) => {
-                        u32::from_be_bytes(size_buffer)
-                    }
+                    Ok(_) => u32::from_be_bytes(size_buffer),
                     Err(_) => {
                         break;
                     }
@@ -227,9 +225,11 @@ impl Handle {
 }
 
 enum ControlSignal {
-    ConnectNewPeer(std::net::SocketAddr, oneshot::Sender<std::io::Result<peer::Handle>>),
+    ConnectNewPeer(
+        std::net::SocketAddr,
+        oneshot::Sender<std::io::Result<peer::Handle>>,
+    ),
     BroadcastMessage(message::Message),
     GetNewPeer(Async<net::TcpStream>),
     DroppedPeer(std::net::SocketAddr),
 }
-

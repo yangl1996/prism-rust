@@ -1,7 +1,7 @@
 use super::message;
 use futures::{channel::mpsc, sink::SinkExt};
-use smol::Async;
 use log::trace;
+use smol::Async;
 
 pub fn new(
     stream: &Async<std::net::TcpStream>,
