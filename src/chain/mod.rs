@@ -33,10 +33,36 @@
 // - Note that a segment may be broken apart (in the case of forking), or be extended
 // - In the API, identify a segment by the lowest and highest proposer level it votes
 //
-use crate::crypto::hash::{H256, Hashable};
-use std::sync::Arc;
+// ----- Confirmation Logic -----
+//
+// Voter chain tip -> Vote and depth --x1000--> Proposer leader
+// Proposer level  -> 
+//
+// When a new voter block arrives:
+// - Extends the main chain: no existing ledger changes except list confirmation
+// - Extends a fork: no existing ledger changes or new confirmation
+// - Switches the main chain: everything up to the fork does not change
+//
+// Every confirmed (not list confirmed) proposer block should have a signature recording the
+// condition on which it is confirmed: The segment IDs of each voter chain. Then we simply compare
+// the current chain state with when it is confirmed. If the current state has the confirmation
+// state as a prefix, then we don't need to do anything. Otherwise, recompute the proposer leader.
+use crate::crypto::hash::H256;
+use std::sync::{Arc, Weak};
 use std::convert::TryFrom;
 
+//         Segment 1
+// /                      \ 
+// ------------------------
+//          \
+//           -----------
+//           \         /
+//             Sgmt. 2
+//
+// Segment 2 has parent Segment 1.
+//
+// Idea: we should store the trees top-down, so that we can simply drop the root to shrink the size
+// of the tree for garbage collection.
 pub struct Segment {
     pub lowest_vote_level: u64,     // inclusive
     pub highest_vote_level: u64,    // inclusive
@@ -46,46 +72,58 @@ pub struct Segment {
     pub votes: Vec<(H256, u64)>,    // proposer hash, level of the vote
 }
 
-/// Given the voter chain (identified by its deepest segment) and the proposer level we are
+pub struct Voter {
+    pub level: u64,
+    pub hash: H256,
+    pub vote_start_level: u64,      // inclusive
+    pub votes: Vec<H256>,           // hashes of proposer blocks voted, organized by level
+    pub parent: Weak<Voter>,        // using Weak to allow garbage collection
+}
+
+/// Given the voter chain (identified by its tip voter block) and the proposer level we are
 /// interested in, get the proposer block on that level voted by this voter chain and the depth of
 /// the vote.
-pub fn proposer_vote_of_level(voter_chain: &Segment, proposer_level: u64) -> Option<(H256, u64)> {
+pub fn proposer_vote_of_level(voter_chain: &Voter, proposer_level: u64) -> Option<(H256, u64)> {
     // For now, we simply do a linear search. TODO: implement a functional segment tree to improve
     // the speed that we search the segment containing a specific proposer level.
 
-    let best_voter_level = voter_chain.highest_block.1;
-    // First check the current segment
-    if proposer_level > voter_chain.highest_vote_level {
+    let best_voter_level = voter_chain.level;
+    // First check the current voter block
+    if proposer_level >= voter_chain.vote_start_level + u64::try_from(voter_chain.votes.len()).unwrap() {
+        // The proposer level is higher than the highest voted level of this chain
         return None;
     }
     else {
-        if proposer_level >= voter_chain.lowest_vote_level {
-            let idx = usize::try_from(proposer_level - voter_chain.lowest_vote_level).unwrap();
-            let (vote, level) = voter_chain.votes[idx];
-            return Some((vote, best_voter_level - level + 1));
+        if proposer_level >= voter_chain.vote_start_level {
+            // This voter block votes for this proposer level
+            let idx = usize::try_from(proposer_level - voter_chain.vote_start_level).unwrap();
+            let vote = voter_chain.votes[idx];
+            return Some((vote, 1));
         }
     }
 
-    // Then trace back and find the first segment that votes a lower level than proposer_level
-    let mut current_segment = match &voter_chain.parent {
-        Some(p) => Arc::clone(&p),
+    // Then trace back
+    let mut current_block = match voter_chain.parent.upgrade() {
+        Some(p) => p,
         None => return None,
     };
-    while proposer_level < current_segment.lowest_vote_level {
-        current_segment = match &current_segment.parent {
-            Some(p) => Arc::clone(&p),
-            None => return None,
-        };
+    while proposer_level < current_block.vote_start_level + u64::try_from(current_block.votes.len()).unwrap() {
+        if proposer_level >= current_block.vote_start_level {
+            let idx = usize::try_from(proposer_level - current_block.vote_start_level).unwrap();
+            let vote = current_block.votes[idx];
+            return Some((vote, best_voter_level - current_block.level + 1));
+        }
+        else {
+            current_block = match current_block.parent.upgrade() {
+                Some(p) => p,
+                None => return None,
+            };
+        }
     }
-    if proposer_level <= current_segment.highest_vote_level {
-            let idx = usize::try_from(proposer_level - current_segment.lowest_vote_level).unwrap();
-            let (vote, level) = current_segment.votes[idx];
-            return Some((vote, best_voter_level - level + 1));
-    }
-    else {
-        None
-    }
+    None
 }
+
+
 
 #[cfg(test)]
 mod tests {
@@ -108,41 +146,47 @@ mod tests {
             proposer_blocks.push(get_hash());
         }
         let mut voter_blocks: Vec<H256> = vec![];
-        for _ in 0..6 {
+        for _ in 0..7 {
             voter_blocks.push(get_hash());
         }
 
-        let genesis_segment = Segment {
-            lowest_vote_level: 0,
-            highest_vote_level: 3,
-            lowest_block: (voter_blocks[0], 0),
-            highest_block: (voter_blocks[2], 2),
-            parent: None,
-            votes: vec![(proposer_blocks[0], 0), (proposer_blocks[1], 1), (proposer_blocks[2], 1), (proposer_blocks[3], 2)],
+        let mut voters: Vec<Arc<Voter>> = vec![];
+        let mut this_vote_level = 0;
+        let mut this_level = 0;
+        let mut last_voter_block: Option<Arc<Voter>> = None;
+        let mut create_voter = |votes: Vec<H256>| -> Arc<Voter> {
+            let parent_ref = match &last_voter_block {
+                Some(p) => Arc::downgrade(&p),
+                None => Default::default(),
+            };
+            let v = Voter {
+                level: this_level,
+                hash: voter_blocks[this_level as usize],
+                vote_start_level: this_vote_level,
+                votes: votes,
+                parent: parent_ref,
+            };
+            let v = Arc::new(v);
+            voters.push(Arc::clone(&v));
+            this_vote_level += v.votes.len() as u64;
+            this_level += 1;
+            last_voter_block = Some(Arc::clone(&v));
+            return v;
         };
-        let segment_0 = Arc::new(genesis_segment);
-        let segment = Segment {
-            lowest_vote_level: 4,
-            highest_vote_level: 4,
-            lowest_block: (voter_blocks[3], 3),
-            highest_block: (voter_blocks[4], 4),
-            parent: Some(segment_0),
-            votes: vec![(proposer_blocks[4], 4)],
-        };
-        let segment_1 = Arc::new(segment);
-        let segment = Segment {
-            lowest_vote_level: 5,
-            highest_vote_level: 6,
-            lowest_block: (voter_blocks[3], 5),
-            highest_block: (voter_blocks[3], 5),
-            parent: Some(segment_1),
-            votes: vec![(proposer_blocks[5], 5), (proposer_blocks[6], 5)],
-        };
-        assert_eq!(proposer_vote_of_level(&segment, 0), Some((proposer_blocks[0], 6)));
+
+        create_voter(vec![proposer_blocks[0]]);
+        create_voter(vec![]);
+        create_voter(vec![proposer_blocks[1], proposer_blocks[2]]);
+        create_voter(vec![proposer_blocks[3]]);
+        create_voter(vec![proposer_blocks[4]]);
+        create_voter(vec![]);
+        let segment = create_voter(vec![proposer_blocks[5], proposer_blocks[6]]);
+
+        assert_eq!(proposer_vote_of_level(&segment, 0), Some((proposer_blocks[0], 7)));
         assert_eq!(proposer_vote_of_level(&segment, 1), Some((proposer_blocks[1], 5)));
         assert_eq!(proposer_vote_of_level(&segment, 2), Some((proposer_blocks[2], 5)));
         assert_eq!(proposer_vote_of_level(&segment, 3), Some((proposer_blocks[3], 4)));
-        assert_eq!(proposer_vote_of_level(&segment, 4), Some((proposer_blocks[4], 2)));
+        assert_eq!(proposer_vote_of_level(&segment, 4), Some((proposer_blocks[4], 3)));
         assert_eq!(proposer_vote_of_level(&segment, 5), Some((proposer_blocks[5], 1)));
         assert_eq!(proposer_vote_of_level(&segment, 6), Some((proposer_blocks[6], 1)));
         assert_eq!(proposer_vote_of_level(&segment, 7), None);
