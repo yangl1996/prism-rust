@@ -22,3 +22,4 @@ pub mod utxodb;
 pub mod validation;
 pub mod visualization;
 pub mod wallet;
+pub mod chain;
