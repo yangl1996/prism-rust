@@ -80,47 +80,49 @@ pub struct Voter {
     pub parent: Weak<Voter>,        // using Weak to allow garbage collection
 }
 
-/// Given the voter chain (identified by its tip voter block) and the proposer level we are
-/// interested in, get the proposer block on that level voted by this voter chain and the depth of
-/// the vote.
-pub fn proposer_vote_of_level(voter_chain: &Voter, proposer_level: u64) -> Option<(H256, u64)> {
-    // For now, we simply do a linear search. TODO: implement a functional segment tree to improve
-    // the speed that we search the segment containing a specific proposer level.
+impl Voter {
+    /// Given the voter chain (identified by its tip voter block) and the proposer level we are
+    /// interested in, get the proposer block on that level voted by this voter chain and the depth of
+    /// the vote.
+    pub fn proposer_vote_of_level(&self, proposer_level: u64) -> Option<(H256, u64)> {
+        // For now, we simply do a linear search. TODO: implement a functional segment tree to improve
+        // the speed that we search the segment containing a specific proposer level.
 
-    let best_voter_level = voter_chain.level;
-    // First check the current voter block
-    if proposer_level >= voter_chain.vote_start_level + u64::try_from(voter_chain.votes.len()).unwrap() {
-        // The proposer level is higher than the highest voted level of this chain
-        return None;
-    }
-    else {
-        if proposer_level >= voter_chain.vote_start_level {
-            // This voter block votes for this proposer level
-            let idx = usize::try_from(proposer_level - voter_chain.vote_start_level).unwrap();
-            let vote = voter_chain.votes[idx];
-            return Some((vote, 1));
-        }
-    }
-
-    // Then trace back
-    let mut current_block = match voter_chain.parent.upgrade() {
-        Some(p) => p,
-        None => return None,
-    };
-    while proposer_level < current_block.vote_start_level + u64::try_from(current_block.votes.len()).unwrap() {
-        if proposer_level >= current_block.vote_start_level {
-            let idx = usize::try_from(proposer_level - current_block.vote_start_level).unwrap();
-            let vote = current_block.votes[idx];
-            return Some((vote, best_voter_level - current_block.level + 1));
+        let best_voter_level = self.level;
+        // First check the current voter block
+        if proposer_level >= self.vote_start_level + u64::try_from(self.votes.len()).unwrap() {
+            // The proposer level is higher than the highest voted level of this chain
+            return None;
         }
         else {
-            current_block = match current_block.parent.upgrade() {
-                Some(p) => p,
-                None => return None,
-            };
+            if proposer_level >= self.vote_start_level {
+                // This voter block votes for this proposer level
+                let idx = usize::try_from(proposer_level - self.vote_start_level).unwrap();
+                let vote = self.votes[idx];
+                return Some((vote, 1));
+            }
         }
+
+        // Then trace back
+        let mut current_block = match self.parent.upgrade() {
+            Some(p) => p,
+            None => return None,
+        };
+        while proposer_level < current_block.vote_start_level + u64::try_from(current_block.votes.len()).unwrap() {
+            if proposer_level >= current_block.vote_start_level {
+                let idx = usize::try_from(proposer_level - current_block.vote_start_level).unwrap();
+                let vote = current_block.votes[idx];
+                return Some((vote, best_voter_level - current_block.level + 1));
+            }
+            else {
+                current_block = match current_block.parent.upgrade() {
+                    Some(p) => p,
+                    None => return None,
+                };
+            }
+        }
+        None
     }
-    None
 }
 
 
@@ -182,13 +184,13 @@ mod tests {
         create_voter(vec![]);
         let segment = create_voter(vec![proposer_blocks[5], proposer_blocks[6]]);
 
-        assert_eq!(proposer_vote_of_level(&segment, 0), Some((proposer_blocks[0], 7)));
-        assert_eq!(proposer_vote_of_level(&segment, 1), Some((proposer_blocks[1], 5)));
-        assert_eq!(proposer_vote_of_level(&segment, 2), Some((proposer_blocks[2], 5)));
-        assert_eq!(proposer_vote_of_level(&segment, 3), Some((proposer_blocks[3], 4)));
-        assert_eq!(proposer_vote_of_level(&segment, 4), Some((proposer_blocks[4], 3)));
-        assert_eq!(proposer_vote_of_level(&segment, 5), Some((proposer_blocks[5], 1)));
-        assert_eq!(proposer_vote_of_level(&segment, 6), Some((proposer_blocks[6], 1)));
-        assert_eq!(proposer_vote_of_level(&segment, 7), None);
+        assert_eq!(segment.proposer_vote_of_level(0), Some((proposer_blocks[0], 7)));
+        assert_eq!(segment.proposer_vote_of_level(1), Some((proposer_blocks[1], 5)));
+        assert_eq!(segment.proposer_vote_of_level(2), Some((proposer_blocks[2], 5)));
+        assert_eq!(segment.proposer_vote_of_level(3), Some((proposer_blocks[3], 4)));
+        assert_eq!(segment.proposer_vote_of_level(4), Some((proposer_blocks[4], 3)));
+        assert_eq!(segment.proposer_vote_of_level(5), Some((proposer_blocks[5], 1)));
+        assert_eq!(segment.proposer_vote_of_level(6), Some((proposer_blocks[6], 1)));
+        assert_eq!(segment.proposer_vote_of_level(7), None);
     }
 }
