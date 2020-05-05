@@ -123,6 +123,16 @@ impl Voter {
         }
         None
     }
+
+    pub fn attach_new_block(self: &Arc<Self>, hash: H256, votes: &[H256]) -> Self {
+        Self {
+            level: self.level + 1,
+            hash,
+            vote_start_level: self.vote_start_level + u64::try_from(self.votes.len()).unwrap(),
+            votes: votes.to_vec(),
+            parent: Arc::downgrade(self),
+        }
+    }
 }
 
 
@@ -140,9 +150,99 @@ mod tests {
         (&raw_bytes).into()
     }
 
+    fn cmp(a: &Voter, b: &Voter) -> bool {
+            if a.level != b.level {
+                return false;
+            }
+            if a.hash != b.hash {
+                return false;
+            }
+            if a.vote_start_level != b.vote_start_level {
+                return false;
+            }
+            if a.votes != b.votes {
+                return false;
+            }
+            let ap = a.parent.upgrade();
+            let bp = b.parent.upgrade();
+            if ap.is_none() && bp.is_none() {
+                return true;
+            } else {
+                if ap.is_some() && bp.is_some() {
+                    return cmp(&ap.unwrap(), &bp.unwrap());
+                }
+                else {
+                    return false;
+                }
+            }
+    }
+
+    #[test]
+    fn attach_new_voter() {
+        // the groundtruth
+        let mut proposer_blocks: Vec<H256> = vec![];
+        for _ in 0..7 {
+            proposer_blocks.push(get_hash());
+        }
+        let mut voter_blocks: Vec<H256> = vec![];
+        for _ in 0..7 {
+            voter_blocks.push(get_hash());
+        }
+
+        let mut voters: Vec<Arc<Voter>> = vec![];
+        let mut this_vote_level = 0;
+        let mut this_level = 0;
+        let mut last_voter_block: Option<Arc<Voter>> = None;
+        let mut create_voter = |votes: Vec<H256>| -> Arc<Voter> {
+            let parent_ref = match &last_voter_block {
+                Some(p) => Arc::downgrade(&p),
+                None => Default::default(),
+            };
+            let v = Voter {
+                level: this_level,
+                hash: voter_blocks[this_level as usize],
+                vote_start_level: this_vote_level,
+                votes: votes,
+                parent: parent_ref,
+            };
+            let v = Arc::new(v);
+            voters.push(Arc::clone(&v));
+            this_vote_level += v.votes.len() as u64;
+            this_level += 1;
+            last_voter_block = Some(Arc::clone(&v));
+            return v;
+        };
+
+        create_voter(vec![proposer_blocks[0]]);
+        create_voter(vec![]);
+        create_voter(vec![proposer_blocks[1], proposer_blocks[2]]);
+        create_voter(vec![proposer_blocks[3]]);
+        create_voter(vec![proposer_blocks[4]]);
+        create_voter(vec![]);
+        create_voter(vec![proposer_blocks[5], proposer_blocks[6]]);
+
+        // results from the function
+        let mut my_voters: Vec<Arc<Voter>> = vec![];
+        my_voters.push(Arc::clone(&voters[0]));
+        let v = my_voters[0].attach_new_block(voter_blocks[1], &vec![]);
+        my_voters.push(Arc::new(v));
+        let v = my_voters[1].attach_new_block(voter_blocks[2], &vec![proposer_blocks[1], proposer_blocks[2]]);
+        my_voters.push(Arc::new(v));
+        let v = my_voters[2].attach_new_block(voter_blocks[3], &vec![proposer_blocks[3]]);
+        my_voters.push(Arc::new(v));
+        let v = my_voters[3].attach_new_block(voter_blocks[4], &vec![proposer_blocks[4]]);
+        my_voters.push(Arc::new(v));
+        let v = my_voters[4].attach_new_block(voter_blocks[5], &vec![]);
+        my_voters.push(Arc::new(v));
+        let v = my_voters[5].attach_new_block(voter_blocks[6], &vec![proposer_blocks[5], proposer_blocks[6]]);
+        my_voters.push(Arc::new(v));
+
+        assert!(cmp(&voters[6], &my_voters[6]));
+    }
+
     #[test]
     fn get_proposer_vote_by_level() {
-        // generate 7 hashes for proposer blocks, and 6 hashes for voter blocks
+        // generate 7 hashes for proposer blocks, and 7 hashes for voter blocks
         let mut proposer_blocks: Vec<H256> = vec![];
         for _ in 0..7 {
             proposer_blocks.push(get_hash());
