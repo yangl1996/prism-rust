@@ -90,16 +90,19 @@ pub fn proposer_vote_of_level(voter_chain: &Segment, proposer_level: u64) -> Opt
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::Rng;
+
+    fn get_hash() -> H256 {
+        let mut rng = rand::thread_rng();
+        let random_bytes: Vec<u8> = (0..32).map(|_| rng.gen_range(0, 255) as u8).collect();
+        let mut raw_bytes = [0; 32];
+        raw_bytes.copy_from_slice(&random_bytes);
+        (&raw_bytes).into()
+    }
 
     #[test]
     fn get_proposer_vote_by_level() {
-        // generate 10 hashes for proposer blocks, and 6 hashes for voter blocks
-        let mut hash_base: [u8; 32] = [0; 32];
-        let mut get_hash = || -> H256 {
-            let hash = (&hash_base).into();
-            hash_base[31] += 1;
-            hash
-        };
+        // generate 7 hashes for proposer blocks, and 6 hashes for voter blocks
         let mut proposer_blocks: Vec<H256> = vec![];
         for _ in 0..7 {
             proposer_blocks.push(get_hash());
