@@ -50,6 +50,8 @@
 use crate::crypto::hash::H256;
 use std::sync::{Arc, Weak};
 use std::convert::TryFrom;
+use crate::block::Block;
+use crate::block::Content;
 
 //         Segment 1
 // /                      \ 
@@ -135,7 +137,67 @@ impl Voter {
     }
 }
 
+//        -----      ------
+//       /          /
+// -------------------------------
+//                \
+//                 --------
+// For now, we set a threshold level and remove everything lower than that level
+pub struct VoterIndex {
+    blocks: std::collections::HashMap<H256, Arc<Voter>>,
+    starting_level: u64,                                    // the level stored by index 0 in the vecdeque
+    by_level: std::collections::VecDeque<Vec<H256>>,        // organized by level in increasing order
+}
 
+impl VoterIndex {
+    pub fn new(starting: u64) -> Self {
+        Self {
+            blocks: std::collections::HashMap::new(),
+            starting_level: starting,
+            by_level: std::collections::VecDeque::new(),
+        }
+    }
+
+    /*
+    pub fn insert_at(&mut self, block: &Block, level: u64) -> Option<Voter> {
+
+    }
+    */
+
+    pub fn insert(&mut self, block: &Block, hash: H256) -> Arc<Voter> {
+        let content = match &block.content {
+            Content::Voter(stuff) => stuff,
+            _ => panic!("Adding a non-voter block to a voter chain"),
+        };
+        let parent = content.voter_parent;
+        let parent_ref = match self.blocks.get(&parent) {
+            Some(v) => v,
+            None => panic!("Adding a voter block whose parent is unknown"),
+        };
+        
+        let new_block = parent_ref.attach_new_block(hash, &content.votes);
+        let level = new_block.level;
+        let new_block_ref = Arc::new(new_block);
+        self.blocks.insert(hash, Arc::clone(&new_block_ref));
+        let level_idx = level - self.starting_level;
+        let vec_len = u64::try_from(self.by_level.len()).unwrap();
+        if level_idx > vec_len {
+            panic!("Adding a voter block deeper than the current deepest level + 1");
+        }
+        else if level_idx == vec_len {
+            self.by_level.push_back(vec![hash]);
+        }
+        else {
+            let list = self.by_level.get_mut(usize::try_from(level_idx).unwrap()).unwrap();
+            if list.contains(&hash) {
+                panic!("Adding a voter block already there on that level");
+            }
+            list.push(hash);
+        }
+
+        return new_block_ref;
+    }
+}
 
 #[cfg(test)]
 mod tests {
