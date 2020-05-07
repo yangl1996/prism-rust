@@ -158,6 +158,26 @@ impl VoterIndex {
         }
     }
 
+    pub fn remove_levels(&mut self, new_start_level: u64) {
+        if new_start_level <= self.starting_level {
+            return;
+        }
+        let levels_to_remove = usize::try_from(new_start_level - self.starting_level).unwrap();
+        if levels_to_remove >= self.by_level.len() {
+            panic!("Removing all levels in the voter index");
+        }
+        let new = self.by_level.split_off(levels_to_remove);
+        for l in self.by_level.iter() {
+            for h in l.iter() {
+                if self.blocks.remove(&h).is_none() {
+                    panic!("Voter block hash exists in the by-level list but not in the hashtable");
+                }
+            }
+        }
+        self.by_level = new;
+        self.starting_level = new_start_level;
+    }
+
     pub fn insert_root_at(&mut self, block: &Block, hash: H256, level: u64, vote_start_level: u64) -> Arc<Voter> {
         let content = match &block.content {
             Content::Voter(stuff) => stuff,
@@ -298,6 +318,50 @@ mod tests {
         }
     }
 
+    fn remove_voter_level() {
+        // level starts at 30
+        // v0 - v1 - v2 - v3
+        //        \- v4
+        let mut voter_blocks: Vec<Block> = vec![];
+        let b0 = voter_block(get_hash(), &[]);
+        voter_blocks.push(b0);
+        let b1 = voter_block(voter_blocks[0].hash(), &[]);
+        voter_blocks.push(b1);
+        let b2 = voter_block(voter_blocks[1].hash(), &[]);
+        voter_blocks.push(b2);
+        let b3 = voter_block(voter_blocks[2].hash(), &[]);
+        voter_blocks.push(b3);
+        let b4 = voter_block(voter_blocks[1].hash(), &[]);
+        voter_blocks.push(b4);
+
+        let mut idx = VoterIndex::new();
+        idx.insert_root_at(&voter_blocks[0], voter_blocks[0].hash(), 30, 10);
+        idx.insert(&voter_blocks[1], voter_blocks[1].hash());
+        idx.insert(&voter_blocks[2], voter_blocks[2].hash());
+        idx.insert(&voter_blocks[3], voter_blocks[3].hash());
+        idx.insert(&voter_blocks[4], voter_blocks[4].hash());
+
+        assert_eq!(idx.starting_level, 30);
+        assert_eq!(idx.by_level.len(), 4);
+        idx.remove_levels(20);
+        assert_eq!(idx.starting_level, 30);
+        assert_eq!(idx.by_level.len(), 4);
+        idx.remove_levels(30);
+        assert_eq!(idx.starting_level, 30);
+        assert_eq!(idx.by_level.len(), 4);
+        idx.remove_levels(32);
+        assert_eq!(idx.starting_level, 32);
+        assert_eq!(idx.by_level.len(), 2);
+        assert!(idx.by_level[0].contains(&voter_blocks[2].hash()));
+        assert!(idx.by_level[0].contains(&voter_blocks[4].hash()));
+        assert_eq!(idx.blocks.len(), 3);
+        idx.remove_levels(33);
+        assert_eq!(idx.starting_level, 33);
+        assert_eq!(idx.by_level.len(), 1);
+        assert!(idx.by_level[0].contains(&voter_blocks[3].hash()));
+        assert_eq!(idx.blocks.len(), 1);
+    }
+
     #[test]
     fn insert_voter_block() {
         let mut proposer_blocks: Vec<H256> = vec![];
@@ -343,6 +407,15 @@ mod tests {
         assert_eq!(tip2.proposer_vote_of_level(12), Some((proposer_blocks[2], 3)));
         assert_eq!(tip2.proposer_vote_of_level(13), Some((proposer_blocks[3], 1)));
         assert_eq!(tip2.proposer_vote_of_level(14), None);
+        assert_eq!(idx.by_level[0].len(), 1);
+        assert_eq!(idx.by_level[1].len(), 1);
+        assert_eq!(idx.by_level[2].len(), 2);
+        assert_eq!(idx.by_level[3].len(), 1);
+        assert!(idx.by_level[0].contains(&voter_blocks[0].hash()));
+        assert!(idx.by_level[1].contains(&voter_blocks[1].hash()));
+        assert!(idx.by_level[2].contains(&voter_blocks[2].hash()));
+        assert!(idx.by_level[2].contains(&voter_blocks[4].hash()));
+        assert!(idx.by_level[3].contains(&voter_blocks[3].hash()));
     }
 
     #[test]
