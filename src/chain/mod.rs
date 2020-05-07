@@ -150,19 +150,52 @@ pub struct VoterIndex {
 }
 
 impl VoterIndex {
-    pub fn new(starting: u64) -> Self {
+    pub fn new() -> Self {
         Self {
             blocks: std::collections::HashMap::new(),
-            starting_level: starting,
+            starting_level: 0,
             by_level: std::collections::VecDeque::new(),
         }
     }
 
-    /*
-    pub fn insert_at(&mut self, block: &Block, level: u64) -> Option<Voter> {
+    pub fn insert_stub_at(&mut self, hash: H256, level: u64) -> Arc<Voter> {
+        let block_empty = self.blocks.is_empty();
+        let level_empty = self.by_level.is_empty();
+        let voter = Voter {
+            level,
+            hash,
+            vote_start_level: 0,
+            votes: vec![],
+            parent: Default::default(),
+        };
+        let voter = Arc::new(voter);
 
+        if block_empty && !level_empty {
+            panic!("Voter chain index has zero block but non-zero level");
+        }
+        else if block_empty && level_empty {
+            // if the index is previously empty
+            self.starting_level = level;
+            self.blocks.insert(hash, Arc::clone(&voter));
+            self.by_level.push_back(vec![hash]);
+        }
+        else if (!block_empty) && level_empty {
+            panic!("Voter chain index has non-zero blocks but zero level");
+        }
+        else {
+            // if the index is nonempty
+            if level != self.starting_level {
+                panic!("Adding a voter stub at a level different from the index starting level");
+            }
+            let list = self.by_level.get_mut(0).unwrap();
+            if list.contains(&hash) {
+                panic!("Adding a voter stub already there on that level");
+            }
+            list.push(hash);
+            self.blocks.insert(hash, Arc::clone(&voter));
+        }
+        return voter;
     }
-    */
 
     pub fn insert(&mut self, block: &Block, hash: H256) -> Arc<Voter> {
         let content = match &block.content {
