@@ -158,6 +158,25 @@ impl VoterIndex {
         }
     }
 
+    // TODO: looks like it can be optimized with a segment tree
+    pub fn num_voter_blocks(&self, start: u64, end: u64) -> usize {
+        if start < self.starting_level {
+            panic!("Counting voter blocks beginning at a level lower than the voter index starting level");
+        }
+        let start_idx = usize::try_from(start - self.starting_level).unwrap();
+        let count = usize::try_from(end - self.starting_level).unwrap() + 1; 
+        let count = if count > self.by_level.len() {
+            self.by_level.len()
+        } else {
+            count
+        };
+        let mut total = 0;
+        for i in start_idx..count {
+            total += self.by_level[i].len();
+        }
+        return total;
+    }
+
     pub fn highest_block(&self) -> Arc<Voter> {
         if self.by_level.is_empty() {
             panic!("Querying the highest block from an empty voter index");
@@ -435,6 +454,12 @@ mod tests {
         assert!(idx.by_level[2].contains(&voter_blocks[2].hash()));
         assert!(idx.by_level[2].contains(&voter_blocks[4].hash()));
         assert!(idx.by_level[3].contains(&voter_blocks[3].hash()));
+        assert_eq!(idx.num_voter_blocks(60, 62), 0);
+        assert_eq!(idx.num_voter_blocks(30, 38), 5);
+        assert_eq!(idx.num_voter_blocks(30, 33), 5);
+        assert_eq!(idx.num_voter_blocks(30, 31), 2);
+        assert_eq!(idx.num_voter_blocks(32, 32), 2);
+        assert_eq!(idx.num_voter_blocks(31, 33), 4);
     }
 
     #[test]

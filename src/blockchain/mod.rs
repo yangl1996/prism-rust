@@ -703,47 +703,29 @@ impl BlockChain {
         let mut new_leader: Option<H256> = None;
 
         // collect the depth of each vote on each proposer block
-        let mut votes_depth: HashMap<&H256, Vec<u64>> = HashMap::new(); // chain number and vote depth casted on the proposer block
+        let mut votes_depth: HashMap<H256, Vec<u64>> = HashMap::new(); // chain number and vote depth casted on the proposer block
 
         // collect the total votes on all proposer blocks, and the number of
         // voter blocks mined after those votes are casted
         let mut total_vote_count: u16 = 0;
         let mut total_vote_blocks: u64 = 0;
 
-        for block in &proposer_blocks {
-            let votes: Vec<(u16, u64)> = match get_value!(proposer_node_vote_cf, block) {
-                None => vec![],
-                Some(d) => d,
-            };
-            let mut vote_depth: Vec<u64> = vec![];
-            for (chain_num, vote_level) in &votes {
-                // TODO: cache the voter chain best levels
-                let voter_best = self.voter_best[*chain_num as usize].lock().unwrap();
-                let voter_best_level = voter_best.1;
-                drop(voter_best);
-                total_vote_blocks += self
-                    .num_voter_blocks(*chain_num, *vote_level, voter_best_level)
-                    .unwrap();
-                total_vote_count += 1;
-                /* replaced by the new voter index
-                let this_depth = voter_best_level - vote_level + 1;
-                vote_depth.push(this_depth);
-                */
-            }
-            votes_depth.insert(block, vec![]);  // used to be vote_depth
-        }
-
         // get the vote from each voter chain
         for chain_num in 0..self.config.voter_chains {
             let voter_index = self.voter_index[chain_num as usize].lock().unwrap();
             let voter_best = voter_index.highest_block();
-            drop(voter_index);
-            match voter_best.proposer_vote_of_level(level) {
-                Some((hash, depth)) => {
-                    votes_depth.get_mut(&hash).unwrap().push(depth);
-                },
-                None => continue,
+            let vote = voter_best.proposer_vote_of_level(level);
+            if let Some((hash, depth)) = vote {
+                if let Some(l) = votes_depth.get_mut(&hash) {
+                    l.push(depth);
+                } else {
+                    votes_depth.insert(hash, vec![depth]);
+                }
+                total_vote_count += 1;
+                // count the number of blocks (on main chain or not) starting at the vote
+                total_vote_blocks += voter_index.num_voter_blocks(voter_best.level - depth + 1, voter_best.level) as u64;
             }
+            drop(voter_index);
         }
 
         // For debugging purpose only. This is very important for security.
