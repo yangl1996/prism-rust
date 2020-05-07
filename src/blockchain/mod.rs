@@ -686,18 +686,6 @@ impl BlockChain {
     }
 
     fn proposer_leader(&self, level: u64, quantile: f32) -> Result<Option<H256>> {
-        let proposer_node_vote_cf = self.db.cf_handle(PROPOSER_NODE_VOTE_CF).unwrap();
-        let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
-
-        macro_rules! get_value {
-            ($cf:expr, $key:expr) => {{
-                match self.db.get_pinned_cf($cf, serialize(&$key).unwrap())? {
-                    Some(raw) => Some(deserialize(&raw).unwrap()),
-                    None => None,
-                }
-            }};
-        }
-        let proposer_blocks: Vec<H256> = get_value!(proposer_tree_level_cf, level as u64).unwrap();
         // compute the new leader of this level
         // we use the confirmation policy from https://arxiv.org/abs/1810.08092
         let mut new_leader: Option<H256> = None;
@@ -727,6 +715,7 @@ impl BlockChain {
             }
             drop(voter_index);
         }
+        let proposer_blocks: Vec<H256> = votes_depth.keys().copied().collect();
 
         // For debugging purpose only. This is very important for security.
         // TODO: remove this check in the future
@@ -825,22 +814,6 @@ impl BlockChain {
         }
 
         Ok(new_leader)
-    }
-
-    fn num_voter_blocks(&self, chain: u16, start_level: u64, end_level: u64) -> Result<u64> {
-        let voter_tree_level_count_cf = self.db.cf_handle(VOTER_TREE_LEVEL_COUNT_CF).unwrap();
-        let mut total: u64 = 0;
-        for l in start_level..=end_level {
-            let t: u64 = deserialize(
-                &self
-                    .db
-                    .get_pinned_cf(voter_tree_level_count_cf, serialize(&(chain, l)).unwrap())?
-                    .unwrap(),
-            )
-            .unwrap();
-            total += t;
-        }
-        Ok(total)
     }
 
     /// Given two voter blocks on the same chain, calculate the added and removed votes when
