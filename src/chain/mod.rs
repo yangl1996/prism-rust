@@ -158,6 +158,21 @@ impl VoterIndex {
         }
     }
 
+    pub fn highest_block(&self) -> Arc<Voter> {
+        if self.by_level.is_empty() {
+            panic!("Querying the highest block from an empty voter index");
+        }
+        let highest_level = self.by_level.back().unwrap();
+        if highest_level.is_empty() {
+            panic!("The highest level of the voter index is empty");
+        }
+        let block_hash = highest_level[0];
+        match self.blocks.get(&block_hash) {
+            Some(p) => return Arc::clone(&p),
+            None => panic!("Hash stored on the highest level does not exist in the hashmap"),
+        }
+    }
+
     pub fn remove_levels(&mut self, new_start_level: u64) {
         if new_start_level <= self.starting_level {
             return;
@@ -391,10 +406,14 @@ mod tests {
 
         let mut idx = VoterIndex::new();
         idx.insert_root_at(&voter_blocks[0], voter_blocks[0].hash(), 30, 10);
-        idx.insert(&voter_blocks[1], voter_blocks[1].hash());
-        idx.insert(&voter_blocks[2], voter_blocks[2].hash());
+        let b = idx.insert(&voter_blocks[1], voter_blocks[1].hash());
+        assert!(cmp(&idx.highest_block(), &b));
+        let b = idx.insert(&voter_blocks[2], voter_blocks[2].hash());
+        assert!(cmp(&idx.highest_block(), &b));
         let tip2 = idx.insert(&voter_blocks[3], voter_blocks[3].hash());
+        assert!(cmp(&idx.highest_block(), &tip2));
         let tip = idx.insert(&voter_blocks[4], voter_blocks[4].hash());
+        assert!(cmp(&idx.highest_block(), &tip2));
         assert_eq!(tip.proposer_vote_of_level(9), None);
         assert_eq!(tip.proposer_vote_of_level(10), Some((proposer_blocks[0], 3)));
         assert_eq!(tip.proposer_vote_of_level(11), Some((proposer_blocks[1], 3)));
