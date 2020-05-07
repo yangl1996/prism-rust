@@ -78,6 +78,8 @@ pub trait Block {
     type Ref;   // can't make Ref = &[something] here due to lack of GAT in rust
 
     fn attach(self: &Arc<Self>, hash: H256, refs: &[Self::Ref]) -> Self;
+
+    fn level(&self) -> u64;
 }
 
 pub struct Voter {
@@ -145,6 +147,10 @@ impl Block for Voter {
             parent: Arc::downgrade(self),
         }
     }
+
+    fn level(&self) -> u64 {
+        self.level
+    }
 }
 
 //        -----      ------
@@ -155,7 +161,7 @@ impl Block for Voter {
 // For now, we set a threshold level and remove everything lower than that level
 
 pub struct ChainIndex<B: Block> {
-    pub blocks: std::collections::HashMap<H256, Arc<B>>,
+    blocks: std::collections::HashMap<H256, Arc<B>>,
     starting_level: u64,                                    // the level stored by index 0 in the vecdeque
     by_level: std::collections::VecDeque<Vec<H256>>,        // organized by level in increasing order
 }
@@ -222,6 +228,59 @@ impl<B: Block> ChainIndex<B> {
         self.by_level = new;
         self.starting_level = new_start_level;
     }
+
+    fn insert_at_root(&mut self, block: &Arc<B>, hash: H256, level: u64) {
+        let block = Arc::clone(block);
+        let block_empty = self.blocks.is_empty();
+        let level_empty = self.by_level.is_empty();
+
+        if block_empty && !level_empty {
+            panic!("Chain index has zero block but non-zero level");
+        }
+        else if block_empty && level_empty {
+            // if the index is previously empty
+            self.starting_level = level;
+            self.blocks.insert(hash, Arc::clone(&block));
+            self.by_level.push_back(vec![hash]);
+        }
+        else if (!block_empty) && level_empty {
+            panic!("Chain index has non-zero blocks but zero level");
+        }
+        else {
+            // if the index is nonempty
+            if level != self.starting_level {
+                panic!("Adding a root at a level different from the index starting level");
+            }
+            let list = self.by_level.get_mut(0).unwrap();
+            if list.contains(&hash) {
+                panic!("Adding a root already there on that level");
+            }
+            list.push(hash);
+            self.blocks.insert(hash, Arc::clone(&block));
+        }
+    }
+
+    fn insert_block(&mut self, block: &Arc<B>, hash: H256) {
+        let level = block.level();
+        self.blocks.insert(hash, Arc::clone(block));
+        let level_idx = level - self.starting_level;
+        let vec_len = u64::try_from(self.by_level.len()).unwrap();
+        if level_idx > vec_len {
+            panic!("Adding a block deeper than the current deepest level + 1");
+        }
+        else if level_idx == vec_len {
+            self.by_level.push_back(vec![hash]);
+        }
+        else {
+            let list = self.by_level.get_mut(usize::try_from(level_idx).unwrap()).unwrap();
+            if list.contains(&hash) {
+                panic!("Adding a block already there on that level");
+            }
+            list.push(hash);
+        }
+
+
+    }
 }
 
 impl ChainIndex<Voter> {
@@ -231,8 +290,6 @@ impl ChainIndex<Voter> {
             _ => panic!("Adding a non-voter block to a voter chain as a root"),
         };
 
-        let block_empty = self.blocks.is_empty();
-        let level_empty = self.by_level.is_empty();
         let voter = Voter {
             level,
             hash,
@@ -242,30 +299,7 @@ impl ChainIndex<Voter> {
         };
         let voter = Arc::new(voter);
 
-        if block_empty && !level_empty {
-            panic!("Voter chain index has zero block but non-zero level");
-        }
-        else if block_empty && level_empty {
-            // if the index is previously empty
-            self.starting_level = level;
-            self.blocks.insert(hash, Arc::clone(&voter));
-            self.by_level.push_back(vec![hash]);
-        }
-        else if (!block_empty) && level_empty {
-            panic!("Voter chain index has non-zero blocks but zero level");
-        }
-        else {
-            // if the index is nonempty
-            if level != self.starting_level {
-                panic!("Adding a voter root at a level different from the index starting level");
-            }
-            let list = self.by_level.get_mut(0).unwrap();
-            if list.contains(&hash) {
-                panic!("Adding a voter root already there on that level");
-            }
-            list.push(hash);
-            self.blocks.insert(hash, Arc::clone(&voter));
-        }
+        self.insert_at_root(&voter, hash, level);
         return voter;
     }
 
@@ -281,26 +315,9 @@ impl ChainIndex<Voter> {
         };
         
         let new_block = parent_ref.attach(hash, &content.votes);
-        let level = new_block.level;
-        let new_block_ref = Arc::new(new_block);
-        self.blocks.insert(hash, Arc::clone(&new_block_ref));
-        let level_idx = level - self.starting_level;
-        let vec_len = u64::try_from(self.by_level.len()).unwrap();
-        if level_idx > vec_len {
-            panic!("Adding a voter block deeper than the current deepest level + 1");
-        }
-        else if level_idx == vec_len {
-            self.by_level.push_back(vec![hash]);
-        }
-        else {
-            let list = self.by_level.get_mut(usize::try_from(level_idx).unwrap()).unwrap();
-            if list.contains(&hash) {
-                panic!("Adding a voter block already there on that level");
-            }
-            list.push(hash);
-        }
-
-        return new_block_ref;
+        let new_block = Arc::new(new_block);
+        self.insert_block(&new_block, hash);
+        return new_block;
     }
 }
 
