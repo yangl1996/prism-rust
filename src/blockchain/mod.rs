@@ -51,7 +51,7 @@ pub struct BlockChain {
     proposer_ledger_tip: Mutex<u64>,
     voter_ledger_tips: Mutex<Vec<H256>>,
     config: BlockchainConfig,
-    voter_index: Vec<Mutex<VoterIndex>>,
+    voter_index: Vec<Mutex<ChainIndex<Voter>>>,
 }
 
 // Functions to edit the blockchain
@@ -95,10 +95,10 @@ impl BlockChain {
         opts.create_missing_column_families(true);
         let db = DB::open_cf_descriptors(&opts, path, cfs)?;
         let mut voter_best: Vec<Mutex<(H256, u64)>> = vec![];
-        let mut voter_index: Vec<Mutex<VoterIndex>> = vec![];
+        let mut voter_index: Vec<Mutex<ChainIndex<Voter>>> = vec![];
         for _ in 0..config.voter_chains {
             voter_best.push(Mutex::new((H256::default(), 0)));
-            voter_index.push(Mutex::new(VoterIndex::new()));
+            voter_index.push(Mutex::new(ChainIndex::new()));
         }
 
         let blockchain_db = Self {
@@ -711,7 +711,7 @@ impl BlockChain {
                 }
                 total_vote_count += 1;
                 // count the number of blocks (on main chain or not) starting at the vote
-                total_vote_blocks += voter_index.num_voter_blocks(voter_best.level - depth + 1, voter_best.level) as u64;
+                total_vote_blocks += voter_index.num_blocks(voter_best.level - depth + 1, voter_best.level) as u64;
             }
             drop(voter_index);
         }

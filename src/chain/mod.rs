@@ -153,13 +153,14 @@ impl Block for Voter {
 //                \
 //                 --------
 // For now, we set a threshold level and remove everything lower than that level
-pub struct VoterIndex {
-    pub blocks: std::collections::HashMap<H256, Arc<Voter>>,
+
+pub struct ChainIndex<B: Block> {
+    pub blocks: std::collections::HashMap<H256, Arc<B>>,
     starting_level: u64,                                    // the level stored by index 0 in the vecdeque
     by_level: std::collections::VecDeque<Vec<H256>>,        // organized by level in increasing order
 }
 
-impl VoterIndex {
+impl<B: Block> ChainIndex<B> {
     pub fn new() -> Self {
         Self {
             blocks: std::collections::HashMap::new(),
@@ -169,9 +170,9 @@ impl VoterIndex {
     }
 
     // TODO: looks like it can be optimized with a segment tree
-    pub fn num_voter_blocks(&self, start: u64, end: u64) -> usize {
+    pub fn num_blocks(&self, start: u64, end: u64) -> usize {
         if start < self.starting_level {
-            panic!("Counting voter blocks beginning at a level lower than the voter index starting level");
+            panic!("Counting blocks beginning at a level lower than the chain index starting level");
         }
         let start_idx = usize::try_from(start - self.starting_level).unwrap();
         let count = usize::try_from(end - self.starting_level).unwrap() + 1; 
@@ -187,13 +188,13 @@ impl VoterIndex {
         return total;
     }
 
-    pub fn highest_block(&self) -> Arc<Voter> {
+    pub fn highest_block(&self) -> Arc<B> {
         if self.by_level.is_empty() {
-            panic!("Querying the highest block from an empty voter index");
+            panic!("Querying the highest block from an empty chain index");
         }
         let highest_level = self.by_level.back().unwrap();
         if highest_level.is_empty() {
-            panic!("The highest level of the voter index is empty");
+            panic!("The highest level of the chain index is empty");
         }
         let block_hash = highest_level[0];
         match self.blocks.get(&block_hash) {
@@ -208,20 +209,22 @@ impl VoterIndex {
         }
         let levels_to_remove = usize::try_from(new_start_level - self.starting_level).unwrap();
         if levels_to_remove >= self.by_level.len() {
-            panic!("Removing all levels in the voter index");
+            panic!("Removing all levels in the chain index");
         }
         let new = self.by_level.split_off(levels_to_remove);
         for l in self.by_level.iter() {
             for h in l.iter() {
                 if self.blocks.remove(&h).is_none() {
-                    panic!("Voter block hash exists in the by-level list but not in the hashtable");
+                    panic!("Block hash exists in the by-level list but not in the hashtable");
                 }
             }
         }
         self.by_level = new;
         self.starting_level = new_start_level;
     }
+}
 
+impl ChainIndex<Voter> {
     pub fn insert_root_at(&mut self, block: &RealBlock, hash: H256, level: u64, vote_start_level: u64) -> Arc<Voter> {
         let content = match &block.content {
             Content::Voter(stuff) => stuff,
@@ -378,7 +381,7 @@ mod tests {
         let b4 = voter_block(voter_blocks[1].hash(), &[]);
         voter_blocks.push(b4);
 
-        let mut idx = VoterIndex::new();
+        let mut idx = ChainIndex::new();
         idx.insert_root_at(&voter_blocks[0], voter_blocks[0].hash(), 30, 10);
         idx.insert(&voter_blocks[1], voter_blocks[1].hash());
         idx.insert(&voter_blocks[2], voter_blocks[2].hash());
@@ -433,7 +436,7 @@ mod tests {
         let b4 = voter_block(voter_blocks[1].hash(), &[proposer_blocks[4]]);
         voter_blocks.push(b4);
 
-        let mut idx = VoterIndex::new();
+        let mut idx = ChainIndex::new();
         idx.insert_root_at(&voter_blocks[0], voter_blocks[0].hash(), 30, 10);
         let b = idx.insert(&voter_blocks[1], voter_blocks[1].hash());
         assert!(cmp(&idx.highest_block(), &b));
@@ -464,12 +467,12 @@ mod tests {
         assert!(idx.by_level[2].contains(&voter_blocks[2].hash()));
         assert!(idx.by_level[2].contains(&voter_blocks[4].hash()));
         assert!(idx.by_level[3].contains(&voter_blocks[3].hash()));
-        assert_eq!(idx.num_voter_blocks(60, 62), 0);
-        assert_eq!(idx.num_voter_blocks(30, 38), 5);
-        assert_eq!(idx.num_voter_blocks(30, 33), 5);
-        assert_eq!(idx.num_voter_blocks(30, 31), 2);
-        assert_eq!(idx.num_voter_blocks(32, 32), 2);
-        assert_eq!(idx.num_voter_blocks(31, 33), 4);
+        assert_eq!(idx.num_blocks(60, 62), 0);
+        assert_eq!(idx.num_blocks(30, 38), 5);
+        assert_eq!(idx.num_blocks(30, 33), 5);
+        assert_eq!(idx.num_blocks(30, 31), 2);
+        assert_eq!(idx.num_blocks(32, 32), 2);
+        assert_eq!(idx.num_blocks(31, 33), 4);
     }
 
     #[test]
