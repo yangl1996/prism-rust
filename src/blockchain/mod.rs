@@ -1,6 +1,9 @@
 use crate::block::{Block, Content};
+use crate::block::header::Header;
+use crate::block::voter::Content as VoterContent;
 use crate::config::*;
 use crate::crypto::hash::{Hashable, H256};
+use crate::chain::*;
 
 use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 use bincode::{deserialize, serialize};
@@ -48,6 +51,7 @@ pub struct BlockChain {
     proposer_ledger_tip: Mutex<u64>,
     voter_ledger_tips: Mutex<Vec<H256>>,
     config: BlockchainConfig,
+    voter_index: Vec<Mutex<VoterIndex>>,
 }
 
 // Functions to edit the blockchain
@@ -91,8 +95,10 @@ impl BlockChain {
         opts.create_missing_column_families(true);
         let db = DB::open_cf_descriptors(&opts, path, cfs)?;
         let mut voter_best: Vec<Mutex<(H256, u64)>> = vec![];
+        let mut voter_index: Vec<Mutex<VoterIndex>> = vec![];
         for _ in 0..config.voter_chains {
             voter_best.push(Mutex::new((H256::default(), 0)));
+            voter_index.push(Mutex::new(VoterIndex::new()));
         }
 
         let blockchain_db = Self {
@@ -105,6 +111,7 @@ impl BlockChain {
             proposer_ledger_tip: Mutex::new(0),
             voter_ledger_tips: Mutex::new(vec![H256::default(); config.voter_chains as usize]),
             config,
+            voter_index,
         };
 
         Ok(blockchain_db)
@@ -170,8 +177,27 @@ impl BlockChain {
         )?;
 
         // voter genesis blocks
+        let voter_genesis_stub = Block {
+            header: Header {
+                parent: [0;32].into(),
+                timestamp: 0,
+                nonce: 0,
+                content_merkle_root: [0;32].into(),
+                extra_content: [0; 32],
+                difficulty: [0;32].into(),
+            },
+            content: Content::Voter(VoterContent {
+                chain_number: 0,
+                voter_parent: [0; 32].into(),
+                votes: vec![db.config.proposer_genesis],
+            }),
+            sortition_proof: vec![],
+        };
         let mut voter_ledger_tips = db.voter_ledger_tips.lock().unwrap();
         for chain_num in 0..db.config.voter_chains {
+            let mut voter_index = db.voter_index[chain_num as usize].lock().unwrap();
+            voter_index.insert_root_at(&voter_genesis_stub, db.config.voter_genesis[chain_num as usize], 0, 0);
+            drop(voter_index);
             wb.put_cf(
                 parent_neighbor_cf,
                 serialize(&db.config.voter_genesis[chain_num as usize]).unwrap(),
@@ -374,6 +400,9 @@ impl BlockChain {
                     block_hash,
                     proposer_parent_level as u64
                 );
+                let mut voter_index = self.voter_index[self_chain as usize].lock().unwrap();
+                voter_index.insert(&block, block_hash);
+                drop(voter_index);
 
                 self.db.write(wb)?;
 
