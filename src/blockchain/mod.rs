@@ -196,7 +196,7 @@ impl BlockChain {
         let mut voter_ledger_tips = db.voter_ledger_tips.lock().unwrap();
         for chain_num in 0..db.config.voter_chains {
             let mut voter_index = db.voter_index[chain_num as usize].lock().unwrap();
-            voter_index.insert_root_at(&voter_genesis_stub, db.config.voter_genesis[chain_num as usize], 0, 0);
+            voter_index.insert_voter_root_at(&voter_genesis_stub, db.config.voter_genesis[chain_num as usize], 0, 0);
             drop(voter_index);
             wb.put_cf(
                 parent_neighbor_cf,
@@ -401,7 +401,7 @@ impl BlockChain {
                     proposer_parent_level as u64
                 );
                 let mut voter_index = self.voter_index[self_chain as usize].lock().unwrap();
-                voter_index.insert(&block, block_hash);
+                voter_index.insert_voter(&block, block_hash);
                 drop(voter_index);
 
                 self.db.write(wb)?;

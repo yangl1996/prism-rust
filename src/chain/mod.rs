@@ -84,6 +84,34 @@ pub trait Block {
     fn hash(&self) -> H256;
 }
 
+pub struct Proposer {
+    pub level: u64,
+    pub hash: H256,
+    pub refs: Vec<H256>,
+    pub parent: Weak<Proposer>,
+}
+
+impl Block for Proposer {
+    type Ref = H256;
+
+    fn attach(self: &Arc<Self>, hash: H256, refs: &[H256]) -> Self {
+        Self {
+            level: self.level + 1,
+            hash,
+            refs: refs.to_vec(),
+            parent: Arc::downgrade(self),
+        }
+    }
+
+    fn level(&self) -> u64 {
+        self.level
+    }
+
+    fn hash(&self) -> H256 {
+        self.hash
+    }
+}
+
 pub struct Voter {
     pub level: u64,
     pub hash: H256,
@@ -235,7 +263,7 @@ impl<B: Block> ChainIndex<B> {
         self.starting_level = new_start_level;
     }
 
-    fn insert_at_root(&mut self, block: &Arc<B>, level: u64) {
+    fn insert_at_root(&mut self, block: &Arc<B>) {
         let block = Arc::clone(block);
         let block_empty = self.blocks.is_empty();
         let level_empty = self.by_level.is_empty();
@@ -245,7 +273,7 @@ impl<B: Block> ChainIndex<B> {
         }
         else if block_empty && level_empty {
             // if the index is previously empty
-            self.starting_level = level;
+            self.starting_level = block.level();
             self.blocks.insert(block.hash(), Arc::clone(&block));
             self.by_level.push_back(vec![block.hash()]);
         }
@@ -254,7 +282,7 @@ impl<B: Block> ChainIndex<B> {
         }
         else {
             // if the index is nonempty
-            if level != self.starting_level {
+            if block.level() != self.starting_level {
                 panic!("Adding a root at a level different from the index starting level");
             }
             let list = self.by_level.get_mut(0).unwrap();
@@ -289,8 +317,45 @@ impl<B: Block> ChainIndex<B> {
     }
 }
 
+impl ChainIndex<Proposer> {
+    pub fn insert_proposer_root_at(&mut self, block: &RealBlock, hash: H256, level: u64) -> Arc<Proposer> {
+        let content = match &block.content {
+            Content::Proposer(stuff) => stuff,
+            _ => panic!("Adding a non-proposer block to a proposer chain as a root"),
+        };
+
+        let block = Proposer {
+            level,
+            hash,
+            refs: content.proposer_refs.to_vec(),
+            parent: Default::default(),
+        };
+        let block = Arc::new(block);
+
+        self.insert_at_root(&block);
+        return block;
+    }
+
+    pub fn insert_proposer(&mut self, block: &RealBlock, hash: H256) -> Arc<Proposer> {
+        let content = match &block.content {
+            Content::Proposer(stuff) => stuff,
+            _ => panic!("Adding a non-proposer block to a proposer chain"),
+        };
+        let parent = block.header.parent;
+        let parent_ref = match self.blocks.get(&parent) {
+            Some(v) => v,
+            None => panic!("Adding a proposer block whose parent is unknown"),
+        };
+        
+        let new_block = parent_ref.attach(hash, &content.transaction_refs);
+        let new_block = Arc::new(new_block);
+        self.insert_block(&new_block);
+        return new_block;
+    }
+}
+
 impl ChainIndex<Voter> {
-    pub fn insert_root_at(&mut self, block: &RealBlock, hash: H256, level: u64, vote_start_level: u64) -> Arc<Voter> {
+    pub fn insert_voter_root_at(&mut self, block: &RealBlock, hash: H256, level: u64, vote_start_level: u64) -> Arc<Voter> {
         let content = match &block.content {
             Content::Voter(stuff) => stuff,
             _ => panic!("Adding a non-voter block to a voter chain as a root"),
@@ -305,11 +370,11 @@ impl ChainIndex<Voter> {
         };
         let voter = Arc::new(voter);
 
-        self.insert_at_root(&voter, level);
+        self.insert_at_root(&voter);
         return voter;
     }
 
-    pub fn insert(&mut self, block: &RealBlock, hash: H256) -> Arc<Voter> {
+    pub fn insert_voter(&mut self, block: &RealBlock, hash: H256) -> Arc<Voter> {
         let content = match &block.content {
             Content::Voter(stuff) => stuff,
             _ => panic!("Adding a non-voter block to a voter chain"),
@@ -406,11 +471,11 @@ mod tests {
         voter_blocks.push(b4);
 
         let mut idx = ChainIndex::new();
-        idx.insert_root_at(&voter_blocks[0], voter_blocks[0].hash(), 30, 10);
-        idx.insert(&voter_blocks[1], voter_blocks[1].hash());
-        idx.insert(&voter_blocks[2], voter_blocks[2].hash());
-        idx.insert(&voter_blocks[3], voter_blocks[3].hash());
-        idx.insert(&voter_blocks[4], voter_blocks[4].hash());
+        idx.insert_voter_root_at(&voter_blocks[0], voter_blocks[0].hash(), 30, 10);
+        idx.insert_voter(&voter_blocks[1], voter_blocks[1].hash());
+        idx.insert_voter(&voter_blocks[2], voter_blocks[2].hash());
+        idx.insert_voter(&voter_blocks[3], voter_blocks[3].hash());
+        idx.insert_voter(&voter_blocks[4], voter_blocks[4].hash());
 
         assert_eq!(idx.starting_level, 30);
         assert_eq!(idx.by_level.len(), 4);
@@ -461,14 +526,14 @@ mod tests {
         voter_blocks.push(b4);
 
         let mut idx = ChainIndex::new();
-        idx.insert_root_at(&voter_blocks[0], voter_blocks[0].hash(), 30, 10);
-        let b = idx.insert(&voter_blocks[1], voter_blocks[1].hash());
+        idx.insert_voter_root_at(&voter_blocks[0], voter_blocks[0].hash(), 30, 10);
+        let b = idx.insert_voter(&voter_blocks[1], voter_blocks[1].hash());
         assert!(cmp(&idx.highest_block(), &b));
-        let b = idx.insert(&voter_blocks[2], voter_blocks[2].hash());
+        let b = idx.insert_voter(&voter_blocks[2], voter_blocks[2].hash());
         assert!(cmp(&idx.highest_block(), &b));
-        let tip2 = idx.insert(&voter_blocks[3], voter_blocks[3].hash());
+        let tip2 = idx.insert_voter(&voter_blocks[3], voter_blocks[3].hash());
         assert!(cmp(&idx.highest_block(), &tip2));
-        let tip = idx.insert(&voter_blocks[4], voter_blocks[4].hash());
+        let tip = idx.insert_voter(&voter_blocks[4], voter_blocks[4].hash());
         assert!(cmp(&idx.highest_block(), &tip2));
         assert_eq!(tip.proposer_vote_of_level(9), None);
         assert_eq!(tip.proposer_vote_of_level(10), Some((proposer_blocks[0], 3)));
