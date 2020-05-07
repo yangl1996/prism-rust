@@ -50,7 +50,7 @@
 use crate::crypto::hash::H256;
 use std::sync::{Arc, Weak};
 use std::convert::TryFrom;
-use crate::block::Block;
+use crate::block::Block as RealBlock;
 use crate::block::Content;
 
 //         Segment 1
@@ -72,6 +72,12 @@ pub struct Segment {
     pub highest_block: (H256, u64),
     pub parent: Option<Arc<Segment>>,
     pub votes: Vec<(H256, u64)>,    // proposer hash, level of the vote
+}
+
+pub trait Block {
+    type Ref;   // can't make Ref = &[something] here due to lack of GAT in rust
+
+    fn attach(self: &Arc<Self>, hash: H256, refs: &[Self::Ref]) -> Self;
 }
 
 pub struct Voter {
@@ -125,13 +131,17 @@ impl Voter {
         }
         None
     }
+}
 
-    pub fn attach_new_block(self: &Arc<Self>, hash: H256, votes: &[H256]) -> Self {
+impl Block for Voter {
+    type Ref = H256; // holding the proposer blocks to vote for
+
+    fn attach(self: &Arc<Self>, hash: H256, refs: &[H256]) -> Self {
         Self {
             level: self.level + 1,
             hash,
             vote_start_level: self.vote_start_level + u64::try_from(self.votes.len()).unwrap(),
-            votes: votes.to_vec(),
+            votes: refs.to_vec(),
             parent: Arc::downgrade(self),
         }
     }
@@ -212,7 +222,7 @@ impl VoterIndex {
         self.starting_level = new_start_level;
     }
 
-    pub fn insert_root_at(&mut self, block: &Block, hash: H256, level: u64, vote_start_level: u64) -> Arc<Voter> {
+    pub fn insert_root_at(&mut self, block: &RealBlock, hash: H256, level: u64, vote_start_level: u64) -> Arc<Voter> {
         let content = match &block.content {
             Content::Voter(stuff) => stuff,
             _ => panic!("Adding a non-voter block to a voter chain as a root"),
@@ -256,7 +266,7 @@ impl VoterIndex {
         return voter;
     }
 
-    pub fn insert(&mut self, block: &Block, hash: H256) -> Arc<Voter> {
+    pub fn insert(&mut self, block: &RealBlock, hash: H256) -> Arc<Voter> {
         let content = match &block.content {
             Content::Voter(stuff) => stuff,
             _ => panic!("Adding a non-voter block to a voter chain"),
@@ -267,7 +277,7 @@ impl VoterIndex {
             None => panic!("Adding a voter block whose parent is unknown"),
         };
         
-        let new_block = parent_ref.attach_new_block(hash, &content.votes);
+        let new_block = parent_ref.attach(hash, &content.votes);
         let level = new_block.level;
         let new_block_ref = Arc::new(new_block);
         self.blocks.insert(hash, Arc::clone(&new_block_ref));
@@ -295,7 +305,7 @@ impl VoterIndex {
 mod tests {
     use super::*;
     use rand::Rng;
-    use crate::block::{Block, voter::Content as VoterContent, header::Header};
+    use crate::block::{Block as RealBlock, voter::Content as VoterContent, header::Header};
     use crate::crypto::hash::Hashable;
 
     fn get_hash() -> H256 {
@@ -333,8 +343,8 @@ mod tests {
             }
     }
 
-    fn voter_block(parent: H256, votes: &[H256]) -> Block {
-        Block {
+    fn voter_block(parent: H256, votes: &[H256]) -> RealBlock {
+        RealBlock {
             header: Header {
                 parent: get_hash(),
                 timestamp: 0,
@@ -356,7 +366,7 @@ mod tests {
         // level starts at 30
         // v0 - v1 - v2 - v3
         //        \- v4
-        let mut voter_blocks: Vec<Block> = vec![];
+        let mut voter_blocks: Vec<RealBlock> = vec![];
         let b0 = voter_block(get_hash(), &[]);
         voter_blocks.push(b0);
         let b1 = voter_block(voter_blocks[0].hash(), &[]);
@@ -411,7 +421,7 @@ mod tests {
         for _ in 0..5 {
             proposer_blocks.push(get_hash());
         }
-        let mut voter_blocks: Vec<Block> = vec![];
+        let mut voter_blocks: Vec<RealBlock> = vec![];
         let b0 = voter_block(get_hash(), &[proposer_blocks[0], proposer_blocks[1]]);
         voter_blocks.push(b0);
         let b1 = voter_block(voter_blocks[0].hash(), &[proposer_blocks[2]]);
@@ -509,17 +519,17 @@ mod tests {
         // results from the function
         let mut my_voters: Vec<Arc<Voter>> = vec![];
         my_voters.push(Arc::clone(&voters[0]));
-        let v = my_voters[0].attach_new_block(voter_blocks[1], &vec![]);
+        let v = my_voters[0].attach(voter_blocks[1], &vec![]);
         my_voters.push(Arc::new(v));
-        let v = my_voters[1].attach_new_block(voter_blocks[2], &vec![proposer_blocks[1], proposer_blocks[2]]);
+        let v = my_voters[1].attach(voter_blocks[2], &vec![proposer_blocks[1], proposer_blocks[2]]);
         my_voters.push(Arc::new(v));
-        let v = my_voters[2].attach_new_block(voter_blocks[3], &vec![proposer_blocks[3]]);
+        let v = my_voters[2].attach(voter_blocks[3], &vec![proposer_blocks[3]]);
         my_voters.push(Arc::new(v));
-        let v = my_voters[3].attach_new_block(voter_blocks[4], &vec![proposer_blocks[4]]);
+        let v = my_voters[3].attach(voter_blocks[4], &vec![proposer_blocks[4]]);
         my_voters.push(Arc::new(v));
-        let v = my_voters[4].attach_new_block(voter_blocks[5], &vec![]);
+        let v = my_voters[4].attach(voter_blocks[5], &vec![]);
         my_voters.push(Arc::new(v));
-        let v = my_voters[5].attach_new_block(voter_blocks[6], &vec![proposer_blocks[5], proposer_blocks[6]]);
+        let v = my_voters[5].attach(voter_blocks[6], &vec![proposer_blocks[5], proposer_blocks[6]]);
         my_voters.push(Arc::new(v));
 
         assert!(cmp(&voters[6], &my_voters[6]));
