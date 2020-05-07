@@ -158,14 +158,19 @@ impl VoterIndex {
         }
     }
 
-    pub fn insert_stub_at(&mut self, hash: H256, level: u64) -> Arc<Voter> {
+    pub fn insert_root_at(&mut self, block: &Block, hash: H256, level: u64, vote_start_level: u64) -> Arc<Voter> {
+        let content = match &block.content {
+            Content::Voter(stuff) => stuff,
+            _ => panic!("Adding a non-voter block to a voter chain as a root"),
+        };
+
         let block_empty = self.blocks.is_empty();
         let level_empty = self.by_level.is_empty();
         let voter = Voter {
             level,
             hash,
-            vote_start_level: 0,
-            votes: vec![],
+            vote_start_level,
+            votes: content.votes.to_vec(),
             parent: Default::default(),
         };
         let voter = Arc::new(voter);
@@ -185,11 +190,11 @@ impl VoterIndex {
         else {
             // if the index is nonempty
             if level != self.starting_level {
-                panic!("Adding a voter stub at a level different from the index starting level");
+                panic!("Adding a voter root at a level different from the index starting level");
             }
             let list = self.by_level.get_mut(0).unwrap();
             if list.contains(&hash) {
-                panic!("Adding a voter stub already there on that level");
+                panic!("Adding a voter root already there on that level");
             }
             list.push(hash);
             self.blocks.insert(hash, Arc::clone(&voter));
@@ -236,6 +241,8 @@ impl VoterIndex {
 mod tests {
     use super::*;
     use rand::Rng;
+    use crate::block::{Block, voter::Content as VoterContent, header::Header};
+    use crate::crypto::hash::Hashable;
 
     fn get_hash() -> H256 {
         let mut rng = rand::thread_rng();
@@ -270,6 +277,72 @@ mod tests {
                     return false;
                 }
             }
+    }
+
+    fn voter_block(parent: H256, votes: &[H256]) -> Block {
+        Block {
+            header: Header {
+                parent: get_hash(),
+                timestamp: 0,
+                nonce: 0,
+                content_merkle_root: get_hash(),
+                extra_content: [0; 32],
+                difficulty: get_hash(),
+            },
+            content: Content::Voter(VoterContent {
+                chain_number: 0,
+                voter_parent: parent,
+                votes: votes.to_vec(),
+            }),
+            sortition_proof: vec![],
+        }
+    }
+
+    #[test]
+    fn insert_voter_block() {
+        let mut proposer_blocks: Vec<H256> = vec![];
+        // level starts at 10
+        // p0 - p1 - p2 - p3
+        //             \- p4
+        //
+        // level starts at 30
+        // v0 - v1 - v2 - v3
+        //        \- v4
+        //
+        // v0 -> p0, p1; v1 -> p2; v2 -> []; v3 -> p3; v4 -> p4
+        for _ in 0..5 {
+            proposer_blocks.push(get_hash());
+        }
+        let mut voter_blocks: Vec<Block> = vec![];
+        let b0 = voter_block(get_hash(), &[proposer_blocks[0], proposer_blocks[1]]);
+        voter_blocks.push(b0);
+        let b1 = voter_block(voter_blocks[0].hash(), &[proposer_blocks[2]]);
+        voter_blocks.push(b1);
+        let b2 = voter_block(voter_blocks[1].hash(), &[]);
+        voter_blocks.push(b2);
+        let b3 = voter_block(voter_blocks[2].hash(), &[proposer_blocks[3]]);
+        voter_blocks.push(b3);
+        let b4 = voter_block(voter_blocks[1].hash(), &[proposer_blocks[4]]);
+        voter_blocks.push(b4);
+
+        let mut idx = VoterIndex::new();
+        idx.insert_root_at(&voter_blocks[0], voter_blocks[0].hash(), 30, 10);
+        idx.insert(&voter_blocks[1], voter_blocks[1].hash());
+        idx.insert(&voter_blocks[2], voter_blocks[2].hash());
+        let tip2 = idx.insert(&voter_blocks[3], voter_blocks[3].hash());
+        let tip = idx.insert(&voter_blocks[4], voter_blocks[4].hash());
+        assert_eq!(tip.proposer_vote_of_level(9), None);
+        assert_eq!(tip.proposer_vote_of_level(10), Some((proposer_blocks[0], 3)));
+        assert_eq!(tip.proposer_vote_of_level(11), Some((proposer_blocks[1], 3)));
+        assert_eq!(tip.proposer_vote_of_level(12), Some((proposer_blocks[2], 2)));
+        assert_eq!(tip.proposer_vote_of_level(13), Some((proposer_blocks[4], 1)));
+        assert_eq!(tip.proposer_vote_of_level(14), None);
+        assert_eq!(tip2.proposer_vote_of_level(9), None);
+        assert_eq!(tip2.proposer_vote_of_level(10), Some((proposer_blocks[0], 4)));
+        assert_eq!(tip2.proposer_vote_of_level(11), Some((proposer_blocks[1], 4)));
+        assert_eq!(tip2.proposer_vote_of_level(12), Some((proposer_blocks[2], 3)));
+        assert_eq!(tip2.proposer_vote_of_level(13), Some((proposer_blocks[3], 1)));
+        assert_eq!(tip2.proposer_vote_of_level(14), None);
     }
 
     #[test]
