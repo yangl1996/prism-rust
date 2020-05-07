@@ -725,10 +725,27 @@ impl BlockChain {
                     .num_voter_blocks(*chain_num, *vote_level, voter_best_level)
                     .unwrap();
                 total_vote_count += 1;
+                /* replaced by the new voter index
                 let this_depth = voter_best_level - vote_level + 1;
                 vote_depth.push(this_depth);
+                */
             }
-            votes_depth.insert(block, vote_depth);
+            votes_depth.insert(block, vec![]);  // used to be vote_depth
+        }
+
+        // get the vote from each voter chain
+        for chain_num in 0..self.config.voter_chains {
+            let voter_best = self.voter_best[chain_num as usize].lock().unwrap();
+            let voter_best_hash = voter_best.0;
+            drop(voter_best);   // got the best voter hash
+            let voter_index = self.voter_index[chain_num as usize].lock().unwrap();
+            match voter_index.blocks.get(&voter_best_hash).unwrap().proposer_vote_of_level(level) {
+                Some((hash, depth)) => {
+                    votes_depth.get_mut(&hash).unwrap().push(depth);
+                },
+                None => continue,
+            }
+            drop(voter_index);
         }
 
         // For debugging purpose only. This is very important for security.

@@ -144,7 +144,7 @@ impl Voter {
 //                 --------
 // For now, we set a threshold level and remove everything lower than that level
 pub struct VoterIndex {
-    blocks: std::collections::HashMap<H256, Arc<Voter>>,
+    pub blocks: std::collections::HashMap<H256, Arc<Voter>>,
     starting_level: u64,                                    // the level stored by index 0 in the vecdeque
     by_level: std::collections::VecDeque<Vec<H256>>,        // organized by level in increasing order
 }
