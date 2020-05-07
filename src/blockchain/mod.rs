@@ -1,6 +1,7 @@
 use crate::block::{Block, Content};
 use crate::block::header::Header;
 use crate::block::voter::Content as VoterContent;
+use crate::block::proposer::Content as ProposerContent;
 use crate::config::*;
 use crate::crypto::hash::{Hashable, H256};
 use crate::chain::*;
@@ -52,6 +53,7 @@ pub struct BlockChain {
     voter_ledger_tips: Mutex<Vec<H256>>,
     config: BlockchainConfig,
     voter_index: Vec<Mutex<ChainIndex<Voter>>>,
+    proposer_index: Mutex<ChainIndex<Proposer>>,
 }
 
 // Functions to edit the blockchain
@@ -112,6 +114,7 @@ impl BlockChain {
             voter_ledger_tips: Mutex::new(vec![H256::default(); config.voter_chains as usize]),
             config,
             voter_index,
+            proposer_index: Mutex::new(ChainIndex::new()),
         };
 
         Ok(blockchain_db)
@@ -175,6 +178,24 @@ impl BlockChain {
             serialize(&db.config.proposer_genesis).unwrap(),
             serialize(&Vec::<H256>::new()).unwrap(),
         )?;
+        let mut proposer_index = db.proposer_index.lock().unwrap();
+        let proposer_genesis_stub = Block {
+            header: Header {
+                parent: [0;32].into(),
+                timestamp: 0,
+                nonce: 0,
+                content_merkle_root: [0;32].into(),
+                extra_content: [0; 32],
+                difficulty: [0;32].into(),
+            },
+            content: Content::Proposer(ProposerContent {
+                transaction_refs: vec![],
+                proposer_refs: vec![],
+            }),
+            sortition_proof: vec![],
+        };
+        proposer_index.insert_proposer_root_at(&proposer_genesis_stub, db.config.proposer_genesis, 0);
+        drop(proposer_index);
 
         // voter genesis blocks
         let voter_genesis_stub = Block {
@@ -336,6 +357,9 @@ impl BlockChain {
                 unconfirmed_proposers.insert(block_hash);
                 drop(unconfirmed_proposers);
 
+                let mut proposer_index = self.proposer_index.lock().unwrap();
+                proposer_index.insert_proposer(&block, block_hash);
+                drop(proposer_index);
                 // commit to the database and update proposer best in the same atomic operation
                 // These two happen together to ensure that if a voter/proposer/transaction block
                 // depend on this proposer block, the miner must have already known about this
