@@ -84,8 +84,22 @@ pub trait Block {
 
     fn hash(&self) -> H256;
 
+    fn parent_ptr<'a>(&'a self) -> &'a Option<Weak<Self>>;
+
     /// Returns the pointer to the parent blocks. If the block has no parent, it returns None.
-    fn parent(&self) -> Option<Arc<Self>>;
+    fn parent(&self) -> Option<Arc<Self>> {
+        match self.parent_ptr() {
+            None => return None,    // genesis block has no parent
+            Some(o) => {
+                match o.upgrade() {
+                    Some(p) => return Some(p),
+                    None => {
+                        panic!("Parent block does not exist in the index");
+                    }
+                }
+            }
+        }
+    }
 
     /// Returns the common ancestor with the given block. The caller is responsible for ensuring
     /// the two blocks are on the same chain.
@@ -121,7 +135,7 @@ pub struct Proposer {
     pub hash: H256,
     pub tx_refs: Vec<H256>,
     pub prop_refs: Vec<Weak<Proposer>>,
-    pub parent: Weak<Proposer>,
+    parent: Option<Weak<Proposer>>,
 }
 
 pub enum ProposerReference {
@@ -184,7 +198,7 @@ impl Block for Proposer {
             hash,
             tx_refs,
             prop_refs,
-            parent: Arc::downgrade(self),
+            parent: Some(Arc::downgrade(self)),
         }
     }
 
@@ -196,21 +210,8 @@ impl Block for Proposer {
         self.hash
     }
 
-    fn parent(&self) -> Option<Arc<Self>> {
-        match self.parent.upgrade() {
-            Some(p) => Some(p),
-            None => {
-                if std::sync::Weak::ptr_eq(&self.parent, &Default::default()) {
-                    return None;
-                }
-                else {
-                    // only panic when the parent pointer is a non-zero weak pointer
-                    // if it is a zero weak pointer, it means we are currently at the genesis
-                    // block which does not have a parent
-                    panic!("Proposer parent block does not exist in the index");
-                }
-            }
-        }
+    fn parent_ptr<'a>(&'a self) -> &'a Option<Weak<Self>> {
+        &self.parent
     }
 }
 
@@ -219,7 +220,7 @@ pub struct Voter {
     pub hash: H256,
     pub vote_start_level: u64,      // inclusive
     pub votes: Vec<H256>,           // hashes of proposer blocks voted, organized by level
-    pub parent: Weak<Voter>,        // using Weak to allow garbage collection
+    parent: Option<Weak<Voter>>,    // Weak allows garbage collection
 }
 
 impl Voter {
@@ -246,7 +247,7 @@ impl Voter {
         }
 
         // Then trace back
-        let mut current_block = match self.parent.upgrade() {
+        let mut current_block = match self.parent() {
             Some(p) => p,
             None => return None,
         };
@@ -257,7 +258,7 @@ impl Voter {
                 return Some((vote, best_voter_level - current_block.level + 1));
             }
             else {
-                current_block = match current_block.parent.upgrade() {
+                current_block = match current_block.parent() {
                     Some(p) => p,
                     None => return None,
                 };
@@ -277,7 +278,7 @@ impl Block for Voter {
             hash,
             vote_start_level: self.vote_start_level + u64::try_from(self.votes.len()).unwrap(),
             votes: refs.to_vec(),
-            parent: Arc::downgrade(self),
+            parent: Some(Arc::downgrade(self)),
         }
     }
 
@@ -289,18 +290,8 @@ impl Block for Voter {
         self.hash
     }
 
-    fn parent(&self) -> Option<Arc<Self>> {
-        match self.parent.upgrade() {
-            Some(p) => Some(p),
-            None => {
-                if std::sync::Weak::ptr_eq(&self.parent, &Default::default()) {
-                    return None;
-                }
-                else {
-                    panic!("Voter parent block does not exist in the index");
-                }
-            }
-        }
+    fn parent_ptr<'a>(&'a self) -> &'a Option<Weak<Self>> {
+        &self.parent
     }
 }
 
@@ -446,7 +437,7 @@ impl ChainIndex<Proposer> {
             hash,
             tx_refs: content.transaction_refs.to_vec(),
             prop_refs: vec![],
-            parent: Default::default(),
+            parent: None,
         };
         let block = Arc::new(block);
 
@@ -496,7 +487,7 @@ impl ChainIndex<Voter> {
             hash,
             vote_start_level,
             votes: content.votes.to_vec(),
-            parent: Default::default(),
+            parent: None,
         };
         let voter = Arc::new(voter);
 
@@ -550,8 +541,8 @@ mod tests {
             if a.votes != b.votes {
                 return false;
             }
-            let ap = a.parent.upgrade();
-            let bp = b.parent.upgrade();
+            let ap = a.parent();
+            let bp = b.parent();
             if ap.is_none() && bp.is_none() {
                 return true;
             } else {
@@ -837,8 +828,8 @@ mod tests {
         let mut last_voter_block: Option<Arc<Voter>> = None;
         let mut create_voter = |votes: Vec<H256>| -> Arc<Voter> {
             let parent_ref = match &last_voter_block {
-                Some(p) => Arc::downgrade(&p),
-                None => Default::default(),
+                Some(p) => Some(Arc::downgrade(&p)),
+                None => None,
             };
             let v = Voter {
                 level: this_level,
@@ -900,8 +891,8 @@ mod tests {
         let mut last_voter_block: Option<Arc<Voter>> = None;
         let mut create_voter = |votes: Vec<H256>| -> Arc<Voter> {
             let parent_ref = match &last_voter_block {
-                Some(p) => Arc::downgrade(&p),
-                None => Default::default(),
+                Some(p) => Some(Arc::downgrade(&p)),
+                None => None,
             };
             let v = Voter {
                 level: this_level,
