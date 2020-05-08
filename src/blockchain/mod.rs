@@ -607,32 +607,18 @@ impl BlockChain {
                         Some(leader) => leader,
                     };
                     // Get the sequence of blocks by doing a depth-first traverse
-                    let mut order: Vec<H256> = vec![];
-                    let mut stack: Vec<H256> = vec![leader];
-                    while let Some(top) = stack.pop() {
-                        // if it's already
-                        // confirmed before, ignore it
-                        if !unconfirmed_proposers.contains(&top) {
-                            continue;
-                        }
-                        let proposer_idx = self.proposer_index.lock().unwrap();
-                        let p = std::sync::Arc::clone(&proposer_idx.blocks.get(&top).unwrap());
-                        drop(proposer_idx);
-                        let refs: Vec<H256> = p.prop_refs.iter().map(|x| x.upgrade().unwrap().hash).collect();
+                    let proposer_idx = self.proposer_index.lock().unwrap();
+                    let leader = std::sync::Arc::clone(&proposer_idx.blocks.get(&leader).unwrap());
+                    drop(proposer_idx);
+                    // the following line is tricky: first we deref the mutex guard into HashSet
+                    // but a plain HashSet<T> implements IntoIterator<T> and we want
+                    // IntoIterator<&'a T>, so we take a reference of the HashSet since
+                    // &'a HashSet<T> impelments IntoIterator<&'a T>
+                    let seq = leader.ledger_order(&(*unconfirmed_proposers));
+                    let order: Vec<H256> = seq.into_iter().map(|x| x.hash).collect();
 
-                        // add the current block to the ordered ledger, could be duplicated
-                        order.push(top);
-
-                        // search all referred blocks
-                        for ref_hash in &refs {
-                            stack.push(*ref_hash);
-                        }
-                    }
-
-                    // reverse the order we just got
-                    order.reverse();
                     // deduplicate, keep the one copy that is former in this order
-                    order = order
+                    let order: Vec<H256> = order
                         .into_iter()
                         .filter(|h| unconfirmed_proposers.remove(h))
                         .collect();

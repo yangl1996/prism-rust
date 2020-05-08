@@ -52,6 +52,7 @@ use std::sync::{Arc, Weak};
 use std::convert::TryFrom;
 use crate::block::Block as RealBlock;
 use crate::block::Content;
+use std::iter::FromIterator;
 
 //         Segment 1
 // /                      \ 
@@ -84,7 +85,9 @@ pub trait Block {
     fn hash(&self) -> H256;
 }
 
-// TODO: add a function to get proposer sequence given leaders and where to stop searching downwards
+// TODO: wrap prop_refs and parent into methods to allow automatically recovery from "page faults",
+// that is, to automatically load the full blocks and convert weak references to full references,
+// without adding the loaded blocks into the main memory
 pub struct Proposer {
     pub level: u64,
     pub hash: H256,
@@ -96,6 +99,49 @@ pub struct Proposer {
 pub enum ProposerReference {
     Proposer(Weak<Proposer>),
     Transaction(H256),
+}
+
+impl Proposer {
+    /// Get the ledger order within the given set, assuming this is a leader block.
+    pub fn ledger_order<'a, T>(self: &Arc<Self>, within: T) -> Vec<Arc<Self>>
+        where
+        T: IntoIterator<Item = &'a H256>,
+    {
+        let mut unconfirmed: std::collections::HashSet<_, std::collections::hash_map::RandomState> = std::collections::HashSet::from_iter(within.into_iter().copied());
+        // always assume self is unconfirmed
+        unconfirmed.insert(self.hash);
+
+        // perform a depth first search to get all the blocks we directly or indirectly refer to
+        let mut order: Vec<Arc<Self>> = vec![];
+        let mut stack: Vec<Arc<Self>> = vec![Arc::clone(self)];
+        while let Some(top) = stack.pop() {
+            // if it is not in the unconfirmed set, we have reached the end of this path
+            // otherwise, remove it from the set since we are adding it to the confirmed order
+            if !unconfirmed.remove(&top.hash) {
+                continue;
+            }
+            order.push(Arc::clone(&top));
+            for r in top.prop_refs.iter() {
+                stack.push(r.upgrade().unwrap());
+            }
+            match top.parent.upgrade() {
+                Some(t) => {
+                    stack.push(t);
+                }
+                None => {
+                    if !std::sync::Weak::ptr_eq(&top.parent, &Default::default()) {
+                        // only panic when the parent pointer is a non-zero weak pointer
+                        // if it is a zero weak pointer, it means we are currently at the genesis
+                        // block which does not have a parent
+                        panic!("Missing parent block when tracing referred proposer blocks");
+                    }
+                }
+            }
+        }
+        order.reverse();
+
+        return order;
+    }
 }
 
 impl Block for Proposer {
@@ -540,6 +586,62 @@ mod tests {
         assert_eq!(prop_blocks[0].tx_refs.len(), 2);
         assert_eq!(&tx_ref2, &prop_blocks[4].tx_refs[0]);
         assert_eq!(prop_blocks[4].tx_refs.len(), 1);
+    }
+
+    #[test]
+    fn proposer_refs() {
+        // level starts at 15
+        // p0 - p1 - p3 - p5
+        //   \- p2 - p4
+        // 
+        // p3 refers to p2, p4 refers to p1, p5 refers to p4
+        let tx_ref1 = get_hash();
+        let tx_ref2 = get_hash();
+        let p0 = proposer_block(get_hash(), &[], &[tx_ref1, get_hash()]);
+        let p1 = proposer_block(p0.hash(), &[], &[get_hash()]);
+        let p2 = proposer_block(p0.hash(), &[], &[get_hash(), get_hash()]);
+        let p3 = proposer_block(p1.hash(), &[p2.hash()], &[get_hash(), get_hash()]);
+        let p4 = proposer_block(p2.hash(), &[p1.hash()], &[tx_ref2]);
+        let p5 = proposer_block(p3.hash(), &[p4.hash()], &[get_hash()]);
+        
+        let mut prop_blocks = vec![];
+        let mut idx = ChainIndex::new();
+        prop_blocks.push(idx.insert_proposer_root_at(&p0, p0.hash(), 15));
+        prop_blocks.push(idx.insert_proposer(&p1, p1.hash()));
+        prop_blocks.push(idx.insert_proposer(&p2, p2.hash()));
+        prop_blocks.push(idx.insert_proposer(&p3, p3.hash()));
+        prop_blocks.push(idx.insert_proposer(&p4, p4.hash()));
+        prop_blocks.push(idx.insert_proposer(&p5, p5.hash()));
+
+        // searching within all blocks
+        let range = vec![p0.hash(), p1.hash(), p2.hash(), p3.hash(), p4.hash(), p5.hash()];
+        let p5_refs: Vec<H256> = prop_blocks[5].ledger_order(&range).iter().map(|x| x.hash).collect();
+        assert!(p5_refs.contains(&p0.hash()));
+        assert!(p5_refs.contains(&p1.hash()));
+        assert!(p5_refs.contains(&p2.hash()));
+        assert!(p5_refs.contains(&p3.hash()));
+        assert!(p5_refs.contains(&p4.hash()));
+        assert!(p5_refs.contains(&p5.hash()));
+        assert_eq!(p5_refs.len(), 6);
+        let p4_refs: Vec<H256> = prop_blocks[4].ledger_order(&range).iter().map(|x| x.hash).collect();
+        assert!(p4_refs.contains(&p0.hash()));
+        assert!(p4_refs.contains(&p1.hash()));
+        assert!(p4_refs.contains(&p2.hash()));
+        assert!(p4_refs.contains(&p4.hash()));
+        assert_eq!(p4_refs.len(), 4);
+
+        // search within p2, p3, p4, p5 (implicit)
+        let range = vec![p2.hash(), p3.hash(), p4.hash()];
+        let p5_refs: Vec<H256> = prop_blocks[5].ledger_order(&range).iter().map(|x| x.hash).collect();
+        assert!(p5_refs.contains(&p2.hash()));
+        assert!(p5_refs.contains(&p3.hash()));
+        assert!(p5_refs.contains(&p4.hash()));
+        assert!(p5_refs.contains(&p5.hash()));
+        assert_eq!(p5_refs.len(), 4);
+        let p4_refs: Vec<H256> = prop_blocks[4].ledger_order(&range).iter().map(|x| x.hash).collect();
+        assert!(p4_refs.contains(&p2.hash()));
+        assert!(p4_refs.contains(&p4.hash()));
+        assert_eq!(p4_refs.len(), 2);
     }
 
     #[test]
