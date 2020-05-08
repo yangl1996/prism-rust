@@ -267,6 +267,21 @@ impl Voter {
         None
     }
 
+    // returns (starting level, end_level + 1)
+    // TODO: no test
+    pub fn affected_range(self: &Arc<Self>, other: &Arc<Self>) -> (u64, u64) {
+        let common_ancestor = self.common_ancestor(other);
+        let start = common_ancestor.vote_start_level + u64::try_from(common_ancestor.votes.len()).unwrap();
+        let self_end = self.vote_start_level + u64::try_from(self.votes.len()).unwrap();
+        let other_end = other.vote_start_level + u64::try_from(other.votes.len()).unwrap();
+
+        if self_end > other_end {
+            return (start, self_end);
+        }
+        else {
+            return (start, other_end);
+        }
+    }
 }
 
 impl Block for Voter {
