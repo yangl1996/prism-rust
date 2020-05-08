@@ -12,7 +12,7 @@ use log::{debug, info, warn};
 use rocksdb::{ColumnFamilyDescriptor, Options, WriteBatch, DB};
 use statrs::distribution::{Discrete, Poisson, Univariate};
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 
 use std::ops::Range;
 use std::sync::Mutex;
@@ -1097,6 +1097,7 @@ impl BlockChain {
     }
 }
 
+/*
 impl BlockChain {
     pub fn proposer_transaction_in_ledger(&self, limit: u64) -> Result<Vec<(H256, Vec<H256>)>> {
         let ledger_tip_ = self.proposer_ledger_tip.lock().unwrap();
@@ -1197,6 +1198,7 @@ impl BlockChain {
         }
         Ok(voters)
     }
+
 
     pub fn dump(&self, limit: u64, display_fork: bool) -> Result<String> {
         /// Struct to hold blockchain data to be dumped
@@ -1603,6 +1605,7 @@ impl BlockChain {
         Ok(serde_json::to_string_pretty(&dump).unwrap())
     }
 }
+*/
 
 fn vote_vec_merge(
     _: &[u8],

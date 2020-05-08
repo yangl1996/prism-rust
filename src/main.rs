@@ -18,7 +18,7 @@ use prism::network::server;
 use prism::network::worker;
 use prism::transaction::Address;
 use prism::utxodb::UtxoDatabase;
-use prism::visualization::Server as VisualizationServer;
+//use prism::visualization::Server as VisualizationServer;
 use prism::wallet::Wallet;
 use rand::rngs::OsRng;
 use std::convert::TryInto;
@@ -36,7 +36,7 @@ fn main() {
      (@arg verbose: -v ... "Increases the verbosity of logging")
      (@arg peer_addr: --p2p [ADDR] default_value("127.0.0.1:6000") "Sets the IP address and the port of the P2P server")
      (@arg api_addr: --api [ADDR] default_value("127.0.0.1:7000") "Sets the IP address and the port of the API server")
-     (@arg visualization: --visual [ADDR] "Enables the visualization server and sets its address and port")
+     //(@arg visualization: --visual [ADDR] "Enables the visualization server and sets its address and port")
      (@arg known_peer: -c --connect ... [PEER] "Sets the peers to connect to at start")
      (@arg block_db: --blockdb [PATH] default_value("/tmp/prism-blocks.rocksdb") "Sets the path to the block database")
      (@arg utxo_db: --utxodb [PATH] default_value("/tmp/prism-utxo.rocksdb") "Sets the path to the UTXO database")
@@ -414,6 +414,7 @@ fn main() {
         txgen_control_chan,
     );
 
+    /*
     // start the visualization server
     if let Some(addr) = matches.value_of("visualization") {
         let addr = addr.parse::<net::SocketAddr>().unwrap_or_else(|e| {
@@ -423,6 +424,7 @@ fn main() {
         info!("Starting visualization server at {}", &addr);
         VisualizationServer::start(addr, &blockchain, &blockdb, &utxodb);
     }
+    */
 
     loop {
         std::thread::park();
