@@ -21,7 +21,6 @@ use std::sync::Mutex;
 const PROPOSER_NODE_LEVEL_CF: &str = "PROPOSER_NODE_LEVEL"; // hash to node level (u64)
 const VOTER_NODE_LEVEL_CF: &str = "VOTER_NODE_LEVEL"; // hash to node level (u64)
 const VOTER_NODE_CHAIN_CF: &str = "VOTER_NODE_CHAIN"; // hash to chain number (u16)
-const VOTER_TREE_LEVEL_COUNT_CF: &str = "VOTER_TREE_LEVEL_COUNT_CF"; // chain number and level (u16, u64) to number of blocks (u64)
 const PROPOSER_TREE_LEVEL_CF: &str = "PROPOSER_TREE_LEVEL"; // level (u64) to hashes of blocks (Vec<hash>)
 const VOTER_NODE_VOTED_LEVEL_CF: &str = "VOTER_NODE_VOTED_LEVEL"; // hash to max. voted level (u64)
 const PROPOSER_LEADER_SEQUENCE_CF: &str = "PROPOSER_LEADER_SEQUENCE"; // level (u64) to hash of leader block.
@@ -83,7 +82,6 @@ impl BlockChain {
         add_cf!(PROPOSER_TREE_LEVEL_CF, h256_vec_append_merge);
         add_cf!(PARENT_NEIGHBOR_CF, h256_vec_append_merge);
         add_cf!(VOTE_NEIGHBOR_CF, h256_vec_append_merge);
-        add_cf!(VOTER_TREE_LEVEL_COUNT_CF, u64_plus_merge);
         add_cf!(PROPOSER_VOTE_COUNT_CF, u64_plus_merge);
         add_cf!(VOTER_PARENT_NEIGHBOR_CF, h256_vec_append_merge);
         add_cf!(TRANSACTION_REF_NEIGHBOR_CF, h256_vec_append_merge);
@@ -128,7 +126,6 @@ impl BlockChain {
         let proposer_tree_level_cf = db.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
         let parent_neighbor_cf = db.db.cf_handle(PARENT_NEIGHBOR_CF).unwrap();
         let vote_neighbor_cf = db.db.cf_handle(VOTE_NEIGHBOR_CF).unwrap();
-        let voter_tree_level_count_cf = db.db.cf_handle(VOTER_TREE_LEVEL_COUNT_CF).unwrap();
         let proposer_vote_count_cf = db.db.cf_handle(PROPOSER_VOTE_COUNT_CF).unwrap();
         let proposer_leader_sequence_cf = db.db.cf_handle(PROPOSER_LEADER_SEQUENCE_CF).unwrap();
         let proposer_ledger_order_cf = db.db.cf_handle(PROPOSER_LEDGER_ORDER_CF).unwrap();
@@ -238,11 +235,6 @@ impl BlockChain {
                 serialize(&db.config.voter_genesis[chain_num as usize]).unwrap(),
                 serialize(&(chain_num as u16)).unwrap(),
             )?;
-            wb.merge_cf(
-                voter_tree_level_count_cf,
-                serialize(&(chain_num as u16, 0 as u64)).unwrap(),
-                serialize(&(1 as u64)).unwrap(),
-            )?;
             let mut voter_best = db.voter_best[chain_num as usize].lock().unwrap();
             voter_best.0 = db.config.voter_genesis[chain_num as usize];
             drop(voter_best);
@@ -268,7 +260,6 @@ impl BlockChain {
         let proposer_vote_count_cf = self.db.cf_handle(PROPOSER_VOTE_COUNT_CF).unwrap();
         let voter_parent_neighbor_cf = self.db.cf_handle(VOTER_PARENT_NEIGHBOR_CF).unwrap();
         let transaction_ref_neighbor_cf = self.db.cf_handle(TRANSACTION_REF_NEIGHBOR_CF).unwrap();
-        let voter_tree_level_count_cf = self.db.cf_handle(VOTER_TREE_LEVEL_COUNT_CF).unwrap();
 
         let mut wb = WriteBatch::default();
 
@@ -388,11 +379,6 @@ impl BlockChain {
                 // set current block level and chain number
                 put_value!(voter_node_level_cf, block_hash, self_level as u64);
                 put_value!(voter_node_chain_cf, block_hash, self_chain as u16);
-                merge_value!(
-                    voter_tree_level_count_cf,
-                    (self_chain as u16, self_level as u64),
-                    1 as u64
-                );
                 // add voting blocks for the proposer
                 for proposer_hash in &content.votes {
                     merge_value!(proposer_vote_count_cf, proposer_hash, 1 as u64);
