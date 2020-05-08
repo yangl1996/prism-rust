@@ -500,8 +500,6 @@ impl BlockChain {
             }
         }
         drop(voter_ledger_tips);
-        // commit the votes into the database
-        self.db.write(wb)?;
 
         // recompute the leader of each level that was affected
         let mut wb = WriteBatch::default();
