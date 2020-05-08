@@ -87,18 +87,33 @@ pub trait Block {
 pub struct Proposer {
     pub level: u64,
     pub hash: H256,
-    pub refs: Vec<H256>,
+    pub tx_refs: Vec<H256>,
+    pub prop_refs: Vec<Weak<Proposer>>,
     pub parent: Weak<Proposer>,
 }
 
-impl Block for Proposer {
-    type Ref = H256;
+pub enum ProposerReference {
+    Proposer(Weak<Proposer>),
+    Transaction(H256),
+}
 
-    fn attach(self: &Arc<Self>, hash: H256, refs: &[H256]) -> Self {
+impl Block for Proposer {
+    type Ref = ProposerReference;
+
+    fn attach(self: &Arc<Self>, hash: H256, refs: &[ProposerReference]) -> Self {
+        let mut tx_refs = vec![];
+        let mut prop_refs = vec![];
+        for r in refs.iter() {
+            match r {
+                ProposerReference::Proposer(ptr) => prop_refs.push(Weak::clone(&ptr)),
+                ProposerReference::Transaction(h) => tx_refs.push(*h),
+            }
+        }
         Self {
             level: self.level + 1,
             hash,
-            refs: refs.to_vec(),
+            tx_refs,
+            prop_refs,
             parent: Arc::downgrade(self),
         }
     }
@@ -327,7 +342,8 @@ impl ChainIndex<Proposer> {
         let block = Proposer {
             level,
             hash,
-            refs: content.proposer_refs.to_vec(),
+            tx_refs: content.transaction_refs.to_vec(),
+            prop_refs: vec![],
             parent: Default::default(),
         };
         let block = Arc::new(block);
@@ -346,8 +362,20 @@ impl ChainIndex<Proposer> {
             Some(v) => v,
             None => panic!("Adding a proposer block whose parent is unknown"),
         };
+        let mut refs = vec![];
+        for tref in content.transaction_refs.iter() {
+            refs.push(ProposerReference::Transaction(*tref));
+        }
+        for pref in content.proposer_refs.iter() {
+            if let Some(ptr) = self.blocks.get(&pref) {
+                refs.push(ProposerReference::Proposer(Arc::downgrade(&ptr)));
+            }
+            else {
+                panic!("Adding a proposer which refers to a proposer block not in the index");
+            }
+        }
         
-        let new_block = parent_ref.attach(hash, &content.transaction_refs);
+        let new_block = parent_ref.attach(hash, &refs);
         let new_block = Arc::new(new_block);
         self.insert_block(&new_block);
         return new_block;
