@@ -469,7 +469,6 @@ impl BlockChain {
         let proposer_node_level_cf = self.db.cf_handle(PROPOSER_NODE_LEVEL_CF).unwrap();
         let proposer_leader_sequence_cf = self.db.cf_handle(PROPOSER_LEADER_SEQUENCE_CF).unwrap();
         let proposer_ledger_order_cf = self.db.cf_handle(PROPOSER_LEDGER_ORDER_CF).unwrap();
-        let proposer_ref_neighbor_cf = self.db.cf_handle(PROPOSER_REF_NEIGHBOR_CF).unwrap();
         let transaction_ref_neighbor_cf = self.db.cf_handle(TRANSACTION_REF_NEIGHBOR_CF).unwrap();
 
         macro_rules! get_value {
@@ -668,7 +667,12 @@ impl BlockChain {
                         if !unconfirmed_proposers.contains(&top) {
                             continue;
                         }
-                        let refs: Vec<H256> = get_value!(proposer_ref_neighbor_cf, top).unwrap();
+                        let proposer_idx = self.proposer_index.lock().unwrap();
+                        let p = std::sync::Arc::clone(&proposer_idx.blocks.get(&top).unwrap());
+                        drop(proposer_idx);
+                        let refs: Vec<H256> = p.prop_refs.iter().map(|x| x.upgrade().unwrap().hash).collect();
+
+                        //let refs: Vec<H256> = get_value!(proposer_ref_neighbor_cf, top).unwrap();
 
                         // add the current block to the ordered ledger, could be duplicated
                         order.push(top);
