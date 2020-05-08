@@ -83,6 +83,34 @@ pub trait Block {
     fn level(&self) -> u64;
 
     fn hash(&self) -> H256;
+
+    /// Returns the pointer to the parent blocks. If the block has no parent, it returns None.
+    fn parent(&self) -> Option<Arc<Self>>;
+
+    /// Returns the common ancestor with the given block. The caller is responsible for ensuring
+    /// the two blocks are on the same chain.
+    fn common_ancestor(self: &Arc<Self>, other: &Arc<Self>) -> Arc<Self> {
+        let mut self_ptr = Arc::clone(self);
+        let mut other_ptr = Arc::clone(other);
+
+        while self_ptr.level() != other_ptr.level() {
+            if self_ptr.level() < other_ptr.level() {
+                other_ptr = other_ptr.parent().unwrap();
+            }
+            else {
+                self_ptr = self_ptr.parent().unwrap();
+            }
+        }
+
+        while self_ptr.hash() != other_ptr.hash() {
+            other_ptr = other_ptr.parent().unwrap();
+            self_ptr = self_ptr.parent().unwrap();
+        }
+        if !Arc::ptr_eq(&self_ptr, &other_ptr) {
+            panic!("Two blocks with the same hash does not point to the same memory address");
+        }
+        return self_ptr;
+    }
 }
 
 // TODO: wrap prop_refs and parent into methods to allow automatically recovery from "page faults",
@@ -124,17 +152,12 @@ impl Proposer {
             for r in top.prop_refs.iter() {
                 stack.push(r.upgrade().unwrap());
             }
-            match top.parent.upgrade() {
+            match top.parent() {
                 Some(t) => {
                     stack.push(t);
                 }
                 None => {
-                    if !std::sync::Weak::ptr_eq(&top.parent, &Default::default()) {
-                        // only panic when the parent pointer is a non-zero weak pointer
-                        // if it is a zero weak pointer, it means we are currently at the genesis
-                        // block which does not have a parent
-                        panic!("Missing parent block when tracing referred proposer blocks");
-                    }
+                    // we have hit the genesis block. it has not parent
                 }
             }
         }
@@ -171,6 +194,23 @@ impl Block for Proposer {
 
     fn hash(&self) -> H256 {
         self.hash
+    }
+
+    fn parent(&self) -> Option<Arc<Self>> {
+        match self.parent.upgrade() {
+            Some(p) => Some(p),
+            None => {
+                if std::sync::Weak::ptr_eq(&self.parent, &Default::default()) {
+                    return None;
+                }
+                else {
+                    // only panic when the parent pointer is a non-zero weak pointer
+                    // if it is a zero weak pointer, it means we are currently at the genesis
+                    // block which does not have a parent
+                    panic!("Proposer parent block does not exist in the index");
+                }
+            }
+        }
     }
 }
 
@@ -225,6 +265,7 @@ impl Voter {
         }
         None
     }
+
 }
 
 impl Block for Voter {
@@ -246,6 +287,20 @@ impl Block for Voter {
 
     fn hash(&self) -> H256 {
         self.hash
+    }
+
+    fn parent(&self) -> Option<Arc<Self>> {
+        match self.parent.upgrade() {
+            Some(p) => Some(p),
+            None => {
+                if std::sync::Weak::ptr_eq(&self.parent, &Default::default()) {
+                    return None;
+                }
+                else {
+                    panic!("Voter parent block does not exist in the index");
+                }
+            }
+        }
     }
 }
 
@@ -586,6 +641,15 @@ mod tests {
         assert_eq!(prop_blocks[0].tx_refs.len(), 2);
         assert_eq!(&tx_ref2, &prop_blocks[4].tx_refs[0]);
         assert_eq!(prop_blocks[4].tx_refs.len(), 1);
+
+        // common ancestors
+        assert_eq!(prop_blocks[5].common_ancestor(&prop_blocks[5]).hash, prop_blocks[5].hash);
+        assert_eq!(prop_blocks[1].common_ancestor(&prop_blocks[5]).hash, prop_blocks[1].hash);
+        assert_eq!(prop_blocks[5].common_ancestor(&prop_blocks[1]).hash, prop_blocks[1].hash);
+        assert_eq!(prop_blocks[4].common_ancestor(&prop_blocks[5]).hash, prop_blocks[0].hash);
+        assert_eq!(prop_blocks[5].common_ancestor(&prop_blocks[4]).hash, prop_blocks[0].hash);
+        assert_eq!(prop_blocks[5].common_ancestor(&prop_blocks[0]).hash, prop_blocks[0].hash);
+        assert_eq!(prop_blocks[0].common_ancestor(&prop_blocks[5]).hash, prop_blocks[0].hash);
     }
 
     #[test]
