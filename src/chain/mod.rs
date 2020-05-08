@@ -84,6 +84,7 @@ pub trait Block {
     fn hash(&self) -> H256;
 }
 
+// TODO: add a function to get proposer sequence given leaders and where to stop searching downwards
 pub struct Proposer {
     pub level: u64,
     pub hash: H256,
