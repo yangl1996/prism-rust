@@ -424,7 +424,7 @@ impl ChainIndex<Voter> {
 mod tests {
     use super::*;
     use rand::Rng;
-    use crate::block::{Block as RealBlock, voter::Content as VoterContent, header::Header};
+    use crate::block::{Block as RealBlock, voter::Content as VoterContent, header::Header, proposer::Content as ProposerContent};
     use crate::crypto::hash::Hashable;
 
     fn get_hash() -> H256 {
@@ -479,6 +479,66 @@ mod tests {
             }),
             sortition_proof: vec![],
         }
+    }
+
+    fn proposer_block(parent: H256, prefs: &[H256], trefs: &[H256]) -> RealBlock {
+        RealBlock {
+            header: Header {
+                parent: parent,
+                timestamp: 0,
+                nonce: 0,
+                content_merkle_root: get_hash(),
+                extra_content: [0; 32],
+                difficulty: get_hash(),
+            },
+            content: Content::Proposer(ProposerContent {
+                proposer_refs: prefs.to_vec(),
+                transaction_refs: trefs.to_vec(),
+            }),
+            sortition_proof: vec![],
+        }
+    }
+
+    #[test]
+    fn proposer_index() {
+        // level starts at 15
+        // p0 - p1 - p3 - p5
+        //   \- p2 - p4
+        // 
+        // p3 refers to p2, p4 refers to p1, p5 refers to p4
+        let tx_ref1 = get_hash();
+        let tx_ref2 = get_hash();
+        let p0 = proposer_block(get_hash(), &[], &[tx_ref1, get_hash()]);
+        let p1 = proposer_block(p0.hash(), &[], &[get_hash()]);
+        let p2 = proposer_block(p0.hash(), &[], &[get_hash(), get_hash()]);
+        let p3 = proposer_block(p1.hash(), &[p2.hash()], &[get_hash(), get_hash()]);
+        let p4 = proposer_block(p2.hash(), &[p1.hash()], &[tx_ref2]);
+        let p5 = proposer_block(p3.hash(), &[p4.hash()], &[get_hash()]);
+        
+        let mut prop_blocks = vec![];
+        let mut idx = ChainIndex::new();
+        prop_blocks.push(idx.insert_proposer_root_at(&p0, p0.hash(), 15));
+        prop_blocks.push(idx.insert_proposer(&p1, p1.hash()));
+        prop_blocks.push(idx.insert_proposer(&p2, p2.hash()));
+        prop_blocks.push(idx.insert_proposer(&p3, p3.hash()));
+        prop_blocks.push(idx.insert_proposer(&p4, p4.hash()));
+        prop_blocks.push(idx.insert_proposer(&p5, p5.hash()));
+
+        // p5 refers to p4
+        assert!(Arc::ptr_eq(&prop_blocks[4], &prop_blocks[5].prop_refs[0].upgrade().unwrap()));
+        assert_eq!(prop_blocks[5].prop_refs.len(), 1);
+        // p4 refers to p1
+        assert!(Arc::ptr_eq(&prop_blocks[1], &prop_blocks[4].prop_refs[0].upgrade().unwrap()));
+        assert_eq!(prop_blocks[4].prop_refs.len(), 1);
+        // p3 refers to p2
+        assert!(Arc::ptr_eq(&prop_blocks[2], &prop_blocks[3].prop_refs[0].upgrade().unwrap()));
+        assert_eq!(prop_blocks[3].prop_refs.len(), 1);
+        assert!(prop_blocks[1].prop_refs.is_empty());
+        // p0 tx refs
+        assert_eq!(&tx_ref1, &prop_blocks[0].tx_refs[0]);
+        assert_eq!(prop_blocks[0].tx_refs.len(), 2);
+        assert_eq!(&tx_ref2, &prop_blocks[4].tx_refs[0]);
+        assert_eq!(prop_blocks[4].tx_refs.len(), 1);
     }
 
     #[test]
