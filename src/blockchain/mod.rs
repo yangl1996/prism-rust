@@ -36,7 +36,6 @@ const PARENT_NEIGHBOR_CF: &str = "GRAPH_PARENT_NEIGHBOR"; // the proposer parent
 const VOTE_NEIGHBOR_CF: &str = "GRAPH_VOTE_NEIGHBOR"; // neighbors associated by a vote
 const VOTER_PARENT_NEIGHBOR_CF: &str = "GRAPH_VOTER_PARENT_NEIGHBOR"; // the voter parent of a block
 const TRANSACTION_REF_NEIGHBOR_CF: &str = "GRAPH_TRANSACTION_REF_NEIGHBOR";
-const PROPOSER_REF_NEIGHBOR_CF: &str = "GRAPH_PROPOSER_REF_NEIGHBOR";
 
 pub type Result<T> = std::result::Result<T, rocksdb::Error>;
 
@@ -90,7 +89,6 @@ impl BlockChain {
         add_cf!(PROPOSER_VOTE_COUNT_CF, u64_plus_merge);
         add_cf!(VOTER_PARENT_NEIGHBOR_CF, h256_vec_append_merge);
         add_cf!(TRANSACTION_REF_NEIGHBOR_CF, h256_vec_append_merge);
-        add_cf!(PROPOSER_REF_NEIGHBOR_CF, h256_vec_append_merge);
 
         let mut opts = Options::default();
         opts.create_if_missing(true);
@@ -137,7 +135,6 @@ impl BlockChain {
         let proposer_vote_count_cf = db.db.cf_handle(PROPOSER_VOTE_COUNT_CF).unwrap();
         let proposer_leader_sequence_cf = db.db.cf_handle(PROPOSER_LEADER_SEQUENCE_CF).unwrap();
         let proposer_ledger_order_cf = db.db.cf_handle(PROPOSER_LEDGER_ORDER_CF).unwrap();
-        let proposer_ref_neighbor_cf = db.db.cf_handle(PROPOSER_REF_NEIGHBOR_CF).unwrap();
         let transaction_ref_neighbor_cf = db.db.cf_handle(TRANSACTION_REF_NEIGHBOR_CF).unwrap();
 
         // insert genesis blocks
@@ -167,11 +164,6 @@ impl BlockChain {
             proposer_ledger_order_cf,
             serialize(&(0 as u64)).unwrap(),
             serialize(&proposer_genesis_ledger).unwrap(),
-        )?;
-        wb.put_cf(
-            proposer_ref_neighbor_cf,
-            serialize(&db.config.proposer_genesis).unwrap(),
-            serialize(&Vec::<H256>::new()).unwrap(),
         )?;
         wb.put_cf(
             transaction_ref_neighbor_cf,
@@ -284,7 +276,6 @@ impl BlockChain {
         let proposer_vote_count_cf = self.db.cf_handle(PROPOSER_VOTE_COUNT_CF).unwrap();
         let voter_parent_neighbor_cf = self.db.cf_handle(VOTER_PARENT_NEIGHBOR_CF).unwrap();
         let transaction_ref_neighbor_cf = self.db.cf_handle(TRANSACTION_REF_NEIGHBOR_CF).unwrap();
-        let proposer_ref_neighbor_cf = self.db.cf_handle(PROPOSER_REF_NEIGHBOR_CF).unwrap();
         let voter_tree_level_count_cf = self.db.cf_handle(VOTER_TREE_LEVEL_COUNT_CF).unwrap();
 
         let mut wb = WriteBatch::default();
@@ -324,7 +315,6 @@ impl BlockChain {
                 // note that the parent is the first proposer block that we refer
                 let mut refed_proposer: Vec<H256> = vec![parent_hash];
                 refed_proposer.extend(&content.proposer_refs);
-                put_value!(proposer_ref_neighbor_cf, block_hash, refed_proposer);
                 put_value!(
                     transaction_ref_neighbor_cf,
                     block_hash,
@@ -671,8 +661,6 @@ impl BlockChain {
                         let p = std::sync::Arc::clone(&proposer_idx.blocks.get(&top).unwrap());
                         drop(proposer_idx);
                         let refs: Vec<H256> = p.prop_refs.iter().map(|x| x.upgrade().unwrap().hash).collect();
-
-                        //let refs: Vec<H256> = get_value!(proposer_ref_neighbor_cf, top).unwrap();
 
                         // add the current block to the ordered ledger, could be duplicated
                         order.push(top);
