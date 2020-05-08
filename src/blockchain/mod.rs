@@ -31,7 +31,6 @@ const PROPOSER_VOTE_COUNT_CF: &str = "PROPOSER_VOTE_COUNT"; // number of all vot
 
 // Column family names for graph neighbors
 const PARENT_NEIGHBOR_CF: &str = "GRAPH_PARENT_NEIGHBOR"; // the proposer parent of a block
-const VOTE_NEIGHBOR_CF: &str = "GRAPH_VOTE_NEIGHBOR"; // neighbors associated by a vote
 const VOTER_PARENT_NEIGHBOR_CF: &str = "GRAPH_VOTER_PARENT_NEIGHBOR"; // the voter parent of a block
 const TRANSACTION_REF_NEIGHBOR_CF: &str = "GRAPH_TRANSACTION_REF_NEIGHBOR";
 
@@ -81,7 +80,6 @@ impl BlockChain {
         add_cf!(PROPOSER_LEDGER_ORDER_CF);
         add_cf!(PROPOSER_TREE_LEVEL_CF, h256_vec_append_merge);
         add_cf!(PARENT_NEIGHBOR_CF, h256_vec_append_merge);
-        add_cf!(VOTE_NEIGHBOR_CF, h256_vec_append_merge);
         add_cf!(PROPOSER_VOTE_COUNT_CF, u64_plus_merge);
         add_cf!(VOTER_PARENT_NEIGHBOR_CF, h256_vec_append_merge);
         add_cf!(TRANSACTION_REF_NEIGHBOR_CF, h256_vec_append_merge);
@@ -125,7 +123,6 @@ impl BlockChain {
         let voter_node_voted_level_cf = db.db.cf_handle(VOTER_NODE_VOTED_LEVEL_CF).unwrap();
         let proposer_tree_level_cf = db.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
         let parent_neighbor_cf = db.db.cf_handle(PARENT_NEIGHBOR_CF).unwrap();
-        let vote_neighbor_cf = db.db.cf_handle(VOTE_NEIGHBOR_CF).unwrap();
         let proposer_vote_count_cf = db.db.cf_handle(PROPOSER_VOTE_COUNT_CF).unwrap();
         let proposer_leader_sequence_cf = db.db.cf_handle(PROPOSER_LEADER_SEQUENCE_CF).unwrap();
         let proposer_ledger_order_cf = db.db.cf_handle(PROPOSER_LEDGER_ORDER_CF).unwrap();
@@ -211,11 +208,6 @@ impl BlockChain {
                 serialize(&db.config.proposer_genesis).unwrap(),
             )?;
             wb.merge_cf(
-                vote_neighbor_cf,
-                serialize(&db.config.voter_genesis[chain_num as usize]).unwrap(),
-                serialize(&db.config.proposer_genesis).unwrap(),
-            )?;
-            wb.merge_cf(
                 proposer_vote_count_cf,
                 serialize(&db.config.proposer_genesis).unwrap(),
                 serialize(&(1 as u64)).unwrap(),
@@ -256,7 +248,6 @@ impl BlockChain {
         let voter_node_voted_level_cf = self.db.cf_handle(VOTER_NODE_VOTED_LEVEL_CF).unwrap();
         let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
         let parent_neighbor_cf = self.db.cf_handle(PARENT_NEIGHBOR_CF).unwrap();
-        let vote_neighbor_cf = self.db.cf_handle(VOTE_NEIGHBOR_CF).unwrap();
         let proposer_vote_count_cf = self.db.cf_handle(PROPOSER_VOTE_COUNT_CF).unwrap();
         let voter_parent_neighbor_cf = self.db.cf_handle(VOTER_PARENT_NEIGHBOR_CF).unwrap();
         let transaction_ref_neighbor_cf = self.db.cf_handle(TRANSACTION_REF_NEIGHBOR_CF).unwrap();
@@ -383,8 +374,6 @@ impl BlockChain {
                 for proposer_hash in &content.votes {
                     merge_value!(proposer_vote_count_cf, proposer_hash, 1 as u64);
                 }
-                // add voted blocks and set deepest voted level
-                put_value!(vote_neighbor_cf, block_hash, content.votes);
                 // set the voted level to be until proposer parent
                 let proposer_parent_level: u64 = get_value!(proposer_node_level_cf, parent_hash);
                 put_value!(
@@ -433,7 +422,6 @@ impl BlockChain {
     }
 
     pub fn update_ledger(&self) -> Result<(Vec<H256>, Vec<H256>)> {
-        let proposer_node_level_cf = self.db.cf_handle(PROPOSER_NODE_LEVEL_CF).unwrap();
         let proposer_leader_sequence_cf = self.db.cf_handle(PROPOSER_LEADER_SEQUENCE_CF).unwrap();
         let proposer_ledger_order_cf = self.db.cf_handle(PROPOSER_LEDGER_ORDER_CF).unwrap();
         let transaction_ref_neighbor_cf = self.db.cf_handle(TRANSACTION_REF_NEIGHBOR_CF).unwrap();
@@ -462,28 +450,13 @@ impl BlockChain {
             drop(voter_best);
             voter_ledger_tips[chain_num as usize] = to;
 
-            let (added, removed) = self.vote_diff(from, to)?;
-
-            // apply the vote diff on the proposer main chain vote cf
-            for vote in &removed {
-                let proposer_level: u64 = get_value!(proposer_node_level_cf, vote.0).unwrap();
-                if proposer_level < affected_range.start {
-                    affected_range.start = proposer_level;
-                }
-                if proposer_level >= affected_range.end {
-                    affected_range.end = proposer_level + 1;
-                }
-            }
-
-            for vote in &added {
-                let proposer_level: u64 = get_value!(proposer_node_level_cf, vote.0).unwrap();
-                if proposer_level < affected_range.start {
-                    affected_range.start = proposer_level;
-                }
-                if proposer_level >= affected_range.end {
-                    affected_range.end = proposer_level + 1;
-                }
-            }
+            let voter_index = self.voter_index[chain_num as usize].lock().unwrap();
+            let from_ptr = std::sync::Arc::clone(&voter_index.blocks.get(&from).unwrap());
+            let to_ptr = std::sync::Arc::clone(&voter_index.blocks.get(&to).unwrap());
+            drop(voter_index);
+            let rg = from_ptr.affected_range(&to_ptr);
+            affected_range.start = rg.0;
+            affected_range.end = rg.1;
         }
         drop(voter_ledger_tips);
 
@@ -774,72 +747,6 @@ impl BlockChain {
         }
 
         Ok(new_leader)
-    }
-
-    /// Given two voter blocks on the same chain, calculate the added and removed votes when
-    /// switching the main chain.
-    fn vote_diff(&self, from: H256, to: H256) -> Result<(Vec<(H256, u64)>, Vec<(H256, u64)>)> {
-        // get cf handles
-        let voter_node_level_cf = self.db.cf_handle(VOTER_NODE_LEVEL_CF).unwrap();
-        let vote_neighbor_cf = self.db.cf_handle(VOTE_NEIGHBOR_CF).unwrap();
-        let voter_parent_neighbor_cf = self.db.cf_handle(VOTER_PARENT_NEIGHBOR_CF).unwrap();
-
-        macro_rules! get_value {
-            ($cf:expr, $key:expr) => {{
-                deserialize(
-                    &self
-                        .db
-                        .get_pinned_cf($cf, serialize(&$key).unwrap())?
-                        .unwrap(),
-                )
-                .unwrap()
-            }};
-        }
-
-        let mut to: H256 = to;
-        let mut from: H256 = from;
-
-        let mut to_level: u64 = get_value!(voter_node_level_cf, to);
-        let mut from_level: u64 = get_value!(voter_node_level_cf, from);
-
-        let mut added_votes: Vec<(H256, u64)> = vec![];
-        let mut removed_votes: Vec<(H256, u64)> = vec![];
-
-        // trace back the longer chain until the levels of the two tips are the same
-        while to_level != from_level {
-            if to_level > from_level {
-                let votes: Vec<H256> = get_value!(vote_neighbor_cf, to);
-                for vote in votes {
-                    added_votes.push((vote, to_level));
-                }
-                to = get_value!(voter_parent_neighbor_cf, to);
-                to_level -= 1;
-            } else if to_level < from_level {
-                let votes: Vec<H256> = get_value!(vote_neighbor_cf, from);
-                for vote in votes {
-                    removed_votes.push((vote, from_level));
-                }
-                from = get_value!(voter_parent_neighbor_cf, from);
-                from_level -= 1;
-            }
-        }
-
-        while to != from {
-            let votes: Vec<H256> = get_value!(vote_neighbor_cf, to);
-            for vote in votes {
-                added_votes.push((vote, to_level));
-            }
-            to = get_value!(voter_parent_neighbor_cf, to);
-            to_level -= 1;
-
-            let votes: Vec<H256> = get_value!(vote_neighbor_cf, from);
-            for vote in votes {
-                removed_votes.push((vote, from_level));
-            }
-            from = get_value!(voter_parent_neighbor_cf, from);
-            from_level -= 1;
-        }
-        Ok((added_votes, removed_votes))
     }
 
     pub fn best_proposer(&self) -> Result<H256> {
