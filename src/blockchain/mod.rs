@@ -24,7 +24,6 @@ const VOTER_NODE_CHAIN_CF: &str = "VOTER_NODE_CHAIN"; // hash to chain number (u
 const VOTER_TREE_LEVEL_COUNT_CF: &str = "VOTER_TREE_LEVEL_COUNT_CF"; // chain number and level (u16, u64) to number of blocks (u64)
 const PROPOSER_TREE_LEVEL_CF: &str = "PROPOSER_TREE_LEVEL"; // level (u64) to hashes of blocks (Vec<hash>)
 const VOTER_NODE_VOTED_LEVEL_CF: &str = "VOTER_NODE_VOTED_LEVEL"; // hash to max. voted level (u64)
-const PROPOSER_NODE_VOTE_CF: &str = "PROPOSER_NODE_VOTE"; // hash to level and chain number of main chain votes (Vec<u16, u64>)
 const PROPOSER_LEADER_SEQUENCE_CF: &str = "PROPOSER_LEADER_SEQUENCE"; // level (u64) to hash of leader block.
 const PROPOSER_LEDGER_ORDER_CF: &str = "PROPOSER_LEDGER_ORDER"; // level (u64) to the list of proposer blocks confirmed
                                                                 // by this level, including the leader itself. The list
@@ -82,7 +81,6 @@ impl BlockChain {
         add_cf!(PROPOSER_LEADER_SEQUENCE_CF);
         add_cf!(PROPOSER_LEDGER_ORDER_CF);
         add_cf!(PROPOSER_TREE_LEVEL_CF, h256_vec_append_merge);
-        add_cf!(PROPOSER_NODE_VOTE_CF, vote_vec_merge);
         add_cf!(PARENT_NEIGHBOR_CF, h256_vec_append_merge);
         add_cf!(VOTE_NEIGHBOR_CF, h256_vec_append_merge);
         add_cf!(VOTER_TREE_LEVEL_COUNT_CF, u64_plus_merge);
@@ -127,7 +125,6 @@ impl BlockChain {
         let voter_node_level_cf = db.db.cf_handle(VOTER_NODE_LEVEL_CF).unwrap();
         let voter_node_chain_cf = db.db.cf_handle(VOTER_NODE_CHAIN_CF).unwrap();
         let voter_node_voted_level_cf = db.db.cf_handle(VOTER_NODE_VOTED_LEVEL_CF).unwrap();
-        let proposer_node_vote_cf = db.db.cf_handle(PROPOSER_NODE_VOTE_CF).unwrap();
         let proposer_tree_level_cf = db.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
         let parent_neighbor_cf = db.db.cf_handle(PARENT_NEIGHBOR_CF).unwrap();
         let vote_neighbor_cf = db.db.cf_handle(VOTE_NEIGHBOR_CF).unwrap();
@@ -225,11 +222,6 @@ impl BlockChain {
                 proposer_vote_count_cf,
                 serialize(&db.config.proposer_genesis).unwrap(),
                 serialize(&(1 as u64)).unwrap(),
-            )?;
-            wb.merge_cf(
-                proposer_node_vote_cf,
-                serialize(&db.config.proposer_genesis).unwrap(),
-                serialize(&(true, chain_num as u16, 0 as u64)).unwrap(),
             )?;
             wb.put_cf(
                 voter_node_level_cf,
@@ -455,7 +447,6 @@ impl BlockChain {
     }
 
     pub fn update_ledger(&self) -> Result<(Vec<H256>, Vec<H256>)> {
-        let proposer_node_vote_cf = self.db.cf_handle(PROPOSER_NODE_VOTE_CF).unwrap();
         let proposer_node_level_cf = self.db.cf_handle(PROPOSER_NODE_LEVEL_CF).unwrap();
         let proposer_leader_sequence_cf = self.db.cf_handle(PROPOSER_LEADER_SEQUENCE_CF).unwrap();
         let proposer_ledger_order_cf = self.db.cf_handle(PROPOSER_LEDGER_ORDER_CF).unwrap();
@@ -471,13 +462,6 @@ impl BlockChain {
         }
 
         // apply the vote diff while tracking the votes of which proposer levels are affected
-        let mut wb = WriteBatch::default();
-        macro_rules! merge_value {
-            ($cf:expr, $key:expr, $value:expr) => {{
-                wb.merge_cf($cf, serialize(&$key).unwrap(), serialize(&$value).unwrap())?;
-            }};
-        }
-
         let mut voter_ledger_tips = self.voter_ledger_tips.lock().unwrap();
         let mut affected_range: Range<u64> = Range {
             start: std::u64::MAX,
@@ -496,11 +480,6 @@ impl BlockChain {
 
             // apply the vote diff on the proposer main chain vote cf
             for vote in &removed {
-                merge_value!(
-                    proposer_node_vote_cf,
-                    vote.0,
-                    (false, chain_num as u16, vote.1)
-                );
                 let proposer_level: u64 = get_value!(proposer_node_level_cf, vote.0).unwrap();
                 if proposer_level < affected_range.start {
                     affected_range.start = proposer_level;
@@ -511,11 +490,6 @@ impl BlockChain {
             }
 
             for vote in &added {
-                merge_value!(
-                    proposer_node_vote_cf,
-                    vote.0,
-                    (true, chain_num as u16, vote.1)
-                );
                 let proposer_level: u64 = get_value!(proposer_node_level_cf, vote.0).unwrap();
                 if proposer_level < affected_range.start {
                     affected_range.start = proposer_level;
@@ -1606,36 +1580,6 @@ impl BlockChain {
     }
 }
 */
-
-fn vote_vec_merge(
-    _: &[u8],
-    existing_val: Option<&[u8]>,
-    operands: &mut rocksdb::merge_operator::MergeOperands,
-) -> Option<Vec<u8>> {
-    let mut existing: Vec<(u16, u64)> = match existing_val {
-        Some(v) => deserialize(v).unwrap(),
-        None => vec![],
-    };
-    for op in operands {
-        // parse the operation as add(true)/remove(false), chain(u16), level(u64)
-        let operation: (bool, u16, u64) = deserialize(op).unwrap();
-        match operation.0 {
-            true => {
-                if !existing.contains(&(operation.1, operation.2)) {
-                    existing.push((operation.1, operation.2));
-                }
-            }
-            false => {
-                match existing.iter().position(|&x| x.0 == operation.1) {
-                    Some(p) => existing.swap_remove(p),
-                    None => continue, // TODO: potential bug here - what if we delete a nonexisting item
-                };
-            }
-        }
-    }
-    let result: Vec<u8> = serialize(&existing).unwrap();
-    Some(result)
-}
 
 fn h256_vec_append_merge(
     _: &[u8],
