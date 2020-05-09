@@ -332,6 +332,12 @@ impl<B: Block> ChainIndex<B> {
         }
     }
 
+    // TODO: this is a bad API (returning H256 rather than the pointer)
+    pub fn blocks_at_level(&self, level: u64) -> Vec<H256> {
+        let idx = usize::try_from(level - self.starting_level).unwrap();
+        return self.by_level[idx].clone();
+    }
+
     // TODO: looks like it can be optimized with a segment tree
     pub fn num_blocks(&self, start: u64, end: u64) -> usize {
         if start < self.starting_level {

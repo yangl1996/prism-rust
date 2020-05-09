@@ -817,40 +817,47 @@ impl BlockChain {
         )
         .unwrap();
 
+        let best_voters: Vec<_> = self.voter_index.iter().map(|x| {
+            let g = x.lock().unwrap();
+            let best = g.highest_block();
+            drop(g);
+            return best;
+        }).collect();
+
         // get the block with the most votes on each proposer level
         // and break ties with hash value
         let mut list: Vec<H256> = vec![];
         for level in first_vote_level + 1..=last_vote_level {
-            let mut blocks: Vec<H256> = deserialize(
-                &self
-                    .db
-                    .get_pinned_cf(proposer_tree_level_cf, serialize(&(level as u64)).unwrap())?
-                    .unwrap(),
-            )
-            .unwrap();
+            let proposer_index = self.proposer_index.lock().unwrap();
+            let mut blocks = proposer_index.blocks_at_level(level);
+            drop(proposer_index);
+            // first, we pick the block with the lowest hash
             blocks.sort_unstable();
-            // the current best proposer block to vote for
-            let mut best_vote: Option<(H256, u64)> = None;
-            for block_hash in &blocks {
-                let vote_count: u64 = match &self
-                    .db
-                    .get_pinned_cf(proposer_vote_count_cf, serialize(&block_hash).unwrap())?
-                {
-                    Some(d) => deserialize(d).unwrap(),
-                    None => 0,
-                };
-                match best_vote {
-                    Some((_, num_votes)) => {
-                        if vote_count > num_votes {
-                            best_vote = Some((*block_hash, vote_count));
-                        }
+            let mut selected = blocks[0];
+
+            // then we try to find a block with more votes
+            let mut count: HashMap<H256, u64> = HashMap::new();
+            for v in best_voters.iter() {
+                if let Some((voted, _)) = v.proposer_vote_of_level(level as u64) {
+                    if count.contains_key(&voted) {
+                        let mutref = count.get_mut(&voted).unwrap();
+                        *mutref += 1;
                     }
-                    None => {
-                        best_vote = Some((*block_hash, vote_count));
+                    else {
+                        count.insert(voted, 1);
                     }
                 }
             }
-            list.push(best_vote.unwrap().0); //Note: the last vote in list could be other proposer that at the same level of proposer_parent
+            // sort and find the one with the most votes, break ties by choosing the lower hash
+            let mut max_votes = 0;
+            for (h, c) in count.iter() {
+                if *c > max_votes {
+                    max_votes = *c;
+                    selected = *h;
+                }
+            }
+            list.push(selected);
+             //Note: the last vote in list could be other proposer that at the same level of proposer_parent
         }
         Ok(list)
     }
