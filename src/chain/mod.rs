@@ -823,6 +823,11 @@ mod tests {
         assert_eq!(idx.num_blocks(30, 31), 2);
         assert_eq!(idx.num_blocks(32, 32), 2);
         assert_eq!(idx.num_blocks(31, 33), 4);
+
+        // test affected range
+        assert_eq!(tip.affected_range(&tip2), (13, 14));
+        assert_eq!(tip.affected_range(&tip), (14, 14));
+        assert_eq!(tip.affected_range(&b), (13, 14));
     }
 
     #[test]
