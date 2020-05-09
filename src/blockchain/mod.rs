@@ -455,8 +455,12 @@ impl BlockChain {
             let to_ptr = std::sync::Arc::clone(&voter_index.blocks.get(&to).unwrap());
             drop(voter_index);
             let rg = from_ptr.affected_range(&to_ptr);
-            affected_range.start = rg.0;
-            affected_range.end = rg.1;
+            if affected_range.start > rg.0 {
+                affected_range.start = rg.0;
+            }
+            if affected_range.end < rg.1 {
+                affected_range.end = rg.1;
+            }
         }
         drop(voter_ledger_tips);
 
