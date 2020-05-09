@@ -75,6 +75,7 @@ pub struct Segment {
     pub votes: Vec<(H256, u64)>,    // proposer hash, level of the vote
 }
 
+// TODO: examine those APIs and return a reference (with lifetime bound) when possible
 pub trait Block {
     type Ref;   // can't make Ref = &[something] here due to lack of GAT in rust
 
@@ -178,6 +179,10 @@ impl Proposer {
         order.reverse();
 
         return order;
+    }
+
+    pub fn transaction_block_refs<'a>(&'a self) -> &'a[H256] {
+        return &self.tx_refs;
     }
 }
 
@@ -336,9 +341,9 @@ impl<B: Block> ChainIndex<B> {
     }
 
     // TODO: this is a bad API (returning H256 rather than the pointer)
-    pub fn blocks_at_level(&self, level: u64) -> Vec<H256> {
+    pub fn blocks_at_level<'a>(&'a self, level: u64) -> &'a[H256] {
         let idx = usize::try_from(level - self.starting_level).unwrap();
-        return self.by_level[idx].clone();
+        return &self.by_level[idx];
     }
 
     // TODO: looks like it can be optimized with a segment tree

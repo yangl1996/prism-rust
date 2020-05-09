@@ -116,7 +116,6 @@ impl BlockChain {
         let parent_neighbor_cf = db.db.cf_handle(PARENT_NEIGHBOR_CF).unwrap();
         let proposer_leader_sequence_cf = db.db.cf_handle(PROPOSER_LEADER_SEQUENCE_CF).unwrap();
         let proposer_ledger_order_cf = db.db.cf_handle(PROPOSER_LEDGER_ORDER_CF).unwrap();
-        let transaction_ref_neighbor_cf = db.db.cf_handle(TRANSACTION_REF_NEIGHBOR_CF).unwrap();
 
         // insert genesis blocks
         let mut wb = WriteBatch::default();
@@ -140,11 +139,6 @@ impl BlockChain {
             proposer_ledger_order_cf,
             serialize(&(0 as u64)).unwrap(),
             serialize(&proposer_genesis_ledger).unwrap(),
-        )?;
-        wb.put_cf(
-            transaction_ref_neighbor_cf,
-            serialize(&db.config.proposer_genesis).unwrap(),
-            serialize(&Vec::<H256>::new()).unwrap(),
         )?;
         let mut proposer_index = db.proposer_index.lock().unwrap();
         let proposer_genesis_stub = Block {
@@ -221,7 +215,6 @@ impl BlockChain {
         let voter_node_chain_cf = self.db.cf_handle(VOTER_NODE_CHAIN_CF).unwrap();
         let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
         let parent_neighbor_cf = self.db.cf_handle(PARENT_NEIGHBOR_CF).unwrap();
-        let transaction_ref_neighbor_cf = self.db.cf_handle(TRANSACTION_REF_NEIGHBOR_CF).unwrap();
 
         let mut wb = WriteBatch::default();
 
@@ -260,11 +253,6 @@ impl BlockChain {
                 // note that the parent is the first proposer block that we refer
                 let mut refed_proposer: Vec<H256> = vec![parent_hash];
                 refed_proposer.extend(&content.proposer_refs);
-                put_value!(
-                    transaction_ref_neighbor_cf,
-                    block_hash,
-                    content.transaction_refs
-                );
                 // get current block level
                 let parent_level = self.proposer_level(&parent_hash).unwrap();
                 let self_level = parent_level + 1;
@@ -384,7 +372,6 @@ impl BlockChain {
     pub fn update_ledger(&self) -> Result<(Vec<H256>, Vec<H256>)> {
         let proposer_leader_sequence_cf = self.db.cf_handle(PROPOSER_LEADER_SEQUENCE_CF).unwrap();
         let proposer_ledger_order_cf = self.db.cf_handle(PROPOSER_LEDGER_ORDER_CF).unwrap();
-        let transaction_ref_neighbor_cf = self.db.cf_handle(TRANSACTION_REF_NEIGHBOR_CF).unwrap();
 
         macro_rules! get_value {
             ($cf:expr, $key:expr) => {{
@@ -569,12 +556,16 @@ impl BlockChain {
             let mut removed_transaction_blocks: Vec<H256> = vec![];
             let mut added_transaction_blocks: Vec<H256> = vec![];
             for block in &removed {
-                let t: Vec<H256> = get_value!(transaction_ref_neighbor_cf, block).unwrap();
-                removed_transaction_blocks.extend(&t);
+                let proposer_index = self.proposer_index.lock().unwrap();
+                let ptr = proposer_index.blocks.get(&block).unwrap();
+                removed_transaction_blocks.extend(ptr.transaction_block_refs());
+                drop(proposer_index);
             }
             for block in &added {
-                let t: Vec<H256> = get_value!(transaction_ref_neighbor_cf, block).unwrap();
-                added_transaction_blocks.extend(&t);
+                let proposer_index = self.proposer_index.lock().unwrap();
+                let ptr = proposer_index.blocks.get(&block).unwrap();
+                added_transaction_blocks.extend(ptr.transaction_block_refs());
+                drop(proposer_index);
             }
             Ok((added_transaction_blocks, removed_transaction_blocks))
         } else {
@@ -775,7 +766,7 @@ impl BlockChain {
         let mut list: Vec<H256> = vec![];
         for level in first_vote_level + 1..=last_vote_level {
             let proposer_index = self.proposer_index.lock().unwrap();
-            let mut blocks = proposer_index.blocks_at_level(level);
+            let mut blocks = proposer_index.blocks_at_level(level).to_vec();
             drop(proposer_index);
             // first, we pick the block with the lowest hash
             blocks.sort_unstable();
