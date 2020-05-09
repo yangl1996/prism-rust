@@ -29,7 +29,6 @@ const PROPOSER_LEDGER_ORDER_CF: &str = "PROPOSER_LEDGER_ORDER"; // level (u64) t
 
 // Column family names for graph neighbors
 const PARENT_NEIGHBOR_CF: &str = "GRAPH_PARENT_NEIGHBOR"; // the proposer parent of a block
-const VOTER_PARENT_NEIGHBOR_CF: &str = "GRAPH_VOTER_PARENT_NEIGHBOR"; // the voter parent of a block
 const TRANSACTION_REF_NEIGHBOR_CF: &str = "GRAPH_TRANSACTION_REF_NEIGHBOR";
 
 pub type Result<T> = std::result::Result<T, rocksdb::Error>;
@@ -76,7 +75,6 @@ impl BlockChain {
         add_cf!(PROPOSER_LEDGER_ORDER_CF);
         add_cf!(PROPOSER_TREE_LEVEL_CF, h256_vec_append_merge);
         add_cf!(PARENT_NEIGHBOR_CF, h256_vec_append_merge);
-        add_cf!(VOTER_PARENT_NEIGHBOR_CF, h256_vec_append_merge);
         add_cf!(TRANSACTION_REF_NEIGHBOR_CF, h256_vec_append_merge);
 
         let mut opts = Options::default();
@@ -223,7 +221,6 @@ impl BlockChain {
         let voter_node_chain_cf = self.db.cf_handle(VOTER_NODE_CHAIN_CF).unwrap();
         let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
         let parent_neighbor_cf = self.db.cf_handle(PARENT_NEIGHBOR_CF).unwrap();
-        let voter_parent_neighbor_cf = self.db.cf_handle(VOTER_PARENT_NEIGHBOR_CF).unwrap();
         let transaction_ref_neighbor_cf = self.db.cf_handle(TRANSACTION_REF_NEIGHBOR_CF).unwrap();
 
         let mut wb = WriteBatch::default();
@@ -334,7 +331,6 @@ impl BlockChain {
             Content::Voter(content) => {
                 // add voter parent
                 let voter_parent_hash = content.voter_parent;
-                put_value!(voter_parent_neighbor_cf, block_hash, voter_parent_hash);
                 // get current block level and chain number
                 let voter_parent_level: u64 = get_value!(voter_node_level_cf, voter_parent_hash);
                 let voter_parent_chain: u16 = get_value!(voter_node_chain_cf, voter_parent_hash);
