@@ -224,6 +224,10 @@ pub struct Voter {
 }
 
 impl Voter {
+    pub fn level_after_last_vote(&self) -> u64 {
+        return self.vote_start_level + u64::try_from(self.votes.len()).unwrap();
+    }
+
     /// Given the voter chain (identified by its tip voter block) and the proposer level we are
     /// interested in, get the proposer block on that level voted by this voter chain and the depth of
     /// the vote.

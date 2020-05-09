@@ -39,7 +39,7 @@ pub fn check_chain_number(content: &Content, blockchain: &BlockChain) -> bool {
 
 pub fn check_levels_voted(content: &Content, blockchain: &BlockChain, parent: &H256) -> bool {
     let mut start = blockchain
-        .deepest_voted_level(&content.voter_parent)
+        .deepest_voted_level(&content.voter_parent, content.chain_number)
         .unwrap(); //need to be +1
     let end = blockchain.proposer_level(parent).unwrap();
 

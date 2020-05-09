@@ -345,7 +345,7 @@ impl Context {
                     if let Content::Voter(c) = &mut self.contents[chain_id] {
                         c.votes = self
                             .blockchain
-                            .unvoted_proposer(&voter_parent, &self.header.parent)
+                            .unvoted_proposer(&voter_parent, voter_chain as u16, &self.header.parent)
                             .unwrap();
                         touched_content.insert(chain_id as u16);
                     } else {
@@ -363,7 +363,7 @@ impl Context {
                     if let Content::Voter(c) = &mut self.contents[chain_id] {
                         c.votes = self
                             .blockchain
-                            .unvoted_proposer(&voter_parent, &self.header.parent)
+                            .unvoted_proposer(&voter_parent, voter_chain as u16, &self.header.parent)
                             .unwrap();
                         touched_content.insert(chain_id as u16);
                     } else {

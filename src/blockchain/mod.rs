@@ -774,16 +774,9 @@ impl BlockChain {
 
     /// Get the list of unvoted proposer blocks that a voter chain should vote for, given the tip
     /// of the particular voter chain.
-    pub fn unvoted_proposer(&self, tip: &H256, proposer_parent: &H256) -> Result<Vec<H256>> {
-        let voter_node_voted_level_cf = self.db.cf_handle(VOTER_NODE_VOTED_LEVEL_CF).unwrap();
+    pub fn unvoted_proposer(&self, tip: &H256, voter_chain_idx: u16, proposer_parent: &H256) -> Result<Vec<H256>> {
         // get the deepest voted level
-        let first_vote_level: u64 = deserialize(
-            &self
-                .db
-                .get_pinned_cf(voter_node_voted_level_cf, serialize(&tip).unwrap())?
-                .unwrap(),
-        )
-        .unwrap();
+        let first_vote_level = self.deepest_voted_level(&tip, voter_chain_idx).unwrap();
 
         let proposer_index = self.proposer_index.lock().unwrap();
         let last_vote_level = proposer_index.blocks.get(&proposer_parent).unwrap().level();
@@ -843,17 +836,11 @@ impl BlockChain {
     }
 
     /// Get the deepest voted level of a voter
-    pub fn deepest_voted_level(&self, voter: &H256) -> Result<u64> {
-        let voter_node_voted_level_cf = self.db.cf_handle(VOTER_NODE_VOTED_LEVEL_CF).unwrap();
-        // get the deepest voted level
-        let voted_level: u64 = deserialize(
-            &self
-                .db
-                .get_pinned_cf(voter_node_voted_level_cf, serialize(voter).unwrap())?
-                .unwrap(),
-        )
-        .unwrap();
-        Ok(voted_level)
+    pub fn deepest_voted_level(&self, voter: &H256, voter_chain_idx: u16) -> Result<u64> {
+        let voter_index = self.voter_index[voter_chain_idx as usize].lock().unwrap();
+        let voted_level = voter_index.blocks.get(&voter).unwrap().level_after_last_vote();
+        drop(voter_index);
+        Ok(voted_level - 1)
     }
 
     /// Get the chain number of the voter block
