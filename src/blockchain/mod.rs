@@ -27,7 +27,6 @@ const PROPOSER_LEADER_SEQUENCE_CF: &str = "PROPOSER_LEADER_SEQUENCE"; // level (
 const PROPOSER_LEDGER_ORDER_CF: &str = "PROPOSER_LEDGER_ORDER"; // level (u64) to the list of proposer blocks confirmed
                                                                 // by this level, including the leader itself. The list
                                                                 // is in the order that those blocks should live in the ledger.
-const PROPOSER_VOTE_COUNT_CF: &str = "PROPOSER_VOTE_COUNT"; // number of all votes on a block
 
 // Column family names for graph neighbors
 const PARENT_NEIGHBOR_CF: &str = "GRAPH_PARENT_NEIGHBOR"; // the proposer parent of a block
@@ -80,7 +79,6 @@ impl BlockChain {
         add_cf!(PROPOSER_LEDGER_ORDER_CF);
         add_cf!(PROPOSER_TREE_LEVEL_CF, h256_vec_append_merge);
         add_cf!(PARENT_NEIGHBOR_CF, h256_vec_append_merge);
-        add_cf!(PROPOSER_VOTE_COUNT_CF, u64_plus_merge);
         add_cf!(VOTER_PARENT_NEIGHBOR_CF, h256_vec_append_merge);
         add_cf!(TRANSACTION_REF_NEIGHBOR_CF, h256_vec_append_merge);
 
@@ -123,7 +121,6 @@ impl BlockChain {
         let voter_node_voted_level_cf = db.db.cf_handle(VOTER_NODE_VOTED_LEVEL_CF).unwrap();
         let proposer_tree_level_cf = db.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
         let parent_neighbor_cf = db.db.cf_handle(PARENT_NEIGHBOR_CF).unwrap();
-        let proposer_vote_count_cf = db.db.cf_handle(PROPOSER_VOTE_COUNT_CF).unwrap();
         let proposer_leader_sequence_cf = db.db.cf_handle(PROPOSER_LEADER_SEQUENCE_CF).unwrap();
         let proposer_ledger_order_cf = db.db.cf_handle(PROPOSER_LEDGER_ORDER_CF).unwrap();
         let transaction_ref_neighbor_cf = db.db.cf_handle(TRANSACTION_REF_NEIGHBOR_CF).unwrap();
@@ -207,11 +204,6 @@ impl BlockChain {
                 serialize(&db.config.voter_genesis[chain_num as usize]).unwrap(),
                 serialize(&db.config.proposer_genesis).unwrap(),
             )?;
-            wb.merge_cf(
-                proposer_vote_count_cf,
-                serialize(&db.config.proposer_genesis).unwrap(),
-                serialize(&(1 as u64)).unwrap(),
-            )?;
             wb.put_cf(
                 voter_node_level_cf,
                 serialize(&db.config.voter_genesis[chain_num as usize]).unwrap(),
@@ -248,7 +240,6 @@ impl BlockChain {
         let voter_node_voted_level_cf = self.db.cf_handle(VOTER_NODE_VOTED_LEVEL_CF).unwrap();
         let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
         let parent_neighbor_cf = self.db.cf_handle(PARENT_NEIGHBOR_CF).unwrap();
-        let proposer_vote_count_cf = self.db.cf_handle(PROPOSER_VOTE_COUNT_CF).unwrap();
         let voter_parent_neighbor_cf = self.db.cf_handle(VOTER_PARENT_NEIGHBOR_CF).unwrap();
         let transaction_ref_neighbor_cf = self.db.cf_handle(TRANSACTION_REF_NEIGHBOR_CF).unwrap();
 
@@ -371,9 +362,6 @@ impl BlockChain {
                 put_value!(voter_node_level_cf, block_hash, self_level as u64);
                 put_value!(voter_node_chain_cf, block_hash, self_chain as u16);
                 // add voting blocks for the proposer
-                for proposer_hash in &content.votes {
-                    merge_value!(proposer_vote_count_cf, proposer_hash, 1 as u64);
-                }
                 // set the voted level to be until proposer parent
                 let proposer_parent_level: u64 = get_value!(proposer_node_level_cf, parent_hash);
                 put_value!(
@@ -798,8 +786,6 @@ impl BlockChain {
     pub fn unvoted_proposer(&self, tip: &H256, proposer_parent: &H256) -> Result<Vec<H256>> {
         let voter_node_voted_level_cf = self.db.cf_handle(VOTER_NODE_VOTED_LEVEL_CF).unwrap();
         let proposer_node_level_cf = self.db.cf_handle(PROPOSER_NODE_LEVEL_CF).unwrap();
-        let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
-        let proposer_vote_count_cf = self.db.cf_handle(PROPOSER_VOTE_COUNT_CF).unwrap();
         // get the deepest voted level
         let first_vote_level: u64 = deserialize(
             &self
@@ -1483,23 +1469,6 @@ fn h256_vec_append_merge(
         if !existing.contains(&new_hash) {
             existing.push(new_hash);
         }
-    }
-    let result: Vec<u8> = serialize(&existing).unwrap();
-    Some(result)
-}
-
-fn u64_plus_merge(
-    _: &[u8],
-    existing_val: Option<&[u8]>,
-    operands: &mut rocksdb::merge_operator::MergeOperands,
-) -> Option<Vec<u8>> {
-    let mut existing: u64 = match existing_val {
-        Some(v) => deserialize(v).unwrap(),
-        None => 0,
-    };
-    for op in operands {
-        let to_add: u64 = deserialize(op).unwrap();
-        existing += to_add;
     }
     let result: Vec<u8> = serialize(&existing).unwrap();
     Some(result)
