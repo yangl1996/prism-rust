@@ -22,7 +22,6 @@ use std::sync::Mutex;
 const VOTER_NODE_LEVEL_CF: &str = "VOTER_NODE_LEVEL"; // hash to node level (u64)
 const VOTER_NODE_CHAIN_CF: &str = "VOTER_NODE_CHAIN"; // hash to chain number (u16)
 const PROPOSER_TREE_LEVEL_CF: &str = "PROPOSER_TREE_LEVEL"; // level (u64) to hashes of blocks (Vec<hash>)
-const VOTER_NODE_VOTED_LEVEL_CF: &str = "VOTER_NODE_VOTED_LEVEL"; // hash to max. voted level (u64)
 const PROPOSER_LEADER_SEQUENCE_CF: &str = "PROPOSER_LEADER_SEQUENCE"; // level (u64) to hash of leader block.
 const PROPOSER_LEDGER_ORDER_CF: &str = "PROPOSER_LEDGER_ORDER"; // level (u64) to the list of proposer blocks confirmed
                                                                 // by this level, including the leader itself. The list
@@ -73,7 +72,6 @@ impl BlockChain {
         }
         add_cf!(VOTER_NODE_LEVEL_CF);
         add_cf!(VOTER_NODE_CHAIN_CF);
-        add_cf!(VOTER_NODE_VOTED_LEVEL_CF);
         add_cf!(PROPOSER_LEADER_SEQUENCE_CF);
         add_cf!(PROPOSER_LEDGER_ORDER_CF);
         add_cf!(PROPOSER_TREE_LEVEL_CF, h256_vec_append_merge);
@@ -116,7 +114,6 @@ impl BlockChain {
         // get cf handles
         let voter_node_level_cf = db.db.cf_handle(VOTER_NODE_LEVEL_CF).unwrap();
         let voter_node_chain_cf = db.db.cf_handle(VOTER_NODE_CHAIN_CF).unwrap();
-        let voter_node_voted_level_cf = db.db.cf_handle(VOTER_NODE_VOTED_LEVEL_CF).unwrap();
         let proposer_tree_level_cf = db.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
         let parent_neighbor_cf = db.db.cf_handle(PARENT_NEIGHBOR_CF).unwrap();
         let proposer_leader_sequence_cf = db.db.cf_handle(PROPOSER_LEADER_SEQUENCE_CF).unwrap();
@@ -203,11 +200,6 @@ impl BlockChain {
                 serialize(&(0 as u64)).unwrap(),
             )?;
             wb.put_cf(
-                voter_node_voted_level_cf,
-                serialize(&db.config.voter_genesis[chain_num as usize]).unwrap(),
-                serialize(&(0 as u64)).unwrap(),
-            )?;
-            wb.put_cf(
                 voter_node_chain_cf,
                 serialize(&db.config.voter_genesis[chain_num as usize]).unwrap(),
                 serialize(&(chain_num as u16)).unwrap(),
@@ -229,7 +221,6 @@ impl BlockChain {
         // get cf handles
         let voter_node_level_cf = self.db.cf_handle(VOTER_NODE_LEVEL_CF).unwrap();
         let voter_node_chain_cf = self.db.cf_handle(VOTER_NODE_CHAIN_CF).unwrap();
-        let voter_node_voted_level_cf = self.db.cf_handle(VOTER_NODE_VOTED_LEVEL_CF).unwrap();
         let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
         let parent_neighbor_cf = self.db.cf_handle(PARENT_NEIGHBOR_CF).unwrap();
         let voter_parent_neighbor_cf = self.db.cf_handle(VOTER_PARENT_NEIGHBOR_CF).unwrap();
@@ -354,12 +345,6 @@ impl BlockChain {
                 put_value!(voter_node_chain_cf, block_hash, self_chain as u16);
                 // add voting blocks for the proposer
                 // set the voted level to be until proposer parent
-                let proposer_parent_level: u64 = self.proposer_level(&parent_hash).unwrap();
-                put_value!(
-                    voter_node_voted_level_cf,
-                    block_hash,
-                    proposer_parent_level as u64
-                );
                 let mut voter_index = self.voter_index[self_chain as usize].lock().unwrap();
                 voter_index.insert_voter(&block, block_hash);
                 drop(voter_index);
