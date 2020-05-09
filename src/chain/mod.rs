@@ -131,10 +131,10 @@ pub trait Block {
 // that is, to automatically load the full blocks and convert weak references to full references,
 // without adding the loaded blocks into the main memory
 pub struct Proposer {
-    pub level: u64,
-    pub hash: H256,
+    level: u64,
+    hash: H256,
     pub tx_refs: Vec<H256>,
-    pub prop_refs: Vec<Weak<Proposer>>,
+    prop_refs: Vec<Weak<Proposer>>,
     parent: Option<Weak<Proposer>>,
 }
 
@@ -216,10 +216,10 @@ impl Block for Proposer {
 }
 
 pub struct Voter {
-    pub level: u64,
-    pub hash: H256,
-    pub vote_start_level: u64,      // inclusive
-    pub votes: Vec<H256>,           // hashes of proposer blocks voted, organized by level
+    level: u64,
+    hash: H256,
+    vote_start_level: u64,      // inclusive
+    votes: Vec<H256>,           // hashes of proposer blocks voted, organized by level
     parent: Option<Weak<Voter>>,    // Weak allows garbage collection
 }
 
@@ -268,7 +268,6 @@ impl Voter {
     }
 
     // returns (starting level, end_level + 1)
-    // TODO: no test
     pub fn affected_range(self: &Arc<Self>, other: &Arc<Self>) -> (u64, u64) {
         let common_ancestor = self.common_ancestor(other);
         let start = common_ancestor.vote_start_level + u64::try_from(common_ancestor.votes.len()).unwrap();

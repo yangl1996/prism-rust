@@ -5,6 +5,7 @@ use crate::block::proposer::Content as ProposerContent;
 use crate::config::*;
 use crate::crypto::hash::{Hashable, H256};
 use crate::chain::*;
+use crate::chain::Block as BlockTrait;
 
 use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 use bincode::{deserialize, serialize};
@@ -18,7 +19,6 @@ use std::ops::Range;
 use std::sync::Mutex;
 
 // Column family names for node/chain metadata
-const PROPOSER_NODE_LEVEL_CF: &str = "PROPOSER_NODE_LEVEL"; // hash to node level (u64)
 const VOTER_NODE_LEVEL_CF: &str = "VOTER_NODE_LEVEL"; // hash to node level (u64)
 const VOTER_NODE_CHAIN_CF: &str = "VOTER_NODE_CHAIN"; // hash to chain number (u16)
 const PROPOSER_TREE_LEVEL_CF: &str = "PROPOSER_TREE_LEVEL"; // level (u64) to hashes of blocks (Vec<hash>)
@@ -71,7 +71,6 @@ impl BlockChain {
                 cfs.push(cf);
             }};
         }
-        add_cf!(PROPOSER_NODE_LEVEL_CF);
         add_cf!(VOTER_NODE_LEVEL_CF);
         add_cf!(VOTER_NODE_CHAIN_CF);
         add_cf!(VOTER_NODE_VOTED_LEVEL_CF);
@@ -115,7 +114,6 @@ impl BlockChain {
         DB::destroy(&Options::default(), &path)?;
         let db = Self::open(&path, config)?;
         // get cf handles
-        let proposer_node_level_cf = db.db.cf_handle(PROPOSER_NODE_LEVEL_CF).unwrap();
         let voter_node_level_cf = db.db.cf_handle(VOTER_NODE_LEVEL_CF).unwrap();
         let voter_node_chain_cf = db.db.cf_handle(VOTER_NODE_CHAIN_CF).unwrap();
         let voter_node_voted_level_cf = db.db.cf_handle(VOTER_NODE_VOTED_LEVEL_CF).unwrap();
@@ -129,11 +127,6 @@ impl BlockChain {
         let mut wb = WriteBatch::default();
 
         // proposer genesis block
-        wb.put_cf(
-            proposer_node_level_cf,
-            serialize(&db.config.proposer_genesis).unwrap(),
-            serialize(&(0 as u64)).unwrap(),
-        )?;
         wb.merge_cf(
             proposer_tree_level_cf,
             serialize(&(0 as u64)).unwrap(),
@@ -234,7 +227,6 @@ impl BlockChain {
     /// removed transaction blocks.
     pub fn insert_block(&self, block: &Block) -> Result<()> {
         // get cf handles
-        let proposer_node_level_cf = self.db.cf_handle(PROPOSER_NODE_LEVEL_CF).unwrap();
         let voter_node_level_cf = self.db.cf_handle(VOTER_NODE_LEVEL_CF).unwrap();
         let voter_node_chain_cf = self.db.cf_handle(VOTER_NODE_CHAIN_CF).unwrap();
         let voter_node_voted_level_cf = self.db.cf_handle(VOTER_NODE_VOTED_LEVEL_CF).unwrap();
@@ -286,10 +278,9 @@ impl BlockChain {
                     content.transaction_refs
                 );
                 // get current block level
-                let parent_level: u64 = get_value!(proposer_node_level_cf, parent_hash);
+                let parent_level = self.proposer_level(&parent_hash).unwrap();
                 let self_level = parent_level + 1;
                 // set current block level
-                put_value!(proposer_node_level_cf, block_hash, self_level as u64);
                 merge_value!(proposer_tree_level_cf, self_level, block_hash);
 
                 // mark ourself as unreferred proposer
@@ -363,7 +354,7 @@ impl BlockChain {
                 put_value!(voter_node_chain_cf, block_hash, self_chain as u16);
                 // add voting blocks for the proposer
                 // set the voted level to be until proposer parent
-                let proposer_parent_level: u64 = get_value!(proposer_node_level_cf, parent_hash);
+                let proposer_parent_level: u64 = self.proposer_level(&parent_hash).unwrap();
                 put_value!(
                     voter_node_voted_level_cf,
                     block_hash,
@@ -580,7 +571,7 @@ impl BlockChain {
                     // IntoIterator<&'a T>, so we take a reference of the HashSet since
                     // &'a HashSet<T> impelments IntoIterator<&'a T>
                     let seq = leader.ledger_order(&(*unconfirmed_proposers));
-                    let order: Vec<H256> = seq.into_iter().map(|x| x.hash).collect();
+                    let order: Vec<H256> = seq.into_iter().map(|x| x.hash()).collect();
 
                     // deduplicate, keep the one copy that is former in this order
                     let order: Vec<H256> = order
@@ -636,7 +627,7 @@ impl BlockChain {
                 }
                 total_vote_count += 1;
                 // count the number of blocks (on main chain or not) starting at the vote
-                total_vote_blocks += voter_index.num_blocks(voter_best.level - depth + 1, voter_best.level) as u64;
+                total_vote_blocks += voter_index.num_blocks(voter_best.level() - depth + 1, voter_best.level()) as u64;
             }
             drop(voter_index);
         }
@@ -785,7 +776,6 @@ impl BlockChain {
     /// of the particular voter chain.
     pub fn unvoted_proposer(&self, tip: &H256, proposer_parent: &H256) -> Result<Vec<H256>> {
         let voter_node_voted_level_cf = self.db.cf_handle(VOTER_NODE_VOTED_LEVEL_CF).unwrap();
-        let proposer_node_level_cf = self.db.cf_handle(PROPOSER_NODE_LEVEL_CF).unwrap();
         // get the deepest voted level
         let first_vote_level: u64 = deserialize(
             &self
@@ -795,13 +785,9 @@ impl BlockChain {
         )
         .unwrap();
 
-        let last_vote_level: u64 = deserialize(
-            &self
-                .db
-                .get_pinned_cf(proposer_node_level_cf, serialize(&proposer_parent).unwrap())?
-                .unwrap(),
-        )
-        .unwrap();
+        let proposer_index = self.proposer_index.lock().unwrap();
+        let last_vote_level = proposer_index.blocks.get(&proposer_parent).unwrap().level();
+        drop(proposer_index);
 
         let best_voters: Vec<_> = self.voter_index.iter().map(|x| {
             let g = x.lock().unwrap();
@@ -850,14 +836,9 @@ impl BlockChain {
 
     /// Get the level of the proposer block
     pub fn proposer_level(&self, hash: &H256) -> Result<u64> {
-        let proposer_node_level_cf = self.db.cf_handle(PROPOSER_NODE_LEVEL_CF).unwrap();
-        let level: u64 = deserialize(
-            &self
-                .db
-                .get_pinned_cf(proposer_node_level_cf, serialize(&hash).unwrap())?
-                .unwrap(),
-        )
-        .unwrap();
+        let proposer_index = self.proposer_index.lock().unwrap();
+        let level = proposer_index.blocks.get(&hash).unwrap().level();
+        drop(proposer_index);
         Ok(level)
     }
 
@@ -890,14 +871,13 @@ impl BlockChain {
 
     /// Check whether the given proposer block exists in the database.
     pub fn contains_proposer(&self, hash: &H256) -> Result<bool> {
-        let proposer_node_level_cf = self.db.cf_handle(PROPOSER_NODE_LEVEL_CF).unwrap();
-        match self
-            .db
-            .get_pinned_cf(proposer_node_level_cf, serialize(&hash).unwrap())?
-        {
-            Some(_) => Ok(true),
-            None => Ok(false),
-        }
+        let proposer_index = self.proposer_index.lock().unwrap();
+        let res = match proposer_index.blocks.get(&hash) {
+            Some(_) => true,
+            None => false,
+        };
+        drop(proposer_index);
+        Ok(res)
     }
 
     /// Check whether the given voter block exists in the database.
