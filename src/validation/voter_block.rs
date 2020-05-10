@@ -14,7 +14,7 @@ pub fn get_missing_references(
     let mut missing_blocks = vec![];
 
     // check the voter parent
-    let voter_parent = check_voter_block_exists(content.voter_parent, blockchain);
+    let voter_parent = check_voter_block_exists(content.voter_parent, content.chain_number, blockchain);
     if !voter_parent {
         missing_blocks.push(content.voter_parent);
     }
@@ -31,10 +31,9 @@ pub fn get_missing_references(
 }
 
 pub fn check_chain_number(content: &Content, blockchain: &BlockChain) -> bool {
-    let chain_num = blockchain
-        .voter_chain_number(&content.voter_parent)
-        .unwrap();
-    chain_num == content.chain_number
+    blockchain
+        .contains_voter(&content.voter_parent, content.chain_number)
+        .unwrap()
 }
 
 pub fn check_levels_voted(content: &Content, blockchain: &BlockChain, parent: &H256) -> bool {

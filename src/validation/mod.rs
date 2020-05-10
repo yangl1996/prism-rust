@@ -194,8 +194,8 @@ fn check_proposer_block_exists(hash: H256, blockchain: &BlockChain) -> bool {
 }
 
 /// Check whether a voter block exists in the block database and the blockchain.
-fn check_voter_block_exists(hash: H256, blockchain: &BlockChain) -> bool {
-    match blockchain.contains_voter(&hash) {
+fn check_voter_block_exists(hash: H256, voter_chain_idx: u16, blockchain: &BlockChain) -> bool {
+    match blockchain.contains_voter(&hash, voter_chain_idx) {
         Err(e) => panic!("Blockchain error {}", e),
         Ok(b) => b,
     }

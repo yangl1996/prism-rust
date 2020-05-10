@@ -340,6 +340,10 @@ impl<B: Block> ChainIndex<B> {
         }
     }
 
+    pub fn get<'a>(&'a self, hash: H256) -> Option<&'a Arc<B>> {
+        return self.blocks.get(&hash);
+    }
+
     // TODO: this is a bad API (returning H256 rather than the pointer)
     pub fn blocks_at_level<'a>(&'a self, level: u64) -> &'a[H256] {
         let idx = usize::try_from(level - self.starting_level).unwrap();
