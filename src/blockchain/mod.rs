@@ -31,6 +31,12 @@ pub type Result<T> = std::result::Result<T, rocksdb::Error>;
 
 // cf_handle is a lightweight operation, it takes 44000 micro seconds to get 100000 cf handles
 
+pub enum NewBlock {
+    Proposer(std::sync::Arc<Proposer>),
+    Voter(u16, std::sync::Arc<Voter>),
+    Transaction
+}
+
 pub struct BlockChain {
     db: DB,
     proposer_best_level: Mutex<u64>,
@@ -186,7 +192,7 @@ impl BlockChain {
 
     /// Insert a new block into the ledger. Returns the list of added transaction blocks and
     /// removed transaction blocks.
-    pub fn insert_block(&self, block: &Block) -> Result<()> {
+    pub fn insert_block(&self, block: &Block) -> Result<NewBlock> {
         // get cf handles
         let parent_neighbor_cf = self.db.cf_handle(PARENT_NEIGHBOR_CF).unwrap();
 
@@ -233,7 +239,7 @@ impl BlockChain {
                 drop(unconfirmed_proposers);
 
                 let mut proposer_index = self.proposer_index.lock().unwrap();
-                proposer_index.insert_proposer(&block, block_hash);
+                let ptr = proposer_index.insert_proposer(&block, block_hash);
                 drop(proposer_index);
                 // commit to the database and update proposer best in the same atomic operation
                 // These two happen together to ensure that if a voter/proposer/transaction block
@@ -268,6 +274,7 @@ impl BlockChain {
                     "Adding proposer block {:.8} at level {}",
                     block_hash, self_level
                 );
+                return Ok(NewBlock::Proposer(ptr));
             }
             Content::Voter(content) => {
                 // add voter parent
@@ -281,7 +288,7 @@ impl BlockChain {
                 // add voting blocks for the proposer
                 // set the voted level to be until proposer parent
                 let mut voter_index = self.voter_index[self_chain as usize].lock().unwrap();
-                voter_index.insert_voter(&block, block_hash);
+                let ptr = voter_index.insert_voter(&block, block_hash);
                 drop(voter_index);
 
                 self.db.write(wb)?;
@@ -304,6 +311,7 @@ impl BlockChain {
                     "Adding voter block {:.8} at chain {} level {}",
                     block_hash, self_chain, self_level
                 );
+                return Ok(NewBlock::Voter(voter_parent_chain, ptr));
             }
             Content::Transaction(_content) => {
                 // mark itself as unreferred
@@ -315,9 +323,9 @@ impl BlockChain {
 
                 // This db write is only to facilitate check_existence
                 self.db.write(wb)?;
+                return Ok(NewBlock::Transaction);
             }
         }
-        Ok(())
     }
 
     pub fn update_ledger(&self) -> Result<(Vec<H256>, Vec<H256>)> {
