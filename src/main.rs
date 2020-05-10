@@ -195,9 +195,20 @@ fn main() {
     debug!("Initialized UTXO database");
 
     // init blockchain database
-    let proposer_index = Arc::new(std::sync::Mutex::new(ChainIndex::<Proposer>::new()));
-    let (blockchain, proposer_genesis_ptr, voter_genesis_ptrs) =
-        BlockChain::new(&matches.value_of("blockchain_db").unwrap(), config.clone()).unwrap();
+    let mut proposer_index = ChainIndex::<Proposer>::new();
+    let proposer_genesis_ptr = proposer_index.insert_proposer_root_at(&config.proposer_genesis(), config.proposer_genesis, 0);
+    let proposer_index = Arc::new(std::sync::Mutex::new(proposer_index));
+
+    let mut voter_index = vec![];
+    let mut voter_genesis_ptrs = vec![];
+    for chain_num in 0..config.voter_chains {
+        let mut vindex = ChainIndex::<Voter>::new();
+        let voter_genesis_ptr = vindex.insert_voter_root_at(&config.voter_genesis(chain_num), config.voter_genesis[chain_num as usize], 0, 0);
+        voter_index.push(Arc::new(std::sync::Mutex::new(vindex)));
+        voter_genesis_ptrs.push(voter_genesis_ptr);
+    }
+    let blockchain =
+        BlockChain::new(&matches.value_of("blockchain_db").unwrap(), proposer_index, voter_index, config.clone()).unwrap();
     let blockchain = Arc::new(blockchain);
     debug!("Initialized blockchain database");
 

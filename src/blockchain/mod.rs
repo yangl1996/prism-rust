@@ -44,8 +44,8 @@ pub struct BlockChain {
     proposer_ledger_tip: Mutex<u64>,
     voter_ledger_tips: Mutex<Vec<H256>>,
     config: BlockchainConfig,
-    voter_index: Vec<Mutex<ChainIndex<Voter>>>,
-    proposer_index: Mutex<ChainIndex<Proposer>>,
+    voter_index: Vec<std::sync::Arc<Mutex<ChainIndex<Voter>>>>,
+    proposer_index: std::sync::Arc<Mutex<ChainIndex<Proposer>>>,
 }
 
 // Functions to edit the blockchain
@@ -77,10 +77,10 @@ impl BlockChain {
         opts.create_missing_column_families(true);
         let db = DB::open_cf_descriptors(&opts, path, cfs)?;
         let mut voter_best: Vec<Mutex<(H256, u64)>> = vec![];
-        let mut voter_index: Vec<Mutex<ChainIndex<Voter>>> = vec![];
+        let mut voter_index = vec![];
         for _ in 0..config.voter_chains {
             voter_best.push(Mutex::new((H256::default(), 0)));
-            voter_index.push(Mutex::new(ChainIndex::new()));
+            voter_index.push(std::sync::Arc::new(Mutex::new(ChainIndex::new())));
         }
 
         let blockchain_db = Self {
@@ -94,16 +94,16 @@ impl BlockChain {
             voter_ledger_tips: Mutex::new(vec![H256::default(); config.voter_chains as usize]),
             config,
             voter_index,
-            proposer_index: Mutex::new(ChainIndex::new()),
+            proposer_index: std::sync::Arc::new(Mutex::new(ChainIndex::new())),
         };
 
         Ok(blockchain_db)
     }
 
     /// Destroy the existing database at the given path, create a new one, and initialize the content.
-    pub fn new<P: AsRef<std::path::Path>>(path: P, config: BlockchainConfig) -> Result<(Self, std::sync::Arc<Proposer>, Vec<std::sync::Arc<Voter>>)> {
+    pub fn new<P: AsRef<std::path::Path>>(path: P, proposer_index: std::sync::Arc<Mutex<ChainIndex<Proposer>>>, voter_index: Vec<std::sync::Arc<Mutex<ChainIndex<Voter>>>>, config: BlockchainConfig) -> Result<Self> {
         DB::destroy(&Options::default(), &path)?;
-        let db = Self::open(&path, config)?;
+        let mut db = Self::open(&path, config)?;
         // get cf handles
         let parent_neighbor_cf = db.db.cf_handle(PARENT_NEIGHBOR_CF).unwrap();
         let proposer_leader_sequence_cf = db.db.cf_handle(PROPOSER_LEADER_SEQUENCE_CF).unwrap();
@@ -127,21 +127,10 @@ impl BlockChain {
             serialize(&(0 as u64)).unwrap(),
             serialize(&proposer_genesis_ledger).unwrap(),
         )?;
-        let mut proposer_index = db.proposer_index.lock().unwrap();
-        let proposer_genesis_stub = db.config.proposer_genesis();
-        let proposer_genesis_ptr = proposer_index.insert_proposer_root_at(&proposer_genesis_stub, db.config.proposer_genesis, 0);
-        drop(proposer_index);
-
-        let mut voter_genesis_ptrs = vec![];
 
         // voter genesis blocks
         let mut voter_ledger_tips = db.voter_ledger_tips.lock().unwrap();
         for chain_num in 0..db.config.voter_chains {
-            let voter_genesis_stub = db.config.voter_genesis(chain_num);
-            let mut voter_index = db.voter_index[chain_num as usize].lock().unwrap();
-            let voter_genesis_ptr = voter_index.insert_voter_root_at(&voter_genesis_stub, db.config.voter_genesis[chain_num as usize], 0, 0);
-            drop(voter_index);
-            voter_genesis_ptrs.push(voter_genesis_ptr);
             wb.put_cf(
                 parent_neighbor_cf,
                 serialize(&db.config.voter_genesis[chain_num as usize]).unwrap(),
@@ -154,8 +143,10 @@ impl BlockChain {
         }
         drop(voter_ledger_tips);
         db.db.write(wb)?;
+        db.proposer_index = proposer_index;
+        db.voter_index = voter_index;
 
-        Ok((db, proposer_genesis_ptr, voter_genesis_ptrs))
+        Ok(db)
     }
 
     /// Insert a new block into the ledger. Returns the list of added transaction blocks and
