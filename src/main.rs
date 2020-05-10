@@ -208,7 +208,7 @@ fn main() {
         voter_genesis_ptrs.push(voter_genesis_ptr);
     }
     let blockchain =
-        BlockChain::new(&matches.value_of("blockchain_db").unwrap(), proposer_index, voter_index, config.clone()).unwrap();
+        BlockChain::new(&matches.value_of("blockchain_db").unwrap(), proposer_index.clone(), voter_index.clone(), config.clone()).unwrap();
     let blockchain = Arc::new(blockchain);
     debug!("Initialized blockchain database");
 
@@ -262,7 +262,7 @@ fn main() {
             error!("Error parsing transaction execution buffer size: {}", e);
             process::exit(1);
         });
-    let ledger_manager = LedgerManager::new(&blockdb, &blockchain, &utxodb, &wallet);
+    let ledger_manager = LedgerManager::new(&blockdb, &blockchain, &utxodb, &wallet, &proposer_index, &voter_index, &config);
     ledger_manager.start(tx_buffer, tx_workers);
     debug!(
         "Initialized ledger manager with buffer size {} and {} workers",

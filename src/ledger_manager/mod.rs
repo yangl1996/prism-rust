@@ -3,6 +3,8 @@ use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
 use crate::crypto::hash::{Hashable, H256};
 use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
+use crate::config::*;
+use crate::chain::*;
 
 use crate::transaction::{CoinId, Output, Transaction};
 use crate::utxodb::UtxoDatabase;
@@ -10,6 +12,7 @@ use crate::wallet::Wallet;
 use crossbeam::channel;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::thread;
 
 pub struct LedgerManager {
@@ -17,6 +20,9 @@ pub struct LedgerManager {
     chain: Arc<BlockChain>,
     utxodb: Arc<UtxoDatabase>,
     wallet: Arc<Wallet>,
+    config: BlockchainConfig,
+    voter_index: Vec<Arc<Mutex<ChainIndex<Voter>>>>,
+    proposer_index: Arc<Mutex<ChainIndex<Proposer>>>,
 }
 
 impl LedgerManager {
@@ -25,12 +31,18 @@ impl LedgerManager {
         chain: &Arc<BlockChain>,
         utxodb: &Arc<UtxoDatabase>,
         wallet: &Arc<Wallet>,
+        proposer_index: &Arc<Mutex<ChainIndex<Proposer>>>,
+        voter_index: &[Arc<Mutex<ChainIndex<Voter>>>],
+        config: &BlockchainConfig,
     ) -> Self {
         Self {
             blockdb: Arc::clone(&blockdb),
             chain: Arc::clone(&chain),
             utxodb: Arc::clone(&utxodb),
             wallet: Arc::clone(&wallet),
+            config: config.clone(),
+            proposer_index: Arc::clone(&proposer_index),
+            voter_index: voter_index.to_vec(),
         }
     }
 
