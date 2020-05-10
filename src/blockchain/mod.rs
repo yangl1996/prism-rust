@@ -28,7 +28,6 @@ const PROPOSER_LEDGER_ORDER_CF: &str = "PROPOSER_LEDGER_ORDER"; // level (u64) t
 
 // Column family names for graph neighbors
 const PARENT_NEIGHBOR_CF: &str = "GRAPH_PARENT_NEIGHBOR"; // the proposer parent of a block
-const TRANSACTION_REF_NEIGHBOR_CF: &str = "GRAPH_TRANSACTION_REF_NEIGHBOR";
 
 pub type Result<T> = std::result::Result<T, rocksdb::Error>;
 
@@ -73,7 +72,6 @@ impl BlockChain {
         add_cf!(PROPOSER_LEADER_SEQUENCE_CF);
         add_cf!(PROPOSER_LEDGER_ORDER_CF);
         add_cf!(PARENT_NEIGHBOR_CF, h256_vec_append_merge);
-        add_cf!(TRANSACTION_REF_NEIGHBOR_CF, h256_vec_append_merge);
 
         let mut opts = Options::default();
         opts.create_if_missing(true);
