@@ -1,7 +1,7 @@
 use super::buffer::BlockBuffer;
 use super::message::Message;
 use super::peer;
-use crate::block::{Block, Content};
+use crate::block::Block;
 use crate::blockchain::{BlockChain, NewBlock};
 use crate::blockdb::BlockDatabase;
 use crate::config::*;

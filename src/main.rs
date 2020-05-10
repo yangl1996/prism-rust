@@ -27,6 +27,7 @@ use std::process;
 use std::sync::Arc;
 use std::thread;
 use std::time;
+use prism::chain::*;
 
 fn main() {
     // parse command line arguments
@@ -194,6 +195,7 @@ fn main() {
     debug!("Initialized UTXO database");
 
     // init blockchain database
+    let proposer_index = Arc::new(std::sync::Mutex::new(ChainIndex::<Proposer>::new()));
     let (blockchain, proposer_genesis_ptr, voter_genesis_ptrs) =
         BlockChain::new(&matches.value_of("blockchain_db").unwrap(), config.clone()).unwrap();
     let blockchain = Arc::new(blockchain);

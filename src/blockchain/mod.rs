@@ -1,7 +1,4 @@
 use crate::block::{Block, Content};
-use crate::block::header::Header;
-use crate::block::voter::Content as VoterContent;
-use crate::block::proposer::Content as ProposerContent;
 use crate::config::*;
 use crate::crypto::hash::{Hashable, H256};
 use crate::chain::*;
@@ -131,45 +128,16 @@ impl BlockChain {
             serialize(&proposer_genesis_ledger).unwrap(),
         )?;
         let mut proposer_index = db.proposer_index.lock().unwrap();
-        let proposer_genesis_stub = Block {
-            header: Header {
-                parent: [0;32].into(),
-                timestamp: 0,
-                nonce: 0,
-                content_merkle_root: [0;32].into(),
-                extra_content: [0; 32],
-                difficulty: [0;32].into(),
-            },
-            content: Content::Proposer(ProposerContent {
-                transaction_refs: vec![],
-                proposer_refs: vec![],
-            }),
-            sortition_proof: vec![],
-        };
+        let proposer_genesis_stub = db.config.proposer_genesis();
         let proposer_genesis_ptr = proposer_index.insert_proposer_root_at(&proposer_genesis_stub, db.config.proposer_genesis, 0);
         drop(proposer_index);
 
         let mut voter_genesis_ptrs = vec![];
 
         // voter genesis blocks
-        let voter_genesis_stub = Block {
-            header: Header {
-                parent: [0;32].into(),
-                timestamp: 0,
-                nonce: 0,
-                content_merkle_root: [0;32].into(),
-                extra_content: [0; 32],
-                difficulty: [0;32].into(),
-            },
-            content: Content::Voter(VoterContent {
-                chain_number: 0,
-                voter_parent: [0; 32].into(),
-                votes: vec![db.config.proposer_genesis],
-            }),
-            sortition_proof: vec![],
-        };
         let mut voter_ledger_tips = db.voter_ledger_tips.lock().unwrap();
         for chain_num in 0..db.config.voter_chains {
+            let voter_genesis_stub = db.config.voter_genesis(chain_num);
             let mut voter_index = db.voter_index[chain_num as usize].lock().unwrap();
             let voter_genesis_ptr = voter_index.insert_voter_root_at(&voter_genesis_stub, db.config.voter_genesis[chain_num as usize], 0, 0);
             drop(voter_index);

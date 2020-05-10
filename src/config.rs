@@ -1,5 +1,6 @@
 use crate::crypto::hash::H256;
 use bigint::uint::U256;
+use crate::block::{Block, Content, header::Header, voter::Content as VoterContent, proposer::Content as ProposerContent};
 
 const AVG_TX_SIZE: u32 = 168; // average size of a transaction (in Bytes)
 const PROPOSER_TX_REF_HEADROOM: f32 = 10.0;
@@ -11,6 +12,7 @@ pub const PROPOSER_INDEX: u16 = 0;
 pub const TRANSACTION_INDEX: u16 = 1;
 pub const FIRST_VOTER_INDEX: u16 = 2;
 
+// TODO: don't use floating points here
 #[derive(Clone)]
 pub struct BlockchainConfig {
     /// Number of voter chains.
@@ -113,6 +115,43 @@ impl BlockchainConfig {
             quantile_epsilon_confirm: quantile_confirm,
             quantile_epsilon_deconfirm: quantile_deconfirm,
         }
+    }
+
+    pub fn proposer_genesis(&self) -> Block {
+        return Block {
+            header: Header {
+                parent: [0; 32].into(),
+                timestamp: 0,
+                nonce: 0,
+                content_merkle_root: [0; 32].into(),
+                extra_content: [0; 32],
+                difficulty: [0; 32].into()
+            },
+            content: Content::Proposer(ProposerContent {
+                transaction_refs: vec![],
+                proposer_refs: vec![],
+            }),
+            sortition_proof: vec![],
+        };
+    }
+
+    pub fn voter_genesis(&self, chain_number: u16) -> Block {
+        return Block {
+            header: Header {
+                parent: [0; 32].into(),
+                timestamp: 0,
+                nonce: 0,
+                content_merkle_root: [0; 32].into(),
+                extra_content: [0; 32],
+                difficulty: [0; 32].into()
+            },
+            content: Content::Voter(VoterContent {
+                chain_number,
+                voter_parent: [0; 32].into(),
+                votes: vec![self.proposer_genesis]
+            }),
+            sortition_proof: vec![],
+        };
     }
 
     pub fn sortition_hash(&self, hash: &H256, difficulty: &H256) -> Option<u16> {
