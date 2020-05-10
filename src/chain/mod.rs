@@ -365,7 +365,7 @@ impl<B: Block> ChainIndex<B> {
         return total;
     }
 
-    pub fn highest_block(&self) -> Arc<B> {
+    pub fn highest_block<'a>(&'a self) -> &'a Arc<B> {
         if self.by_level.is_empty() {
             panic!("Querying the highest block from an empty chain index");
         }
@@ -375,7 +375,7 @@ impl<B: Block> ChainIndex<B> {
         }
         let block_hash = highest_level[0];
         match self.blocks.get(&block_hash) {
-            Some(p) => return Arc::clone(&p),
+            Some(p) => &p,
             None => panic!("Hash stored on the highest level does not exist in the hashmap"),
         }
     }

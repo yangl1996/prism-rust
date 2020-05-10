@@ -21,7 +21,6 @@ use std::sync::Mutex;
 // Column family names for node/chain metadata
 const VOTER_NODE_LEVEL_CF: &str = "VOTER_NODE_LEVEL"; // hash to node level (u64)
 const VOTER_NODE_CHAIN_CF: &str = "VOTER_NODE_CHAIN"; // hash to chain number (u16)
-const PROPOSER_TREE_LEVEL_CF: &str = "PROPOSER_TREE_LEVEL"; // level (u64) to hashes of blocks (Vec<hash>)
 const PROPOSER_LEADER_SEQUENCE_CF: &str = "PROPOSER_LEADER_SEQUENCE"; // level (u64) to hash of leader block.
 const PROPOSER_LEDGER_ORDER_CF: &str = "PROPOSER_LEDGER_ORDER"; // level (u64) to the list of proposer blocks confirmed
                                                                 // by this level, including the leader itself. The list
@@ -73,7 +72,6 @@ impl BlockChain {
         add_cf!(VOTER_NODE_CHAIN_CF);
         add_cf!(PROPOSER_LEADER_SEQUENCE_CF);
         add_cf!(PROPOSER_LEDGER_ORDER_CF);
-        add_cf!(PROPOSER_TREE_LEVEL_CF, h256_vec_append_merge);
         add_cf!(PARENT_NEIGHBOR_CF, h256_vec_append_merge);
         add_cf!(TRANSACTION_REF_NEIGHBOR_CF, h256_vec_append_merge);
 
@@ -112,7 +110,6 @@ impl BlockChain {
         // get cf handles
         let voter_node_level_cf = db.db.cf_handle(VOTER_NODE_LEVEL_CF).unwrap();
         let voter_node_chain_cf = db.db.cf_handle(VOTER_NODE_CHAIN_CF).unwrap();
-        let proposer_tree_level_cf = db.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
         let parent_neighbor_cf = db.db.cf_handle(PARENT_NEIGHBOR_CF).unwrap();
         let proposer_leader_sequence_cf = db.db.cf_handle(PROPOSER_LEADER_SEQUENCE_CF).unwrap();
         let proposer_ledger_order_cf = db.db.cf_handle(PROPOSER_LEDGER_ORDER_CF).unwrap();
@@ -121,11 +118,6 @@ impl BlockChain {
         let mut wb = WriteBatch::default();
 
         // proposer genesis block
-        wb.merge_cf(
-            proposer_tree_level_cf,
-            serialize(&(0 as u64)).unwrap(),
-            serialize(&db.config.proposer_genesis).unwrap(),
-        )?;
         let mut unreferred_proposers = db.unreferred_proposers.lock().unwrap();
         unreferred_proposers.insert(db.config.proposer_genesis);
         drop(unreferred_proposers);
@@ -213,7 +205,6 @@ impl BlockChain {
         // get cf handles
         let voter_node_level_cf = self.db.cf_handle(VOTER_NODE_LEVEL_CF).unwrap();
         let voter_node_chain_cf = self.db.cf_handle(VOTER_NODE_CHAIN_CF).unwrap();
-        let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
         let parent_neighbor_cf = self.db.cf_handle(PARENT_NEIGHBOR_CF).unwrap();
 
         let mut wb = WriteBatch::default();
@@ -236,12 +227,6 @@ impl BlockChain {
             }};
         }
 
-        macro_rules! merge_value {
-            ($cf:expr, $key:expr, $value:expr) => {{
-                wb.merge_cf($cf, serialize(&$key).unwrap(), serialize(&$value).unwrap())?;
-            }};
-        }
-
         // insert parent link
         let block_hash = block.hash();
         let parent_hash = block.header.parent;
@@ -256,9 +241,6 @@ impl BlockChain {
                 // get current block level
                 let parent_level = self.proposer_level(&parent_hash).unwrap();
                 let self_level = parent_level + 1;
-                // set current block level
-                merge_value!(proposer_tree_level_cf, self_level, block_hash);
-
                 // mark ourself as unreferred proposer
                 // This should happen before committing to the database, since we want this
                 // add operation to happen before later block deletes it. NOTE: we could do this
@@ -705,19 +687,11 @@ impl BlockChain {
     }
 
     pub fn best_proposer(&self) -> Result<H256> {
-        let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
-
-        let proposer_best = self.proposer_best_level.lock().unwrap();
-        let level: u64 = *proposer_best;
-        drop(proposer_best);
-        let blocks: Vec<H256> = deserialize(
-            &self
-                .db
-                .get_pinned_cf(proposer_tree_level_cf, serialize(&level).unwrap())?
-                .unwrap(),
-        )
-        .unwrap();
-        Ok(blocks[0])
+        let proposer_index = self.proposer_index.lock().unwrap();
+        let res = proposer_index.highest_block();
+        let res = res.hash();
+        drop(proposer_index);
+        Ok(res)
     }
 
     pub fn best_voter(&self, chain_num: usize) -> H256 {
@@ -757,8 +731,9 @@ impl BlockChain {
         let best_voters: Vec<_> = self.voter_index.iter().map(|x| {
             let g = x.lock().unwrap();
             let best = g.highest_block();
+            let res = std::sync::Arc::clone(&best);
             drop(g);
-            return best;
+            return res;
         }).collect();
 
         // get the block with the most votes on each proposer level
