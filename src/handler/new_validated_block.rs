@@ -1,5 +1,5 @@
 use crate::block::{Block, Content};
-use crate::blockchain::BlockChain;
+use crate::blockchain::{BlockChain, NewBlock};
 use crate::blockdb::BlockDatabase;
 use crate::crypto::hash::Hashable;
 use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
@@ -15,7 +15,7 @@ pub fn new_validated_block(
     _blockdb: &BlockDatabase,
     chain: &BlockChain,
     _server: &ServerHandle,
-) {
+) -> NewBlock {
     PERFORMANCE_COUNTER.record_process_block(&block);
 
     // if this block is a transaction, remove transactions from mempool
@@ -33,5 +33,5 @@ pub fn new_validated_block(
     }
 
     // insert the new block into the blockchain
-    chain.insert_block(&block).unwrap();
+    return chain.insert_block(&block).unwrap();
 }

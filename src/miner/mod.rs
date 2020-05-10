@@ -3,7 +3,7 @@ pub mod memory_pool;
 use crate::block::header::Header;
 use crate::block::{proposer, transaction, voter};
 use crate::block::{Block, Content};
-use crate::blockchain::BlockChain;
+use crate::blockchain::{BlockChain, NewBlock};
 use crate::blockdb::BlockDatabase;
 use crate::config::*;
 use crate::crypto::hash::{Hashable, H256};
@@ -34,14 +34,13 @@ enum ControlSignal {
     Exit,
 }
 
-#[derive(Ord, Eq, PartialOrd, PartialEq)]
 pub enum ContextUpdateSignal {
     // TODO: New transaction comes, we update transaction block's content
     //NewTx,//should be called: mem pool change
     // New proposer block comes, we need to update all contents' parent
-    NewProposerBlock,
+    NewProposerBlock(Arc<Proposer>),
     // New voter block comes, we need to update that voter chain
-    NewVoterBlock(u16),
+    NewVoterBlock(u16, Arc<Voter>),
     // New transaction block comes, we need to update proposer content's tx ref
     NewTransactionBlock,
 }
@@ -193,19 +192,6 @@ impl Context {
     }
 
     fn miner_loop(&mut self) {
-        // tell ourself to update all context
-        self.context_update_tx
-            .send(ContextUpdateSignal::NewProposerBlock)
-            .unwrap();
-        self.context_update_tx
-            .send(ContextUpdateSignal::NewTransactionBlock)
-            .unwrap();
-        for voter_chain in 0..self.config.voter_chains {
-            self.context_update_tx
-                .send(ContextUpdateSignal::NewVoterBlock(voter_chain as u16))
-                .unwrap();
-        }
-
         let mut rng = rand::thread_rng();
 
         // main mining loop
@@ -240,8 +226,8 @@ impl Context {
             let mut new_proposer_block: bool = false;
             for sig in self.context_update_chan.try_iter() {
                 match sig {
-                    ContextUpdateSignal::NewProposerBlock => new_proposer_block = true,
-                    ContextUpdateSignal::NewVoterBlock(chain) => {
+                    ContextUpdateSignal::NewProposerBlock(_) => new_proposer_block = true,
+                    ContextUpdateSignal::NewVoterBlock(chain, _) => {
                         new_voter_block.insert(chain);
                     }
                     ContextUpdateSignal::NewTransactionBlock => new_transaction_block = true,
@@ -445,7 +431,7 @@ impl Context {
                 if !skip {
                     PERFORMANCE_COUNTER.record_mine_block(&mined_block);
                     self.blockdb.insert(&mined_block).unwrap();
-                    new_validated_block(
+                    let res = new_validated_block(
                         &mined_block,
                         &self.mempool,
                         &self.blockdb,
@@ -461,21 +447,22 @@ impl Context {
                     if let OperatingState::Step = self.operating_state {
                         self.operating_state = OperatingState::Paused;
                     }
-                }
-                // after we mined this block, we update the context based on this block
-                match &mined_block.content {
-                    Content::Proposer(_) => self
-                        .context_update_tx
-                        .send(ContextUpdateSignal::NewProposerBlock)
-                        .unwrap(),
-                    Content::Voter(content) => self
-                        .context_update_tx
-                        .send(ContextUpdateSignal::NewVoterBlock(content.chain_number))
-                        .unwrap(),
-                    Content::Transaction(_) => self
-                        .context_update_tx
-                        .send(ContextUpdateSignal::NewTransactionBlock)
-                        .unwrap(),
+
+                    // after we mined this block, we update the context based on this block
+                    match res {
+                        NewBlock::Proposer(ptr) => self
+                            .context_update_tx
+                            .send(ContextUpdateSignal::NewProposerBlock(ptr))
+                            .unwrap(),
+                        NewBlock::Voter(c, ptr) => self
+                            .context_update_tx
+                            .send(ContextUpdateSignal::NewVoterBlock(c, ptr))
+                            .unwrap(),
+                        NewBlock::Transaction => self
+                            .context_update_tx
+                            .send(ContextUpdateSignal::NewTransactionBlock)
+                            .unwrap(),
+                    }
                 }
             }
 

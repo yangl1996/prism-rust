@@ -2,7 +2,7 @@ use super::buffer::BlockBuffer;
 use super::message::Message;
 use super::peer;
 use crate::block::{Block, Content};
-use crate::blockchain::BlockChain;
+use crate::blockchain::{BlockChain, NewBlock};
 use crate::blockdb::BlockDatabase;
 use crate::config::*;
 use crate::crypto::hash::{Hashable, H256};
@@ -289,17 +289,17 @@ impl Context {
                         }
 
                         debug!("Processing block {:.8}", block.hash());
-                        new_validated_block(
+                        let res = new_validated_block(
                             &block,
                             &self.mempool,
                             &self.blockdb,
                             &self.chain,
                             &self.server,
                         );
-                        context_update_sig.push(match &block.content {
-                            Content::Proposer(_) => ContextUpdateSignal::NewProposerBlock,
-                            Content::Voter(c) => ContextUpdateSignal::NewVoterBlock(c.chain_number),
-                            Content::Transaction(_) => ContextUpdateSignal::NewTransactionBlock,
+                        context_update_sig.push(match res {
+                            NewBlock::Proposer(ptr) => ContextUpdateSignal::NewProposerBlock(ptr),
+                            NewBlock::Voter(c, ptr) => ContextUpdateSignal::NewVoterBlock(c, ptr),
+                            NewBlock::Transaction => ContextUpdateSignal::NewTransactionBlock,
                         });
                         let mut buffer = self.buffer.lock().unwrap();
                         let mut resolved_by_current = buffer.satisfy(block.hash());
