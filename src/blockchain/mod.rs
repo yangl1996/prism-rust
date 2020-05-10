@@ -98,7 +98,7 @@ impl BlockChain {
     }
 
     /// Destroy the existing database at the given path, create a new one, and initialize the content.
-    pub fn new<P: AsRef<std::path::Path>>(path: P, config: BlockchainConfig) -> Result<Self> {
+    pub fn new<P: AsRef<std::path::Path>>(path: P, config: BlockchainConfig) -> Result<(Self, std::sync::Arc<Proposer>, Vec<std::sync::Arc<Voter>>)> {
         DB::destroy(&Options::default(), &path)?;
         let db = Self::open(&path, config)?;
         // get cf handles
@@ -140,8 +140,10 @@ impl BlockChain {
             }),
             sortition_proof: vec![],
         };
-        proposer_index.insert_proposer_root_at(&proposer_genesis_stub, db.config.proposer_genesis, 0);
+        let proposer_genesis_ptr = proposer_index.insert_proposer_root_at(&proposer_genesis_stub, db.config.proposer_genesis, 0);
         drop(proposer_index);
+
+        let mut voter_genesis_ptrs = vec![];
 
         // voter genesis blocks
         let voter_genesis_stub = Block {
@@ -163,8 +165,9 @@ impl BlockChain {
         let mut voter_ledger_tips = db.voter_ledger_tips.lock().unwrap();
         for chain_num in 0..db.config.voter_chains {
             let mut voter_index = db.voter_index[chain_num as usize].lock().unwrap();
-            voter_index.insert_voter_root_at(&voter_genesis_stub, db.config.voter_genesis[chain_num as usize], 0, 0);
+            let voter_genesis_ptr = voter_index.insert_voter_root_at(&voter_genesis_stub, db.config.voter_genesis[chain_num as usize], 0, 0);
             drop(voter_index);
+            voter_genesis_ptrs.push(voter_genesis_ptr);
             wb.put_cf(
                 parent_neighbor_cf,
                 serialize(&db.config.voter_genesis[chain_num as usize]).unwrap(),
@@ -178,7 +181,7 @@ impl BlockChain {
         drop(voter_ledger_tips);
         db.db.write(wb)?;
 
-        Ok(db)
+        Ok((db, proposer_genesis_ptr, voter_genesis_ptrs))
     }
 
     /// Insert a new block into the ledger. Returns the list of added transaction blocks and

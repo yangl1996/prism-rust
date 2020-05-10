@@ -24,6 +24,7 @@ use rand::distributions::Distribution;
 use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex};
 use std::thread;
+use crate::chain::*;
 
 use rand::Rng;
 
@@ -67,6 +68,8 @@ pub struct Context {
     contents: Vec<Content>,
     content_merkle_tree: MerkleTree,
     config: BlockchainConfig,
+    proposer_parent: Arc<Proposer>,
+    voter_parents: Vec<Arc<Voter>>,
 }
 
 #[derive(Clone)]
@@ -83,6 +86,8 @@ pub fn new(
     ctx_update_tx: &Sender<ContextUpdateSignal>,
     server: &ServerHandle,
     config: BlockchainConfig,
+    proposer_parent: &Arc<Proposer>,
+    voter_parents: &[Arc<Voter>],
 ) -> (Context, Handle) {
     let (signal_chan_sender, signal_chan_receiver) = unbounded();
     let mut contents: Vec<Content> = vec![];
@@ -129,6 +134,8 @@ pub fn new(
         contents,
         content_merkle_tree,
         config,
+        proposer_parent: Arc::clone(proposer_parent),
+        voter_parents: voter_parents.to_vec(),
     };
 
     let handle = Handle {

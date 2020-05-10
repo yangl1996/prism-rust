@@ -194,7 +194,7 @@ fn main() {
     debug!("Initialized UTXO database");
 
     // init blockchain database
-    let blockchain =
+    let (blockchain, proposer_genesis_ptr, voter_genesis_ptrs) =
         BlockChain::new(&matches.value_of("blockchain_db").unwrap(), config.clone()).unwrap();
     let blockchain = Arc::new(blockchain);
     debug!("Initialized blockchain database");
@@ -317,6 +317,8 @@ fn main() {
         &ctx_tx_miner,
         &server,
         config.clone(),
+        &proposer_genesis_ptr,
+        &voter_genesis_ptrs,
     );
     miner_ctx.start();
 
