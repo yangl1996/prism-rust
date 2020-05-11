@@ -6,19 +6,23 @@ use crate::chain::*;
 use std::collections::{HashMap, HashSet};
 use std::iter::{IntoIterator, FromIterator};
 use statrs::distribution::{Discrete, Poisson, Univariate};
+use log::{info, warn};
+use std::ops::Range;
+use crate::config::*;
 
 pub struct LedgerIndex {
     voter_tips: Vec<Arc<Voter>>,
     proposer_tip: Arc<Proposer>,
     unconfirmed_proposer: HashSet<H256>,
     leader_sequence: Vec<Option<H256>>,
-    ledger_order: Vec<Option<Vec<H256>>>,
+    ledger_order: Vec<Vec<H256>>,
+    config: BlockchainConfig,
 }
 
 impl LedgerIndex {
     // TODO: for now, we only have the ability to start from scratch
     pub fn new<'a, T>(proposer_tip: &Arc<Proposer>, voter_tips: &[Arc<Voter>], unconfirmed: T,
-                      leader_sequence: &[Option<H256>], ledger_order: &[Option<Vec<H256>>]) -> Self
+                      leader_sequence: &[Option<H256>], ledger_order: &[Vec<H256>], config: &BlockchainConfig) -> Self
     where T: IntoIterator<Item = &'a H256>,
     {
         Self {
@@ -27,6 +31,7 @@ impl LedgerIndex {
             unconfirmed_proposer: HashSet::from_iter(unconfirmed.into_iter().copied()),
             leader_sequence: leader_sequence.to_vec(),
             ledger_order: ledger_order.to_vec(),
+            config: config.clone(),
         }
     }
 
@@ -35,10 +40,163 @@ impl LedgerIndex {
     }
 
     // returns added transaction blocks, removed transaction blocks
-    //pub fn advance_ledger_to(&mut self, new_voter_tips: &[Voter]) -> (Vec<H256>, Vec<H256>) {}
-    //}
+    pub fn advance_ledger_to(&mut self, new_voter_tips: &[Arc<Voter>], proposer_index: &ChainIndex<Proposer>) -> (Vec<H256>, Vec<H256>) {
+        // track the range of the proposer levels that may see a change in the votes
+        let mut affected_range: Range<u64> = Range {
+            start: std::u64::MAX,
+            end: std::u64::MIN,
+        };
+        let num_voter_chains = self.voter_tips.len();
+        if num_voter_chains != new_voter_tips.len() {
+            panic!("New voter ledger tips has different number of voter chains from the current tips");
+        }
+        for chain_num in 0..num_voter_chains {
+            let range = new_voter_tips[chain_num].affected_range(&self.voter_tips[chain_num]);
+            if affected_range.start > range.0 {
+                affected_range.start = range.0;
+            }
+            if affected_range.end < range.1 {
+                affected_range.end = range.1;
+            }
+            self.voter_tips[chain_num] = Arc::clone(&new_voter_tips[chain_num]);
+        }
+        
+        // recompute the leader of each level that was affected
+        // we will recompute the leader starting from min. affected level or ledger tip level + 1,
+        // whichever is smaller. so make min. affected level the smaller of the two
+        if affected_range.start < affected_range.end {
+            let proposer_ledger_tip = self.proposer_tip.level();
+            if proposer_ledger_tip + 1 < affected_range.start {
+                affected_range.start = proposer_ledger_tip + 1;
+            }
+        }
+
+        // start actually recomputing the leaders
+        let mut change_begin: Option<u64> = None;   // marks the level where we see the first chain of leader
+        for level in affected_range {
+            // get the current leader of the level. if the level is empty now, insert a None
+            let existing_leader = match self.leader_sequence.get(usize::try_from(level).unwrap()) {
+                Some(v) => *v,
+                None => {
+                    if self.leader_sequence.len() != usize::try_from(level).unwrap() {
+                        panic!("The length of the leader sequence vector is not the same as the level of the proposer ledger tip");
+                    }
+                    self.leader_sequence.push(None);
+                    None
+                }
+            };
+            // calculate two different leaders for confirm and deconfirm respectively
+            // we set a higher bar to confirm so that we don't deconfirm easily
+            let new_leader_confirm: Option<H256> =
+                self.proposer_leader(&new_voter_tips, level, self.config.quantile_epsilon_confirm, self.config.adversary_ratio);
+            let new_leader_deconfirm: Option<H256> =
+                self.proposer_leader(&new_voter_tips, level, self.config.quantile_epsilon_deconfirm, self.config.adversary_ratio);
+            let new_leader = {
+                if existing_leader.is_some() {
+                    new_leader_deconfirm
+                } else {
+                    new_leader_confirm
+                }
+            };
+
+            if new_leader != existing_leader {
+                match new_leader {
+                    Some(hash) => info!(
+                        "New proposer leader selected for level {}: {:.8}",
+                        level, hash
+                    ),
+                    None => warn!("Proposer leader deconfirmed for level {}", level),
+                }
+                // mark it's the beginning of the change
+                if change_begin.is_none() {
+                    change_begin = Some(level);
+                }
+                // write it to the leader sequence vector
+                self.leader_sequence[usize::try_from(level).unwrap()] = new_leader;
+            }
+        }
+
+        // recompute the ledger from the first level whose leader changed
+        if let Some(change_begin) = change_begin {
+            let previous_proposer_tip_level = self.proposer_tip.level();
+            let mut removed: Vec<H256> = vec![];
+            let mut added: Vec<H256> = vec![];            
+
+            // deconfirm the blocks from change_begin all the way to previous ledger tip
+            for level in change_begin..=previous_proposer_tip_level {
+                let original_ledger = &self.ledger_order[usize::try_from(level).unwrap()];
+                for block in original_ledger.iter() {
+                    // the proposer block is now unconfirmed
+                    self.unconfirmed_proposer.insert(*block);
+                    removed.push(*block);
+                }
+                self.ledger_order[usize::try_from(level).unwrap()] = vec![];
+            }
+
+            // recompute the ledger from change_begin until the first level where there's no leader
+            // make sure that the ledger is continuous
+            if change_begin <= previous_proposer_tip_level + 1 {
+                for level in change_begin.. {
+                    let leader = match self.leader_sequence.get(usize::try_from(level).unwrap()) {
+                        Some(l) => match l {
+                            Some(v) => v,
+                            None => {
+                                break;
+                            }
+                        }
+                        None => {
+                            break;
+                        }
+                    };
+                    
+                    // Get the sequence of blocks by doing a depth-first traverse
+                    let leader = std::sync::Arc::clone(&proposer_index.blocks.get(&leader).unwrap());
+                    self.proposer_tip = std::sync::Arc::clone(&leader);
+                    // the following line is tricky: first we deref the mutex guard into HashSet
+                    // but a plain HashSet<T> implements IntoIterator<T> and we want
+                    // IntoIterator<&'a T>, so we take a reference of the HashSet since
+                    // &'a HashSet<T> impelments IntoIterator<&'a T>
+                    let seq = leader.ledger_order(&self.unconfirmed_proposer);
+                    let order: Vec<H256> = seq.into_iter().map(|x| x.hash()).collect();
+
+                    // deduplicate, keep the one copy that is former in this order
+                    let order: Vec<H256> = order
+                        .into_iter()
+                        .filter(|h| self.unconfirmed_proposer.remove(h))
+                        .collect();
+                    added.extend(&order);
+                    match self.ledger_order.get_mut(usize::try_from(level).unwrap()) {
+                        Some(ptr) => {
+                            *ptr = order;
+                        }
+                        None => {
+                            if self.ledger_order.len() != usize::try_from(level).unwrap() {
+                                panic!("The length of the ledger order vector is not the same as the level of the proposer ledger");
+                            }
+                            self.ledger_order.push(order);
+                        }
+                    } 
+                }
+            }
+
+            let mut removed_transaction_blocks: Vec<H256> = vec![];
+            let mut added_transaction_blocks: Vec<H256> = vec![];
+            for block in &removed {
+                let ptr = proposer_index.blocks.get(&block).unwrap();
+                removed_transaction_blocks.extend(ptr.transaction_block_refs());
+            }
+            for block in &added {
+                let ptr = proposer_index.blocks.get(&block).unwrap();
+                added_transaction_blocks.extend(ptr.transaction_block_refs());
+            }
+            (added_transaction_blocks, removed_transaction_blocks)
+        } else {
+            (vec![], vec![])
+        }
+    }
     
-    fn proposer_leader(&self, voter_tips: &[Voter], level: u64, quantile: f32, adversary_ratio: f32) -> Option<H256> {
+    fn proposer_leader(&self, voter_tips: &[Arc<Voter>], level: u64, quantile: f32, adversary_ratio: f32) -> Option<H256> 
+    {
         // compute the new leader of this level
         // we use the confirmation policy from https://arxiv.org/abs/1810.08092
         let mut new_leader: Option<H256> = None;
