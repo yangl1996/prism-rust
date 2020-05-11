@@ -25,6 +25,7 @@ pub struct LedgerManager {
     config: BlockchainConfig,
     voter_index: Vec<Arc<Mutex<ChainIndex<Voter>>>>,
     proposer_index: Arc<Mutex<ChainIndex<Proposer>>>,
+    ledger_index: Arc<Mutex<index::LedgerIndex>>,
 }
 
 impl LedgerManager {
@@ -36,6 +37,7 @@ impl LedgerManager {
         proposer_index: &Arc<Mutex<ChainIndex<Proposer>>>,
         voter_index: &[Arc<Mutex<ChainIndex<Voter>>>],
         config: &BlockchainConfig,
+        ledger_index: &Arc<Mutex<index::LedgerIndex>>,
     ) -> Self {
         Self {
             blockdb: Arc::clone(&blockdb),
@@ -45,16 +47,19 @@ impl LedgerManager {
             config: config.clone(),
             proposer_index: Arc::clone(&proposer_index),
             voter_index: voter_index.to_vec(),
+            ledger_index: Arc::clone(&ledger_index),
         }
     }
 
     pub fn start(self, buffer_size: usize, num_workers: usize) {
         // start thread that updates transaction sequence
         let blockdb = Arc::clone(&self.blockdb);
-        let chain = Arc::clone(&self.chain);
+        let ledger_index = Arc::clone(&self.ledger_index);
+        let proposer_index = Arc::clone(&self.proposer_index);
+        let voter_index = self.voter_index.clone();
         let (tx_diff_tx, tx_diff_rx) = channel::bounded(buffer_size);
         thread::spawn(move || loop {
-            let tx_diff = update_transaction_sequence(&blockdb, &chain);
+            let tx_diff = update_transaction_sequence(&blockdb, &ledger_index, &proposer_index, &voter_index);
             tx_diff_tx.send(tx_diff).unwrap();
         });
 
@@ -208,11 +213,25 @@ impl UtxoManager {
     }
 }
 
-fn update_transaction_sequence(
+fn update_transaction_sequence<T>(
     blockdb: &BlockDatabase,
-    chain: &BlockChain,
-) -> (Vec<(Transaction, H256)>, Vec<(Transaction, H256)>) {
-    let diff = chain.update_ledger().unwrap();
+    ledger: &Mutex<index::LedgerIndex>,
+    proposer_index: &Mutex<ChainIndex<Proposer>>,
+    voter_index: &[T],
+) -> (Vec<(Transaction, H256)>, Vec<(Transaction, H256)>)
+where T: std::convert::AsRef<Mutex<ChainIndex<Voter>>>
+{
+    let new_voter_tips: Vec<_> = voter_index.iter().map(|x| {
+        let voter_ptr = x.as_ref().lock().unwrap();
+        let res = Arc::clone(&voter_ptr.highest_block());
+        drop(voter_ptr);
+        return res;
+    }).collect();
+    let proposer_ptr = proposer_index.lock().unwrap();
+    let mut ledger_ptr = ledger.lock().unwrap();
+    let diff = ledger_ptr.advance_ledger_to(&new_voter_tips, &proposer_ptr);
+    drop(ledger_ptr);
+    drop(proposer_ptr);
     PERFORMANCE_COUNTER.record_deconfirm_transaction_blocks(diff.1.len());
 
     // gather the transaction diff

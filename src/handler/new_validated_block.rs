@@ -4,7 +4,7 @@ use crate::blockdb::BlockDatabase;
 use crate::crypto::hash::Hashable;
 use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 use crate::miner::memory_pool::MemoryPool;
-
+use crate::ledger_manager::index::LedgerIndex;
 use crate::network::server::Handle as ServerHandle;
 
 use std::sync::Mutex;
@@ -15,8 +15,15 @@ pub fn new_validated_block(
     _blockdb: &BlockDatabase,
     chain: &BlockChain,
     _server: &ServerHandle,
+    ledger: &Mutex<LedgerIndex>,
 ) -> NewBlock {
     PERFORMANCE_COUNTER.record_process_block(&block);
+    if let Content::Proposer(_) = &block.content {
+        let mut ledger_ptr = ledger.lock().unwrap();
+        // TODO: excessive hashign
+        ledger_ptr.insert_unconfirmed(block.hash());
+        drop(ledger_ptr);
+    }
 
     // if this block is a transaction, remove transactions from mempool
     if let Content::Transaction(content) = &block.content {

@@ -12,6 +12,7 @@ use prism::config::BlockchainConfig;
 use prism::crypto::hash::H256;
 use prism::experiment::transaction_generator::TransactionGenerator;
 use prism::ledger_manager::LedgerManager;
+use prism::ledger_manager::index::LedgerIndex;
 use prism::miner;
 use prism::miner::memory_pool::MemoryPool;
 use prism::network::server;
@@ -212,6 +213,10 @@ fn main() {
     let blockchain = Arc::new(blockchain);
     debug!("Initialized blockchain database");
 
+    // init ledger index
+    let ledger_index = LedgerIndex::new(&proposer_genesis_ptr, &voter_genesis_ptrs, &vec![], &[Some(config.proposer_genesis)], &[vec![config.proposer_genesis]], &config);
+    let ledger_index = Arc::new(std::sync::Mutex::new(ledger_index));
+
     // init wallet database
     let wallet = Wallet::new(&matches.value_of("wallet_db").unwrap()).unwrap();
     let wallet = Arc::new(wallet);
@@ -262,7 +267,7 @@ fn main() {
             error!("Error parsing transaction execution buffer size: {}", e);
             process::exit(1);
         });
-    let ledger_manager = LedgerManager::new(&blockdb, &blockchain, &utxodb, &wallet, &proposer_index, &voter_index, &config);
+    let ledger_manager = LedgerManager::new(&blockdb, &blockchain, &utxodb, &wallet, &proposer_index, &voter_index, &config, &ledger_index);
     ledger_manager.start(tx_buffer, tx_workers);
     debug!(
         "Initialized ledger manager with buffer size {} and {} workers",
@@ -318,6 +323,7 @@ fn main() {
         ctx_tx,
         &server,
         config.clone(),
+        &ledger_index,
     );
     worker_ctx.start();
 
@@ -332,6 +338,7 @@ fn main() {
         config.clone(),
         &proposer_genesis_ptr,
         &voter_genesis_ptrs,
+        &ledger_index,
     );
     miner_ctx.start();
 

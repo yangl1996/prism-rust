@@ -12,6 +12,7 @@ use crate::experiment::performance_counter::PERFORMANCE_COUNTER;
 use crate::handler::new_validated_block;
 use crate::network::message::Message;
 use crate::network::server::Handle as ServerHandle;
+use crate::ledger_manager::index::LedgerIndex;
 
 use log::info;
 
@@ -69,6 +70,7 @@ pub struct Context {
     config: BlockchainConfig,
     proposer_parent: Arc<Proposer>,
     voter_parents: Vec<Arc<Voter>>,
+    ledger: Arc<Mutex<LedgerIndex>>,
 }
 
 #[derive(Clone)]
@@ -87,6 +89,7 @@ pub fn new(
     config: BlockchainConfig,
     proposer_parent: &Arc<Proposer>,
     voter_parents: &[Arc<Voter>],
+    ledger: &Arc<Mutex<LedgerIndex>>,
 ) -> (Context, Handle) {
     let (signal_chan_sender, signal_chan_receiver) = unbounded();
     let mut contents: Vec<Content> = vec![];
@@ -135,6 +138,7 @@ pub fn new(
         config,
         proposer_parent: Arc::clone(proposer_parent),
         voter_parents: voter_parents.to_vec(),
+        ledger: Arc::clone(ledger),
     };
 
     let handle = Handle {
@@ -437,6 +441,7 @@ impl Context {
                         &self.blockdb,
                         &self.blockchain,
                         &self.server,
+                        &self.ledger,
                     );
                     // broadcast after adding the new block to the blockchain, in case a peer mines
                     // a block immediately after we broadcast, leaving us non time to insert into

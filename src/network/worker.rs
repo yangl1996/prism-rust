@@ -18,6 +18,7 @@ use crate::wallet::Wallet;
 use crossbeam::channel;
 use log::{debug, warn};
 use std::collections::HashSet;
+use crate::ledger_manager::index::LedgerIndex;
 
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -37,6 +38,7 @@ pub struct Context {
     recent_blocks: Arc<Mutex<HashSet<H256>>>, // blocks that we have received but not yet inserted
     requested_blocks: Arc<Mutex<HashSet<H256>>>, // blocks that we have requested but not yet received
     config: BlockchainConfig,
+    ledger: Arc<Mutex<LedgerIndex>>,
 }
 
 pub fn new(
@@ -50,6 +52,7 @@ pub fn new(
     ctx_update_sink: channel::Sender<ContextUpdateSignal>,
     server: &ServerHandle,
     config: BlockchainConfig,
+    ledger: &Arc<Mutex<LedgerIndex>>,
 ) -> Context {
     Context {
         msg_chan: msg_src,
@@ -65,6 +68,7 @@ pub fn new(
         recent_blocks: Arc::new(Mutex::new(HashSet::new())),
         requested_blocks: Arc::new(Mutex::new(HashSet::new())),
         config,
+        ledger: Arc::clone(ledger),
     }
 }
 
@@ -295,6 +299,7 @@ impl Context {
                             &self.blockdb,
                             &self.chain,
                             &self.server,
+                            &self.ledger,
                         );
                         context_update_sig.push(match res {
                             NewBlock::Proposer(ptr) => ContextUpdateSignal::NewProposerBlock(ptr),
