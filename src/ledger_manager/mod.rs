@@ -1,3 +1,5 @@
+pub mod index;
+
 use crate::block::Content;
 use crate::blockchain::BlockChain;
 use crate::blockdb::BlockDatabase;
