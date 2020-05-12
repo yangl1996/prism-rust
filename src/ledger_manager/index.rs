@@ -13,7 +13,7 @@ use crate::config::*;
 pub struct LedgerIndex {
     voter_tips: Vec<Arc<Voter>>,
     proposer_tip: Arc<Proposer>,
-    unconfirmed_proposer: HashSet<H256>,
+    unconfirmed_proposer: Arc<Mutex<HashSet<H256>>>,
     leader_sequence: Vec<Option<H256>>,
     ledger_order: Vec<Vec<H256>>,
     config: BlockchainConfig,
@@ -21,23 +21,18 @@ pub struct LedgerIndex {
 
 impl LedgerIndex {
     // TODO: for now, we only have the ability to start from scratch
-    pub fn new<'a, T>(proposer_tip: &Arc<Proposer>, voter_tips: &[Arc<Voter>], unconfirmed: T,
+    pub fn new(proposer_tip: &Arc<Proposer>, voter_tips: &[Arc<Voter>], unconfirmed: &Arc<Mutex<HashSet<H256>>>,
                       leader_sequence: &[Option<H256>], ledger_order: &[Vec<H256>], config: &BlockchainConfig) -> Self
-        where T: IntoIterator<Item = &'a H256>,
               {
                   Self {
                       voter_tips: voter_tips.to_vec(),
                       proposer_tip: Arc::clone(&proposer_tip),
-                      unconfirmed_proposer: HashSet::from_iter(unconfirmed.into_iter().copied()),
+                      unconfirmed_proposer: Arc::clone(&unconfirmed),
                       leader_sequence: leader_sequence.to_vec(),
                       ledger_order: ledger_order.to_vec(),
                       config: config.clone(),
                   }
               }
-
-    pub fn insert_unconfirmed(&mut self, hash: H256) {
-        self.unconfirmed_proposer.insert(hash);
-    }
 
     // returns added transaction blocks, removed transaction blocks
     pub fn advance_ledger_to(&mut self, new_voter_tips: &[Arc<Voter>], proposer_index: &ChainIndex<Proposer>) -> (Vec<H256>, Vec<H256>) {
@@ -123,19 +118,22 @@ impl LedgerIndex {
             let mut added: Vec<H256> = vec![];            
 
             // deconfirm the blocks from change_begin all the way to previous ledger tip
+            let mut unconfirmed_ptr = self.unconfirmed_proposer.lock().unwrap();
             for level in change_begin..=previous_proposer_tip_level {
                 let original_ledger = &self.ledger_order[usize::try_from(level).unwrap()];
                 for block in original_ledger.iter() {
                     // the proposer block is now unconfirmed
-                    self.unconfirmed_proposer.insert(*block);
+                    unconfirmed_ptr.insert(*block);
                     removed.push(*block);
                 }
                 self.ledger_order[usize::try_from(level).unwrap()] = vec![];
             }
+            drop(unconfirmed_ptr);
 
             // recompute the ledger from change_begin until the first level where there's no leader
             // make sure that the ledger is continuous
             if change_begin <= previous_proposer_tip_level + 1 {
+                let mut unconfirmed_ptr = self.unconfirmed_proposer.lock().unwrap();
                 for level in change_begin.. {
                     let leader = match self.leader_sequence.get(usize::try_from(level).unwrap()) {
                         Some(l) => match l {
@@ -152,17 +150,15 @@ impl LedgerIndex {
                     // Get the sequence of blocks by doing a depth-first traverse
                     let leader = std::sync::Arc::clone(&proposer_index.blocks.get(&leader).unwrap());
                     self.proposer_tip = std::sync::Arc::clone(&leader);
-                    // the following line is tricky: first we deref the mutex guard into HashSet
-                    // but a plain HashSet<T> implements IntoIterator<T> and we want
-                    // IntoIterator<&'a T>, so we take a reference of the HashSet since
-                    // &'a HashSet<T> impelments IntoIterator<&'a T>
-                    let seq = leader.ledger_order(&self.unconfirmed_proposer);
+
+                    // first deref into HashSet, then take ref to get IntoIter<'a>
+                    let seq = leader.ledger_order(&(*unconfirmed_ptr));
                     let order: Vec<H256> = seq.into_iter().map(|x| x.hash()).collect();
 
                     // deduplicate, keep the one copy that is former in this order
                     let order: Vec<H256> = order
                         .into_iter()
-                        .filter(|h| self.unconfirmed_proposer.remove(h))
+                        .filter(|h| unconfirmed_ptr.remove(h))
                         .collect();
                     added.extend(&order);
                     match self.ledger_order.get_mut(usize::try_from(level).unwrap()) {
@@ -177,6 +173,7 @@ impl LedgerIndex {
                         }
                     } 
                 }
+                drop(unconfirmed_ptr);
             }
 
             let mut removed_transaction_blocks: Vec<H256> = vec![];

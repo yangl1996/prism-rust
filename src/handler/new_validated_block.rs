@@ -1,4 +1,6 @@
 use crate::block::{Block, Content};
+use crate::crypto::hash::H256;
+use std::collections::HashSet;
 use crate::blockchain::{BlockChain, NewBlock};
 use crate::blockdb::BlockDatabase;
 use crate::crypto::hash::Hashable;
@@ -11,17 +13,17 @@ use std::sync::Mutex;
 
 pub fn new_validated_block(
     block: &Block,
+    hash: H256,
     mempool: &Mutex<MemoryPool>,
     _blockdb: &BlockDatabase,
     chain: &BlockChain,
     _server: &ServerHandle,
-    ledger: &Mutex<LedgerIndex>,
+    unconfirmed_set: &Mutex<HashSet<H256>>,
 ) -> NewBlock {
     PERFORMANCE_COUNTER.record_process_block(&block);
     if let Content::Proposer(_) = &block.content {
-        let mut ledger_ptr = ledger.lock().unwrap();
-        // TODO: excessive hashign
-        ledger_ptr.insert_unconfirmed(block.hash());
+        let mut ledger_ptr = unconfirmed_set.lock().unwrap();
+        ledger_ptr.insert(hash);
         drop(ledger_ptr);
     }
 

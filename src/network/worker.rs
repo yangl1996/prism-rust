@@ -38,7 +38,7 @@ pub struct Context {
     recent_blocks: Arc<Mutex<HashSet<H256>>>, // blocks that we have received but not yet inserted
     requested_blocks: Arc<Mutex<HashSet<H256>>>, // blocks that we have requested but not yet received
     config: BlockchainConfig,
-    ledger: Arc<Mutex<LedgerIndex>>,
+    unconfirmed_set: Arc<Mutex<std::collections::HashSet<H256>>>,
 }
 
 pub fn new(
@@ -52,7 +52,7 @@ pub fn new(
     ctx_update_sink: channel::Sender<ContextUpdateSignal>,
     server: &ServerHandle,
     config: BlockchainConfig,
-    ledger: &Arc<Mutex<LedgerIndex>>,
+    unconfirmed_set: &Arc<Mutex<std::collections::HashSet<H256>>>,
 ) -> Context {
     Context {
         msg_chan: msg_src,
@@ -68,7 +68,7 @@ pub fn new(
         recent_blocks: Arc::new(Mutex::new(HashSet::new())),
         requested_blocks: Arc::new(Mutex::new(HashSet::new())),
         config,
-        ledger: Arc::clone(ledger),
+        unconfirmed_set: Arc::clone(unconfirmed_set),
     }
 }
 
@@ -295,11 +295,12 @@ impl Context {
                         debug!("Processing block {:.8}", block.hash());
                         let res = new_validated_block(
                             &block,
+                            block.hash(),
                             &self.mempool,
                             &self.blockdb,
                             &self.chain,
                             &self.server,
-                            &self.ledger,
+                            &self.unconfirmed_set,
                         );
                         context_update_sig.push(match res {
                             NewBlock::Proposer(ptr) => ContextUpdateSignal::NewProposerBlock(ptr),

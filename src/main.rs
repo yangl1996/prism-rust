@@ -214,7 +214,8 @@ fn main() {
     debug!("Initialized blockchain database");
 
     // init ledger index
-    let ledger_index = LedgerIndex::new(&proposer_genesis_ptr, &voter_genesis_ptrs, &vec![], &[Some(config.proposer_genesis)], &[vec![config.proposer_genesis]], &config);
+    let unconfirmed_set = Arc::new(std::sync::Mutex::new(std::collections::HashSet::<H256>::new()));
+    let ledger_index = LedgerIndex::new(&proposer_genesis_ptr, &voter_genesis_ptrs, &unconfirmed_set, &[Some(config.proposer_genesis)], &[vec![config.proposer_genesis]], &config);
     let ledger_index = Arc::new(std::sync::Mutex::new(ledger_index));
 
     // init wallet database
@@ -323,7 +324,7 @@ fn main() {
         ctx_tx,
         &server,
         config.clone(),
-        &ledger_index,
+        &unconfirmed_set,
     );
     worker_ctx.start();
 
@@ -338,7 +339,7 @@ fn main() {
         config.clone(),
         &proposer_genesis_ptr,
         &voter_genesis_ptrs,
-        &ledger_index,
+        &unconfirmed_set,
     );
     miner_ctx.start();
 

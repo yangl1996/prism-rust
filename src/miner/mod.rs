@@ -70,7 +70,7 @@ pub struct Context {
     config: BlockchainConfig,
     proposer_parent: Arc<Proposer>,
     voter_parents: Vec<Arc<Voter>>,
-    ledger: Arc<Mutex<LedgerIndex>>,
+    unconfirmed_set: Arc<Mutex<std::collections::HashSet<H256>>>,
 }
 
 #[derive(Clone)]
@@ -89,7 +89,7 @@ pub fn new(
     config: BlockchainConfig,
     proposer_parent: &Arc<Proposer>,
     voter_parents: &[Arc<Voter>],
-    ledger: &Arc<Mutex<LedgerIndex>>,
+    unconfirmed_set: &Arc<Mutex<std::collections::HashSet<H256>>>,
 ) -> (Context, Handle) {
     let (signal_chan_sender, signal_chan_receiver) = unbounded();
     let mut contents: Vec<Content> = vec![];
@@ -138,7 +138,7 @@ pub fn new(
         config,
         proposer_parent: Arc::clone(proposer_parent),
         voter_parents: voter_parents.to_vec(),
-        ledger: Arc::clone(ledger),
+        unconfirmed_set: Arc::clone(unconfirmed_set),
     };
 
     let handle = Handle {
@@ -437,11 +437,12 @@ impl Context {
                     self.blockdb.insert(&mined_block).unwrap();
                     let res = new_validated_block(
                         &mined_block,
+                        header_hash,
                         &self.mempool,
                         &self.blockdb,
                         &self.blockchain,
                         &self.server,
-                        &self.ledger,
+                        &self.unconfirmed_set,
                     );
                     // broadcast after adding the new block to the blockchain, in case a peer mines
                     // a block immediately after we broadcast, leaving us non time to insert into
