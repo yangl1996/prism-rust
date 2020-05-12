@@ -372,31 +372,8 @@ impl Context {
             // update the difficulty
             self.header.difficulty = self.get_difficulty(&self.header.parent);
 
-            // update or rebuild the merkle tree according to what we did in the last stage
-            if new_proposer_block || voter_shift {
-                // if there has been a new proposer block, simply rebuild the merkle tree
-                self.content_merkle_tree = MerkleTree::new(&self.contents);
-            } else {
-                // if there has not been a new proposer block, update individual entries
-                // TODO: add batch updating to merkle tree
-                for voter_chain in new_voter_block.iter() {
-                    let chain_id = (FIRST_VOTER_INDEX + voter_chain) as usize;
-                    self.content_merkle_tree
-                        .update(chain_id, &self.contents[chain_id]);
-                }
-                if new_transaction_block {
-                    self.content_merkle_tree.update(
-                        TRANSACTION_INDEX as usize,
-                        &self.contents[TRANSACTION_INDEX as usize],
-                    );
-                    if touched_content.contains(&PROPOSER_INDEX) {
-                        self.content_merkle_tree.update(
-                            PROPOSER_INDEX as usize,
-                            &self.contents[PROPOSER_INDEX as usize],
-                        );
-                    }
-                }
-            }
+            // update the merkle tree according to what we did in the last stage
+            self.content_merkle_tree = MerkleTree::new(&self.contents);
 
             // update merkle root if anything happened in the last stage
             if new_proposer_block || !new_voter_block.is_empty() || new_transaction_block {
