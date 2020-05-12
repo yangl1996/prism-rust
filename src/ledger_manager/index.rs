@@ -35,7 +35,7 @@ impl LedgerIndex {
               }
 
     // returns added transaction blocks, removed transaction blocks
-    pub fn advance_ledger_to(&mut self, new_voter_tips: &[Arc<Voter>], proposer_index: &ChainIndex<Proposer>) -> (Vec<H256>, Vec<H256>) {
+    pub fn advance_ledger_to(&mut self, new_voter_tips: &[Arc<Voter>], proposer_index: &Mutex<ChainIndex<Proposer>>) -> (Vec<H256>, Vec<H256>) {
         // track the range of the proposer levels that may see a change in the votes
         let mut affected_range: Range<u64> = Range {
             start: std::u64::MAX,
@@ -148,7 +148,9 @@ impl LedgerIndex {
                     };
 
                     // Get the sequence of blocks by doing a depth-first traverse
-                    let leader = std::sync::Arc::clone(&proposer_index.blocks.get(&leader).unwrap());
+                    let proposer_index_ptr = proposer_index.lock().unwrap();
+                    let leader = std::sync::Arc::clone(&proposer_index_ptr.get(*leader).unwrap());
+                    drop(proposer_index_ptr);
                     self.proposer_tip = std::sync::Arc::clone(&leader);
 
                     // first deref into HashSet, then take ref to get IntoIter<'a>
@@ -178,12 +180,13 @@ impl LedgerIndex {
 
             let mut removed_transaction_blocks: Vec<H256> = vec![];
             let mut added_transaction_blocks: Vec<H256> = vec![];
+            let proposer_index_ptr = proposer_index.lock().unwrap();
             for block in &removed {
-                let ptr = proposer_index.blocks.get(&block).unwrap();
+                let ptr = proposer_index_ptr.get(*block).unwrap();
                 removed_transaction_blocks.extend(ptr.transaction_block_refs());
             }
             for block in &added {
-                let ptr = proposer_index.blocks.get(&block).unwrap();
+                let ptr = proposer_index_ptr.get(*block).unwrap();
                 added_transaction_blocks.extend(ptr.transaction_block_refs());
             }
             (added_transaction_blocks, removed_transaction_blocks)

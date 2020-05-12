@@ -227,11 +227,9 @@ where T: std::convert::AsRef<Mutex<ChainIndex<Voter>>>
         drop(voter_ptr);
         return res;
     }).collect();
-    let proposer_ptr = proposer_index.lock().unwrap();
     let mut ledger_ptr = ledger.lock().unwrap();
-    let diff = ledger_ptr.advance_ledger_to(&new_voter_tips, &proposer_ptr);
+    let diff = ledger_ptr.advance_ledger_to(&new_voter_tips, &proposer_index);
     drop(ledger_ptr);
-    drop(proposer_ptr);
     PERFORMANCE_COUNTER.record_deconfirm_transaction_blocks(diff.1.len());
 
     // gather the transaction diff
