@@ -28,6 +28,16 @@ use std::thread;
 use crate::chain::*;
 
 use rand::Rng;
+use std::sync::atomic::AtomicBool;
+
+//                        Voter1
+//   ----->  Prop1  <------  |
+//  |          |           | |
+// Tx  <---  Prop2  <---  Voter2
+//
+// Prop 2 > Tx > Prop 1
+// Voter 2 > Voter 1
+// Voter 2 > Prop 2 > Prop 1
 
 enum ControlSignal {
     Start(u64, bool), // the number controls the lambda of interval between block generation
