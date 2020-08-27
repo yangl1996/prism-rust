@@ -152,7 +152,7 @@ impl BlockchainConfig {
         if h_delta >= th {
             return true;
         } else {
-            println!("h_delta={}, threshold={}", h_delta, th);
+            //println!("h_delta={}, threshold={}", h_delta, th);
             return false;
         }
     }
@@ -165,7 +165,7 @@ pub fn function_q(t_l: f32, lh_l: f32, la_l: f32) -> f32 {
     let lh = lh_l as f64;
     let la = la_l as f64;
 
-    let terms = 30;
+    let terms = 40;
 
     let mut res: f64 = 1.0;
     for l in 0..=terms {
@@ -189,22 +189,23 @@ fn lh_prime(lh: f32, delta: f32) -> f32 {
     return lh / (1.0 + lh * delta);
 }
 
-fn solve_t_delta(lh: f32, la: f32, delta: f32) -> f32 {
+fn solve_t_delta(lh: f32, la: f32, delta: f32, small_delta: f32) -> f32 {
     let mut res: f32 = 1.0;
     let lh_p = lh_prime(lh, delta);
     loop {
         let h_delta: f32 = 1.0 - function_q(res, lh_p, la);
-        let d: f32 = if h_delta > 0.5 {
-            h_delta - 0.5
+        let th = 0.5 + small_delta;
+        let d: f32 = if h_delta > th {
+            h_delta - th
         } else {
-            0.5 - h_delta
+            th - h_delta
         };
-        if d < 0.05 {
+        if d < 0.01 {
             println!("Expected confirmation latency={}", res);
             return res
         } else {
             res += 1.0;
-            println!("trying t_delta={}, diff={}", res, d);
+            //println!("trying t_delta={}, diff={}", res, d);
         }
     }
 }
@@ -214,17 +215,22 @@ fn error_prob(l: f32, m: u16, small_delta: f32, t_delta: f32) -> f32 {
 }
 
 fn solve_small_delta(lh: f32, la: f32, delta: f32, ep: f32, m: u16) -> f32 {
-    let mut res: f32 = 0.001;
-    let t_delta = solve_t_delta(lh, la, delta);
-    loop {
-        let our_ep = error_prob(lh + la, m, res, t_delta);
-        if our_ep > ep {
-            res += 0.001;
-        } else {
-            println!("Small delta={}, error prob={} < {}", res, our_ep, ep);
-            return res;
+    let mut res: f32 = 0.0;
+    for _ in 0..5 {
+        let mut tmp_res: f32 = 0.001;
+        let t_delta = solve_t_delta(lh, la, delta, res);
+        loop {
+            let our_ep = error_prob(lh + la, m, tmp_res, t_delta);
+            if our_ep > ep {
+                tmp_res += 0.001;
+            } else {
+                println!("Small delta={}, error prob={} < {}", tmp_res, our_ep, ep);
+                res = tmp_res;
+                break;
+            }
         }
     }
+    return res;
 }
 
 fn factdiv(up: f64, n: u64) -> f64 {
