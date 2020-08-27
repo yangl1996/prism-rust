@@ -164,7 +164,7 @@ pub fn function_q(t_l: f32, lh_l: f32, la_l: f32) -> f32 {
     let lh = lh_l as f64;
     let la = la_l as f64;
 
-    let terms = 30;
+    let terms = 20;
 
     let mut res: f64 = 1.0;
     for l in 0..=terms {
