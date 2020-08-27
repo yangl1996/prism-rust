@@ -178,6 +178,10 @@ fn main() {
         "Transaction block mining rate set to {} blks/s",
         config.tx_mining_rate
     );
+    info!(
+        "Small delta is {}",
+        config.small_delta
+    );
 
     // init mempool
     let mempool_size = matches

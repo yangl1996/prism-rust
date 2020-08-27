@@ -193,6 +193,7 @@ fn solve_t_delta(lh: f32, la: f32, delta: f32) -> f32 {
             0.5 - h_delta
         };
         if d < 0.001 {
+            println!("Expected confirmation latency={}", res);
             return res
         } else {
             res += 0.01;
@@ -209,9 +210,10 @@ fn solve_small_delta(lh: f32, la: f32, delta: f32, ep: f32, m: u16) -> f32 {
     let t_delta = solve_t_delta(lh, la, delta);
     loop {
         let our_ep = error_prob(lh + la, m, res, t_delta);
-        if our_ep < ep {
+        if our_ep > ep {
             res += 0.001;
         } else {
+            println!("Small delta={}, error prob={} < {}", res, our_ep, ep);
             return res;
         }
     }
