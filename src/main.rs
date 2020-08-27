@@ -163,6 +163,8 @@ fn main() {
         voter_mining_rate,
         adv_ratio,
         log_epsilon,
+        net_latency as f32,
+        adv_ratio,
     );
     info!(
         "Proposer block mining rate set to {} blks/s",

@@ -38,7 +38,9 @@ pub struct BlockchainConfig {
     pub quantile_epsilon_deconfirm: f32,
     pub adversary_ratio: f32,
     log_epsilon: f32,
-    //pub small_delta: f32,
+    pub network_delta: f32,
+    pub beta: f32,
+    pub small_delta: f32,
 }
 
 impl BlockchainConfig {
@@ -50,6 +52,8 @@ impl BlockchainConfig {
         voter_rate: f32,
         adv_ratio: f32,
         log_epsilon: f32,
+        network_delta: f32,
+        beta: f32,
     ) -> Self {
         let tx_txs = tx_size / AVG_TX_SIZE;
         let proposer_genesis: H256 = {
@@ -113,6 +117,9 @@ impl BlockchainConfig {
             log_epsilon,
             quantile_epsilon_confirm: quantile_confirm,
             quantile_epsilon_deconfirm: quantile_deconfirm,
+            network_delta,
+            beta,
+            small_delta: solve_small_delta(voter_rate * beta, voter_rate * (1.0 - beta), network_delta, (-log_epsilon).exp(), voter_chains),
         }
     }
 
@@ -136,23 +143,76 @@ impl BlockchainConfig {
         }
     }
 
-    pub fn function_q(&self, t: f32, lh: f32, la: f32) -> f32 {
-        let mut res: f32 = 1.0;
-        for l in 0..=10 {
-            let term1: f32 = (lh - la) / lh * (la / lh).powi(l as i32);
-            let mut term2: f32 = 0.0;
-            for k in l..=10 {
-                let term2_1: f32 = (-lh * t).exp() * (lh * t).powi(k as i32) / fact(k) as f32;
-                let mut term2_2: f32 = 0.0;
-                for n in 0..=k-l {
-                    let term2_2_1: f32 = (-la * t).exp() * (la * t).powi(n as i32) / fact(n) as f32 * (1.0 - (la / lh).powi((k-n-l) as i32));
-                    term2_2 = term2_2 + term2_2_1;
-                }
-                term2 = term2 + term2_1 * term2_2;
-            }
-            res = res - term1 * term2;
+    pub fn try_confirm(&self, depth_sum: u64, nonvote: u64) -> bool {
+        let lh_p = lh_prime(self.voter_mining_rate * (1.0 - self.beta), self.network_delta);
+        let t = depth_sum as f32 / ((1.0 + self.small_delta) * self.voter_chains as f32 * self.voter_mining_rate);
+        let th = nonvote as f32 / self.voter_chains as f32 + 0.5 + self.small_delta;
+        let h_delta = 1.0 - function_q(t, lh_p, self.voter_mining_rate * self.beta);
+        if h_delta >= th {
+            return true;
+        } else {
+            return false;
         }
-        return res;
+    }
+
+    // TODO: just make a table of the inverse of function_q for different Vl(T) values
+}
+
+pub fn function_q(t: f32, lh: f32, la: f32) -> f32 {
+    let mut res: f32 = 1.0;
+    for l in 0..=10 {
+        let term1: f32 = (lh - la) / lh * (la / lh).powi(l as i32);
+        let mut term2: f32 = 0.0;
+        for k in l..=10 {
+            let term2_1: f32 = (-lh * t).exp() * (lh * t).powi(k as i32) / fact(k) as f32;
+            let mut term2_2: f32 = 0.0;
+            for n in 0..=k-l {
+                let term2_2_1: f32 = (-la * t).exp() * (la * t).powi(n as i32) / fact(n) as f32 * (1.0 - (la / lh).powi((k-n-l) as i32));
+                term2_2 = term2_2 + term2_2_1;
+            }
+            term2 = term2 + term2_1 * term2_2;
+        }
+        res = res - term1 * term2;
+    }
+    return res;
+}
+
+fn lh_prime(lh: f32, delta: f32) -> f32 {
+    return lh / (1.0 + lh * delta);
+}
+
+fn solve_t_delta(lh: f32, la: f32, delta: f32) -> f32 {
+    let mut res: f32 = 0.01;
+    let lh_p = lh_prime(lh, delta);
+    loop {
+        let h_delta: f32 = 1.0 - function_q(res, lh_p, la);
+        let d: f32 = if h_delta > 0.5 {
+            h_delta - 0.5
+        } else {
+            0.5 - h_delta
+        };
+        if d < 0.001 {
+            return res
+        } else {
+            res += 0.01;
+        }
+    }
+}
+
+fn error_prob(l: f32, m: u16, small_delta: f32, t_delta: f32) -> f32 {
+    return (-2.0 * small_delta * small_delta * m as f32).exp() + 2.0 * (-(small_delta * small_delta * t_delta * l * m as f32) / 3.0).exp();
+}
+
+fn solve_small_delta(lh: f32, la: f32, delta: f32, ep: f32, m: u16) -> f32 {
+    let mut res: f32 = 0.001;
+    let t_delta = solve_t_delta(lh, la, delta);
+    loop {
+        let our_ep = error_prob(lh + la, m, res, t_delta);
+        if our_ep < ep {
+            res += 0.001;
+        } else {
+            return res;
+        }
     }
 }
 
