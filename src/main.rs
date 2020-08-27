@@ -57,7 +57,7 @@ fn main() {
      (@arg adv_ratio: --("adversary-ratio") [FLOAT] default_value("0.4") "Sets the ratio of adversary hashing power")
      (@arg log_epsilon: --("confirm-confidence") [FLOAT] default_value("20.0") "Sets -log(epsilon) for confirmation")
      (@arg expected_latency: --("expected-latency") [FLOAT] default_value("3.0") "Sets the expected network latency of voter blocks")
-
+     (@arg adversary: --adversary [INT] default_value("0") "Sets the adversarial behavior of miner, 0 honest, 7 censorship attack, 8 balance attack")
      (@subcommand keygen =>
       (about: "Generates Prism wallet key pair")
       (@arg display_address: --addr "Prints the address of the key pair to STDERR")
@@ -323,6 +323,15 @@ fn main() {
     worker_ctx.start();
 
     // start the miner
+    let adversary = matches
+        .value_of("adversary")
+        .unwrap()
+        .parse::<u8>()
+        .unwrap_or_else(|e| {
+            error!("Error parsing value of initial fund coins: {}", e);
+            process::exit(1);
+        });
+
     let (miner_ctx, miner) = miner::new(
         &mempool,
         &blockchain,
@@ -331,6 +340,7 @@ fn main() {
         &ctx_tx_miner,
         &server,
         config.clone(),
+        adversary,
     );
     miner_ctx.start();
 

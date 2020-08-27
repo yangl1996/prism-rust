@@ -352,7 +352,7 @@ func log(interval, duration uint, nodesFile, dataDir string, grafana bool) {
 						proposer_len:       curr["node_0"].Proposer_main_chain_length,
 						latency_sum:        curr["node_0"].Total_transaction_block_confirmation_latency,
 					}
-					expStopAlarm = time.After(600 * time.Second)
+					expStopAlarm = time.After(600* time.Second)
 				case <-expStopAlarm:
 					expStarted = true
 					expRunning = false

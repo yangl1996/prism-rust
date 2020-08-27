@@ -27,6 +27,13 @@ use std::thread;
 
 use rand::Rng;
 
+const HONEST: u8 = 0;
+const TRANSACTION_CENSORSHIP_ATTACK: u8 = 1;
+const PROPOSER_CENSORSHIP_ATTACK: u8 = 2;
+//const VOTER_CENSORSHIP_ATTACK: u8 = 4;
+
+const BALANCE_ATTACK: u8 = 8;
+
 enum ControlSignal {
     Start(u64, bool), // the number controls the lambda of interval between block generation
     Step,
@@ -67,6 +74,9 @@ pub struct Context {
     contents: Vec<Content>,
     content_merkle_tree: MerkleTree,
     config: BlockchainConfig,
+    // bit array for adversarial behavior, e.g. 0 for honest behavior, 3 (b11) for two adversarial
+    // behavior
+    adversary: u8,
 }
 
 #[derive(Clone)]
@@ -83,6 +93,7 @@ pub fn new(
     ctx_update_tx: &Sender<ContextUpdateSignal>,
     server: &ServerHandle,
     config: BlockchainConfig,
+    adversary: u8,
 ) -> (Context, Handle) {
     let (signal_chan_sender, signal_chan_receiver) = unbounded();
     let mut contents: Vec<Content> = vec![];
@@ -129,6 +140,7 @@ pub fn new(
         contents,
         content_merkle_tree,
         config,
+        adversary,
     };
 
     let handle = Handle {
@@ -156,6 +168,24 @@ impl Handle {
 
 impl Context {
     pub fn start(mut self) {
+        match self.adversary {
+            HONEST => info!("Miner is honest"),
+            x => {
+                if x & TRANSACTION_CENSORSHIP_ATTACK != 0 {
+                    info!("Miner has transaction censorship attack");
+                }
+                if x & PROPOSER_CENSORSHIP_ATTACK != 0 {
+                    info!("Miner has proposer censorship attack");
+                }
+                /*
+                if x & VOTER_CENSORSHIP_ATTACK != 0 {
+                    info!("Miner has voter censorship attack");
+                }*/
+                if x & BALANCE_ATTACK != 0 {
+                    info!("Miner has balance attack");
+                }
+            }
+        };
         thread::Builder::new()
             .name("miner".to_string())
             .spawn(move || {
@@ -257,35 +287,41 @@ impl Context {
                 }
             }
 
-            // update transaction block content
-            if new_transaction_block {
-                let mempool = self.mempool.lock().unwrap();
-                let transactions = mempool.get_transactions(self.config.tx_txs);
-                drop(mempool);
-                let _chain_id: usize = TRANSACTION_INDEX as usize;
-                if let Content::Transaction(c) = &mut self.contents[TRANSACTION_INDEX as usize] {
-                    c.transactions = transactions;
-                    touched_content.insert(TRANSACTION_INDEX);
-                } else {
-                    unreachable!();
+            // CENSORSHIP won't update
+            if self.adversary & TRANSACTION_CENSORSHIP_ATTACK == 0 {
+                // update transaction block content
+                if new_transaction_block {
+                    let mempool = self.mempool.lock().unwrap();
+                    let transactions = mempool.get_transactions(self.config.tx_txs);
+                    drop(mempool);
+                    let chain_id: usize = TRANSACTION_INDEX as usize;
+                    if let Content::Transaction(c) = &mut self.contents[TRANSACTION_INDEX as usize] {
+                        c.transactions = transactions;
+                        touched_content.insert(TRANSACTION_INDEX);
+                    } else {
+                        unreachable!();
+                    }
                 }
             }
 
-            // append transaction references
-            // FIXME: we are now refreshing the whole tree
-            // note that if there are new proposer blocks, we will need to refresh tx refs in the
-            // next step. In that case, don't bother doing it here.
-            if new_transaction_block && !new_proposer_block {
-                if let Content::Proposer(c) = &mut self.contents[PROPOSER_INDEX as usize] {
-                    // only update the references if we are not running out of quota
-                    if c.transaction_refs.len() < self.config.proposer_tx_refs as usize {
-                        let mut refs = self.blockchain.unreferred_transactions();
-                        refs.truncate(self.config.proposer_tx_refs as usize);
-                        c.transaction_refs = refs;
-                        touched_content.insert(PROPOSER_INDEX);
+            // CENSORSHIP won't update
+            if self.adversary & PROPOSER_CENSORSHIP_ATTACK == 0 {
+                // append transaction references
+                // FIXME: we are now refreshing the whole tree
+                // note that if there are new proposer blocks, we will need to refresh tx refs in the
+                // next step. In that case, don't bother doing it here.
+                if new_transaction_block && !new_proposer_block {
+                    if let Content::Proposer(c) = &mut self.contents[PROPOSER_INDEX as usize] {
+                        // only update the references if we are not running out of quota
+                        if c.transaction_refs.len() < self.config.proposer_tx_refs as usize {
+                            let mut refs = self.blockchain.unreferred_transactions();
+                            refs.truncate(self.config.proposer_tx_refs as usize);
+                            c.transaction_refs = refs;
+                            touched_content.insert(PROPOSER_INDEX);
+                        }
+                    } else {
+                        unreachable!();
                     }
-                } else {
-                    unreachable!();
                 }
             }
 
@@ -307,12 +343,15 @@ impl Context {
                 // block
                 if new_proposer_block {
                     if let Content::Proposer(c) = &mut self.contents[PROPOSER_INDEX as usize] {
-                        let mut refs = self.blockchain.unreferred_transactions();
-                        refs.truncate(self.config.proposer_tx_refs as usize);
-                        c.transaction_refs = refs;
-                        c.proposer_refs = self.blockchain.unreferred_proposers();
-                        let parent = self.header.parent;
-                        c.proposer_refs.retain(|&x| x != parent);
+                        // CENSORSHIP won't update
+                        if self.adversary & PROPOSER_CENSORSHIP_ATTACK == 0 {
+                            let mut refs = self.blockchain.unreferred_transactions();
+                            refs.truncate(self.config.proposer_tx_refs as usize);
+                            c.transaction_refs = refs;
+                            c.proposer_refs = self.blockchain.unreferred_proposers();
+                            let parent = self.header.parent;
+                            c.proposer_refs.retain(|&x| x != parent);
+                        }
                         touched_content.insert(PROPOSER_INDEX);
                     } else {
                         unreachable!();
@@ -340,34 +379,51 @@ impl Context {
                         unreachable!();
                     };
                     if let Content::Voter(c) = &mut self.contents[chain_id] {
-                        c.votes = self
-                            .blockchain
-                            .unvoted_proposer(&voter_parent, &self.header.parent)
-                            .unwrap();
+                        c.votes = if self.adversary & BALANCE_ATTACK == 0 {
+                            self
+                                .blockchain
+                                .unvoted_proposer(&voter_parent, &self.header.parent)
+                                .unwrap()
+                        } else {
+                            self
+                                .blockchain
+                                .unvoted_proposer_balance_attack(&voter_parent, &self.header.parent)
+                                .unwrap()
+                        };
                         touched_content.insert(chain_id as u16);
                     } else {
                         unreachable!();
                     }
                 }
-            } else if !new_voter_block.is_empty() {
-                for voter_chain in 0..self.config.voter_chains {
-                    let chain_id: usize = (FIRST_VOTER_INDEX + voter_chain) as usize;
-                    let voter_parent = if let Content::Voter(c) = &self.contents[chain_id] {
-                        c.voter_parent
-                    } else {
-                        unreachable!();
-                    };
-                    if let Content::Voter(c) = &mut self.contents[chain_id] {
-                        c.votes = self
-                            .blockchain
-                            .unvoted_proposer(&voter_parent, &self.header.parent)
-                            .unwrap();
-                        touched_content.insert(chain_id as u16);
-                    } else {
-                        unreachable!();
+            } else {
+                if !new_voter_block.is_empty() {
+                    for voter_chain in 0..self.config.voter_chains{
+                        let chain_id: usize = (FIRST_VOTER_INDEX + voter_chain) as usize;
+                        let voter_parent = if let Content::Voter(c) = &self.contents[chain_id] {
+                            c.voter_parent
+                        } else {
+                            unreachable!();
+                        };
+                        if let Content::Voter(c) = &mut self.contents[chain_id] {
+                            c.votes = if self.adversary & BALANCE_ATTACK == 0 {
+                                self
+                                    .blockchain
+                                    .unvoted_proposer(&voter_parent, &self.header.parent)
+                                    .unwrap()
+                            } else {
+                                self
+                                    .blockchain
+                                    .unvoted_proposer_balance_attack(&voter_parent, &self.header.parent)
+                                    .unwrap()
+                            };
+                            touched_content.insert(chain_id as u16);
+                        } else {
+                            unreachable!();
+                        }
                     }
                 }
             }
+
 
             // update the difficulty
             self.header.difficulty = self.get_difficulty(&self.header.parent);
@@ -385,15 +441,20 @@ impl Context {
                         .update(chain_id, &self.contents[chain_id]);
                 }
                 if new_transaction_block {
-                    self.content_merkle_tree.update(
-                        TRANSACTION_INDEX as usize,
-                        &self.contents[TRANSACTION_INDEX as usize],
-                    );
-                    if touched_content.contains(&PROPOSER_INDEX) {
+                    // CENSORSHIP won't update
+                    if self.adversary & TRANSACTION_CENSORSHIP_ATTACK == 0 {
                         self.content_merkle_tree.update(
-                            PROPOSER_INDEX as usize,
-                            &self.contents[PROPOSER_INDEX as usize],
-                        );
+                            TRANSACTION_INDEX as usize,
+                            &self.contents[TRANSACTION_INDEX as usize],
+                            );
+                    }
+                    if self.adversary & PROPOSER_CENSORSHIP_ATTACK == 0 {
+                        if touched_content.contains(&PROPOSER_INDEX) {
+                            self.content_merkle_tree.update(
+                                PROPOSER_INDEX as usize,
+                                &self.contents[PROPOSER_INDEX as usize],
+                            );
+                        }
                     }
                 }
             }

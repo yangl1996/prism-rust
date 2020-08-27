@@ -6,7 +6,7 @@ use crate::wallet::WalletError;
 use log::debug;
 use std::sync::atomic::{AtomicIsize, AtomicUsize, Ordering};
 use std::time::SystemTime;
-
+use log::trace;
 lazy_static! {
     pub static ref PERFORMANCE_COUNTER: Counter = { Counter::default() };
 }

@@ -917,6 +917,86 @@ impl BlockChain {
         Ok(list)
     }
 
+    /// Get the list of unvoted proposer blocks that have the SECOND most votes. This is for adversary
+    pub fn unvoted_proposer_balance_attack(&self, tip: &H256, proposer_parent: &H256) -> Result<Vec<H256>> {
+        let voter_node_voted_level_cf = self.db.cf_handle(VOTER_NODE_VOTED_LEVEL_CF).unwrap();
+        let proposer_node_level_cf = self.db.cf_handle(PROPOSER_NODE_LEVEL_CF).unwrap();
+        let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
+        let proposer_vote_count_cf = self.db.cf_handle(PROPOSER_VOTE_COUNT_CF).unwrap();
+        // get the deepest voted level
+        let first_vote_level: u64 = deserialize(
+            &self
+                .db
+                .get_pinned_cf(voter_node_voted_level_cf, serialize(&tip).unwrap())?
+                .unwrap(),
+        )
+        .unwrap();
+
+        let last_vote_level: u64 = deserialize(
+            &self
+                .db
+                .get_pinned_cf(proposer_node_level_cf, serialize(&proposer_parent).unwrap())?
+                .unwrap(),
+        )
+        .unwrap();
+
+        // get the block with the most votes on each proposer level
+        // and break ties with hash value
+        let mut list: Vec<H256> = vec![];
+        for level in first_vote_level + 1..=last_vote_level {
+            let mut blocks: Vec<H256> = deserialize(
+                &self
+                    .db
+                    .get_pinned_cf(proposer_tree_level_cf, serialize(&(level as u64)).unwrap())?
+                    .unwrap(),
+            )
+            .unwrap();
+            blocks.sort_unstable();
+            // the current best proposer block to vote for
+            let mut best_vote: Option<(H256, u64)> = None;
+            let mut second_best_vote: Option<(H256, u64)> = None;
+            for block_hash in &blocks {
+                let vote_count: u64 = match &self.db.get_pinned_cf(proposer_vote_count_cf, serialize(&block_hash).unwrap())? {
+                    Some(d) => {
+                        deserialize(d).unwrap()
+                    }
+                    None => 0
+                };
+                match best_vote {
+                    Some((previous_block_hash, num_votes)) => {
+                        if vote_count > num_votes {
+                            second_best_vote = Some((previous_block_hash, num_votes));
+                            best_vote = Some((*block_hash, vote_count));
+                        } else {
+                            match second_best_vote {
+                                Some((_, num_votes)) => {
+                                    if vote_count > num_votes {
+                                        second_best_vote = Some((*block_hash, vote_count));
+                                    }
+                                }
+                                None => {
+                                    second_best_vote = Some((*block_hash, vote_count));
+                                }
+
+                            }
+                        }
+                    }
+                    None => {
+                        best_vote = Some((*block_hash, vote_count));
+                    }
+                }
+            }
+            list.push(
+                if let Some((block_hash,_)) = second_best_vote {
+                    block_hash
+                } else {
+                    best_vote.unwrap().0
+                }
+            ); //Note: the last vote in list could be other proposer that at the same level of proposer_parent
+        }
+        return Ok(list);
+    }
+
     /// Get the level of the proposer block
     pub fn proposer_level(&self, hash: &H256) -> Result<u64> {
         let proposer_node_level_cf = self.db.cf_handle(PROPOSER_NODE_LEVEL_CF).unwrap();
