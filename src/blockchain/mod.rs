@@ -669,7 +669,6 @@ impl BlockChain {
         }
         let proposer_blocks: Vec<H256> = get_value!(proposer_tree_level_cf, level as u64).unwrap();
         // compute the new leader of this level
-        // we use the confirmation policy from https://arxiv.org/abs/1810.08092
         let mut new_leader: Option<H256> = None;
 
         // collect the depth of each vote on each proposer block
