@@ -119,7 +119,7 @@ impl BlockchainConfig {
             quantile_epsilon_deconfirm: quantile_deconfirm,
             network_delta,
             beta,
-            small_delta: solve_small_delta(voter_rate * beta, voter_rate * (1.0 - beta), network_delta, (-log_epsilon).exp(), voter_chains),
+            small_delta: solve_small_delta(voter_rate * (1.0 - beta), voter_rate * beta, network_delta, (-log_epsilon).exp(), voter_chains),
         }
     }
 
@@ -159,23 +159,29 @@ impl BlockchainConfig {
     // TODO: just make a table of the inverse of function_q for different Vl(T) values
 }
 
-pub fn function_q(t: f32, lh: f32, la: f32) -> f32 {
-    let mut res: f32 = 1.0;
-    for l in 0..=10 {
-        let term1: f32 = (lh - la) / lh * (la / lh).powi(l as i32);
-        let mut term2: f32 = 0.0;
-        for k in l..=10 {
-            let term2_1: f32 = (-lh * t).exp() * (lh * t).powi(k as i32) / fact(k) as f32;
-            let mut term2_2: f32 = 0.0;
+pub fn function_q(t_l: f32, lh_l: f32, la_l: f32) -> f32 {
+    let t = t_l as f64;
+    let lh = lh_l as f64;
+    let la = la_l as f64;
+
+    let terms = 30;
+
+    let mut res: f64 = 1.0;
+    for l in 0..=terms {
+        let term1: f64 = (lh - la) / lh * (la / lh).powi(l as i32);
+        let mut term2: f64 = 0.0;
+        for k in l..=terms {
+            let term2_1: f64 = (-lh * t).exp() * factdiv(lh * t, k);
+            let mut term2_2: f64 = 0.0;
             for n in 0..=k-l {
-                let term2_2_1: f32 = (-la * t).exp() * (la * t).powi(n as i32) / fact(n) as f32 * (1.0 - (la / lh).powi((k-n-l) as i32));
+                let term2_2_1: f64 = (-la * t).exp() * factdiv(la * t, n) * (1.0 - (la / lh).powi((k-n-l) as i32));
                 term2_2 = term2_2 + term2_2_1;
             }
             term2 = term2 + term2_1 * term2_2;
         }
         res = res - term1 * term2;
     }
-    return res;
+    return res as f32;
 }
 
 fn lh_prime(lh: f32, delta: f32) -> f32 {
@@ -183,7 +189,7 @@ fn lh_prime(lh: f32, delta: f32) -> f32 {
 }
 
 fn solve_t_delta(lh: f32, la: f32, delta: f32) -> f32 {
-    let mut res: f32 = 0.01;
+    let mut res: f32 = 1.0;
     let lh_p = lh_prime(lh, delta);
     loop {
         let h_delta: f32 = 1.0 - function_q(res, lh_p, la);
@@ -192,11 +198,12 @@ fn solve_t_delta(lh: f32, la: f32, delta: f32) -> f32 {
         } else {
             0.5 - h_delta
         };
-        if d < 0.001 {
+        if d < 0.05 {
             println!("Expected confirmation latency={}", res);
             return res
         } else {
-            res += 0.01;
+            res += 1.0;
+            println!("trying t_delta={}, diff={}", res, d);
         }
     }
 }
@@ -219,10 +226,10 @@ fn solve_small_delta(lh: f32, la: f32, delta: f32, ep: f32, m: u16) -> f32 {
     }
 }
 
-fn fact(n: u64) -> u64 {
-    let mut res: u64 = 1;
+fn factdiv(up: f64, n: u64) -> f64 {
+    let mut res: f64 = 1.0;
     for i in 1..=n {
-        res = res * i;
+        res = res * up / i as f64;
     }
     return res;
 }
