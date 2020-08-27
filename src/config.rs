@@ -34,10 +34,11 @@ pub struct BlockchainConfig {
     proposer_sortition_width: U256,
     voter_sortition_width: U256,
     tx_sortition_width: U256,
-    pub adversary_ratio: f32,
-    log_epsilon: f32,
     pub quantile_epsilon_confirm: f32,
     pub quantile_epsilon_deconfirm: f32,
+    pub adversary_ratio: f32,
+    log_epsilon: f32,
+    //pub small_delta: f32,
 }
 
 impl BlockchainConfig {
@@ -134,6 +135,33 @@ impl BlockchainConfig {
             None
         }
     }
+
+    pub fn function_q(&self, t: f32, lh: f32, la: f32) -> f32 {
+        let mut res: f32 = 1.0;
+        for l in 0..=10 {
+            let term1: f32 = (lh - la) / lh * (la / lh).powi(l as i32);
+            let mut term2: f32 = 0.0;
+            for k in l..=10 {
+                let term2_1: f32 = (-lh * t).exp() * (lh * t).powi(k as i32) / fact(k) as f32;
+                let mut term2_2: f32 = 0.0;
+                for n in 0..=k-l {
+                    let term2_2_1: f32 = (-la * t).exp() * (la * t).powi(n as i32) / fact(n) as f32 * (1.0 - (la / lh).powi((k-n-l) as i32));
+                    term2_2 = term2_2 + term2_2_1;
+                }
+                term2 = term2 + term2_1 * term2_2;
+            }
+            res = res - term1 * term2;
+        }
+        return res;
+    }
+}
+
+fn fact(n: u64) -> u64 {
+    let mut res: u64 = 1;
+    for i in 1..=n {
+        res = res * i;
+    }
+    return res;
 }
 
 lazy_static! {
