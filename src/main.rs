@@ -56,6 +56,7 @@ fn main() {
      (@arg voter_mining_rate: --("voter-mining-rate") [FLOAT] default_value("0.1") "Sets the voter chain mining rate")
      (@arg adv_ratio: --("adversary-ratio") [FLOAT] default_value("0.4") "Sets the ratio of adversary hashing power")
      (@arg log_epsilon: --("confirm-confidence") [FLOAT] default_value("20.0") "Sets -log(epsilon) for confirmation")
+     (@arg expected_latency: --("expected-latency") [FLOAT] default_value("3.0") "Sets the expected network latency of voter blocks")
 
      (@subcommand keygen =>
       (about: "Generates Prism wallet key pair")
@@ -90,6 +91,14 @@ fn main() {
     stderrlog::new().verbosity(verbosity).init().unwrap();
 
     // init config struct
+    let net_latency: f64 = matches
+        .value_of("expected_latency")
+        .unwrap()
+        .parse()
+        .unwrap_or_else(|e| {
+            error!("Error parsing network latency: {}", e);
+            process::exit(1);
+        });
     let voter_chains: u16 = matches
         .value_of("voter_chains")
         .unwrap()
