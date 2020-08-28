@@ -143,8 +143,7 @@ impl BlockchainConfig {
         }
     }
 
-    pub fn try_confirm(&self, depth_sum: u64, vote: u64) -> bool {
-        let nonvote = self.voter_chains as u64 - vote;
+    pub fn try_confirm(&self, depth_sum: u64, nonvote: u64) -> bool {
         let lh_p = lh_prime(self.voter_mining_rate * (1.0 - self.beta), self.network_delta);
         let t = depth_sum as f32 / ((1.0 + self.small_delta) * self.voter_chains as f32 * self.voter_mining_rate);
         let th = nonvote as f32 / self.voter_chains as f32 + 0.5 + self.small_delta;

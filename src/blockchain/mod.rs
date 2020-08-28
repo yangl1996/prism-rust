@@ -721,8 +721,14 @@ impl BlockChain {
 
             for block in &proposer_blocks {
                 let votes = votes_depth.get(block).unwrap();
+                let mut other_votes = 0;
+                for other in &proposer_blocks {
+                    if other != block {
+                        other_votes += votes_depth.get(other).unwrap().len() as u64;
+                    }
+                }
 
-                let cfm = self.config.try_confirm(total_vote_blocks, votes.len() as u64);
+                let cfm = self.config.try_confirm(total_vote_blocks, other_votes);
 
                 if cfm {
                     new_leader = Some(*block);
