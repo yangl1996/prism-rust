@@ -230,8 +230,24 @@ impl Context {
                     if hashes.is_empty() {
                         continue; // end processing this message
                     }
-                    self.server
-                        .broadcast(Message::NewBlockHashes(hashes.clone()));
+
+                    let mut announcements: Vec<H256> = vec![];
+                    let mut raw_blocks: Vec<Vec<u8>> = vec![];
+                    for bidx in 0..blocks.len() {
+                        let b = &blocks[bidx];
+                        match &b.content {
+                            Content::Proposer(_) => raw_blocks.push(encoded_blocks[bidx].clone()),
+                            Content::Voter(_) => raw_blocks.push(encoded_blocks[bidx].clone()),
+                            Content::Transaction(_) => announcements.push(hashes[bidx]),
+                        }
+                    }
+                    if !raw_blocks.is_empty() {
+                        self.server
+                            .broadcast(Message::Blocks(raw_blocks));
+                    }
+                    if !announcements.is_empty() {
+                        self.server.broadcast(Message::NewBlockHashes(announcements));
+                    }
 
                     // process each block
                     let mut to_process: Vec<Block> = blocks;
