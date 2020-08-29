@@ -54,6 +54,7 @@ impl BlockchainConfig {
         log_epsilon: f32,
         network_delta: f32,
         beta: f32,
+        avg_latency: f32,
     ) -> Self {
         let tx_txs = tx_size / AVG_TX_SIZE;
         let proposer_genesis: H256 = {
@@ -119,7 +120,7 @@ impl BlockchainConfig {
             quantile_epsilon_deconfirm: quantile_deconfirm,
             network_delta,
             beta,
-            small_delta: solve_small_delta(voter_rate * (1.0 - beta), voter_rate * beta, network_delta, (-log_epsilon).exp(), voter_chains),
+            small_delta: solve_small_delta(voter_rate * (1.0 - beta), voter_rate * beta, network_delta, (-log_epsilon).exp(), voter_chains, avg_latency),
         }
     }
 
@@ -188,7 +189,7 @@ fn lh_prime(lh: f32, delta: f32) -> f32 {
     return lh / (1.0 + lh * delta);
 }
 
-fn solve_t_delta(lh: f32, la: f32, delta: f32, small_delta: f32) -> f32 {
+fn solve_t_delta(lh: f32, la: f32, delta: f32, small_delta: f32, avg_latency: f32) -> f32 {
     let mut res: f32 = 1.0;
     let lh_p = lh_prime(lh, delta);
     loop {
@@ -200,7 +201,9 @@ fn solve_t_delta(lh: f32, la: f32, delta: f32, small_delta: f32) -> f32 {
             th - h_delta
         };
         if d < 0.01 {
-            println!("Expected confirmation latency={}", res);
+            let fork = 1.0 - 1.0 / (1.0 + (lh + la) * avg_latency);
+            let explatency = res / (1.0 - fork);
+            println!("Expected confirmation latency={}", explatency);
             return res
         } else {
             res += 1.0;
@@ -213,11 +216,11 @@ fn error_prob(l: f32, m: u16, small_delta: f32, t_delta: f32) -> f32 {
     return (-2.0 * small_delta * small_delta * m as f32).exp() + 2.0 * (-(small_delta * small_delta * t_delta * l * m as f32) / 3.0).exp();
 }
 
-fn solve_small_delta(lh: f32, la: f32, delta: f32, ep: f32, m: u16) -> f32 {
+fn solve_small_delta(lh: f32, la: f32, delta: f32, ep: f32, m: u16, avg_latency: f32) -> f32 {
     let mut res: f32 = 0.0;
     for _ in 0..5 {
         let mut tmp_res: f32 = 0.001;
-        let t_delta = solve_t_delta(lh, la, delta, res);
+        let t_delta = solve_t_delta(lh, la, delta, res, avg_latency);
         loop {
             let our_ep = error_prob(lh + la, m, tmp_res, t_delta);
             if our_ep > ep {

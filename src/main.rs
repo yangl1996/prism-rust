@@ -57,6 +57,7 @@ fn main() {
      (@arg adv_ratio: --("adversary-ratio") [FLOAT] default_value("0.4") "Sets the ratio of adversary hashing power")
      (@arg log_epsilon: --("confirm-confidence") [FLOAT] default_value("20.0") "Sets -log(epsilon) for confirmation")
      (@arg expected_latency: --("expected-latency") [FLOAT] default_value("3.0") "Sets the expected network latency of voter blocks")
+     (@arg average_latency: --("average-latency") [FLOAT] default_value("0.9") "Sets the expected network latency of voter blocks")
      (@arg adversary: --adversary [INT] default_value("0") "Sets the adversarial behavior of miner, 0 honest, 7 censorship attack, 8 balance attack")
      (@subcommand keygen =>
       (about: "Generates Prism wallet key pair")
@@ -93,6 +94,14 @@ fn main() {
     // init config struct
     let net_latency: f64 = matches
         .value_of("expected_latency")
+        .unwrap()
+        .parse()
+        .unwrap_or_else(|e| {
+            error!("Error parsing network latency: {}", e);
+            process::exit(1);
+        });
+    let net_avg_latency: f64 = matches
+        .value_of("average_latency")
         .unwrap()
         .parse()
         .unwrap_or_else(|e| {
@@ -165,6 +174,7 @@ fn main() {
         log_epsilon,
         net_latency as f32,
         adv_ratio,
+        net_avg_latency as f32,
     );
     info!(
         "Proposer block mining rate set to {} blks/s",

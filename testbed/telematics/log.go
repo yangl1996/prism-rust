@@ -352,7 +352,7 @@ func log(interval, duration uint, nodesFile, dataDir string, grafana bool) {
 						proposer_len:       curr["node_0"].Proposer_main_chain_length,
 						latency_sum:        curr["node_0"].Total_transaction_block_confirmation_latency,
 					}
-					expStopAlarm = time.After(1800* time.Second)
+					expStopAlarm = time.After(600* time.Second)
 				case <-expStopAlarm:
 					expStarted = true
 					expRunning = false
@@ -442,7 +442,7 @@ func log(interval, duration uint, nodesFile, dataDir string, grafana bool) {
 					if !expStarted {
 						tm.Printf("Hit x to start a recording\n")
 					} else {
-						tm.Printf("Experiment running. Remaining time: %v seconds\n", 1800-dur+expStartTime)
+						tm.Printf("Experiment running. Remaining time: %v seconds\n", 600-dur+expStartTime)
 					}
 				}
 				tm.Flush()
