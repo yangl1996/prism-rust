@@ -18,7 +18,7 @@ log = "0.4"
 stderrlog = "0.4"
 mio = "0.6"
 slab = "0.4"
-rand = "0.6"
+rand = "0.7"
 enum-display-derive="0.1"
 mio-extras = "2.0"
 bigint = "4"
@@ -36,9 +36,9 @@ piper = "0.1"
 futures = "0.3"
 
 [dependencies.ed25519-dalek]
-version = "1.0.0-pre.2"
+version = "1.0.0"
 default-features = false
-features = ["avx2_backend", "std", "batch"]
+features = ["u64_backend", "std", "batch"]
 
 [dependencies.clap]
 version = "2.33"
