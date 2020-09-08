@@ -69,7 +69,7 @@ fn main() {
     // match subcommands
     match matches.subcommand() {
         ("keygen", Some(m)) => {
-            let mut csprng: OsRng = OsRng::new().unwrap();
+            let mut csprng = OsRng;
             let keypair: Keypair = Keypair::generate(&mut csprng);
             let base64_encoded = base64::encode(&keypair.to_bytes().to_vec());
             println!("{}", base64_encoded);
