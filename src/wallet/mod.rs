@@ -1,6 +1,6 @@
 use crate::transaction::{Address, Authorization, CoinId, Input, Output, Transaction};
 use bincode::serialize;
-use ed25519_dalek::Keypair;
+use ed25519_dalek::{Keypair, Signer};
 use rand::rngs::OsRng;
 
 use std::cell::RefCell;
@@ -84,7 +84,7 @@ impl Wallet {
     /// Generate a new key pair
     pub fn generate_keypair(&self) -> Result<Address> {
         let _cf = self.db.cf_handle(KEYPAIR_CF).unwrap();
-        let mut csprng: OsRng = OsRng::new().unwrap();
+        let mut csprng = OsRng;
         let keypair: Keypair = Keypair::generate(&mut csprng);
         self.load_keypair(keypair)
     }

@@ -3,6 +3,8 @@ use crate::transaction::Transaction;
 use ed25519_dalek::PublicKey;
 use ed25519_dalek::Signature;
 
+use std::convert::TryFrom;
+
 /// Checks that input and output are non-empty
 pub fn check_non_empty(transaction: &Transaction) -> bool {
     !(transaction.input.is_empty() || transaction.output.is_empty())
@@ -37,7 +39,7 @@ pub fn check_signature_batch(transactions: &[Transaction]) -> bool {
     for (idx, tx) in transactions.iter().enumerate() {
         for a in &tx.authorization {
             public_keys.push(PublicKey::from_bytes(&a.pubkey).unwrap());
-            signatures.push(Signature::from_bytes(&a.signature).unwrap());
+            signatures.push(Signature::try_from(&a.signature[..]).unwrap());
             messages.push(&raw_messages[idx]);
         }
     }
