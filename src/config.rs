@@ -4,7 +4,6 @@ use bigint::uint::U256;
 const AVG_TX_SIZE: u32 = 168; // average size of a transaction (in Bytes)
 const PROPOSER_TX_REF_HEADROOM: f32 = 10.0;
 const SORTITION_PRECISION: u64 = std::u64::MAX;
-const DECONFIRM_HEADROOM: f32 = 1.05;
 
 // Chain IDs
 pub const PROPOSER_INDEX: u16 = 0;
@@ -34,13 +33,11 @@ pub struct BlockchainConfig {
     proposer_sortition_width: U256,
     voter_sortition_width: U256,
     tx_sortition_width: U256,
-    pub quantile_epsilon_confirm: f32,
-    pub quantile_epsilon_deconfirm: f32,
     pub adversary_ratio: f32,
-    log_epsilon: f32,
-    pub network_delta: f32,
-    pub beta: f32,
-    pub small_delta: f32,
+    log_epsilon: f32,   // confirmation confidence is 1-exp(-log_epsilon)
+    pub network_delta: f32, // network delay
+    pub beta: f32,  // adversary_ratio, used in confirmation
+    pub small_delta: f32,   // slack in the new confirmation algorithm
 }
 
 impl BlockchainConfig {
@@ -92,13 +89,6 @@ impl BlockchainConfig {
         };
         let tx_width: u64 =
             SORTITION_PRECISION - proposer_width - voter_width * u64::from(voter_chains);
-        let log_epsilon_confirm = log_epsilon * DECONFIRM_HEADROOM;
-        let quantile_confirm: f32 = (2.0 * log_epsilon_confirm
-            - (2.0 * log_epsilon_confirm).ln()
-            - (2.0 * 3.141_692_6 as f32).ln())
-        .sqrt();
-        let quantile_deconfirm: f32 =
-            (2.0 * log_epsilon - (2.0 * log_epsilon).ln() - (2.0 * 3.141_692_6 as f32).ln()).sqrt();
         Self {
             voter_chains,
             tx_txs,
@@ -116,8 +106,6 @@ impl BlockchainConfig {
             tx_sortition_width: tx_width.into(),
             adversary_ratio: adv_ratio,
             log_epsilon,
-            quantile_epsilon_confirm: quantile_confirm,
-            quantile_epsilon_deconfirm: quantile_deconfirm,
             network_delta,
             beta,
             small_delta: solve_small_delta(voter_rate * (1.0 - beta), voter_rate * beta, network_delta, (-log_epsilon).exp(), voter_chains, avg_latency),
@@ -181,7 +169,6 @@ impl BlockchainConfig {
         }
         return max;
     }
-
     
     pub fn try_confirm_theory_paper(&self, v_d: &[u64]) -> bool {
         // see the theory paper
@@ -198,7 +185,6 @@ impl BlockchainConfig {
         else {
             false
         }
-        
     }
 
     // TODO: just make a table of the inverse of function_q for different Vl(T) values
