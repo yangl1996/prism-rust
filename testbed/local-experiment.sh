@@ -1,15 +1,19 @@
 #!/bin/bash
 
-VOTER_CHAINS="100"
+VOTER_CHAINS="1000"
 MINING_RATE="0.1"
-THROUGHPUT="500.0"
-MINING_MODIFIER="2.3"	# mine faster than it should be
-
+THROUGHPUT="10.0"
+MINING_MODIFIER="2.4"	# mine faster than it should be
 
 if [ "$#" -ne 1 ]; then
 	echo "Usage: ./local-experiment.sh <num of nodes>"
 	exit 0
 fi
+
+sudo mkdir -p /prism
+sudo umount -f -q /prism
+sudo mount -t tmpfs -o size=2000m tmpfs /prism
+sudo chmod 777 /prism
 
 throughput_param=`echo "$THROUGHPUT / 1" | bc`
 blkps=`echo "(${VOTER_CHAINS}.0 + 1.0) * ${MINING_RATE} + ${THROUGHPUT} / (64000.0 / 168.0)" | bc`
@@ -72,7 +76,10 @@ function kill_prism() {
 	for pid in $pids; do
 		echo "Killing $pid"
 		kill $pid
+		wait $pid
 	done
+	sudo umount -f /prism
+	sudo rm -rf /prism
 }
 
 
@@ -103,7 +110,7 @@ for (( i = 0; i < $num_nodes; i++ )); do
 	p2p=`expr $p2p_port + $i`
 	api=`expr $api_port + $i`
 	vis=`expr $vis_port + $i`
-	command="$binary_path --p2p 127.0.0.1:${p2p} --api 127.0.0.1:${api} --visual 127.0.0.1:${vis} --blockdb /tmp/prism-${i}-blockdb.rocksdb --blockchaindb /tmp/prism-${i}-blockchaindb.rocksdb --utxodb /tmp/prism-${i}-utxodb.rocksdb --walletdb /tmp/prism-${i}-wallet.rocksdb -vv --load-key ${i}.pkcs8 --fund-coins=100000 --voter-chains=${VOTER_CHAINS} --tx-throughput=${throughput_param} --proposer-mining-rate=${MINING_RATE} --voter-mining-rate=${MINING_RATE} --confirm-confidence=10.0 --adversary-ratio=0.20"
+	command="$binary_path --p2p 127.0.0.1:${p2p} --api 127.0.0.1:${api} --visual 127.0.0.1:${vis} --blockdb /prism/prism-${i}-blockdb.rocksdb --blockchaindb /prism/prism-${i}-blockchaindb.rocksdb --utxodb /prism/prism-${i}-utxodb.rocksdb --walletdb /prism/prism-${i}-wallet.rocksdb -vv --load-key ${i}.pkcs8 --fund-coins=100000 --voter-chains=${VOTER_CHAINS} --tx-throughput=${throughput_param} --proposer-mining-rate=${MINING_RATE} --voter-mining-rate=${MINING_RATE} --confirm-confidence=10.0 --adversary-ratio=0.20"
 
 	for (( j = 0; j < $i; j++ )); do
 		peer_port=`expr $p2p_port + $j`
