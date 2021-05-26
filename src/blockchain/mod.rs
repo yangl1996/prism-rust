@@ -668,6 +668,7 @@ impl BlockChain {
         // voter blocks mined after those votes are casted
         let mut total_vote_count: u16 = 0;
         let mut total_vote_blocks: u64 = 0;
+        let mut block_with_most_votes: Option<(H256, u16)> = None;
 
         for block in &proposer_blocks {
             let votes: Vec<(u16, u64)> = match get_value!(proposer_node_vote_cf, block) {
@@ -680,26 +681,19 @@ impl BlockChain {
                 let voter_best = self.voter_best[*chain_num as usize].lock().unwrap();
                 let voter_best_level = voter_best.1;
                 drop(voter_best);
-                /*
-                total_vote_blocks += self
-                    .num_voter_blocks(*chain_num, *vote_level, voter_best_level)
-                    .unwrap();
-                    */
                 total_vote_blocks += voter_best_level - vote_level + 1;
                 total_vote_count += 1;
                 let this_depth = voter_best_level - vote_level + 1;
                 vote_depth.push(this_depth);
             }
+            let num_votes_for_this = vote_depth.len() as u16;
             votes_depth.insert(block, vote_depth);
-        }
-
-        // For debugging purpose only. This is very important for security.
-        // TODO: remove this check in the future
-        if self.config.voter_chains < total_vote_count {
-            panic!(
-                "self.config.voter_chains: {} total_votes:{}",
-                self.config.voter_chains, total_vote_count
-            )
+            match block_with_most_votes {
+                None => block_with_most_votes = Some((*block, num_votes_for_this)),
+                Some((_, n)) => if n < num_votes_for_this {
+                    block_with_most_votes = Some((*block, num_votes_for_this));
+                }
+            }
         }
 
         // no point in going further if less than 3/5 votes are cast
@@ -709,19 +703,13 @@ impl BlockChain {
             let mut total_votes_lcb: f32 = 0.0;
             let mut max_vote_lcb: f32 = 0.0;
 
-            for block in &proposer_blocks {
-                let votes = votes_depth.get(block).unwrap();
-                let mut other_votes = 0;
-                for other in &proposer_blocks {
-                    if other != block {
-                        other_votes += votes_depth.get(other).unwrap().len() as u64;
-                    }
-                }
-
-                let cfm = self.config.try_confirm(total_vote_blocks, other_votes);
+            // we are only going to bother confirm the block with the most votes
+            if let Some((block, votes)) = block_with_most_votes {
+                let other_votes = total_vote_count - votes;
+                let cfm = self.config.try_confirm(total_vote_blocks, other_votes.into());
 
                 if cfm {
-                    new_leader = Some(*block);
+                    new_leader = Some(block);
                 }
             }
         }
