@@ -170,12 +170,28 @@ impl BlockchainConfig {
         return max;
     }
     
-    pub fn try_confirm_theory_paper(&self, v_d: &[u64]) -> bool {
+    pub fn try_confirm_theory_paper(&self, vote_depth: &[u64]) -> bool {
         // see the theory paper
-        // v_d: the i-th item is the number of votes that is at least i+1 deep
         // we assume the round interval is 1 sec
         // this function should only be called on the proposer block with the most votes
-        let v_lowerbound = self.v_n_lowerbound(v_d);
+        let mut count: Vec<u64> = vec![];
+        let mut threshold = 1;
+        loop {
+            let mut num = 0;
+            for i in vote_depth.iter() {
+                if *i >= threshold {
+                    num += 1;
+                }
+            }
+            count.push(num);
+            if num == 0 {
+                break;
+            }
+            threshold += 1;
+        }
+
+        
+        let v_lowerbound = self.v_n_lowerbound(&count);
         // simply ignore the other public proposer blocks and their votes
         // because we are not doing list confirmation
         let v_private_upperbound = self.voter_chains as f32 - v_lowerbound;
