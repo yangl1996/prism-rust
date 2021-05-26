@@ -1,9 +1,9 @@
 #!/bin/bash
 
 VOTER_CHAINS="1000"
-MINING_RATE="0.1"
+MINING_RATE="0.05"
 THROUGHPUT="10.0"
-MINING_MODIFIER="2.4"	# mine faster than it should be
+MINING_MODIFIER="1"	# mine faster than it should be
 
 if [ "$#" -ne 1 ]; then
 	echo "Usage: ./local-experiment.sh <num of nodes>"
