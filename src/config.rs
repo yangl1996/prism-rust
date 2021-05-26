@@ -157,6 +157,50 @@ impl BlockchainConfig {
         }
     }
 
+    fn delta_d(&self, d: u64) -> f32 {
+        // f_v^bar: prob that a voter block is mined in a round
+        let term_1 = 1.0 / (4.0 * self.voter_mining_rate * (d as f32));
+        let term_2 = (1.0 - 2.0 * self.beta) / (8.0 * (self.voter_chains as f32).ln());
+        if term_1 > term_2 {
+            term_1
+        }
+        else {
+            term_2
+        }
+    }
+
+    fn v_n_lowerbound(&self, v_d: &[u64]) -> f32 {
+        // v_d: the i-th item is the number of votes that is at least i+1 deep
+        let mut max: f32 = 0.0;
+        for (pos, n) in v_d.iter().enumerate() {
+            let depth = pos + 1;
+            let val = *n as f32 - 2.0 * self.delta_d(depth as u64) * (self.voter_chains as f32);
+            if val > max {
+                max = val;
+            }
+        }
+        return max;
+    }
+
+    
+    pub fn try_confirm_theory_paper(&self, v_d: &[u64]) -> bool {
+        // see the theory paper
+        // v_d: the i-th item is the number of votes that is at least i+1 deep
+        // we assume the round interval is 1 sec
+        // this function should only be called on the proposer block with the most votes
+        let v_lowerbound = self.v_n_lowerbound(v_d);
+        // simply ignore the other public proposer blocks and their votes
+        // because we are not doing list confirmation
+        let v_private_upperbound = self.voter_chains as f32 - v_lowerbound;
+        if v_lowerbound > v_private_upperbound {
+            true
+        }
+        else {
+            false
+        }
+        
+    }
+
     // TODO: just make a table of the inverse of function_q for different Vl(T) values
 }
 
