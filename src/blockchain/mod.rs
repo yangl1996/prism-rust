@@ -524,18 +524,8 @@ impl BlockChain {
         for level in affected_range {
             let existing_leader: Option<H256> =
                 get_value!(proposer_leader_sequence_cf, level as u64);
-            let new_leader_confirm: Option<H256> = self.proposer_leader(level as u64)?;
-            let new_leader_deconfirm: Option<H256> = self.proposer_leader(level as u64)?;
 
-            // we confirm with a higher confidence so we don't have false deconfirmation
-            let new_leader = {
-                if existing_leader.is_some() {
-                    new_leader_deconfirm
-                }
-                else {
-                    new_leader_confirm
-                }
-            };
+            let new_leader = self.proposer_leader(level as u64)?;
 
             if new_leader != existing_leader {
                 match new_leader {
