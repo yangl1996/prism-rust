@@ -110,7 +110,7 @@ impl BlockchainConfig {
             log_epsilon,
             network_delta,
             beta,
-            small_delta: solve_small_delta(voter_rate * (1.0 - beta), voter_rate * beta, network_delta, (-log_epsilon).exp(), 23800, avg_latency),
+            small_delta: solve_small_delta(voter_rate * (1.0 - beta), voter_rate * beta, network_delta, (-log_epsilon).exp(), voter_chains, avg_latency),
             use_theory_paper_rule,
         }
     }
