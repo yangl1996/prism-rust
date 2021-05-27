@@ -176,7 +176,7 @@ fn main() {
         net_latency as f32,
         adv_ratio,
         net_avg_latency as f32,
-        matches.value_of("use_theory_paper_rule").is_some()
+        matches.is_present("use_theory_paper_rule")
     );
     info!(
         "Proposer block mining rate set to {} blks/s",
