@@ -110,7 +110,7 @@ for (( i = 0; i < $num_nodes; i++ )); do
 	p2p=`expr $p2p_port + $i`
 	api=`expr $api_port + $i`
 	vis=`expr $vis_port + $i`
-	command="$binary_path --p2p 127.0.0.1:${p2p} --api 127.0.0.1:${api} --visual 127.0.0.1:${vis} --blockdb /prism/prism-${i}-blockdb.rocksdb --blockchaindb /prism/prism-${i}-blockchaindb.rocksdb --utxodb /prism/prism-${i}-utxodb.rocksdb --walletdb /prism/prism-${i}-wallet.rocksdb -vv --load-key ${i}.pkcs8 --fund-coins=100000 --voter-chains=${VOTER_CHAINS} --tx-throughput=${throughput_param} --proposer-mining-rate=${MINING_RATE} --voter-mining-rate=${MINING_RATE} --confirm-confidence=30.0 --adversary-ratio=0.20 --theory-rule"
+	command="$binary_path --p2p 127.0.0.1:${p2p} --api 127.0.0.1:${api} --visual 127.0.0.1:${vis} --blockdb /prism/prism-${i}-blockdb.rocksdb --blockchaindb /prism/prism-${i}-blockchaindb.rocksdb --utxodb /prism/prism-${i}-utxodb.rocksdb --walletdb /prism/prism-${i}-wallet.rocksdb -vv --load-key ${i}.pkcs8 --fund-coins=100000 --voter-chains=${VOTER_CHAINS} --tx-throughput=${throughput_param} --proposer-mining-rate=${MINING_RATE} --voter-mining-rate=${MINING_RATE} --confirm-confidence=20.0 --adversary-ratio=0.30 --theory-rule"
 
 	for (( j = 0; j < $i; j++ )); do
 		peer_port=`expr $p2p_port + $j`
