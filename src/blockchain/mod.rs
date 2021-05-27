@@ -525,7 +525,7 @@ impl BlockChain {
             let existing_leader: Option<H256> =
                 get_value!(proposer_leader_sequence_cf, level as u64);
 
-            let new_leader = self.proposer_leader(level as u64)?;
+            let new_leader = self.proposer_leader(level as u64, self.config.use_theory_paper_rule)?;
 
             if new_leader != existing_leader {
                 match new_leader {
@@ -645,7 +645,7 @@ impl BlockChain {
         }
     }
 
-    fn proposer_leader(&self, level: u64) -> Result<Option<H256>> {
+    fn proposer_leader(&self, level: u64, use_theory_rule: bool) -> Result<Option<H256>> {
         let proposer_node_vote_cf = self.db.cf_handle(PROPOSER_NODE_VOTE_CF).unwrap();
         let proposer_tree_level_cf = self.db.cf_handle(PROPOSER_TREE_LEVEL_CF).unwrap();
 
@@ -706,7 +706,12 @@ impl BlockChain {
             // we are only going to bother confirm the block with the most votes
             if let Some((block, votes)) = block_with_most_votes {
                 let other_votes = total_vote_count - votes;
-                let cfm = self.config.try_confirm(total_vote_blocks, other_votes.into());
+                let cfm = if use_theory_rule {
+                    self.config.try_confirm_theory_paper(&votes_depth[&block])
+                }
+                else {
+                    self.config.try_confirm(total_vote_blocks, other_votes.into())
+                };
 
                 if cfm {
                     new_leader = Some(block);

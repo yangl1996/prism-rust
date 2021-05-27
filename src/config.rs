@@ -38,6 +38,7 @@ pub struct BlockchainConfig {
     pub network_delta: f32, // network delay
     pub beta: f32,  // adversary_ratio, used in confirmation
     pub small_delta: f32,   // slack in the new confirmation algorithm
+    pub use_theory_paper_rule: bool,
 }
 
 impl BlockchainConfig {
@@ -52,6 +53,7 @@ impl BlockchainConfig {
         network_delta: f32,
         beta: f32,
         avg_latency: f32,
+        use_theory_paper_rule: bool,
     ) -> Self {
         let tx_txs = tx_size / AVG_TX_SIZE;
         let proposer_genesis: H256 = {
@@ -109,6 +111,7 @@ impl BlockchainConfig {
             network_delta,
             beta,
             small_delta: solve_small_delta(voter_rate * (1.0 - beta), voter_rate * beta, network_delta, (-log_epsilon).exp(), voter_chains, avg_latency),
+            use_theory_paper_rule,
         }
     }
 

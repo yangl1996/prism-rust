@@ -59,6 +59,7 @@ fn main() {
      (@arg expected_latency: --("expected-latency") [FLOAT] default_value("3.0") "Sets the expected network latency of voter blocks")
      (@arg average_latency: --("average-latency") [FLOAT] default_value("0.9") "Sets the expected network latency of voter blocks")
      (@arg adversary: --adversary [INT] default_value("0") "Sets the adversarial behavior of miner, 0 honest, 7 censorship attack, 8 balance attack")
+     (@arg use_theory_paper_rule: --("theory-rule") "Use the confirmation rule in the theory paper")
      (@subcommand keygen =>
       (about: "Generates Prism wallet key pair")
       (@arg display_address: --addr "Prints the address of the key pair to STDERR")
@@ -175,6 +176,7 @@ fn main() {
         net_latency as f32,
         adv_ratio,
         net_avg_latency as f32,
+        matches.value_of("use_theory_paper_rule").is_some()
     );
     info!(
         "Proposer block mining rate set to {} blks/s",
