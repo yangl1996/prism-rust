@@ -2,5 +2,5 @@ github.com/buger/goterm v0.0.0-20181115115552-c206103e1f37 h1:uxxtrnACqI9zK4ENDM
 github.com/buger/goterm v0.0.0-20181115115552-c206103e1f37/go.mod h1:u9UyCz2eTrSGy6fbupqJ54eY5c4IC8gREQ1053dK12U=
 github.com/ziutek/rrd v0.0.0-20190418220501-03be5a978894 h1:YBbl6znQ3JVJLWn7TlZk/MzXOzOwv4NqDpuTqVarJhs=
 github.com/ziutek/rrd v0.0.0-20190418220501-03be5a978894/go.mod h1:kncaQbFuKfmLNOnFKb9VQJ6qWV61iHxIxUQZBZvbEfA=
-golang.org/x/sys v0.0.0-20190613124609-5ed2794edfdc h1:x+/QxSNkVFAC+v4pL1f6mZr1z+qgi+FoR8ccXZPVC10=
-golang.org/x/sys v0.0.0-20190613124609-5ed2794edfdc/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
+golang.org/x/sys v0.1.0 h1:kunALQeHf1/185U1i0GOB/fy1IPRDDpuoOOqRReG57U=
+golang.org/x/sys v0.1.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
